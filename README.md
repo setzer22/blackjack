@@ -1,5 +1,5 @@
 # Blackjack
-> Your Rusty 🦀 procedural modeller
+> Your Rusty 🦀 procedural 3d modeler
 
 [![Latest version](https://img.shields.io/crates/v/blackjack_nodes.svg)](https://crates.io/crates/blackjack_nodes)
 [![Documentation](https://docs.rs/blackjack_nodes/badge.svg)](https://docs.rs/blackjack_nodes)
