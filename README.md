@@ -19,6 +19,27 @@ Here are the main goals and philosophy behind blackjack, but note that this show
 - **Integration with popular game engines:** Export your procedural assets as tiny programs and tweak their parameters at runtime by adding a simple library to your engine of choice.
 - **Error resilience, crash resistance:** When things go wrong, Blackjack will make an effort to *respect your time* as a user and not lose your work. Errors will be clearly communicated and fixing any bugs leading to a crash will take the highest priority.
 
+## Install and usage
+> **Note:** A crates.io version will be published shortly, but it's not possible yet due to unpublished dependencies.
+
+Here are the steps in order to try out the early development version of Blackjack. Binaries and easier installation methods will be provided in the future. The steps below require a complete Rust toolchain using `cargo`:
+
+1. Clone this repository, and make sure to clone its submodules:
+```bash
+git clone https://github.com/setzer22/blackjack
+git submodule update --init --recursive
+```
+2. From the same folder, run `cargo run` to launch Blackjack.
+
+### Usage
+Some minimal usage instructions. Please do note that these can and will change frequently during early development:
+
+- The bottom section of the screen is the node graph.
+- Use right click to open the node selector. Find a node and spawn it by clicking on it. You can also use the search bar.
+- Nodes can be dragged around, and its widgets interacted with using the mouse.
+- Dragging the mouse between two nodes' ports will create a connection.
+- Use the 'Set active' button under a node to make it render to the screen.
+
 ## Tech stack
 Blackjack is built using Rust 🦀 and stands on the shoulders of giants. Here's a shout out to some great rust crates being used in this project:
 
@@ -31,3 +52,5 @@ Blackjack is still under active development. Many features are missing and are b
 
 ## Contributing
 Contributions are welcome! Before writing a PR, please get in touch by filing an issue 😄
+
+
