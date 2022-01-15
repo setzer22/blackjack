@@ -1,0 +1,36 @@
+[package]
+name = "blackjack_nodes"
+version = "0.1.0"
+authors = ["setzer22"]
+edition = "2021"
+
+[dependencies]
+egui = { version = "0.15", features = ["persistence"] }
+uuid = { version = "0.8", features = ["v4"] }
+tri-mesh = "0.5.0"
+rend3 = { path = "./rend3/rend3" }
+rend3-routine = { path = "./rend3/rend3-routine" }
+rend3-egui = { path = "./rend3/rend3-egui" }
+glam = { version = "0.20", features = ["serde"] }
+env_logger = { version = "0.9", default-features = false, features = [
+    "termcolor",
+    "atty",
+] }
+winit = { version = "0.26" }
+wgpu = "0.11"
+pollster = "0.2"
+generational-arena = { version = "0.2", faetures = ["serde"] }
+slotmap = { version = "1.0", features = ["serde"] }
+smallvec = { version = "1.7.0", features = ["serde"] }
+itertools = "0.10"
+anyhow = { version = "1.0", features = ["backtrace"] }
+egui_winit_platform = "0.12.0"
+bytemuck = { version = "1.7", features = ["derive"] }
+serde = { version = "1.0", features =  ["derive"] }
+ron = "0.7"
+strum = "0.23.0"
+strum_macros = "0.23.0"
+hecs = "0.7"
+rfd = "0.6"
+wavefront_rs = { git = "https://github.com/setzer22/wavefront_rs", rev = "e303f33" }
+float-ord  = "0.3.2"
