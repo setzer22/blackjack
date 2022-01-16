@@ -4,7 +4,7 @@ use crate::{
     prelude::graph::NodeId,
     prelude::*,
 };
-use std::time::Instant;
+use std::time::{Instant, Duration};
 
 use egui_winit_platform::Platform;
 use winit::{
@@ -47,7 +47,6 @@ pub struct AppWindow {
 
 pub struct AppState {
     window_size: Vec2,
-    start_time: Instant,
     input_system: InputSystem,
     orbit_camera: OrbitCamera,
     debug_meshes: Option<DebugMeshes>,
@@ -89,7 +88,6 @@ impl AppWindow {
             scale_factor: window.scale_factor() as f32,
             state: AppState {
                 window_size: Vec2::new(window_size.width as f32, window_size.height as f32),
-                start_time: Instant::now(),
                 input_system: InputSystem::default(),
                 orbit_camera: OrbitCamera::default(),
                 debug_meshes: None,
@@ -166,6 +164,9 @@ impl AppWindow {
         state: &mut AppState,
         render_ctx: &mut RenderContext,
     ) {
+        // Record the frame time at the start of the frame.
+        let frame_start_time = Instant::now();
+
         Self::update_camera(
             &mut state.input_system,
             &mut state.orbit_camera,
@@ -210,6 +211,11 @@ impl AppWindow {
         }
 
         render_ctx.render_frame(Some(egui_platform));
+
+        // Sleep for the remaining time to cap at 60Hz
+        let elapsed = Instant::now().duration_since(frame_start_time);
+        let remaining = Duration::from_secs_f32(1.0 / 60.0).saturating_sub(elapsed);
+        spin_sleep::sleep(remaining);
     }
 
     pub fn setup(&mut self, render_ctx: &mut RenderContext) {

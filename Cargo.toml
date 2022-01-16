@@ -39,3 +39,4 @@ hecs = "0.7"
 rfd = "0.6"
 wavefront_rs = { git = "https://github.com/setzer22/wavefront_rs", rev = "e303f33" }
 float-ord  = "0.3.2"
+spin_sleep = "1.0.0"
