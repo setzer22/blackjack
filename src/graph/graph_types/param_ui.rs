@@ -1,6 +1,5 @@
 use super::*;
 use crate::prelude::*;
-use egui::any::AnyMap;
 use egui::*;
 
 impl InputParam {

@@ -34,7 +34,7 @@ pub fn draw_app(ctx: &CtxRef, state: &mut EditorState) -> bool {
 
     egui::TopBottomPanel::top("top_menu").show(ctx, |ui| {
         egui::menu::bar(ui, |ui| {
-            egui::menu::menu(ui, "File", |ui| {
+            ui.menu_button("File", |ui| {
                 if ui.button("Save As...").clicked() {
                     let file_location = rfd::FileDialog::new()
                         .set_file_name("Untitled.blj")

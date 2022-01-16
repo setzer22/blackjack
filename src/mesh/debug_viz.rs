@@ -32,7 +32,7 @@ pub fn load_obj_mesh(path: &str) -> r3::Mesh {
     })
     .expect("OBJ Files in assets path should be correct");
 
-    r3::MeshBuilder::new(positions)
+    r3::MeshBuilder::new(positions, r3::Handedness::Left)
         .with_indices(indices)
         .build()
         .unwrap_or_else(|err| panic!("Could load mesh {}. Error: {:?}", path, err))

@@ -195,7 +195,7 @@ fn make_halfedge_mesh() -> halfedge::HalfEdgeMesh {
 
 pub fn build_mesh(mesh: &halfedge::HalfEdgeMesh) -> r3::Mesh {
     let (positions, indices) = mesh.generate_buffers();
-    r3::MeshBuilder::new(positions)
+    r3::MeshBuilder::new(positions, r3::Handedness::Left)
         .with_indices(indices)
         .build()
         .unwrap()

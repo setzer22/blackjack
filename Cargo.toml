@@ -10,26 +10,26 @@ authors = ["setzer22"]
 edition = "2021"
 
 [dependencies]
-egui = { version = "0.15", features = ["persistence"] }
+egui = { version = "0.16", features = ["persistence"] }
 uuid = { version = "0.8", features = ["v4"] }
 tri-mesh = "0.5.0"
-rend3 = { git = "https://github.com/setzer22/rend3", rev = "acce144712a66e1747e3a4d9188a94ffbc8ca032" }
-rend3-routine = { git = "https://github.com/setzer22/rend3", rev = "acce144712a66e1747e3a4d9188a94ffbc8ca032" }
-rend3-egui = { git = "https://github.com/setzer22/rend3", rev = "acce144712a66e1747e3a4d9188a94ffbc8ca032" }
+rend3 = { git = "https://github.com/BVE-Reborn/rend3", rev = "c42f758d07e1d9c650d2d5239527bd97f7111cb8" }
+rend3-routine = { git = "https://github.com/BVE-Reborn/rend3", rev = "c42f758d07e1d9c650d2d5239527bd97f7111cb8" }
+rend3-egui = { git = "https://github.com/BVE-Reborn/rend3", rev = "c42f758d07e1d9c650d2d5239527bd97f7111cb8" }
 glam = { version = "0.20", features = ["serde"] }
 env_logger = { version = "0.9", default-features = false, features = [
     "termcolor",
     "atty",
 ] }
 winit = { version = "0.26" }
-wgpu = "0.11"
+wgpu = "0.12"
 pollster = "0.2"
 generational-arena = { version = "0.2", faetures = ["serde"] }
 slotmap = { version = "1.0", features = ["serde"] }
 smallvec = { version = "1.7.0", features = ["serde"] }
 itertools = "0.10"
 anyhow = { version = "1.0", features = ["backtrace"] }
-egui_winit_platform = "0.12.0"
+egui_winit_platform = "0.13.0"
 bytemuck = { version = "1.7", features = ["derive"] }
 serde = { version = "1.0", features =  ["derive"] }
 ron = "0.7"
@@ -40,3 +40,4 @@ rfd = "0.6"
 wavefront_rs = { git = "https://github.com/setzer22/wavefront_rs", rev = "e303f33" }
 float-ord  = "0.3.2"
 spin_sleep = "1.0.0"
+type-map = "0.5"

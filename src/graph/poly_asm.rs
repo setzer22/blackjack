@@ -2,7 +2,6 @@ use std::marker::PhantomData;
 
 use crate::prelude::*;
 use anyhow::anyhow;
-use egui::any::AnyMapTrait;
 
 type RawMemAddr = hecs::Entity;
 

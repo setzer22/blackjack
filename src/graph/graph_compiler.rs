@@ -1,5 +1,3 @@
-use egui::any::TypeMap;
-
 use crate::{graph::poly_asm::PolyAsmProgram, prelude::graph::*, prelude::*};
 
 use self::outputs_cache::OutputsCache;

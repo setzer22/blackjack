@@ -53,7 +53,7 @@ impl NodeFinder {
                                 submitted_archetype = Some(archetype);
                                 query_submit = false;
                             }
-                            if ui.selectable_label(false, &archetype_name).clicked() {
+                            if ui.selectable_label(false, archetype_name).clicked() {
                                 submitted_archetype = Some(archetype);
                             }
                         }

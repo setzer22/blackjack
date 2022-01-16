@@ -210,7 +210,7 @@ impl AppWindow {
             );
         }
 
-        render_ctx.render_frame(Some(egui_platform));
+        render_ctx.render_frame(Some(egui_platform), state.window_size.as_uvec2());
 
         // Sleep for the remaining time to cap at 60Hz
         let elapsed = Instant::now().duration_since(frame_start_time);
