@@ -7,14 +7,15 @@ pub mod r3 {
     pub use rend3::{
         types::{
             DirectionalLight, Handedness, MaterialHandle, Mesh, MeshBuilder, MeshHandle, Object,
-            ObjectHandle, SampleCount,
+            ObjectHandle, SampleCount, TextureFormat, TextureUsages,
         },
-        RenderGraph, Renderer, ReadyData,
+        ReadyData, RenderGraph, RenderTargetDescriptor, RenderTargetHandle, Renderer,
     };
 
     pub use rend3_routine::base::{BaseRenderGraph, BaseRenderGraphIntermediateState};
     pub use rend3_routine::pbr::{AlbedoComponent, PbrMaterial, PbrRoutine};
     pub use rend3_routine::tonemapping::TonemappingRoutine;
+    pub use rend3_egui::EguiRenderRoutine;
 }
 
 pub use itertools::Itertools;

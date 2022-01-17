@@ -189,6 +189,7 @@ impl AppWindow {
         crate::graph::graph_editor_egui::draw_app(
             &egui_platform.context(),
             &mut state.editor_state,
+            &render_ctx.egui_textures,
         );
 
         if let Some(side_effect) = state.editor_state.run_side_effect.take() {

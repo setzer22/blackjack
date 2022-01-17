@@ -1,5 +1,5 @@
 use self::{graph_node_ui::*, node_finder::NodeFinder};
-use crate::prelude::*;
+use crate::{prelude::*, render_context::EguiTextures};
 use editor_state::EditorState;
 use egui::*;
 
@@ -14,7 +14,14 @@ pub mod node_finder;
 pub mod serialization;
 
 /// Returns true if dirty
-pub fn draw_app(ctx: &CtxRef, state: &mut EditorState) -> bool {
+pub fn draw_app(ctx: &CtxRef, state: &mut EditorState, egui_textures: &EguiTextures) -> bool {
+    if let Some(viewport) = egui_textures.viewport {
+        CentralPanel::default().show(ctx, |ui| {
+            ui.add(egui::Image::new(viewport, egui::vec2(1000.0, 500.0)));
+        });
+    }
+    return true;
+
     let screen_rect = ctx.available_rect();
     let screen_size = ctx.available_rect().size();
     egui::TopBottomPanel::bottom("graph_panel").show(ctx, |ui| {

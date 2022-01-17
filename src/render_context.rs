@@ -13,13 +13,19 @@ use wgpu::{Features, Surface, TextureFormat};
 
 use crate::rendergraph;
 
+/// The texture ids used by egui draw offscreen render textures
+#[derive(Default)]
+pub struct EguiTextures {
+    pub viewport: Option<egui::TextureId>,
+}
+
 pub struct RenderContext {
     pub renderer: Arc<Renderer>,
 
     pub base_graph: r3::BaseRenderGraph,
     pub pbr_routine: r3::PbrRoutine,
     pub tonemapping_routine: r3::TonemappingRoutine,
-    pub egui_routine: EguiRenderRoutine,
+    pub egui_routine: rendergraph::egui_routine_custom::EguiCustomRoutine,
     pub grid_routine: GridRoutine,
 
     pub surface: Arc<Surface>,
@@ -27,6 +33,8 @@ pub struct RenderContext {
 
     pub objects: Vec<ResourceHandle<Object>>,
     lights: Vec<ResourceHandle<DirectionalLight>>,
+
+    pub egui_textures: EguiTextures,
 }
 
 fn ambient_light() -> Vec4 {
@@ -69,7 +77,7 @@ impl RenderContext {
             r3::TonemappingRoutine::new(&renderer, &base_graph.interfaces, format);
         drop(data_core); // Release the lock
 
-        let egui_routine = EguiRenderRoutine::new(
+        let egui_routine = rendergraph::egui_routine_custom::EguiCustomRoutine::new(
             &renderer,
             format,
             SampleCount::One,
@@ -91,6 +99,7 @@ impl RenderContext {
             texture_format: format,
             objects: vec![],
             lights: vec![],
+            egui_textures: EguiTextures::default(),
         }
     }
 
@@ -141,7 +150,11 @@ impl RenderContext {
         self.lights.push(handle);
     }
 
-    pub fn render_frame(&mut self, egui_platform: Option<&mut egui_winit_platform::Platform>, resolution: UVec2) {
+    pub fn render_frame(
+        &mut self,
+        egui_platform: Option<&mut egui_winit_platform::Platform>,
+        resolution: UVec2,
+    ) {
         let frame = rend3::util::output::OutputFrame::Surface {
             surface: Arc::clone(&self.surface),
         };
@@ -151,9 +164,7 @@ impl RenderContext {
 
         let mut graph = rend3::RenderGraph::new();
 
-        //self.base_graph.add_to_graph(graph, ready, pbr, skybox, tonemapping, resolution, samples, ambient)
-
-        rendergraph::blackjack_rendergraph(
+        let viewport_texture = rendergraph::blackjack_viewport_rendergraph(
             &self.base_graph,
             &mut graph,
             &ready,
@@ -168,13 +179,19 @@ impl RenderContext {
         if let Some(platform) = egui_platform {
             let (_output, paint_commands) = platform.end_frame(None);
             egui_paint_jobs = platform.context().tessellate(paint_commands);
-            let input = rend3_egui::Input {
+            let input = rendergraph::egui_routine_custom::Input {
                 clipped_meshes: &egui_paint_jobs,
                 context: platform.context(),
             };
 
             let surface = graph.add_surface_texture();
-            self.egui_routine.add_to_graph(&mut graph, input, surface);
+            self.egui_routine.add_to_graph(
+                &mut graph,
+                input,
+                surface,
+                viewport_texture,
+                &mut self.egui_textures,
+            );
         };
 
         graph.execute(&self.renderer, frame, cmd_bufs, &ready);

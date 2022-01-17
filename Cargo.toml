@@ -13,9 +13,10 @@ edition = "2021"
 egui = { version = "0.16", features = ["persistence"] }
 uuid = { version = "0.8", features = ["v4"] }
 tri-mesh = "0.5.0"
-rend3 = { git = "https://github.com/BVE-Reborn/rend3", rev = "c42f758d07e1d9c650d2d5239527bd97f7111cb8" }
-rend3-routine = { git = "https://github.com/BVE-Reborn/rend3", rev = "c42f758d07e1d9c650d2d5239527bd97f7111cb8" }
-rend3-egui = { git = "https://github.com/BVE-Reborn/rend3", rev = "c42f758d07e1d9c650d2d5239527bd97f7111cb8" }
+rend3 = { git = "https://github.com/setzer22/rend3", branch = "blackjack" }
+rend3-routine = { git = "https://github.com/setzer22/rend3", branch = "blackjack" }
+rend3-egui = { git = "https://github.com/setzer22/rend3", branch = "blackjack" }
+egui_wgpu_backend = { git = "https://github.com/setzer22/egui_wgpu_backend", branch = "feat/accept_textureview"}
 glam = { version = "0.20", features = ["serde"] }
 env_logger = { version = "0.9", default-features = false, features = [
     "termcolor",
