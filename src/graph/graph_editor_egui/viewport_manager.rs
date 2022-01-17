@@ -10,7 +10,9 @@ impl AppViewports {
     pub fn new() -> Self {
         Self {
             viewport_3d: AppViewport {
-                rect: Rect::NOTHING,
+                // Don't create an empty rect, because this size will be used to
+                // create a render target and may fail if resolution is zero.
+                rect: Rect::from_min_size(Pos2::ZERO, vec2(10.0, 10.0)),
                 texture_id: None,
             }
         }

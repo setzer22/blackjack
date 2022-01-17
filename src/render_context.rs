@@ -156,6 +156,16 @@ impl RenderContext {
 
         let mut graph = rend3::RenderGraph::new();
 
+        let vwp_3d_res = app_viewports.viewport_3d.rect.size();
+        let to_uvec2 = |v: egui::Vec2| { UVec2::new(v.x as u32, v.y as u32) };
+
+        // TODO: What if we ever have multiple 3d viewports? There's no way to
+        // set the aspect ratio differently for different render passes in rend3
+        // right now. The camera is global. 
+        //
+        // See: https://github.com/BVE-Reborn/rend3/issues/327
+        self.renderer.set_aspect_ratio(vwp_3d_res.x / vwp_3d_res.y);
+
         let viewport_texture = rendergraph::blackjack_viewport_rendergraph(
             &self.base_graph,
             &mut graph,
@@ -163,7 +173,7 @@ impl RenderContext {
             &self.pbr_routine,
             &self.tonemapping_routine,
             &self.grid_routine,
-            resolution,
+            to_uvec2(app_viewports.viewport_3d.rect.size()),
             r3::SampleCount::One,
             ambient_light(),
         );

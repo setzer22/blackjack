@@ -17,17 +17,21 @@ pub mod viewport_manager;
 
 /// Returns true if dirty
 pub fn draw_app(ctx: &CtxRef, state: &mut EditorState) -> bool {
-    CentralPanel::default().show(ctx, |ui| {
-        state
-            .app_viewports
-            .viewport_3d
-            .show(ui, vec2(1000.0, 500.0));
-    });
+    let screen_rect = ctx.available_rect();
+    let screen_size = ctx.available_rect().size();
+
+    TopBottomPanel::top("viewport")
+        .resizable(true)
+        .default_height(screen_size.y)
+        .show(ctx, |ui| {
+            state
+                .app_viewports
+                .viewport_3d
+                .show(ui, ui.available_size());
+        });
 
     return true;
 
-    let screen_rect = ctx.available_rect();
-    let screen_size = ctx.available_rect().size();
     egui::TopBottomPanel::bottom("graph_panel").show(ctx, |ui| {
         let panel_height = screen_size.y * 0.5 - 4.0;
         ui.set_min_height(panel_height);
