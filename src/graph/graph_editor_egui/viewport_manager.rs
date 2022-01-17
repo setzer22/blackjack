@@ -1,0 +1,48 @@
+use egui::*;
+
+
+/// Contains several [AppViewport]s used in this app's UI
+pub struct AppViewports {
+    pub viewport_3d: AppViewport,
+}
+
+impl AppViewports {
+    pub fn new() -> Self {
+        Self {
+            viewport_3d: AppViewport {
+                rect: Rect::NOTHING,
+                texture_id: None,
+            }
+        }
+    }
+
+    pub fn set_3d_viewport_texture(&mut self, tex: TextureId) {
+        self.viewport_3d.texture_id = Some(tex);
+    }
+}
+
+/// This application renders several parts of the UI to offscreen textures which
+/// are then drawin inside an egui widget. This is the widget that handles this
+/// interaction.
+///
+/// Offscreen rendering happens with a 1-frame lag. First, egui lays out the
+/// viewport widget and a size is computed and stored. Then, at the start of the
+/// next frame, the offscreen image is rendered and a `TextureId` is generated.
+/// This is then used to draw an `egui::Image` at the location.
+pub struct AppViewport {
+    pub rect: Rect,
+    pub texture_id: Option<TextureId>,
+}
+
+impl AppViewport {
+    pub fn show(&mut self, ui: &mut Ui, desired_size: Vec2) {
+        let (rect, _resp) = ui.allocate_exact_size(desired_size, Sense::hover());
+        self.rect = rect;
+        if let Some(texture_id) = self.texture_id {
+            let mut mesh = epaint::Mesh::with_texture(texture_id);
+            let uv = Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0));
+            mesh.add_rect_with_uv(rect, uv, Color32::WHITE);
+            ui.painter().add(Shape::mesh(mesh));
+        }
+    }
+}

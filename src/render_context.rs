@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::{prelude::*, rendergraph::grid_routine::GridRoutine};
+use crate::{prelude::*, rendergraph::grid_routine::GridRoutine, graph::graph_editor_egui::viewport_manager::AppViewports};
 
 use glam::Mat4;
 use rend3::{
@@ -12,12 +12,6 @@ use rend3_routine::pbr::PbrRoutine;
 use wgpu::{Features, Surface, TextureFormat};
 
 use crate::rendergraph;
-
-/// The texture ids used by egui draw offscreen render textures
-#[derive(Default)]
-pub struct EguiTextures {
-    pub viewport: Option<egui::TextureId>,
-}
 
 pub struct RenderContext {
     pub renderer: Arc<Renderer>,
@@ -33,8 +27,6 @@ pub struct RenderContext {
 
     pub objects: Vec<ResourceHandle<Object>>,
     lights: Vec<ResourceHandle<DirectionalLight>>,
-
-    pub egui_textures: EguiTextures,
 }
 
 fn ambient_light() -> Vec4 {
@@ -99,7 +91,6 @@ impl RenderContext {
             texture_format: format,
             objects: vec![],
             lights: vec![],
-            egui_textures: EguiTextures::default(),
         }
     }
 
@@ -154,6 +145,7 @@ impl RenderContext {
         &mut self,
         egui_platform: Option<&mut egui_winit_platform::Platform>,
         resolution: UVec2,
+        app_viewports: &mut AppViewports,
     ) {
         let frame = rend3::util::output::OutputFrame::Surface {
             surface: Arc::clone(&self.surface),
@@ -190,7 +182,7 @@ impl RenderContext {
                 input,
                 surface,
                 viewport_texture,
-                &mut self.egui_textures,
+                app_viewports,
             );
         };
 

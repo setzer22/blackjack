@@ -4,7 +4,7 @@ use crate::{
     prelude::graph::NodeId,
     prelude::*,
 };
-use std::time::{Instant, Duration};
+use std::time::{Duration, Instant};
 
 use egui_winit_platform::Platform;
 use winit::{
@@ -81,7 +81,7 @@ impl AppWindow {
         let mut editor_state = EditorState::new();
 
         // A path passed in from the command line will be loaded as a file
-        let args : Vec<String> = std::env::args().collect();
+        let args: Vec<String> = std::env::args().collect();
         editor_state.load_op = args.get(1).cloned();
 
         AppWindow {
@@ -189,7 +189,6 @@ impl AppWindow {
         crate::graph::graph_editor_egui::draw_app(
             &egui_platform.context(),
             &mut state.editor_state,
-            &render_ctx.egui_textures,
         );
 
         if let Some(side_effect) = state.editor_state.run_side_effect.take() {
@@ -211,7 +210,11 @@ impl AppWindow {
             );
         }
 
-        render_ctx.render_frame(Some(egui_platform), state.window_size.as_uvec2());
+        render_ctx.render_frame(
+            Some(egui_platform),
+            state.window_size.as_uvec2(),
+            &mut state.editor_state.app_viewports,
+        );
 
         // Sleep for the remaining time to cap at 60Hz
         let elapsed = Instant::now().duration_since(frame_start_time);

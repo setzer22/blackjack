@@ -4,7 +4,7 @@ use rend3::{
 };
 use wgpu::{Color, TextureFormat};
 
-use crate::render_context::EguiTextures;
+use crate::graph::graph_editor_egui::viewport_manager::AppViewports;
 
 pub struct EguiCustomRoutine {
     pub internal: egui_wgpu_backend::RenderPass,
@@ -47,7 +47,7 @@ impl EguiCustomRoutine {
         input: Input<'node>,
         output: RenderTargetHandle,
         viewport_texture: RenderTargetHandle,
-        egui_textures: &'node mut EguiTextures,
+        app_viewports: &'node mut AppViewports,
     ) {
         let mut builder = graph.add_node("egui");
 
@@ -85,11 +85,13 @@ impl EguiCustomRoutine {
                 );
 
                 let viewport_texture = graph_data.get_render_target(viewport_handle);
-                egui_textures.viewport = Some(this.internal.egui_texture_from_wgpu_texture(
-                    &renderer.device,
-                    viewport_texture,
-                    wgpu::FilterMode::Linear,
-                ));
+                app_viewports.set_3d_viewport_texture(
+                    this.internal.egui_texture_from_wgpu_texture(
+                        &renderer.device,
+                        viewport_texture,
+                        wgpu::FilterMode::Linear,
+                    ),
+                );
 
                 this.internal
                     .execute_with_renderpass(rpass, input.clipped_meshes, &this.screen_descriptor)

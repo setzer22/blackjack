@@ -2,6 +2,7 @@ use crate::prelude::graph::*;
 use crate::prelude::*;
 
 use super::node_finder::NodeFinder;
+use super::viewport_manager::AppViewports;
 
 pub struct EditorState {
     pub graph: Graph,
@@ -21,6 +22,9 @@ pub struct EditorState {
     pub node_finder: Option<NodeFinder>,
     /// When set, the file path stored in the inner string will be loaded.
     pub load_op: Option<String>,
+    /// The viewports. Stores information to draw the parts of UI which are
+    /// rendered in a different pass.
+    pub app_viewports: AppViewports,
 }
 
 impl EditorState {
@@ -33,6 +37,7 @@ impl EditorState {
             node_position_ops: HashMap::default(),
             node_finder: None,
             load_op: None,
+            app_viewports: AppViewports::new(),
         }
     }
 }
