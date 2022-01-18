@@ -15,38 +15,28 @@ pub mod serialization;
 
 pub mod viewport_manager;
 
-/// Returns true if dirty
-pub fn draw_app(ctx: &CtxRef, state: &mut EditorState) -> bool {
-    let screen_rect = ctx.available_rect();
+pub mod viewport_split;
+
+pub fn draw_app(ctx: &CtxRef, state: &mut EditorState) {
     let screen_size = ctx.available_rect().size();
 
-    TopBottomPanel::top("viewport")
-        .resizable(true)
-        .default_height(screen_size.y)
-        .show(ctx, |ui| {
+    top_menubar(ctx, state);
+
+    CentralPanel::default().show(ctx, |ui| {
+        ui.horizontal(|ui| {
             state
                 .app_viewports
                 .view_3d
-                .show(ui, ui.available_size());
-        });
+                .show(ui, screen_size * vec2(1.0, 0.5));
 
-    return true;
-
-    egui::TopBottomPanel::bottom("graph_panel").show(ctx, |ui| {
-        let panel_height = screen_size.y * 0.5 - 4.0;
-        ui.set_min_height(panel_height);
-        ui.label("Graph editor");
-        let clip_rect = {
-            let mut r = screen_rect;
-            r.set_top(panel_height);
-            r
-        };
-        draw_graph_editor(ctx, state, clip_rect);
+            ui.label("This is the graph UI");
+        })
     });
+}
 
+pub fn top_menubar(ctx: &CtxRef, state: &mut EditorState) {
     // When set, will load a new editor state at the end of this function
     let mut loaded_state: Option<EditorState> = None;
-
     egui::TopBottomPanel::top("top_menu").show(ctx, |ui| {
         egui::menu::bar(ui, |ui| {
             ui.menu_button("File", |ui| {
@@ -82,9 +72,6 @@ pub fn draw_app(ctx: &CtxRef, state: &mut EditorState) -> bool {
         // TODO: Duplicate code
         *state = serialization::load(ctx, path.into()).expect("Deserialization error");
     }
-
-    // TODO: Return the actual dirty flag and use it.
-    true
 }
 
 pub fn draw_graph_editor(ctx: &CtxRef, state: &mut EditorState, clip_rect: Rect) {

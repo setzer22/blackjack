@@ -43,7 +43,7 @@ impl AppViewport {
     }
 
     pub fn show(&mut self, ui: &mut Ui, desired_size: Vec2) {
-        let (rect, _resp) = ui.allocate_exact_size(desired_size, Sense::hover());
+        let (_, rect) = ui.allocate_space(desired_size);
         self.rect = rect;
         if let Some(texture_id) = self.texture_id {
             let mut mesh = epaint::Mesh::with_texture(texture_id);
