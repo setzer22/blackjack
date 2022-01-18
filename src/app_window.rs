@@ -211,8 +211,7 @@ impl AppWindow {
         }
 
         render_ctx.render_frame(
-            Some(egui_platform),
-            state.window_size.as_uvec2(),
+            egui_platform,
             &mut state.editor_state.app_viewports,
         );
 

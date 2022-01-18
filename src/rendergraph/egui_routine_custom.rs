@@ -85,7 +85,7 @@ impl EguiCustomRoutine {
                 );
 
                 let viewport_texture = graph_data.get_render_target(viewport_handle);
-                app_viewports.set_3d_viewport_texture(
+                app_viewports.set_3d_view_texture(
                     this.internal.egui_texture_from_wgpu_texture(
                         &renderer.device,
                         viewport_texture,

@@ -1,25 +1,21 @@
 use egui::*;
 
-
 /// Contains several [AppViewport]s used in this app's UI
 pub struct AppViewports {
-    pub viewport_3d: AppViewport,
+    pub view_3d: AppViewport,
+    pub node_graph: AppViewport,
 }
 
 impl AppViewports {
     pub fn new() -> Self {
         Self {
-            viewport_3d: AppViewport {
-                // Don't create an empty rect, because this size will be used to
-                // create a render target and may fail if resolution is zero.
-                rect: Rect::from_min_size(Pos2::ZERO, vec2(10.0, 10.0)),
-                texture_id: None,
-            }
+            view_3d: AppViewport::new(),
+            node_graph: AppViewport::new(),
         }
     }
 
-    pub fn set_3d_viewport_texture(&mut self, tex: TextureId) {
-        self.viewport_3d.texture_id = Some(tex);
+    pub fn set_3d_view_texture(&mut self, tex: TextureId) {
+        self.view_3d.texture_id = Some(tex);
     }
 }
 
@@ -37,6 +33,15 @@ pub struct AppViewport {
 }
 
 impl AppViewport {
+    pub fn new() -> AppViewport {
+        AppViewport {
+            // Don't create an empty rect, because this size will be used to
+            // create a render target and may fail if resolution is zero.
+            rect: Rect::from_min_size(Pos2::ZERO, vec2(10.0, 10.0)),
+            texture_id: None,
+        }
+    }
+
     pub fn show(&mut self, ui: &mut Ui, desired_size: Vec2) {
         let (rect, _resp) = ui.allocate_exact_size(desired_size, Sense::hover());
         self.rect = rect;

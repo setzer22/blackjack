@@ -26,7 +26,7 @@ pub fn draw_app(ctx: &CtxRef, state: &mut EditorState) -> bool {
         .show(ctx, |ui| {
             state
                 .app_viewports
-                .viewport_3d
+                .view_3d
                 .show(ui, ui.available_size());
         });
 

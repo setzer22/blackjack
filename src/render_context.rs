@@ -1,6 +1,9 @@
 use std::sync::Arc;
 
-use crate::{prelude::*, rendergraph::grid_routine::GridRoutine, graph::graph_editor_egui::viewport_manager::AppViewports};
+use crate::{
+    graph::graph_editor_egui::viewport_manager::AppViewports, prelude::*,
+    rendergraph::grid_routine::GridRoutine,
+};
 
 use glam::Mat4;
 use rend3::{
@@ -143,8 +146,7 @@ impl RenderContext {
 
     pub fn render_frame(
         &mut self,
-        egui_platform: Option<&mut egui_winit_platform::Platform>,
-        resolution: UVec2,
+        egui_platform: &mut egui_winit_platform::Platform,
         app_viewports: &mut AppViewports,
     ) {
         let frame = rend3::util::output::OutputFrame::Surface {
@@ -156,12 +158,12 @@ impl RenderContext {
 
         let mut graph = rend3::RenderGraph::new();
 
-        let vwp_3d_res = app_viewports.viewport_3d.rect.size();
-        let to_uvec2 = |v: egui::Vec2| { UVec2::new(v.x as u32, v.y as u32) };
+        let vwp_3d_res = app_viewports.view_3d.rect.size();
+        let to_uvec2 = |v: egui::Vec2| UVec2::new(v.x as u32, v.y as u32);
 
         // TODO: What if we ever have multiple 3d viewports? There's no way to
         // set the aspect ratio differently for different render passes in rend3
-        // right now. The camera is global. 
+        // right now. The camera is global.
         //
         // See: https://github.com/BVE-Reborn/rend3/issues/327
         self.renderer.set_aspect_ratio(vwp_3d_res.x / vwp_3d_res.y);
@@ -173,28 +175,22 @@ impl RenderContext {
             &self.pbr_routine,
             &self.tonemapping_routine,
             &self.grid_routine,
-            to_uvec2(app_viewports.viewport_3d.rect.size()),
+            // The resolution needs to be scaled by the pixels-per-point
+            to_uvec2(vwp_3d_res * egui_platform.context().pixels_per_point()),
             r3::SampleCount::One,
             ambient_light(),
         );
 
-        if let Some(platform) = egui_platform {
-            let (_output, paint_commands) = platform.end_frame(None);
-            egui_paint_jobs = platform.context().tessellate(paint_commands);
-            let input = rendergraph::egui_routine_custom::Input {
-                clipped_meshes: &egui_paint_jobs,
-                context: platform.context(),
-            };
-
-            let surface = graph.add_surface_texture();
-            self.egui_routine.add_to_graph(
-                &mut graph,
-                input,
-                surface,
-                viewport_texture,
-                app_viewports,
-            );
+        let (_output, paint_commands) = egui_platform.end_frame(None);
+        egui_paint_jobs = egui_platform.context().tessellate(paint_commands);
+        let input = rendergraph::egui_routine_custom::Input {
+            clipped_meshes: &egui_paint_jobs,
+            context: egui_platform.context(),
         };
+
+        let surface = graph.add_surface_texture();
+        self.egui_routine
+            .add_to_graph(&mut graph, input, surface, viewport_texture, app_viewports);
 
         graph.execute(&self.renderer, frame, cmd_bufs, &ready);
     }
