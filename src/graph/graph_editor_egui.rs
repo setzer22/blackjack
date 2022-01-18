@@ -23,6 +23,7 @@ pub fn draw_app(ctx: &CtxRef, state: &mut EditorState) {
     top_menubar(ctx, state);
 
     CentralPanel::default().show(ctx, |ui| {
+        /*
         ui.horizontal(|ui| {
             state
                 .app_viewports
@@ -31,6 +32,20 @@ pub fn draw_app(ctx: &CtxRef, state: &mut EditorState) {
 
             ui.label("This is the graph UI");
         })
+        */
+
+        state.main_split.show(
+            ui,
+            |ui| {
+                state.app_viewports.view_3d.show(ui, ui.available_size());
+            },
+            |ui| {
+                let (_, rect) = ui.allocate_space(ui.available_size());
+                let mut mesh = epaint::Mesh::default();
+                mesh.add_colored_rect(rect, Color32::RED);
+                ui.painter().add(Shape::mesh(mesh));
+            },
+        );
     });
 }
 
