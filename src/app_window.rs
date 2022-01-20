@@ -237,14 +237,28 @@ impl AppWindow {
         self.state.debug_meshes = Some(debug_meshes);
     }
 
+    pub fn adapt_mouse_event_for_gui(state: &AppState, event: &mut Event<()>) {
+        match event {
+            Event::WindowEvent { ref mut event, .. } => match event {
+                WindowEvent::CursorMoved {
+                    ref mut position, ..
+                } => {
+                    position.x -= state.editor_state.app_viewports.node_graph.rect.min.x as f64;
+                    position.y -= state.editor_state.app_viewports.node_graph.rect.min.y as f64;
+                }
+                _ => {}
+            },
+            _ => {}
+        }
+    }
+
     pub fn run_app(mut self, mut render_ctx: RenderContext) {
         self.setup(&mut render_ctx);
-        self.event_loop.run(move |event, _, control| {
+        self.event_loop.run(move |mut event, _, control| {
             // The egui platform needs to handle *all* events
             self.main_egui.handle_event(&event);
-            self.graph_egui.handle_event(&event); // TODO: Translate mouse coords
             match event {
-                Event::WindowEvent { event, .. } => {
+                Event::WindowEvent { ref event, .. } => {
                     // NOTE: Several events are forwarded to other subsystems here.
                     self.state.input_system.on_window_event(&event);
 
@@ -256,10 +270,10 @@ impl AppWindow {
                         }
 
                         // Resize
-                        WindowEvent::Resized(size) => {
+                        WindowEvent::Resized(ref size) => {
                             self.state.window_size =
                                 Vec2::new(size.width as f32, size.height as f32);
-                            Self::on_resize(&mut render_ctx, self.scale_factor, size)
+                            Self::on_resize(&mut render_ctx, self.scale_factor, *size)
                         }
 
                         _ => {}
@@ -274,6 +288,8 @@ impl AppWindow {
                 ),
                 _ => {}
             }
+            Self::adapt_mouse_event_for_gui(&self.state, &mut event);
+            self.graph_egui.handle_event(&event);
         });
     }
 }
