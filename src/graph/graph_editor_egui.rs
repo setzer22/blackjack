@@ -18,10 +18,8 @@ pub mod viewport_manager;
 pub mod viewport_split;
 
 pub fn draw_app(ctx: &CtxRef, state: &mut EditorState) {
-    let screen_size = ctx.available_rect().size();
-
     top_menubar(ctx, state);
-
+    
     CentralPanel::default().show(ctx, |ui| {
         // We need to make a clone of the split tree here because it lives
         // inside the state, so we can't borrow the state when we pass it to
@@ -35,7 +33,7 @@ pub fn draw_app(ctx: &CtxRef, state: &mut EditorState) {
 pub fn draw_split(ui: &mut Ui, state: &mut EditorState, split_name: &str) {
     match split_name {
         "3d_view" => { state.app_viewports.view_3d.show(ui, ui.available_size()) }
-        "graph_editor" => { ui.label("Graph editor goes here"); }
+        "graph_editor" => { state.app_viewports.node_graph.show(ui, ui.available_size()) }
         "inspector" => { ui.label("Properties inspector goes here"); }
         _ => panic!("Invalid split name {}", split_name),
     }
@@ -81,7 +79,7 @@ pub fn top_menubar(ctx: &CtxRef, state: &mut EditorState) {
     }
 }
 
-pub fn draw_graph_editor(ctx: &CtxRef, state: &mut EditorState, clip_rect: Rect) {
+pub fn draw_graph_editor(ctx: &CtxRef, state: &mut EditorState) {
     let mouse = &ctx.input().pointer;
     let cursor_pos = mouse.hover_pos().unwrap_or(Pos2::ZERO);
 
@@ -101,7 +99,6 @@ pub fn draw_graph_editor(ctx: &CtxRef, state: &mut EditorState, clip_rect: Rect)
         }
 
         node_area.show(ctx, |ui| {
-            ui.set_clip_rect(clip_rect);
             let response = show_graph_node(
                 &mut state.graph,
                 node_id,

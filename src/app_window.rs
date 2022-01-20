@@ -42,7 +42,8 @@ pub struct AppWindow {
     scale_factor: f32,
     event_loop: EventLoop<()>,
     state: AppState,
-    egui_platform: Platform,
+    main_egui: Platform,
+    graph_egui: Platform,
 }
 
 pub struct AppState {
@@ -70,7 +71,15 @@ impl AppWindow {
         let window_size = window.inner_size();
         let scale_factor = window.scale_factor();
 
-        let egui_platform = Platform::new(egui_winit_platform::PlatformDescriptor {
+        let main_egui = Platform::new(egui_winit_platform::PlatformDescriptor {
+            physical_width: window_size.width as u32,
+            physical_height: window_size.height as u32,
+            scale_factor,
+            font_definitions: egui::FontDefinitions::default(),
+            style: Default::default(),
+        });
+
+        let graph_egui = Platform::new(egui_winit_platform::PlatformDescriptor {
             physical_width: window_size.width as u32,
             physical_height: window_size.height as u32,
             scale_factor,
@@ -96,7 +105,8 @@ impl AppWindow {
             },
             event_loop,
             window,
-            egui_platform,
+            main_egui,
+            graph_egui,
         }
     }
 
@@ -160,7 +170,8 @@ impl AppWindow {
     }
 
     fn on_main_events_cleared(
-        egui_platform: &mut Platform,
+        main_egui: &mut Platform,
+        graph_egui: &mut Platform,
         state: &mut AppState,
         render_ctx: &mut RenderContext,
     ) {
@@ -175,7 +186,8 @@ impl AppWindow {
         );
         state.input_system.update();
 
-        egui_platform.begin_frame();
+        graph_egui.begin_frame();
+        main_egui.begin_frame();
         /*
         gui_overlay::draw_gui_overlays(
             render_ctx,
@@ -186,8 +198,9 @@ impl AppWindow {
 
         render_ctx.clear_objects();
 
-        crate::graph::graph_editor_egui::draw_app(
-            &egui_platform.context(),
+        crate::graph::graph_editor_egui::draw_app(&main_egui.context(), &mut state.editor_state);
+        crate::graph::graph_editor_egui::draw_graph_editor(
+            &graph_egui.context(),
             &mut state.editor_state,
         );
 
@@ -199,8 +212,8 @@ impl AppWindow {
         let execution_result = Self::compile_and_execute_program(state, render_ctx);
 
         if let Err(err) = execution_result {
-            let painter = egui_platform.context().debug_painter();
-            let width = egui_platform.context().available_rect().width();
+            let painter = main_egui.context().debug_painter();
+            let width = main_egui.context().available_rect().width();
             painter.text(
                 egui::pos2(width - 10.0, 30.0),
                 egui::Align2::RIGHT_TOP,
@@ -210,10 +223,7 @@ impl AppWindow {
             );
         }
 
-        render_ctx.render_frame(
-            egui_platform,
-            &mut state.editor_state.app_viewports,
-        );
+        render_ctx.render_frame(main_egui, graph_egui, &mut state.editor_state.app_viewports);
 
         // Sleep for the remaining time to cap at 60Hz
         let elapsed = Instant::now().duration_since(frame_start_time);
@@ -231,7 +241,8 @@ impl AppWindow {
         self.setup(&mut render_ctx);
         self.event_loop.run(move |event, _, control| {
             // The egui platform needs to handle *all* events
-            self.egui_platform.handle_event(&event);
+            self.main_egui.handle_event(&event);
+            self.graph_egui.handle_event(&event); // TODO: Translate mouse coords
             match event {
                 Event::WindowEvent { event, .. } => {
                     // NOTE: Several events are forwarded to other subsystems here.
@@ -256,7 +267,8 @@ impl AppWindow {
                 }
                 // Main events cleared
                 Event::MainEventsCleared => Self::on_main_events_cleared(
-                    &mut self.egui_platform,
+                    &mut self.main_egui,
+                    &mut self.graph_egui,
                     &mut self.state,
                     &mut render_ctx,
                 ),

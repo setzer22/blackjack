@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{rc::Rc, sync::Arc};
 
 use crate::{
     graph::graph_editor_egui::viewport_manager::AppViewports, prelude::*,
@@ -22,9 +22,12 @@ pub struct RenderContext {
     pub base_graph: r3::BaseRenderGraph,
     pub pbr_routine: r3::PbrRoutine,
     pub tonemapping_routine: r3::TonemappingRoutine,
-    pub egui_routine: rendergraph::egui_routine_custom::EguiCustomRoutine,
+    /// The egui routine responsible for drawing the main application UI
+    pub main_egui_routine: rendergraph::egui_routine_custom::EguiCustomRoutine,
+    /// The egui routine responsible for drawing the graph editor. This is
+    /// renderd to an offscreen texture so we can do pan / zoom.
+    pub graph_egui_routine: rendergraph::egui_routine_custom::EguiCustomRoutine,
     pub grid_routine: GridRoutine,
-
     pub surface: Arc<Surface>,
     pub texture_format: TextureFormat,
 
@@ -72,7 +75,16 @@ impl RenderContext {
             r3::TonemappingRoutine::new(&renderer, &base_graph.interfaces, format);
         drop(data_core); // Release the lock
 
-        let egui_routine = rendergraph::egui_routine_custom::EguiCustomRoutine::new(
+        let main_egui_routine = rendergraph::egui_routine_custom::EguiCustomRoutine::new(
+            &renderer,
+            format,
+            SampleCount::One,
+            window_size.width,
+            window_size.height,
+            window.scale_factor() as f32,
+        );
+
+        let graph_egui_routine = rendergraph::egui_routine_custom::EguiCustomRoutine::new(
             &renderer,
             format,
             SampleCount::One,
@@ -88,7 +100,8 @@ impl RenderContext {
             pbr_routine,
             base_graph,
             tonemapping_routine,
-            egui_routine,
+            main_egui_routine,
+            graph_egui_routine,
             grid_routine,
             surface,
             texture_format: format,
@@ -146,7 +159,8 @@ impl RenderContext {
 
     pub fn render_frame(
         &mut self,
-        egui_platform: &mut egui_winit_platform::Platform,
+        main_egui: &mut egui_winit_platform::Platform,
+        graph_egui: &mut egui_winit_platform::Platform,
         app_viewports: &mut AppViewports,
     ) {
         let frame = rend3::util::output::OutputFrame::Surface {
@@ -154,11 +168,13 @@ impl RenderContext {
         };
         let (cmd_bufs, ready) = self.renderer.ready();
 
-        let egui_paint_jobs;
+        let main_egui_paint_jobs;
+        let graph_egui_paint_jobs;
 
         let mut graph = rend3::RenderGraph::new();
 
         let vwp_3d_res = app_viewports.view_3d.rect.size();
+        let grph_3d_res = app_viewports.node_graph.rect.size();
         let to_uvec2 = |v: egui::Vec2| UVec2::new(v.x as u32, v.y as u32);
 
         // TODO: What if we ever have multiple 3d viewports? There's no way to
@@ -176,21 +192,55 @@ impl RenderContext {
             &self.tonemapping_routine,
             &self.grid_routine,
             // The resolution needs to be scaled by the pixels-per-point
-            to_uvec2(vwp_3d_res * egui_platform.context().pixels_per_point()),
+            to_uvec2(vwp_3d_res * main_egui.context().pixels_per_point()),
             r3::SampleCount::One,
             ambient_light(),
         );
 
-        let (_output, paint_commands) = egui_platform.end_frame(None);
-        egui_paint_jobs = egui_platform.context().tessellate(paint_commands);
-        let input = rendergraph::egui_routine_custom::Input {
-            clipped_meshes: &egui_paint_jobs,
-            context: egui_platform.context(),
+        self.graph_egui_routine.resize(
+            app_viewports.node_graph.rect.width() as u32,
+            app_viewports.node_graph.rect.height() as u32,
+            1.0,
+        );
+        let graph_egui_texture = {
+            let graph_egui_render_target = graph.add_render_target(r3::RenderTargetDescriptor {
+                label: None,
+                resolution: to_uvec2(grph_3d_res),
+                samples: r3::SampleCount::One,
+                format: r3::TextureFormat::Bgra8UnormSrgb,
+                usage: r3::TextureUsages::RENDER_ATTACHMENT | r3::TextureUsages::TEXTURE_BINDING,
+            });
+            let (_output, paint_commands) = graph_egui.end_frame(None);
+            graph_egui_paint_jobs = graph_egui.context().tessellate(paint_commands);
+            let graph_egui_input = rendergraph::egui_routine_custom::Input {
+                clipped_meshes: &graph_egui_paint_jobs,
+                context: graph_egui.context(),
+            };
+            self.graph_egui_routine.add_sub_ui_to_graph(
+                &mut graph,
+                graph_egui_input,
+                graph_egui_render_target,
+            );
+            graph_egui_render_target
         };
 
-        let surface = graph.add_surface_texture();
-        self.egui_routine
-            .add_to_graph(&mut graph, input, surface, viewport_texture, app_viewports);
+        {
+            let (_output, paint_commands) = main_egui.end_frame(None);
+            main_egui_paint_jobs = main_egui.context().tessellate(paint_commands);
+            let main_egui_input = rendergraph::egui_routine_custom::Input {
+                clipped_meshes: &main_egui_paint_jobs,
+                context: main_egui.context(),
+            };
+            let surface = graph.add_surface_texture();
+            self.main_egui_routine.add_main_egui_to_graph(
+                &mut graph,
+                main_egui_input,
+                surface,
+                viewport_texture,
+                graph_egui_texture,
+                app_viewports,
+            );
+        }
 
         graph.execute(&self.renderer, frame, cmd_bufs, &ready);
     }
@@ -208,6 +258,6 @@ impl RenderContext {
             .set_aspect_ratio(width as f32 / height as f32 * 2.0);
 
         let size = UVec2::new(width, height);
-        self.egui_routine.resize(width, height, scale_factor);
+        self.main_egui_routine.resize(width, height, scale_factor);
     }
 }
