@@ -23,30 +23,22 @@ pub fn draw_app(ctx: &CtxRef, state: &mut EditorState) {
     top_menubar(ctx, state);
 
     CentralPanel::default().show(ctx, |ui| {
-        /*
-        ui.horizontal(|ui| {
-            state
-                .app_viewports
-                .view_3d
-                .show(ui, screen_size * vec2(1.0, 0.5));
-
-            ui.label("This is the graph UI");
-        })
-        */
-
-        state.main_split.show(
-            ui,
-            |ui| {
-                state.app_viewports.view_3d.show(ui, ui.available_size());
-            },
-            |ui| {
-                let (_, rect) = ui.allocate_space(ui.available_size());
-                let mut mesh = epaint::Mesh::default();
-                mesh.add_colored_rect(rect, Color32::RED);
-                ui.painter().add(Shape::mesh(mesh));
-            },
-        );
+        // We need to make a clone of the split tree here because it lives
+        // inside the state, so we can't borrow the state when we pass it to
+        // its `show` method.
+        let mut split_tree = state.split_tree.clone();
+        split_tree.show(ui, state, draw_split);
+        state.split_tree = split_tree;
     });
+}
+
+pub fn draw_split(ui: &mut Ui, state: &mut EditorState, split_name: &str) {
+    match split_name {
+        "3d_view" => { state.app_viewports.view_3d.show(ui, ui.available_size()) }
+        "graph_editor" => { ui.label("Graph editor goes here"); }
+        "inspector" => { ui.label("Properties inspector goes here"); }
+        _ => panic!("Invalid split name {}", split_name),
+    }
 }
 
 pub fn top_menubar(ctx: &CtxRef, state: &mut EditorState) {

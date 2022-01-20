@@ -3,7 +3,7 @@ use crate::prelude::*;
 
 use super::node_finder::NodeFinder;
 use super::viewport_manager::AppViewports;
-use super::viewport_split::ViewportSplit;
+use super::viewport_split::{ViewportSplit, SplitTree};
 
 pub struct EditorState {
     pub graph: Graph,
@@ -26,10 +26,10 @@ pub struct EditorState {
     /// The viewports. Stores information to draw the parts of UI which are
     /// rendered in a different pass.
     pub app_viewports: AppViewports,
-    /// The main split separating the node graph from the 3d view. This field
-    /// will become a more complex data structure storing a tree of nested
-    /// splits eventually.
-    pub main_split: ViewportSplit,
+    /// The tree of splits at the center of application. Splits recursively
+    /// partition the state either horizontally or vertically. This separation
+    /// is dynamic, very similar to Blender's UI model
+    pub split_tree: SplitTree,
 }
 
 impl EditorState {
@@ -43,7 +43,7 @@ impl EditorState {
             node_finder: None,
             load_op: None,
             app_viewports: AppViewports::new(),
-            main_split: ViewportSplit::horizontal(),
+            split_tree: SplitTree::default_tree(),
         }
     }
 }
