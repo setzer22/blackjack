@@ -16,7 +16,7 @@ tri-mesh = "0.5.0"
 rend3 = { git = "https://github.com/setzer22/rend3", branch = "blackjack" }
 rend3-routine = { git = "https://github.com/setzer22/rend3", branch = "blackjack" }
 rend3-egui = { git = "https://github.com/setzer22/rend3", branch = "blackjack" }
-egui_wgpu_backend = { git = "https://github.com/setzer22/egui_wgpu_backend", branch = "feat/accept_textureview"}
+egui_wgpu_backend = "*" # { git = "https://github.com/setzer22/egui_wgpu_backend", branch = "feat/accept_textureview"}
 glam = { version = "0.20", features = ["serde"] }
 env_logger = { version = "0.9", default-features = false, features = [
     "termcolor",
@@ -42,3 +42,7 @@ wavefront_rs = { git = "https://github.com/setzer22/wavefront_rs", rev = "e303f3
 float-ord  = "0.3.2"
 spin_sleep = "1.0.0"
 type-map = "0.5"
+
+[patch.crates-io]
+egui_wgpu_backend = { path = "../egui_wgpu_backend" }
+egui_winit_platform = { path = "../egui_winit_platform" }

@@ -162,6 +162,7 @@ impl RenderContext {
         main_egui: &mut egui_winit_platform::Platform,
         graph_egui: &mut egui_winit_platform::Platform,
         app_viewports: &mut AppViewports,
+        zoom_level: f32,
     ) {
         let frame = rend3::util::output::OutputFrame::Surface {
             surface: Arc::clone(&self.surface),
@@ -197,15 +198,68 @@ impl RenderContext {
             ambient_light(),
         );
 
+        let ppp = main_egui.context().pixels_per_point();
+
         self.graph_egui_routine.resize(
-            app_viewports.node_graph.rect.width() as u32,
-            app_viewports.node_graph.rect.height() as u32,
+            (app_viewports.node_graph.rect.width() * zoom_level * ppp) as u32,
+            (app_viewports.node_graph.rect.height() * zoom_level * ppp) as u32,
             1.0,
         );
+
+        // This is completely nuts... 🤪 but I think I figured it out
+        // 
+        // In this setup, UI scaling is used in two different places:
+        // - Egui winit platform, sets the raw_input screen size and pixels per
+        //   point according to scaling events
+        // - Egui wgpu backend, which uses the scaling to compute the screen
+        //   size, which is in turn used in two places:
+        //    - On the vertex shader, where egui meshes are convert to ndc.
+        //    - At the loop performing the draw calls, where it's used to clamp
+        //      the clip rects to stay whithin the screen size. -> this one is
+        //      actually an issue 
+        // 
+        // To achieve the "zooming" effect, we only need to touch the wgpu
+        // backend values.
+        // - First, we tell the wgpu backend that our screen is smaller than it
+        //   actually is. This makes the code on the vertex shader computing the
+        //   NDC just output bigger meshes relative to a (smaller) screen.
+        // - But this alone is not enough, because the clip rects are not
+        //   affected by this scale. This is why the code at the draw call loop
+        //   needs to scale the clip rects by the inverse of that amount.
+        //
+        // The scaling of the parent UI is another variable to consider, to make
+        // things a bit more interesting
+        // - A larger scale value makes the screen rect of the parent UI
+        //   *smaller*. This means that when fetching the value from the
+        //   `app_viewports`, the screen rect is not the actual size in pixels
+        //   the child UI needs to be drawn with.
+        //
+        // The "zoom effect" is not enough on its own, as making the same shapes
+        // larger, would also make the text // AA blurrier. 
+        // - The way to fix this is by increasing egui's pixels_per_point with
+        //   the inverse of the zoom level. That means the more zoom we have,
+        //   the sharper things are going to be.
+        // - There is an additional consideration to be made: Calling
+        //   set_pixels_per_point like I'm doing below has a 1 frame of lag.
+        //   Instead, we need to hijack the raw_input so that the value is set,
+        //   according to the zoom level, at the start of the frame.
+        //
+        // Some scattered facts
+        // - The *inner* egui should be rendered using 1.0 pixels per point,
+        //   because there's no DPI in the offscreen texture (and there's zoom
+        //   instead)
+        // - The screen rect of the child UI is not important for zooming. It
+        //   only affects what egui perceives as usable screen space. Since the
+        //   nodes are drawn at absolute screen positions and there's no layout
+        //   using the screen size, it doesn't matter.
+        // 
+
+        graph_egui.context().set_pixels_per_point(1.0 / zoom_level);
+
         let graph_egui_texture = {
             let graph_egui_render_target = graph.add_render_target(r3::RenderTargetDescriptor {
                 label: None,
-                resolution: to_uvec2(grph_3d_res),
+                resolution: to_uvec2(grph_3d_res * ppp),
                 samples: r3::SampleCount::One,
                 format: r3::TextureFormat::Bgra8UnormSrgb,
                 usage: r3::TextureUsages::RENDER_ATTACHMENT | r3::TextureUsages::TEXTURE_BINDING,
@@ -220,6 +274,7 @@ impl RenderContext {
                 &mut graph,
                 graph_egui_input,
                 graph_egui_render_target,
+                zoom_level,
             );
             graph_egui_render_target
         };

@@ -53,6 +53,7 @@ pub struct AppState {
     debug_meshes: Option<DebugMeshes>,
     mesh: Option<HalfEdgeMesh>,
     editor_state: EditorState,
+    zoom_level: f32,
 }
 
 impl AppWindow {
@@ -82,7 +83,7 @@ impl AppWindow {
         let graph_egui = Platform::new(egui_winit_platform::PlatformDescriptor {
             physical_width: window_size.width as u32,
             physical_height: window_size.height as u32,
-            scale_factor,
+            scale_factor: 1.0,
             font_definitions: egui::FontDefinitions::default(),
             style: Default::default(),
         });
@@ -102,6 +103,7 @@ impl AppWindow {
                 debug_meshes: None,
                 mesh: None,
                 editor_state,
+                zoom_level: 1.0,
             },
             event_loop,
             window,
@@ -184,6 +186,9 @@ impl AppWindow {
             render_ctx,
             state.window_size,
         );
+        state.zoom_level += state.input_system.mouse.wheel_delta() * 0.1;
+
+
         state.input_system.update();
 
         graph_egui.begin_frame();
@@ -223,7 +228,12 @@ impl AppWindow {
             );
         }
 
-        render_ctx.render_frame(main_egui, graph_egui, &mut state.editor_state.app_viewports);
+        render_ctx.render_frame(
+            main_egui,
+            graph_egui,
+            &mut state.editor_state.app_viewports,
+            state.zoom_level,
+        );
 
         // Sleep for the remaining time to cap at 60Hz
         let elapsed = Instant::now().duration_since(frame_start_time);
@@ -255,8 +265,6 @@ impl AppWindow {
     pub fn run_app(mut self, mut render_ctx: RenderContext) {
         self.setup(&mut render_ctx);
         self.event_loop.run(move |mut event, _, control| {
-            // The egui platform needs to handle *all* events
-            self.main_egui.handle_event(&event);
             match event {
                 Event::WindowEvent { ref event, .. } => {
                     // NOTE: Several events are forwarded to other subsystems here.
@@ -288,7 +296,9 @@ impl AppWindow {
                 ),
                 _ => {}
             }
-            Self::adapt_mouse_event_for_gui(&self.state, &mut event);
+
+            // The egui platform needs to handle *all* events
+            self.main_egui.handle_event(&event);
             self.graph_egui.handle_event(&event);
         });
     }

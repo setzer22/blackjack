@@ -80,6 +80,15 @@ pub fn top_menubar(ctx: &CtxRef, state: &mut EditorState) {
 }
 
 pub fn draw_graph_editor(ctx: &CtxRef, state: &mut EditorState) {
+    CentralPanel::default().frame(Frame::default()).show(ctx, |ui| {
+        ui.label("Look ma I am zoom egui");
+    });
+    if state.graph.iter_nodes().count() == 0 {
+        state.graph.add_node(graph::node_types::GraphNodeType::MakeBox.to_descriptor());
+    }
+
+    //ctx.debug_painter().rect_filled(ctx.available_rect(), 0.0, Color32::RED);
+
     let mouse = &ctx.input().pointer;
     let cursor_pos = mouse.hover_pos().unwrap_or(Pos2::ZERO);
 

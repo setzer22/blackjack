@@ -101,7 +101,7 @@ impl EguiCustomRoutine {
                 ));
 
                 this.internal
-                    .execute_with_renderpass(rpass, input.clipped_meshes, &this.screen_descriptor)
+                    .execute_with_renderpass(rpass, input.clipped_meshes, &this.screen_descriptor, 1.0)
                     .unwrap();
             },
         );
@@ -112,6 +112,7 @@ impl EguiCustomRoutine {
         graph: &mut RenderGraph<'node>,
         input: Input<'node>,
         output: RenderTargetHandle,
+        zoom_level: f32,
     ) {
         let mut builder = graph.add_node("egui");
 
@@ -148,7 +149,7 @@ impl EguiCustomRoutine {
                 );
 
                 this.internal
-                    .execute_with_renderpass(rpass, input.clipped_meshes, &this.screen_descriptor)
+                    .execute_with_renderpass(rpass, input.clipped_meshes, &this.screen_descriptor, zoom_level)
                     .unwrap();
             },
         );
