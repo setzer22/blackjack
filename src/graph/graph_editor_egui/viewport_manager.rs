@@ -54,6 +54,8 @@ impl AppViewport {
             let uv = Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0));
             mesh.add_rect_with_uv(rect, uv, Color32::WHITE);
             ui.painter().add(Shape::mesh(mesh));
+        } else {
+            ui.painter().rect_filled(rect, 0.0, egui::Color32::RED);
         }
     }
 }

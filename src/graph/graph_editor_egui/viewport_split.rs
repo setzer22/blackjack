@@ -35,12 +35,12 @@ impl ViewportSplit {
 }
 
 impl ViewportSplit {
-    pub fn show(
+    pub fn show<Payload>(
         &mut self,
         ui: &mut Ui,
-        state: &mut EditorState,
-        view_1: impl FnOnce(&mut Ui, &mut EditorState) -> (),
-        view_2: impl FnOnce(&mut Ui, &mut EditorState) -> (),
+        payload: &mut Payload,
+        view_1: impl FnOnce(&mut Ui, &mut Payload) -> (),
+        view_2: impl FnOnce(&mut Ui, &mut Payload) -> (),
     ) {
         let total_space = ui.available_rect_before_wrap();
         let hsep = self.separator_width * 0.5;
@@ -57,8 +57,8 @@ impl ViewportSplit {
                 rect2.set_left(total_space.left() + (width_1 + hsep));
 
                 ui.horizontal(|ui| {
-                    view_1(&mut ui.child_ui(rect1, Layout::default()), state);
-                    view_2(&mut ui.child_ui(rect2, Layout::default()), state);
+                    view_1(&mut ui.child_ui(rect1, Layout::default()), payload);
+                    view_2(&mut ui.child_ui(rect2, Layout::default()), payload);
                 });
 
                 let separator_rect = Rect::from_min_max(rect1.right_top(), rect2.left_bottom());
@@ -97,8 +97,8 @@ impl ViewportSplit {
                 rect2.set_top(total_space.top() + (height_1 + hsep));
 
                 ui.horizontal(|ui| {
-                    view_1(&mut ui.child_ui(rect1, Layout::default()), state);
-                    view_2(&mut ui.child_ui(rect2, Layout::default()), state);
+                    view_1(&mut ui.child_ui(rect1, Layout::default()), payload);
+                    view_2(&mut ui.child_ui(rect2, Layout::default()), payload);
                 });
 
                 let separator_rect = Rect::from_min_max(rect1.left_bottom(), rect2.right_top());
@@ -139,17 +139,17 @@ pub enum SplitTree {
 }
 
 impl SplitTree {
-    pub fn show(
+    pub fn show<Payload>(
         &mut self,
         ui: &mut Ui,
-        editor_state: &mut EditorState,
-        show_leaf: fn(&mut Ui, state: &mut EditorState, &str) -> (),
+        payload: &mut Payload,
+        show_leaf: fn(&mut Ui, state: &mut Payload, &str) -> (),
     ) {
         match self {
-            SplitTree::Leaf(ref name) => show_leaf(ui, editor_state, &name),
+            SplitTree::Leaf(ref name) => show_leaf(ui, payload, &name),
             SplitTree::Split { left, right, split } => split.show(
                 ui,
-                editor_state,
+                payload,
                 |ui, state| left.show(ui, state, show_leaf),
                 |ui, state| right.show(ui, state, show_leaf),
             ),

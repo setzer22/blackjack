@@ -26,10 +26,6 @@ pub struct EditorState {
     /// The viewports. Stores information to draw the parts of UI which are
     /// rendered in a different pass.
     pub app_viewports: AppViewports,
-    /// The tree of splits at the center of application. Splits recursively
-    /// partition the state either horizontally or vertically. This separation
-    /// is dynamic, very similar to Blender's UI model
-    pub split_tree: SplitTree,
 }
 
 impl EditorState {
@@ -43,7 +39,6 @@ impl EditorState {
             node_finder: None,
             load_op: None,
             app_viewports: AppViewports::new(),
-            split_tree: SplitTree::default_tree(),
         }
     }
 }

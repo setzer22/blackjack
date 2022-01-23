@@ -29,9 +29,7 @@ fn main() {
     // Setup logging
     env_logger::init();
 
-    let app_window = app_window::AppWindow::new();
-    let render_ctx = render_context::RenderContext::new(&app_window.window());
-
-    app_window.run_app(render_ctx);
+    let (app_window, event_loop) = app_window::AppWindow::new();
+    app_window.run_app(event_loop);
 }
 

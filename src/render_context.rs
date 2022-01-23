@@ -207,7 +207,7 @@ impl RenderContext {
         );
 
         // This is completely nuts... 🤪 but I think I figured it out
-        // 
+        //
         // In this setup, UI scaling is used in two different places:
         // - Egui winit platform, sets the raw_input screen size and pixels per
         //   point according to scaling events
@@ -216,8 +216,8 @@ impl RenderContext {
         //    - On the vertex shader, where egui meshes are convert to ndc.
         //    - At the loop performing the draw calls, where it's used to clamp
         //      the clip rects to stay whithin the screen size. -> this one is
-        //      actually an issue 
-        // 
+        //      actually an issue
+        //
         // To achieve the "zooming" effect, we only need to touch the wgpu
         // backend values.
         // - First, we tell the wgpu backend that our screen is smaller than it
@@ -235,7 +235,7 @@ impl RenderContext {
         //   the child UI needs to be drawn with.
         //
         // The "zoom effect" is not enough on its own, as making the same shapes
-        // larger, would also make the text // AA blurrier. 
+        // larger, would also make the text // AA blurrier.
         // - The way to fix this is by increasing egui's pixels_per_point with
         //   the inverse of the zoom level. That means the more zoom we have,
         //   the sharper things are going to be.
@@ -252,7 +252,7 @@ impl RenderContext {
         //   only affects what egui perceives as usable screen space. Since the
         //   nodes are drawn at absolute screen positions and there's no layout
         //   using the screen size, it doesn't matter.
-        // 
+        //
         // WIP: An idea. All this could be encapsulated inside a NodeGraph
         // object, which owns the egui platform, the egui routine, and listens
         // to winit events. A different 'Blackjack' object would own the other
@@ -306,7 +306,7 @@ impl RenderContext {
         graph.execute(&self.renderer, frame, cmd_bufs, &ready);
     }
 
-    pub fn on_resize(&mut self, width: u32, height: u32, scale_factor: f32) {
+    pub fn on_resize(&mut self, width: u32, height: u32) {
         rend3::configure_surface(
             &self.surface,
             &self.renderer.device,
@@ -314,11 +314,7 @@ impl RenderContext {
             glam::uvec2(width, height),
             rend3::types::PresentMode::Mailbox,
         );
-
         self.renderer
             .set_aspect_ratio(width as f32 / height as f32 * 2.0);
-
-        let size = UVec2::new(width, height);
-        self.main_egui_routine.resize(width, height, scale_factor);
     }
 }

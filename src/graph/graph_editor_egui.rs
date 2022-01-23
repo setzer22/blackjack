@@ -24,9 +24,9 @@ pub fn draw_app(ctx: &CtxRef, state: &mut EditorState) {
         // We need to make a clone of the split tree here because it lives
         // inside the state, so we can't borrow the state when we pass it to
         // its `show` method.
-        let mut split_tree = state.split_tree.clone();
-        split_tree.show(ui, state, draw_split);
-        state.split_tree = split_tree;
+        //let mut split_tree = state.split_tree.clone();
+        //split_tree.show(ui, state, draw_split);
+        //state.split_tree = split_tree;
     });
 }
 
