@@ -214,7 +214,7 @@ impl RootViewport {
                     &screen_descriptor,
                 );
 
-                // Register offscreen viewports
+                // -- Register offscreen viewports --
                 let graph_texture = graph_data.get_render_target(graph_handle);
                 let graph_texture_egui = renderpass.egui_texture_from_wgpu_texture(
                     &renderer.device,
@@ -235,8 +235,6 @@ impl RootViewport {
     }
 
     pub fn add_root_to_graph<'node>(&'node mut self, graph: &mut r3::RenderGraph<'node>) {
-        //let offscreen = self.add_offscreen_viewports(graph);
-
         let output = graph.add_surface_texture();
         self.add_draw_to_graph(graph, output);
     }

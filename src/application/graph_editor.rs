@@ -12,6 +12,9 @@ pub struct GraphEditor {
 }
 
 impl GraphEditor {
+    pub const ZOOM_LEVEL_MIN: f32 = 0.5;
+    pub const ZOOM_LEVEL_MAX: f32 = 10.0;
+
     pub fn new(device: &wgpu::Device, window_size: UVec2, format: r3::TextureFormat) -> Self {
         Self {
             state: EditorState::new(),
@@ -62,9 +65,15 @@ impl GraphEditor {
                 winit::event::WindowEvent::MouseWheel { delta, .. } => match delta {
                     winit::event::MouseScrollDelta::LineDelta(_, dy) => {
                         self.zoom_level += *dy as f32 * 8.0 * 0.01;
+                        self.zoom_level = self
+                            .zoom_level
+                            .clamp(Self::ZOOM_LEVEL_MIN, Self::ZOOM_LEVEL_MAX);
                     }
                     winit::event::MouseScrollDelta::PixelDelta(pos) => {
                         self.zoom_level -= pos.y as f32 * 0.01;
+                        self.zoom_level = self
+                            .zoom_level
+                            .clamp(Self::ZOOM_LEVEL_MIN, Self::ZOOM_LEVEL_MAX);
                     }
                 },
                 _ => {}
@@ -91,7 +100,7 @@ impl GraphEditor {
 
     pub fn update(&mut self, parent_scale: f32, viewport_rect: egui::Rect) {
         self.resize_platform(parent_scale, viewport_rect);
-        // TODO: Also need to hijack raw_input to set a different pixels_per_point before begin_frame at (1.0/zoom_level)
+        self.platform.raw_input.pixels_per_point = Some(1.0 / dbg!(self.zoom_level));
         self.platform.begin_frame();
 
         let ctx = self.platform.context();
