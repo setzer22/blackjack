@@ -111,8 +111,10 @@ impl RootViewport {
     }
 
     pub fn update(&mut self) {
-        self.graph_editor
-            .update(self.offscreen_viewports[&OffscreenViewport::GraphEditor].rect);
+        self.graph_editor.update(
+            self.screen_descriptor.scale_factor,
+            self.offscreen_viewports[&OffscreenViewport::GraphEditor].rect,
+        );
 
         self.platform.begin_frame();
         egui::CentralPanel::default().show(&self.platform.context(), |ui| {

@@ -75,22 +75,22 @@ impl GraphEditor {
         self.platform.handle_event(&event);
     }
 
-    pub fn resize_platform(&mut self, viewport_rect: egui::Rect) {
+    pub fn resize_platform(&mut self, parent_scale: f32, viewport_rect: egui::Rect) {
         // We craft a fake resize event so that the code in egui_winit_platform
         // remains unchanged, thinking it lives in a real window. The poor thing!
         let fake_resize_event: winit::event::Event<()> = winit::event::Event::WindowEvent {
             // SAFETY: This dummy window id is never getting sent back to winit
             window_id: unsafe { winit::window::WindowId::dummy() },
             event: winit::event::WindowEvent::Resized(winit::dpi::PhysicalSize::new(
-                viewport_rect.width() as u32,
-                viewport_rect.height() as u32,
+                (viewport_rect.width() * self.zoom_level * parent_scale) as u32,
+                (viewport_rect.height() * self.zoom_level * parent_scale) as u32,
             )),
         };
         self.platform.handle_event(&fake_resize_event);
     }
 
-    pub fn update(&mut self, viewport_rect: egui::Rect) {
-        self.resize_platform(viewport_rect);
+    pub fn update(&mut self, parent_scale: f32, viewport_rect: egui::Rect) {
+        self.resize_platform(parent_scale, viewport_rect);
         // TODO: Also need to hijack raw_input to set a different pixels_per_point before begin_frame at (1.0/zoom_level)
         self.platform.begin_frame();
 
