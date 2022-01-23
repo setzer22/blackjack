@@ -253,6 +253,12 @@ impl RenderContext {
         //   nodes are drawn at absolute screen positions and there's no layout
         //   using the screen size, it doesn't matter.
         // 
+        // WIP: An idea. All this could be encapsulated inside a NodeGraph
+        // object, which owns the egui platform, the egui routine, and listens
+        // to winit events. A different 'Blackjack' object would own the other
+        // (parent) egui, both platform and render routine. This encapsulation
+        // would allow easy replication of the graph UI, allowing multiple
+        // graphs per split and custom user layouts.
 
         graph_egui.context().set_pixels_per_point(1.0 / zoom_level);
 

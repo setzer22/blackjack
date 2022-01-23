@@ -10,7 +10,9 @@ pub mod r3 {
             ObjectHandle, SampleCount, TextureFormat, TextureUsages,
         },
         ReadyData, RenderGraph, RenderTargetDescriptor, RenderTargetHandle, Renderer,
+        RenderPassHandle, RenderPassTargets, RenderPassTarget
     };
+
 
     pub use rend3_routine::base::{BaseRenderGraph, BaseRenderGraphIntermediateState};
     pub use rend3_routine::pbr::{AlbedoComponent, PbrMaterial, PbrRoutine};

@@ -5,6 +5,8 @@ mod prelude;
 /// Initialization and main loop.
 mod app_window;
 
+mod application;
+
 /// The rendering context. Provides a layer of abstraction over rend3.
 mod render_context;
 

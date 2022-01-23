@@ -115,9 +115,7 @@ impl EguiCustomRoutine {
         zoom_level: f32,
     ) {
         let mut builder = graph.add_node("egui");
-
         let output_handle = builder.add_render_target_output(output);
-
         let rpass_handle = builder.add_renderpass(RenderPassTargets {
             targets: vec![RenderPassTarget {
                 color: output_handle,
