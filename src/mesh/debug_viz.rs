@@ -118,7 +118,7 @@ pub fn add_halfedge_debug(
         let material =
             debug_meshes.get_material(&render_ctx.renderer, mesh.vertex_debug_mark(v_id));
         render_ctx.add_object(r3::Object {
-            mesh: debug_meshes.sphere.clone(),
+            mesh_kind: r3::ObjectMeshKind::Static(debug_meshes.sphere.clone()),
             material,
             transform: glam::Mat4::from_translation(vertex.position)
                 * glam::Mat4::from_scale(Vec3::ONE * VERTEX_THICKNESS),
@@ -152,7 +152,7 @@ pub fn add_halfedge_debug(
         };
 
         render_ctx.add_object(r3::Object {
-            mesh: debug_meshes.cylinder.clone(),
+            mesh_kind: r3::ObjectMeshKind::Static(debug_meshes.cylinder.clone()),
             material,
             transform: Mat4::from_translation(midpoint + towards_face)
                 * orientation

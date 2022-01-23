@@ -1,8 +1,4 @@
 use crate::prelude::*;
-use rend3::{
-    DataHandle, DepthHandle, RenderGraph, RenderPassDepthTarget, RenderPassTarget,
-    RenderPassTargets,
-};
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
     BindGroup, BindGroupLayout, Color, Device, RenderPipeline,
@@ -103,25 +99,25 @@ impl GridRoutine {
 
     fn grid_pass<'node>(
         &'node self,
-        graph: &mut RenderGraph<'node>,
-        color: rend3::RenderTargetHandle,
-        depth: rend3::RenderTargetHandle,
-        resolve: Option<rend3::RenderTargetHandle>,
-        grid_uniform_bg: DataHandle<BindGroup>,
+        graph: &mut r3::RenderGraph<'node>,
+        color: r3::RenderTargetHandle,
+        depth: r3::RenderTargetHandle,
+        resolve: Option<r3::RenderTargetHandle>,
+        grid_uniform_bg: r3::DataHandle<BindGroup>,
     ) {
         let mut builder = graph.add_node("Infinite Grid");
         let color_handle = builder.add_render_target_output(color);
         let resolve = builder.add_optional_render_target_output(resolve);
         let depth_handle = builder.add_render_target_output(depth);
 
-        let rpass_handle = builder.add_renderpass(RenderPassTargets {
-            targets: vec![RenderPassTarget {
+        let rpass_handle = builder.add_renderpass(r3::RenderPassTargets {
+            targets: vec![r3::RenderPassTarget {
                 color: color_handle,
                 clear: Color::BLACK,
                 resolve: resolve,
             }],
-            depth_stencil: Some(RenderPassDepthTarget {
-                target: DepthHandle::RenderTarget(depth_handle),
+            depth_stencil: Some(r3::RenderPassDepthTarget {
+                target: r3::DepthHandle::RenderTarget(depth_handle),
                 depth_clear: Some(0.0),
                 stencil_clear: None,
             }),
@@ -145,8 +141,8 @@ impl GridRoutine {
 
     fn create_bind_groups<'node>(
         &'node self,
-        graph: &mut RenderGraph<'node>,
-        grid_uniform_bg: DataHandle<BindGroup>,
+        graph: &mut r3::RenderGraph<'node>,
+        grid_uniform_bg: r3::DataHandle<BindGroup>,
     ) {
         use wgpu::*;
         let mut builder = graph.add_node("build grid uniforms");
@@ -186,7 +182,7 @@ impl GridRoutine {
 
     pub fn add_to_graph<'node>(
         &'node self,
-        graph: &mut RenderGraph<'node>,
+        graph: &mut r3::RenderGraph<'node>,
         state: &r3::BaseRenderGraphIntermediateState,
     ) {
         let grid_uniform_bg = graph.add_data::<BindGroup>();

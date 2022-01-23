@@ -4,7 +4,6 @@ use crate::{app_window, graph::graph_editor_egui::viewport_manager::AppViewport,
 use egui::{FontDefinitions, Style};
 use egui_wgpu_backend::{RenderPass, ScreenDescriptor};
 use egui_winit_platform::{Platform, PlatformDescriptor};
-use rend3::RenderTargetHandle;
 
 use self::{application_context::ApplicationContext, graph_editor::GraphEditor};
 
@@ -244,7 +243,7 @@ impl RootViewport {
             surface: Arc::clone(&render_ctx.surface),
         };
         let (cmd_bufs, ready) = render_ctx.renderer.ready();
-        let mut graph = rend3::RenderGraph::new();
+        let mut graph = rend3::graph::RenderGraph::new();
         self.add_root_to_graph(&mut graph);
         graph.execute(&render_ctx.renderer, frame, cmd_bufs, &ready);
     }

@@ -5,19 +5,20 @@ pub use glam::{Mat4, Quat, UVec2, UVec3, Vec2, Vec3, Vec4};
 
 pub mod r3 {
     pub use rend3::{
+        graph::{
+            ReadyData, RenderGraph, RenderPassHandle, RenderPassTarget, RenderPassTargets,
+            RenderTargetDescriptor, RenderTargetHandle, DataHandle, RenderPassDepthTarget, DepthHandle
+        },
         types::{
             DirectionalLight, Handedness, MaterialHandle, Mesh, MeshBuilder, MeshHandle, Object,
-            ObjectHandle, SampleCount, TextureFormat, TextureUsages,
+            ObjectHandle, ObjectMeshKind, SampleCount, TextureFormat, TextureUsages,
         },
-        ReadyData, RenderGraph, RenderTargetDescriptor, RenderTargetHandle, Renderer,
-        RenderPassHandle, RenderPassTargets, RenderPassTarget
+        Renderer,
     };
-
 
     pub use rend3_routine::base::{BaseRenderGraph, BaseRenderGraphIntermediateState};
     pub use rend3_routine::pbr::{AlbedoComponent, PbrMaterial, PbrRoutine};
     pub use rend3_routine::tonemapping::TonemappingRoutine;
-    pub use rend3_egui::EguiRenderRoutine;
 }
 
 pub use itertools::Itertools;

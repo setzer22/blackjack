@@ -100,7 +100,7 @@ impl GraphEditor {
 
     pub fn update(&mut self, parent_scale: f32, viewport_rect: egui::Rect) {
         self.resize_platform(parent_scale, viewport_rect);
-        self.platform.raw_input.pixels_per_point = Some(1.0 / dbg!(self.zoom_level));
+        self.platform.raw_input_mut().pixels_per_point = Some(1.0 / self.zoom_level);
         self.platform.begin_frame();
 
         let ctx = self.platform.context();
