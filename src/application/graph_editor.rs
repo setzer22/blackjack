@@ -1,7 +1,4 @@
-use crate::{
-    app_window::input::viewport_relative_position,
-    graph::graph_editor_egui::viewport_manager::AppViewport, prelude::*,
-};
+use crate::{app_window::input::viewport_relative_position, prelude::*};
 use egui_wgpu_backend::{RenderPass, ScreenDescriptor};
 use egui_winit_platform::{Platform, PlatformDescriptor};
 
@@ -12,6 +9,7 @@ pub struct GraphEditor {
     pub platform: Platform,
     pub renderpass: RenderPass,
     pub zoom_level: f32,
+    pub raw_mouse_position: Option<egui::Pos2>,
 }
 
 impl GraphEditor {
@@ -33,6 +31,9 @@ impl GraphEditor {
             }),
             renderpass: RenderPass::new(device, format, 1),
             zoom_level: 1.0,
+            // The mouse position, in window coordinates. Stored to hide other
+            // window events from egui when the cursor is not over the viewport
+            raw_mouse_position: None,
         }
     }
 
@@ -48,6 +49,10 @@ impl GraphEditor {
     ) {
         // Copy event so we can modify it locally
         let mut event = event.clone();
+        let mouse_in_viewport = self
+            .raw_mouse_position
+            .map(|pos| viewport_rect.contains(pos))
+            .unwrap_or(false);
 
         match event {
             winit::event::Event::WindowEvent { ref mut event, .. } => match event {
@@ -59,6 +64,8 @@ impl GraphEditor {
                 winit::event::WindowEvent::CursorMoved {
                     ref mut position, ..
                 } => {
+                    self.raw_mouse_position =
+                        Some(egui::Pos2::new(position.x as f32, position.y as f32));
                     *position = viewport_relative_position(
                         *position,
                         parent_scale,
@@ -67,20 +74,22 @@ impl GraphEditor {
                     );
                 }
 
-                winit::event::WindowEvent::MouseWheel { delta, .. } => match delta {
-                    winit::event::MouseScrollDelta::LineDelta(_, dy) => {
-                        self.zoom_level += *dy as f32 * 8.0 * 0.01;
-                        self.zoom_level = self
-                            .zoom_level
-                            .clamp(Self::ZOOM_LEVEL_MIN, Self::ZOOM_LEVEL_MAX);
+                winit::event::WindowEvent::MouseWheel { delta, .. } if mouse_in_viewport => {
+                    match delta {
+                        winit::event::MouseScrollDelta::LineDelta(_, dy) => {
+                            self.zoom_level += *dy as f32 * 8.0 * 0.01;
+                            self.zoom_level = self
+                                .zoom_level
+                                .clamp(Self::ZOOM_LEVEL_MIN, Self::ZOOM_LEVEL_MAX);
+                        }
+                        winit::event::MouseScrollDelta::PixelDelta(pos) => {
+                            self.zoom_level -= pos.y as f32 * 0.01;
+                            self.zoom_level = self
+                                .zoom_level
+                                .clamp(Self::ZOOM_LEVEL_MIN, Self::ZOOM_LEVEL_MAX);
+                        }
                     }
-                    winit::event::MouseScrollDelta::PixelDelta(pos) => {
-                        self.zoom_level -= pos.y as f32 * 0.01;
-                        self.zoom_level = self
-                            .zoom_level
-                            .clamp(Self::ZOOM_LEVEL_MIN, Self::ZOOM_LEVEL_MAX);
-                    }
-                },
+                }
                 _ => {}
             },
             _ => {}

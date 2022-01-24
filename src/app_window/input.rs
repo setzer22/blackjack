@@ -44,24 +44,27 @@ impl InputSystem {
     ) {
         let mouse_in_viewport = self
             .mouse
-            .last_pos
+            .last_pos_raw
             .map(|pos| viewport_rect.contains(egui::pos2(pos.x, pos.y)))
             .unwrap_or(false);
 
         match event {
-            // Cursor moved
+            // Cursor moves are always registered. The raw (untransformed) mouse
+            // position is also stored so we know if the mosue is over the
+            // viewport on the next events.
             WindowEvent::CursorMoved { position, .. } => {
+                self.mouse.last_pos_raw = Some(Vec2::new(position.x as f32, position.y as f32));
+
                 let position = viewport_relative_position(
                     *position,
                     parent_scale,
                     viewport_rect,
                     1.0, // zoom doesn't affect cursor on this viewport
                 );
-
                 self.mouse
                     .on_cursor_move(Vec2::new(position.x as f32, position.y as f32));
             }
-
+            // Wheel events will only get registered when the cursor is inside the viewport
             WindowEvent::MouseWheel { delta, .. } if mouse_in_viewport => match delta {
                 winit::event::MouseScrollDelta::LineDelta(_, y) => {
                     self.mouse.on_wheel_scroll(*y as f32);
@@ -70,8 +73,12 @@ impl InputSystem {
                     self.mouse.on_wheel_scroll(pos.y as f32);
                 }
             },
-
-            WindowEvent::MouseInput { button, state, .. } if mouse_in_viewport => {
+            // Button events are a bit different: Presses can register inside
+            // the viewport but releases will register anywhere.
+            WindowEvent::MouseInput { button, state: state@ElementState::Pressed, .. } if mouse_in_viewport => {
+                self.mouse.on_button_event(*button, *state);
+            }
+            WindowEvent::MouseInput { button, state: state@ElementState::Released, .. } => {
                 self.mouse.on_button_event(*button, *state);
             }
             _ => {}
@@ -82,6 +89,7 @@ impl InputSystem {
 pub struct MouseInput {
     buttons: Input<MouseButton>,
     last_pos: Option<Vec2>,
+    last_pos_raw: Option<Vec2>,
     delta: Vec2,
     wheel_delta: f32,
 }
@@ -134,6 +142,7 @@ impl Default for MouseInput {
         Self {
             buttons: Input::new(),
             last_pos: Default::default(),
+            last_pos_raw: Default::default(),
             delta: Default::default(),
             wheel_delta: Default::default(),
         }
