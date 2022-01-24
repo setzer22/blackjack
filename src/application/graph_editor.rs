@@ -1,4 +1,7 @@
-use crate::{graph::graph_editor_egui::viewport_manager::AppViewport, prelude::*};
+use crate::{
+    app_window::input::viewport_relative_position,
+    graph::graph_editor_egui::viewport_manager::AppViewport, prelude::*,
+};
 use egui_wgpu_backend::{RenderPass, ScreenDescriptor};
 use egui_winit_platform::{Platform, PlatformDescriptor};
 
@@ -56,10 +59,12 @@ impl GraphEditor {
                 winit::event::WindowEvent::CursorMoved {
                     ref mut position, ..
                 } => {
-                    position.x -= (viewport_rect.min.x * parent_scale) as f64;
-                    position.y -= (viewport_rect.min.y * parent_scale) as f64;
-                    position.x *= self.zoom_level as f64;
-                    position.y *= self.zoom_level as f64;
+                    *position = viewport_relative_position(
+                        *position,
+                        parent_scale,
+                        viewport_rect,
+                        self.zoom_level,
+                    );
                 }
 
                 winit::event::WindowEvent::MouseWheel { delta, .. } => match delta {

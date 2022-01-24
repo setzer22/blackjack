@@ -1,11 +1,16 @@
 use std::{rc::Rc, sync::Arc};
 
-use crate::{app_window, graph::graph_editor_egui::viewport_manager::AppViewport, prelude::*};
+use crate::{
+    app_window, graph::graph_editor_egui::viewport_manager::AppViewport, prelude::*,
+    rendergraph::grid_routine::GridRoutine,
+};
 use egui::{FontDefinitions, Style};
 use egui_wgpu_backend::{RenderPass, ScreenDescriptor};
 use egui_winit_platform::{Platform, PlatformDescriptor};
 
-use self::{application_context::ApplicationContext, graph_editor::GraphEditor};
+use self::{
+    application_context::ApplicationContext, graph_editor::GraphEditor, viewport_3d::Viewport3d,
+};
 
 pub struct RootViewport {
     platform: Platform,
@@ -13,7 +18,8 @@ pub struct RootViewport {
     renderpass: RenderPass,
     screen_format: r3::TextureFormat,
     app_context: application_context::ApplicationContext,
-    graph_editor: graph_editor::GraphEditor,
+    graph_editor: GraphEditor,
+    viewport_3d: Viewport3d,
     /// Stores the egui texture ids for the child viewports.
     offscreen_viewports: HashMap<OffscreenViewport, AppViewport>,
 }
@@ -67,6 +73,7 @@ impl RootViewport {
             screen_format,
             app_context: ApplicationContext::new(),
             graph_editor: GraphEditor::new(&renderer.device, window_size, screen_format),
+            viewport_3d: Viewport3d::new(),
             offscreen_viewports,
         }
     }
@@ -104,15 +111,25 @@ impl RootViewport {
             self.graph_editor.on_winit_event(
                 parent_scale,
                 self.offscreen_viewports[&OffscreenViewport::GraphEditor].rect,
-                event_static,
+                event_static.clone(),
             );
+            self.viewport_3d.on_winit_event(
+                parent_scale,
+                self.offscreen_viewports[&OffscreenViewport::Viewport3d].rect,
+                event_static.clone(),
+            )
         }
     }
 
-    pub fn update(&mut self) {
+    pub fn update(&mut self, render_ctx: &mut RenderContext) {
         self.graph_editor.update(
             self.screen_descriptor.scale_factor,
             self.offscreen_viewports[&OffscreenViewport::GraphEditor].rect,
+        );
+        self.viewport_3d.update(
+            self.screen_descriptor.scale_factor,
+            self.offscreen_viewports[&OffscreenViewport::Viewport3d].rect,
+            render_ctx,
         );
 
         self.platform.begin_frame();
@@ -128,7 +145,11 @@ impl RootViewport {
         // SplitTree. We should be using some kind of identifier instead
         match name {
             "3d_view" => {
-                ui.label("3d view");
+                payload
+                    .offscreen_viewports
+                    .get_mut(&OffscreenViewport::Viewport3d)
+                    .unwrap()
+                    .show(ui, ui.available_size());
             }
             "graph_editor" => {
                 payload
@@ -147,6 +168,8 @@ impl RootViewport {
     fn add_draw_to_graph<'node>(
         &'node mut self,
         graph: &mut r3::RenderGraph<'node>,
+        ready: &r3::ReadyData,
+        viewport_routines: ViewportRoutines<'node>,
         output: r3::RenderTargetHandle,
     ) {
         // Self contains too many things to passthrough it to the inner node `.build`
@@ -157,6 +180,7 @@ impl RootViewport {
             ref mut platform,
             ref mut graph_editor,
             ref mut offscreen_viewports,
+            ref mut viewport_3d,
             ..
         } = self;
 
@@ -167,6 +191,7 @@ impl RootViewport {
             offscreen_viewports[&OffscreenViewport::GraphEditor].rect,
             parent_scale,
         );
+        let viewport_3d_texture = viewport_3d.add_to_graph(graph, ready, viewport_routines);
 
         // --- Draw parent UI ---
         let (_output, paint_commands) = platform.end_frame(None);
@@ -185,6 +210,7 @@ impl RootViewport {
         });
 
         let graph_handle = builder.add_render_target_input(graph_texture);
+        let viewport_3d_handle = builder.add_render_target_input(viewport_3d_texture);
 
         let renderpass_pt = builder.passthrough_ref_mut(renderpass);
         let screen_descriptor_pt = builder.passthrough_ref_mut(screen_descriptor);
@@ -213,7 +239,9 @@ impl RootViewport {
                     &screen_descriptor,
                 );
 
-                // -- Register offscreen viewports --
+                // --- Register offscreen viewports ---
+
+                // Graph editor
                 let graph_texture = graph_data.get_render_target(graph_handle);
                 let graph_texture_egui = renderpass.egui_texture_from_wgpu_texture(
                     &renderer.device,
@@ -226,6 +254,19 @@ impl RootViewport {
                         vwp.texture_id = Some(graph_texture_egui);
                     });
 
+                // Viewport 3d
+                let viewport_3d_texture = graph_data.get_render_target(viewport_3d_handle);
+                let viewport_3d_texture_egui = renderpass.egui_texture_from_wgpu_texture(
+                    &renderer.device,
+                    viewport_3d_texture,
+                    wgpu::FilterMode::Linear,
+                );
+                offscreen_viewports
+                    .entry(OffscreenViewport::Viewport3d)
+                    .and_modify(|vwp| {
+                        vwp.texture_id = Some(viewport_3d_texture_egui);
+                    });
+
                 renderpass
                     .execute_with_renderpass(rpass, &paint_jobs, &screen_descriptor, 1.0)
                     .unwrap();
@@ -233,18 +274,48 @@ impl RootViewport {
         );
     }
 
-    pub fn add_root_to_graph<'node>(&'node mut self, graph: &mut r3::RenderGraph<'node>) {
+    pub fn add_root_to_graph<'node>(
+        &'node mut self,
+        graph: &mut r3::RenderGraph<'node>,
+        ready: &r3::ReadyData,
+        viewport_routines: ViewportRoutines<'node>,
+    ) {
         let output = graph.add_surface_texture();
-        self.add_draw_to_graph(graph, output);
+        self.add_draw_to_graph(graph, ready, viewport_routines, output);
     }
 
     pub fn render(&mut self, render_ctx: &mut RenderContext) {
+        let RenderContext {
+            ref renderer,
+            ref base_graph,
+            ref pbr_routine,
+            ref tonemapping_routine,
+            ref grid_routine,
+            ..
+        } = render_ctx;
+
         let frame = rend3::util::output::OutputFrame::Surface {
             surface: Arc::clone(&render_ctx.surface),
         };
         let (cmd_bufs, ready) = render_ctx.renderer.ready();
         let mut graph = rend3::graph::RenderGraph::new();
-        self.add_root_to_graph(&mut graph);
+        self.add_root_to_graph(
+            &mut graph,
+            &ready,
+            ViewportRoutines {
+                base_graph,
+                pbr_routine,
+                tonemapping_routine,
+                grid_routine,
+            },
+        );
         graph.execute(&render_ctx.renderer, frame, cmd_bufs, &ready);
     }
+}
+
+pub struct ViewportRoutines<'a> {
+    base_graph: &'a r3::BaseRenderGraph,
+    pbr_routine: &'a r3::PbrRoutine,
+    tonemapping_routine: &'a r3::TonemappingRoutine,
+    grid_routine: &'a GridRoutine,
 }

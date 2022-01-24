@@ -1,6 +1,5 @@
 use crate::prelude::*;
 
-pub mod egui_routine_custom;
 pub mod grid_routine;
 
 /// Adds the necessary nodes to render the 3d viewport of the app. The viewport

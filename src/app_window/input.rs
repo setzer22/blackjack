@@ -1,4 +1,7 @@
-use winit::event::{ElementState, MouseButton, WindowEvent};
+use winit::{
+    dpi::PhysicalPosition,
+    event::{ElementState, MouseButton, WindowEvent},
+};
 
 use crate::prelude::*;
 
@@ -7,22 +10,59 @@ pub struct InputSystem {
     pub mouse: MouseInput,
 }
 
+/// Transforms a window-relative position `pos` into viewport relative
+/// coordinates for a viewport at `viewport_rect`, with a `zoom_level` in a
+/// window using a hiDPI scaling of `parent_scale`.
+pub fn viewport_relative_position(
+    position: PhysicalPosition<f64>,
+    parent_scale: f32,
+    viewport_rect: egui::Rect,
+    zoom_level: f32,
+) -> PhysicalPosition<f64> {
+    let mut position = position.clone();
+    position.x -= (viewport_rect.min.x * parent_scale) as f64;
+    position.y -= (viewport_rect.min.y * parent_scale) as f64;
+    position.x *= zoom_level as f64;
+    position.y *= zoom_level as f64;
+    position
+}
+
 impl InputSystem {
     /// Called every frame, updates the input data structures
     pub fn update(&mut self) {
         self.mouse.update();
     }
 
-    /// Called when a new `winit` window event is received.
-    pub fn on_window_event(&mut self, event: &WindowEvent) {
+    /// Called when a new `winit` window event is received. The `viewport_rect`
+    /// and `parent_scaling` are used to translate mouse events to
+    /// viewport-relative coordinates
+    pub fn on_window_event(
+        &mut self,
+        event: &WindowEvent,
+        parent_scale: f32,
+        viewport_rect: egui::Rect,
+    ) {
+        let mouse_in_viewport = self
+            .mouse
+            .last_pos
+            .map(|pos| viewport_rect.contains(egui::pos2(pos.x, pos.y)))
+            .unwrap_or(false);
+
         match event {
             // Cursor moved
             WindowEvent::CursorMoved { position, .. } => {
+                let position = viewport_relative_position(
+                    *position,
+                    parent_scale,
+                    viewport_rect,
+                    1.0, // zoom doesn't affect cursor on this viewport
+                );
+
                 self.mouse
                     .on_cursor_move(Vec2::new(position.x as f32, position.y as f32));
             }
 
-            WindowEvent::MouseWheel { delta, .. } => match delta {
+            WindowEvent::MouseWheel { delta, .. } if mouse_in_viewport => match delta {
                 winit::event::MouseScrollDelta::LineDelta(_, y) => {
                     self.mouse.on_wheel_scroll(*y as f32);
                 }
@@ -31,7 +71,7 @@ impl InputSystem {
                 }
             },
 
-            WindowEvent::MouseInput { button, state, .. } => {
+            WindowEvent::MouseInput { button, state, .. } if mouse_in_viewport => {
                 self.mouse.on_button_event(*button, *state);
             }
             _ => {}
