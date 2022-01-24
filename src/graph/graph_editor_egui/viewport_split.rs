@@ -158,11 +158,13 @@ impl SplitTree {
 
     pub fn default_tree() -> SplitTree {
         SplitTree::Split {
-            left: Box::new(SplitTree::Split {
+            left: Box::new(SplitTree::Leaf("3d_view".into())),
+            /* NOTE: Uncomment once we add the properties inspector
+            Box::new(SplitTree::Split {
                 left: Box::new(SplitTree::Leaf("inspector".into())),
                 right: Box::new(SplitTree::Leaf("3d_view".into())),
                 split: ViewportSplit::horizontal(),
-            }),
+            }), */
             right: Box::new(SplitTree::Leaf("graph_editor".into())),
             split: ViewportSplit::vertical(),
         }
