@@ -104,7 +104,7 @@ impl RootViewport {
                     });
 
                 renderpass
-                    .execute_with_renderpass(rpass, &paint_jobs, screen_descriptor, 1.0)
+                    .execute_with_renderpass(rpass, &paint_jobs, screen_descriptor, 1.0, None)
                     .unwrap();
             },
         );
