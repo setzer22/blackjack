@@ -36,3 +36,9 @@ impl AppViewport {
         }
     }
 }
+
+impl Default for AppViewport {
+    fn default() -> Self {
+        Self::new()
+    }
+}

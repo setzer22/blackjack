@@ -73,7 +73,7 @@ pub fn draw_graph_editor(ctx: &CtxRef, state: &mut GraphEditorState) {
 
     if let Some((_, ref locator)) = state.connection_in_progress {
         let painter = ctx.layer_painter(LayerId::background());
-        let start_pos = port_locations[&locator];
+        let start_pos = port_locations[locator];
         painter.line_segment([start_pos, cursor_pos], connection_stroke)
     }
 

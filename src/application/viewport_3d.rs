@@ -44,6 +44,7 @@ impl Viewport3d {
         viewport_rect: egui::Rect,
         event: winit::event::Event<'static, ()>,
     ) {
+        #[allow(clippy::single_match)]
         match event {
             winit::event::Event::WindowEvent { event, .. } => {
                 self.input
@@ -107,18 +108,22 @@ impl Viewport3d {
         ready: &r3::ReadyData,
         viewport_routines: super::ViewportRoutines<'node>,
     ) -> r3::RenderTargetHandle {
-        let viewport_texture = rendergraph::blackjack_viewport_rendergraph(
-            &viewport_routines.base_graph,
+        rendergraph::blackjack_viewport_rendergraph(
+            viewport_routines.base_graph,
             graph,
             ready,
-            &viewport_routines.pbr_routine,
-            &viewport_routines.tonemapping_routine,
-            &viewport_routines.grid_routine,
+            viewport_routines.pbr_routine,
+            viewport_routines.tonemapping_routine,
+            viewport_routines.grid_routine,
             self.get_resolution(),
             r3::SampleCount::One,
             Self::ambient_light(),
-        );
+        )
+    }
+}
 
-        viewport_texture
+impl Default for Viewport3d {
+    fn default() -> Self {
+        Self::new()
     }
 }

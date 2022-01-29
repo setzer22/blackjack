@@ -12,11 +12,11 @@ pub fn color_from_hex(hex: &str) -> Result<Color32, String> {
     fn _hex_dec(hex_string: &str) -> Result<u8, String> {
         match u8::from_str_radix(hex_string, 16) {
             Ok(o) => Ok(o),
-            Err(e) => Err(format!("Error parsing hex: {}", e).to_string()),
+            Err(e) => Err(format!("Error parsing hex: {}", e)),
         }
     }
 
-    if hex.len() == 9 && hex.starts_with("#") {
+    if hex.len() == 9 && hex.starts_with('#') {
         // #FFFFFFFF (Red Green Blue Alpha)
         return Ok(Color32::from_rgba_premultiplied(
             _hex_dec(&hex[1..3])?,
@@ -24,7 +24,7 @@ pub fn color_from_hex(hex: &str) -> Result<Color32, String> {
             _hex_dec(&hex[5..7])?,
             _hex_dec(&hex[7..9])?,
         ));
-    } else if hex.len() == 7 && hex.starts_with("#") {
+    } else if hex.len() == 7 && hex.starts_with('#') {
         // #FFFFFF (Red Green Blue)
         return Ok(Color32::from_rgb(
             _hex_dec(&hex[1..3])?,

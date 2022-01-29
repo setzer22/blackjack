@@ -135,7 +135,7 @@ impl Graph {
     }
 
     pub fn connection(&self, input: InputId) -> Option<OutputId> {
-        self.connections.get(&input).map(|x| *x)
+        self.connections.get(&input).copied()
     }
 
     pub fn any_param_type(&self, param: AnyParameterId) -> Result<DataType> {
@@ -191,8 +191,7 @@ impl Node {
     /// Can this node be enabled on the UI? I.e. does it output a mesh?
     pub fn can_be_enabled(&self, graph: &Graph) -> bool {
         self.outputs(graph)
-            .find(|output| output.typ == DataType::Mesh)
-            .is_some()
+            .any(|output| output.typ == DataType::Mesh)
     }
 
     /// Executable nodes are used to produce side effects, like exporting files.

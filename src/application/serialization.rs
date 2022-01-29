@@ -19,13 +19,13 @@ impl SerializedEditorState {
     pub fn from_state(editor_state: &GraphEditorState) -> Self {
         SerializedEditorState {
             graph: editor_state.graph.clone(),
-            active_node: editor_state.active_node.clone(),
+            active_node: editor_state.active_node,
             node_positions: editor_state.node_positions.clone(),
             pan_zoom: editor_state.pan_zoom,
         }
     }
 
-    pub fn to_state(self) -> GraphEditorState {
+    pub fn into_state(self) -> GraphEditorState {
         let mut state = GraphEditorState::new();
         state.graph = self.graph;
         state.active_node = self.active_node;
@@ -44,5 +44,5 @@ pub fn save(editor_state: &GraphEditorState, path: PathBuf) -> Result<()> {
 pub fn load(path: PathBuf) -> Result<GraphEditorState> {
     let reader = std::io::BufReader::new(std::fs::File::open(path)?);
     let state: SerializedEditorState = ron::de::from_reader(reader)?;
-    Ok(state.to_state())
+    Ok(state.into_state())
 }

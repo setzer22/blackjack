@@ -39,9 +39,9 @@ impl InputParam {
             InputParamValue::Selection { text, selection } => {
                 if ui.text_edit_singleline(text).changed() {
                     *selection = text
-                        .split(",")
+                        .split(',')
                         .map(|x| {
-                            u32::from_str_radix(x, 10)
+                            x.parse::<u32>()
                                 .map_err(|_| anyhow::anyhow!("Cannot parse number"))
                         })
                         .collect::<Result<Vec<_>>>()

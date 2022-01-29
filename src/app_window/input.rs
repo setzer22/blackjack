@@ -19,7 +19,7 @@ pub fn viewport_relative_position(
     viewport_rect: egui::Rect,
     zoom_level: f32,
 ) -> PhysicalPosition<f64> {
-    let mut position = position.clone();
+    let mut position = position;
     position.x -= (viewport_rect.min.x * parent_scale) as f64;
     position.y -= (viewport_rect.min.y * parent_scale) as f64;
     position.x *= zoom_level as f64;
@@ -157,6 +157,7 @@ impl Default for MouseInput {
     }
 }
 
+#[derive(Default)]
 pub struct Input<Button> {
     pressed: HashSet<Button>,
     just_pressed: HashSet<Button>,

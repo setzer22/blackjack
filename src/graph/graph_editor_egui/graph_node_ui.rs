@@ -141,10 +141,8 @@ impl<'a> GraphNodeWidget<'a> {
                     });
                 }
                 // Show 'Run' button for executable nodes
-                if graph[node_id].is_executable() {
-                    if ui.button("⛭ Run").clicked() {
-                        response = Some(DrawGraphNodeResponse::RunNodeSideEffect(node_id));
-                    }
+                if graph[node_id].is_executable() && ui.button("⛭ Run").clicked() {
+                    response = Some(DrawGraphNodeResponse::RunNodeSideEffect(node_id));
                 }
             })
         });
@@ -156,6 +154,7 @@ impl<'a> GraphNodeWidget<'a> {
         let port_left = outer_rect.left();
         let port_right = outer_rect.right();
 
+        #[allow(clippy::too_many_arguments)]
         fn draw_port(
             ui: &mut Ui,
             graph: &Graph,
@@ -201,10 +200,11 @@ impl<'a> GraphNodeWidget<'a> {
             if let Some((origin_node, origin_param)) = ongoing_drag {
                 if origin_node != node_id {
                     // Don't allow self-loops
-                    if graph.any_param_type(origin_param).unwrap() == port_type {
-                        if resp.hovered() && ui.input().pointer.any_released() {
-                            *response = Some(DrawGraphNodeResponse::ConnectEventEnded(param_id));
-                        }
+                    if graph.any_param_type(origin_param).unwrap() == port_type
+                        && resp.hovered()
+                        && ui.input().pointer.any_released()
+                    {
+                        *response = Some(DrawGraphNodeResponse::ConnectEventEnded(param_id));
                     }
                 }
             }

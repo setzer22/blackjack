@@ -285,7 +285,7 @@ impl HalfEdgeMesh {
     ///
     /// If unsure, you can pass `Vec<Vec<u32>>` as `polygons`. You can also use
     /// `[[u32;3]]` or `&[&[u32]]`. Same for `u8`, `u16` or `usize` indices.
-    pub fn build_from_polygons<'a, Index, Polygon>(
+    pub fn build_from_polygons<Index, Polygon>(
         positions: &[Vec3],
         polygons: &[Polygon],
     ) -> Result<Self>

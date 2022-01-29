@@ -45,6 +45,12 @@ impl GraphEditorState {
     }
 }
 
+impl Default for GraphEditorState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PanZoom {
     pub fn adjust_zoom(
         &mut self,

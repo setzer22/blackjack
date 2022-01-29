@@ -56,6 +56,7 @@ impl GraphEditor {
             .map(|pos| viewport_rect.contains(pos))
             .unwrap_or(false);
 
+        #[allow(clippy::single_match)]
         match event {
             winit::event::Event::WindowEvent { ref mut event, .. } => match event {
                 // Filter out scaling / resize events

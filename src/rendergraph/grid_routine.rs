@@ -114,7 +114,7 @@ impl GridRoutine {
             targets: vec![r3::RenderPassTarget {
                 color: color_handle,
                 clear: Color::BLACK,
-                resolve: resolve,
+                resolve,
             }],
             depth_stencil: Some(r3::RenderPassDepthTarget {
                 target: r3::DepthHandle::RenderTarget(depth_handle),

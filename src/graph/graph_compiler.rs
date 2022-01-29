@@ -53,7 +53,7 @@ where
             }
             InputParamValue::NewFile { path } => {
                 let path: std::path::PathBuf =
-                    path.ok_or_else(|| anyhow!("Path is not set"))?.clone();
+                    path.ok_or_else(|| anyhow!("Path is not set"))?;
                 Ok(program.mem_alloc_raw(path))
             }
         }?;
@@ -202,6 +202,6 @@ pub fn compile_graph(graph: &Graph, final_node: NodeId) -> Result<PolyAsmProgram
     let mut program = PolyAsmProgram::new();
     let mut outputs_cache = OutputsCache::default();
 
-    gen_code_for_node(&mut program, &graph, final_node, &mut outputs_cache)?;
+    gen_code_for_node(&mut program, graph, final_node, &mut outputs_cache)?;
     Ok(program)
 }

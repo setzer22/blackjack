@@ -62,6 +62,6 @@ impl NodeFinder {
             });
         });
 
-        return submitted_archetype;
+        submitted_archetype
     }
 }

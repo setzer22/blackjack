@@ -341,3 +341,9 @@ impl PolyAsmProgram {
         }
     }
 }
+
+impl Default for PolyAsmProgram {
+    fn default() -> Self {
+        Self::new()
+    }
+}

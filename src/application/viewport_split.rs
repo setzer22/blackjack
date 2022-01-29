@@ -37,8 +37,8 @@ impl ViewportSplit {
         &mut self,
         ui: &mut Ui,
         payload: &mut Payload,
-        view_1: impl FnOnce(&mut Ui, &mut Payload) -> (),
-        view_2: impl FnOnce(&mut Ui, &mut Payload) -> (),
+        view_1: impl FnOnce(&mut Ui, &mut Payload),
+        view_2: impl FnOnce(&mut Ui, &mut Payload),
     ) {
         let total_space = ui.available_rect_before_wrap();
         let hsep = self.separator_width * 0.5;
@@ -48,10 +48,10 @@ impl ViewportSplit {
                 let width_1 = total_space.width() * self.fraction;
                 let width_2 = total_space.width() * (1.0 - self.fraction);
 
-                let mut rect1 = total_space.clone();
+                let mut rect1 = total_space;
                 rect1.set_right(total_space.right() - (width_2 + hsep));
 
-                let mut rect2 = total_space.clone();
+                let mut rect2 = total_space;
                 rect2.set_left(total_space.left() + (width_1 + hsep));
 
                 ui.horizontal(|ui| {
@@ -88,10 +88,10 @@ impl ViewportSplit {
                 let height_1 = total_space.height() * self.fraction;
                 let height_2 = total_space.height() * (1.0 - self.fraction);
 
-                let mut rect1 = total_space.clone();
+                let mut rect1 = total_space;
                 rect1.set_bottom(total_space.bottom() - (height_2 + hsep));
 
-                let mut rect2 = total_space.clone();
+                let mut rect2 = total_space;
                 rect2.set_top(total_space.top() + (height_1 + hsep));
 
                 ui.horizontal(|ui| {
@@ -144,7 +144,7 @@ impl SplitTree {
         show_leaf: fn(&mut Ui, state: &mut Payload, &str) -> (),
     ) {
         match self {
-            SplitTree::Leaf(ref name) => show_leaf(ui, payload, &name),
+            SplitTree::Leaf(ref name) => show_leaf(ui, payload, name),
             SplitTree::Split { left, right, split } => split.show(
                 ui,
                 payload,

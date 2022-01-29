@@ -101,6 +101,7 @@ impl RootViewport {
         // consume the event and allow cloning for all variants except
         // ScaleFactorChanged.
 
+        #[allow(clippy::single_match)]
         match event {
             winit::event::Event::WindowEvent { ref event, .. } => match event {
                 winit::event::WindowEvent::Resized(new_size) => {

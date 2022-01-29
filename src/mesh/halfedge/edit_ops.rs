@@ -300,7 +300,7 @@ pub fn split_vertex(
     mesh[h_w_l].next = Some(next_h_v_l);
 
     mesh[h_r_w].next = Some(*outgoing_hs.get(0).unwrap_or(&h_w_l));
-    if incoming_hs.len() > 0 {
+    if !incoming_hs.is_empty() {
         mesh[incoming_hs[incoming_hs.len() - 1]].next = Some(h_w_l);
     }
 
@@ -544,7 +544,7 @@ pub fn cut_face(mesh: &mut halfedge::HalfEdgeMesh, v: VertexId, w: VertexId) -> 
 pub fn dissolve_vertex(mesh: &mut halfedge::HalfEdgeMesh, v: VertexId) -> Result<FaceId> {
     let outgoing = mesh.at_vertex(v).outgoing_halfedges()?;
 
-    if outgoing.len() == 0 {
+    if outgoing.is_empty() {
         bail!("Vertex {:?} is not in a face. Cannot dissolve", v);
     }
 
@@ -736,9 +736,8 @@ fn bevel_edges_connectivity(
                 let h2_d = duplicated_edges.contains(h2);
                 let h_n = !h_b && !h_d;
                 let h2_n = !h2_b && !h2_d;
-
-                let result = h_b && h2_n || h_d && h2_b || h_d && h2_n || h_n && h2_b;
-                result
+                
+                h_b && h2_n || h_d && h2_b || h_d && h2_n || h_n && h2_b
             })
             .collect::<SVecN<_, 16>>();
 
@@ -810,10 +809,10 @@ pub fn bevel_edges(mesh: &mut HalfEdgeMesh, halfedges: &[HalfEdgeId], amount: f3
         let w_to = mesh.at_halfedge(h).next().next().vertex().try_end()?;
         let w_to_pos = mesh.vertex_position(w_to);
 
-        let vdir = move_ops.entry(v).or_insert(HashSet::new());
+        let vdir = move_ops.entry(v).or_insert_with(HashSet::new);
         vdir.insert(v_to_pos.to_ord());
 
-        let wdir = move_ops.entry(w).or_insert(HashSet::new());
+        let wdir = move_ops.entry(w).or_insert_with(HashSet::new);
         wdir.insert(w_to_pos.to_ord());
     }
 
@@ -839,7 +838,7 @@ pub fn extrude_faces(mesh: &mut HalfEdgeMesh, faces: &[FaceId], amount: f32) -> 
     for f in faces {
         for h in mesh.at_face(*f).halfedges()? {
             let twin = mesh.at_halfedge(h).twin().try_end()?;
-            if let Some(tw_face) = mesh.at_halfedge(twin).face().try_end().ok() {
+            if let Ok(tw_face) = mesh.at_halfedge(twin).face().try_end() {
                 if !face_set.contains(&tw_face) {
                     halfedges.push(h);
                 }
@@ -872,11 +871,11 @@ pub fn extrude_faces(mesh: &mut HalfEdgeMesh, faces: &[FaceId], amount: f32) -> 
 
             move_ops
                 .entry(src)
-                .or_insert(HashSet::new())
+                .or_insert_with(HashSet::new)
                 .insert(push.to_ord());
             move_ops
                 .entry(dst)
-                .or_insert(HashSet::new())
+                .or_insert_with(HashSet::new)
                 .insert(push.to_ord());
         }
     }
