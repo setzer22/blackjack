@@ -18,6 +18,8 @@ pub struct GraphEditorState {
     /// When this option is set by the UI, the side effect encoded by the node
     /// will be executed at the start of the next frame.
     pub run_side_effect: Option<NodeId>,
+    /// The panning of the graph viewport.
+    pub pan: egui::Vec2,
 }
 
 impl GraphEditorState {
@@ -29,6 +31,7 @@ impl GraphEditorState {
             run_side_effect: None,
             node_positions: HashMap::new(),
             node_finder: None,
+            pan: egui::Vec2::ZERO,
         }
     }
 }

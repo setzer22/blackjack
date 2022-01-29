@@ -24,6 +24,7 @@ pub struct GraphNodeWidget<'a> {
     pub node_id: NodeId,
     pub ongoing_drag: Option<(NodeId, AnyParameterId)>,
     pub active: bool,
+    pub pan: egui::Vec2,
 }
 
 impl<'a> GraphNodeWidget<'a> {
@@ -31,7 +32,7 @@ impl<'a> GraphNodeWidget<'a> {
 
     pub fn show(self, ui: &mut Ui) -> Option<DrawGraphNodeResponse> {
         let mut child_ui = ui.child_ui(
-            Rect::from_min_size(*self.position, Self::MAX_NODE_SIZE.into()),
+            Rect::from_min_size(*self.position + self.pan, Self::MAX_NODE_SIZE.into()),
             Layout::default(),
         );
 
