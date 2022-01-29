@@ -1,30 +1,22 @@
-use crate::{
-    application::RootViewport,
-    graph::graph_editor_egui::editor_state::EditorState,
-    mesh::debug_viz::{self, DebugMeshes},
-    prelude::graph::NodeId,
-    prelude::*,
-};
+use crate::{application::RootViewport, prelude::*};
 use std::time::{Duration, Instant};
 
-use egui_winit_platform::Platform;
 use winit::{
-    dpi::PhysicalSize,
-    event::{Event, MouseButton, WindowEvent},
+    event::{Event, WindowEvent},
     event_loop::EventLoop,
     window::Window,
 };
 
-pub mod default_scene;
 pub mod gui_overlay;
 pub mod input;
 
 use crate::render_context::RenderContext;
 
 pub struct AppWindow {
-    window: Window,
     render_ctx: RenderContext,
     root_viewport: RootViewport,
+    // Not used, but needs to be kept alive
+    _window: Window,
 }
 
 impl AppWindow {
@@ -48,7 +40,7 @@ impl AppWindow {
 
         (
             AppWindow {
-                window,
+                _window: window,
                 render_ctx,
                 root_viewport,
             },
@@ -72,6 +64,9 @@ impl AppWindow {
     }
 
     pub fn run_app(mut self, event_loop: EventLoop<()>) {
+
+        self.root_viewport.setup(&mut self.render_ctx);
+
         event_loop.run(move |event, _, control| {
             match event {
                 Event::WindowEvent { ref event, .. } => {

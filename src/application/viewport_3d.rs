@@ -73,8 +73,8 @@ impl Viewport3d {
     fn update_camera(&mut self, render_ctx: &mut RenderContext) {
         // Update status
         if self.input.mouse.buttons().pressed(MouseButton::Left) {
-            self.camera.yaw += self.input.mouse.cursor_delta().x * 1.0;
-            self.camera.pitch += self.input.mouse.cursor_delta().y * 1.0;
+            self.camera.yaw += self.input.mouse.cursor_delta().x * 2.0;
+            self.camera.pitch += self.input.mouse.cursor_delta().y * 2.0;
         }
         self.camera.distance += self.input.mouse.wheel_delta();
 

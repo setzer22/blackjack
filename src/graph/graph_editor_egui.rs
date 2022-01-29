@@ -1,6 +1,6 @@
 use self::{graph_node_ui::*, node_finder::NodeFinder};
 use crate::prelude::*;
-use editor_state::EditorState;
+use editor_state::GraphEditorState;
 use egui::*;
 
 use super::graph_types::{AnyParameterId, DataType};
@@ -17,78 +17,7 @@ pub mod viewport_manager;
 
 pub mod viewport_split;
 
-pub fn draw_app(ctx: &CtxRef, state: &mut EditorState) {
-    top_menubar(ctx, state);
-    
-    CentralPanel::default().show(ctx, |ui| {
-        // We need to make a clone of the split tree here because it lives
-        // inside the state, so we can't borrow the state when we pass it to
-        // its `show` method.
-        //let mut split_tree = state.split_tree.clone();
-        //split_tree.show(ui, state, draw_split);
-        //state.split_tree = split_tree;
-    });
-}
-
-pub fn draw_split(ui: &mut Ui, state: &mut EditorState, split_name: &str) {
-    match split_name {
-        "3d_view" => { state.app_viewports.view_3d.show(ui, ui.available_size()) }
-        "graph_editor" => { state.app_viewports.node_graph.show(ui, ui.available_size()) }
-        "inspector" => { ui.label("Properties inspector goes here"); }
-        _ => panic!("Invalid split name {}", split_name),
-    }
-}
-
-pub fn top_menubar(ctx: &CtxRef, state: &mut EditorState) {
-    // When set, will load a new editor state at the end of this function
-    let mut loaded_state: Option<EditorState> = None;
-    egui::TopBottomPanel::top("top_menu").show(ctx, |ui| {
-        egui::menu::bar(ui, |ui| {
-            ui.menu_button("File", |ui| {
-                if ui.button("Save As...").clicked() {
-                    let file_location = rfd::FileDialog::new()
-                        .set_file_name("Untitled.blj")
-                        .add_filter("Blackjack Models", &["blj"])
-                        .save_file();
-                    if let Some(path) = file_location {
-                        // TODO: Do not panic for this. Show error modal instead.
-                        serialization::save(state, ctx, path).expect("Serialization error");
-                    }
-                }
-                if ui.button("Load").clicked() {
-                    let file_location = rfd::FileDialog::new()
-                        .add_filter("Blackjack Models", &["blj"])
-                        .pick_file();
-                    // TODO: Avoid panic
-                    if let Some(path) = file_location {
-                        loaded_state =
-                            Some(serialization::load(ctx, path).expect("Deserialization error"));
-                    }
-                }
-            });
-        })
-    });
-
-    if let Some(new_state) = loaded_state {
-        *state = new_state
-    }
-
-    if let Some(path) = state.load_op.take() {
-        // TODO: Duplicate code
-        *state = serialization::load(ctx, path.into()).expect("Deserialization error");
-    }
-}
-
-pub fn draw_graph_editor(ctx: &CtxRef, state: &mut EditorState) {
-    CentralPanel::default().frame(Frame::default()).show(ctx, |ui| {
-        ui.label("Look ma I am zoom egui");
-    });
-    if state.graph.iter_nodes().count() == 0 {
-        state.graph.add_node(graph::node_types::GraphNodeType::MakeBox.to_descriptor());
-    }
-
-    //ctx.debug_painter().rect_filled(ctx.available_rect(), 0.0, Color32::RED);
-
+pub fn draw_graph_editor(ctx: &CtxRef, state: &mut GraphEditorState) {
     let mouse = &ctx.input().pointer;
     let cursor_pos = mouse.hover_pos().unwrap_or(Pos2::ZERO);
 

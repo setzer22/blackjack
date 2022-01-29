@@ -1,7 +1,7 @@
 use crate::prelude::*;
 use std::path::PathBuf;
 
-use super::{editor_state::EditorState, node_finder::NodeFinder};
+use super::{editor_state::GraphEditorState, node_finder::NodeFinder};
 use crate::prelude::graph::{Graph, InputId, NodeId};
 use serde::{Deserialize, Serialize};
 
@@ -13,7 +13,7 @@ struct SerializedEditorState {
 }
 
 impl SerializedEditorState {
-    pub fn from_state(editor_state: &EditorState, egui_ctx: &egui::CtxRef) -> Self {
+    pub fn from_state(editor_state: &GraphEditorState, egui_ctx: &egui::CtxRef) -> Self {
         SerializedEditorState {
             graph: editor_state.graph.clone(),
             active_node: editor_state.active_node.clone(),
@@ -21,8 +21,8 @@ impl SerializedEditorState {
         }
     }
 
-    pub fn to_state(self, egui_ctx: &egui::CtxRef) -> EditorState {
-        let mut state = EditorState::new(); 
+    pub fn to_state(self, egui_ctx: &egui::CtxRef) -> GraphEditorState {
+        let mut state = GraphEditorState::new(); 
         state.graph = self.graph;
         state.active_node = self.active_node;
         *egui_ctx.memory() = self.egui_memory;
@@ -30,13 +30,13 @@ impl SerializedEditorState {
     }
 }
 
-pub fn save(editor_state: &EditorState, egui_ctx: &egui::CtxRef, path: PathBuf) -> Result<()> {
+pub fn save(editor_state: &GraphEditorState, egui_ctx: &egui::CtxRef, path: PathBuf) -> Result<()> {
     let writer = std::io::BufWriter::new(std::fs::File::create(path)?);
     ron::ser::to_writer(writer, &SerializedEditorState::from_state(editor_state, egui_ctx))?;
     Ok(())
 }
 
-pub fn load(egui_ctx: &egui::CtxRef, path: PathBuf) -> Result<EditorState> {
+pub fn load(egui_ctx: &egui::CtxRef, path: PathBuf) -> Result<GraphEditorState> {
     let reader = std::io::BufReader::new(std::fs::File::open(path)?);
     let state : SerializedEditorState = ron::de::from_reader(reader)?;
     Ok(state.to_state(egui_ctx))

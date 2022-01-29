@@ -16,7 +16,6 @@ pub struct RootViewport {
     platform: Platform,
     screen_descriptor: ScreenDescriptor,
     renderpass: RenderPass,
-    screen_format: r3::TextureFormat,
     app_context: application_context::ApplicationContext,
     graph_editor: GraphEditor,
     viewport_3d: Viewport3d,
@@ -34,6 +33,12 @@ pub mod graph_editor;
 
 /// The 3d viewport, shows the current mesh
 pub mod viewport_3d;
+
+/// The rend3 portion of the rendergraph for the root viewport
+pub mod root_graph;
+
+/// The egui code for the root viewport
+pub mod root_ui;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 enum OffscreenViewport {
@@ -70,13 +75,13 @@ impl RootViewport {
                 scale_factor: scale_factor as f32,
             },
             renderpass: RenderPass::new(&renderer.device, screen_format, 1),
-            screen_format,
-            app_context: ApplicationContext::new(),
+            app_context: ApplicationContext::new(renderer),
             graph_editor: GraphEditor::new(&renderer.device, window_size, screen_format),
             viewport_3d: Viewport3d::new(),
             offscreen_viewports,
         }
     }
+
 
     pub fn on_winit_event(&mut self, event: winit::event::Event<()>) {
         // NOTE: Winit has a feature we don't use, which causes additional
@@ -121,6 +126,10 @@ impl RootViewport {
         }
     }
 
+    pub fn setup(&mut self, render_ctx: &mut RenderContext) {
+        self.app_context.setup(render_ctx);
+    }
+
     pub fn update(&mut self, render_ctx: &mut RenderContext) {
         self.graph_editor.update(
             self.screen_descriptor.scale_factor,
@@ -133,160 +142,26 @@ impl RootViewport {
         );
 
         self.platform.begin_frame();
+
+        egui::TopBottomPanel::top("top_menubar").show(&self.platform.context(), |ui| {
+            Self::top_menubar(ui);
+        });
+
         egui::CentralPanel::default().show(&self.platform.context(), |ui| {
             let mut split_tree = self.app_context.split_tree.clone();
             split_tree.show(ui, self, Self::show_leaf);
             self.app_context.split_tree = split_tree;
         });
-    }
 
-    pub fn show_leaf(ui: &mut egui::Ui, payload: &mut Self, name: &str) {
-        // TODO: These names here are hard-coded in the creation of the
-        // SplitTree. We should be using some kind of identifier instead
-        match name {
-            "3d_view" => {
-                payload
-                    .offscreen_viewports
-                    .get_mut(&OffscreenViewport::Viewport3d)
-                    .unwrap()
-                    .show(ui, ui.available_size());
-            }
-            "graph_editor" => {
-                payload
-                    .offscreen_viewports
-                    .get_mut(&OffscreenViewport::GraphEditor)
-                    .unwrap()
-                    .show(ui, ui.available_size());
-            }
-            "inspector" => {
-                ui.label("Properties inspector goes here");
-            }
-            _ => panic!("Invalid split name {}", name),
-        }
-    }
-
-    fn add_draw_to_graph<'node>(
-        &'node mut self,
-        graph: &mut r3::RenderGraph<'node>,
-        ready: &r3::ReadyData,
-        viewport_routines: ViewportRoutines<'node>,
-        output: r3::RenderTargetHandle,
-    ) {
-        // Self contains too many things to passthrough it to the inner node `.build`
-        //  closure, so we split it up here to make borrow checking more granular
-        let Self {
-            ref mut renderpass,
-            ref mut screen_descriptor,
-            ref mut platform,
-            ref mut graph_editor,
-            ref mut offscreen_viewports,
-            ref mut viewport_3d,
-            ..
-        } = self;
-
-        // --- Draw child UIs ---
-        let parent_scale = platform.context().pixels_per_point();
-        let graph_texture = graph_editor.add_draw_to_graph(
-            graph,
-            offscreen_viewports[&OffscreenViewport::GraphEditor].rect,
-            parent_scale,
+        self.app_context.update(
+            &self.platform.context(),
+            &self.graph_editor.state,
+            render_ctx,
         );
-        let viewport_3d_texture = viewport_3d.add_to_graph(graph, ready, viewport_routines);
-
-        // --- Draw parent UI ---
-        let (_output, paint_commands) = platform.end_frame(None);
-        let paint_jobs = platform.context().tessellate(paint_commands);
-
-        let mut builder = graph.add_node("RootViewport");
-
-        let output_handle = builder.add_render_target_output(output);
-        let rpass_handle = builder.add_renderpass(r3::RenderPassTargets {
-            targets: vec![r3::RenderPassTarget {
-                color: output_handle,
-                clear: wgpu::Color::BLACK,
-                resolve: None,
-            }],
-            depth_stencil: None,
-        });
-
-        let graph_handle = builder.add_render_target_input(graph_texture);
-        let viewport_3d_handle = builder.add_render_target_input(viewport_3d_texture);
-
-        let renderpass_pt = builder.passthrough_ref_mut(renderpass);
-        let screen_descriptor_pt = builder.passthrough_ref_mut(screen_descriptor);
-        let platform_pt = builder.passthrough_ref_mut(platform);
-        let offscreen_pt = builder.passthrough_ref_mut(offscreen_viewports);
-
-        builder.build(
-            move |pt, renderer, encoder_or_pass, _temps, _ready, graph_data| {
-                let renderpass = pt.get_mut(renderpass_pt);
-                let screen_descriptor = pt.get_mut(screen_descriptor_pt);
-                let platform = pt.get_mut(platform_pt);
-                let offscreen_viewports = pt.get_mut(offscreen_pt);
-
-                let rpass = encoder_or_pass.get_rpass(rpass_handle);
-
-                renderpass.update_texture(
-                    &renderer.device,
-                    &renderer.queue,
-                    &platform.context().font_image(),
-                );
-                renderpass.update_user_textures(&renderer.device, &renderer.queue);
-                renderpass.update_buffers(
-                    &renderer.device,
-                    &renderer.queue,
-                    &paint_jobs,
-                    &screen_descriptor,
-                );
-
-                // --- Register offscreen viewports ---
-
-                // Graph editor
-                let graph_texture = graph_data.get_render_target(graph_handle);
-                let graph_texture_egui = renderpass.egui_texture_from_wgpu_texture(
-                    &renderer.device,
-                    graph_texture,
-                    wgpu::FilterMode::Linear,
-                );
-                offscreen_viewports
-                    .entry(OffscreenViewport::GraphEditor)
-                    .and_modify(|vwp| {
-                        vwp.texture_id = Some(graph_texture_egui);
-                    });
-
-                // Viewport 3d
-                let viewport_3d_texture = graph_data.get_render_target(viewport_3d_handle);
-                let viewport_3d_texture_egui = renderpass.egui_texture_from_wgpu_texture(
-                    &renderer.device,
-                    viewport_3d_texture,
-                    wgpu::FilterMode::Linear,
-                );
-                offscreen_viewports
-                    .entry(OffscreenViewport::Viewport3d)
-                    .and_modify(|vwp| {
-                        vwp.texture_id = Some(viewport_3d_texture_egui);
-                    });
-
-                renderpass
-                    .execute_with_renderpass(rpass, &paint_jobs, &screen_descriptor, 1.0)
-                    .unwrap();
-            },
-        );
-    }
-
-    pub fn add_root_to_graph<'node>(
-        &'node mut self,
-        graph: &mut r3::RenderGraph<'node>,
-        ready: &r3::ReadyData,
-        viewport_routines: ViewportRoutines<'node>,
-    ) {
-        let output = graph.add_surface_texture();
-        self.add_draw_to_graph(graph, ready, viewport_routines, output);
     }
 
     pub fn render(&mut self, render_ctx: &mut RenderContext) {
         let RenderContext {
-            ref renderer,
             ref base_graph,
             ref pbr_routine,
             ref tonemapping_routine,

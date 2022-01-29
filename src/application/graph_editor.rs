@@ -2,10 +2,10 @@ use crate::{app_window::input::viewport_relative_position, prelude::*};
 use egui_wgpu_backend::{RenderPass, ScreenDescriptor};
 use egui_winit_platform::{Platform, PlatformDescriptor};
 
-use crate::graph::graph_editor_egui::editor_state::EditorState;
+use crate::graph::graph_editor_egui::editor_state::GraphEditorState;
 
 pub struct GraphEditor {
-    pub state: EditorState,
+    pub state: GraphEditorState,
     pub platform: Platform,
     pub renderpass: RenderPass,
     pub zoom_level: f32,
@@ -18,7 +18,7 @@ impl GraphEditor {
 
     pub fn new(device: &wgpu::Device, window_size: UVec2, format: r3::TextureFormat) -> Self {
         Self {
-            state: EditorState::new(),
+            state: GraphEditorState::new(),
             platform: Platform::new(PlatformDescriptor {
                 // The width here is not really relevant, and will be reset on
                 // the next resize event.
