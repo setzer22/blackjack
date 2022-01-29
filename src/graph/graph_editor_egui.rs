@@ -56,7 +56,9 @@ pub fn draw_graph_editor(ctx: &CtxRef, state: &mut GraphEditorState) {
         node_finder_area.show(ctx, |ui| {
             if let Some(node_archetype) = node_finder.show(ui) {
                 let new_node = state.graph.add_node(node_archetype.to_descriptor());
-                state.node_positions.insert(new_node, cursor_pos);
+                state
+                    .node_positions
+                    .insert(new_node, cursor_pos - state.pan_zoom.pan);
                 should_close_node_finder = true;
             }
         });

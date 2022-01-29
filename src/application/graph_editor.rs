@@ -221,6 +221,7 @@ impl GraphEditor {
                         &paint_jobs,
                         &screen_descriptor,
                         this.zoom_level(),
+                        Some(resolution.to_array()),
                     )
                     .unwrap();
             },

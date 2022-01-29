@@ -12,7 +12,7 @@ edition = "2021"
 [dependencies]
 
 # Forked crates
-egui_wgpu_backend = { git = "https://github.com/setzer22/egui_wgpu_backend", branch = "feat/zoom_level_patch" }
+egui_wgpu_backend = { git = "https://github.com/setzer22/egui_wgpu_backend", rev = "3abd9145aaf2c79417d2ea2207df52f4e302ae28" }
 wavefront_rs = { git = "https://github.com/setzer22/wavefront_rs", rev = "e303f33" }
 
 # Git dependencies

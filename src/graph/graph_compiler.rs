@@ -52,8 +52,7 @@ where
                 Ok(program.mem_alloc_raw(value))
             }
             InputParamValue::NewFile { path } => {
-                let path: std::path::PathBuf =
-                    path.ok_or_else(|| anyhow!("Path is not set"))?;
+                let path: std::path::PathBuf = path.ok_or_else(|| anyhow!("Path is not set"))?;
                 Ok(program.mem_alloc_raw(path))
             }
         }?;

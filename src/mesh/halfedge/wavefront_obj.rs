@@ -72,9 +72,7 @@ impl HalfEdgeMesh {
             }
             _ => {}
         })?;
-        halfedge::HalfEdgeMesh::build_from_polygons(
-            &positions, &polygons,
-        )
+        halfedge::HalfEdgeMesh::build_from_polygons(&positions, &polygons)
     }
 }
 
