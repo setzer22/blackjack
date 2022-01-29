@@ -90,11 +90,11 @@ impl<'a> GraphNodeWidget<'a> {
 
         child_ui.vertical(|ui| {
             ui.horizontal(|ui| {
-                ui.add(
-                    Label::new(&graph[node_id].label)
+                ui.add(Label::new(
+                    RichText::new(&graph[node_id].label)
                         .text_style(TextStyle::Button)
-                        .text_color(color_from_hex("#fefefe").unwrap()),
-                );
+                        .color(color_from_hex("#fefefe").unwrap()),
+                ));
             });
             ui.add_space(margin.y);
             title_height = ui.min_size().y;
@@ -130,9 +130,10 @@ impl<'a> GraphNodeWidget<'a> {
                                 response = Some(DrawGraphNodeResponse::SetActiveNode(node_id));
                             }
                         } else {
-                            let button = egui::Button::new("👁 Active")
-                                .fill(egui::Color32::GOLD)
-                                .text_color(egui::Color32::BLACK);
+                            let button = egui::Button::new(
+                                RichText::new("👁 Active").color(egui::Color32::BLACK),
+                            )
+                            .fill(egui::Color32::GOLD);
                             if ui.add(button).clicked() {
                                 response = Some(DrawGraphNodeResponse::ClearActiveNode);
                             }

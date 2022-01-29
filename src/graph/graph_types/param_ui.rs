@@ -29,7 +29,6 @@ impl InputParam {
                             min = *min_val;
                             max = *max_val;
                         }
-                        _ => {}
                     }
                 }
                 ui.horizontal(|ui| {

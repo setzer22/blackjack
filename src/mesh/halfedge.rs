@@ -499,15 +499,6 @@ impl HalfEdgeMesh {
         Ok(mesh)
     }
 
-    /// Reverses the direction of the halfedges in a face.
-    /// NOTE: This breaks manifoldness. Do not do it unless you know what you're doing.
-    fn flip_face(&mut self, face_id: FaceId) {
-        let edges = self.face_edges(face_id);
-        for (&e1, &e2) in edges.iter().rev().circular_tuple_windows() {
-            self[e1].next = Some(e2);
-        }
-    }
-
     fn halfedge_loop(&self, h0: HalfEdgeId) -> SVec<HalfEdgeId> {
         let mut ret = smallvec::smallvec![h0];
         let mut h = h0;
@@ -528,13 +519,6 @@ impl HalfEdgeMesh {
             }
         }
         ret
-    }
-
-    fn previous_halfedge(&self, h: HalfEdgeId) -> HalfEdgeId {
-        *self
-            .halfedge_loop(h)
-            .last()
-            .expect("Halfedge loop must always return a positive size vector")
     }
 
     pub fn iter_vertices(&self) -> impl Iterator<Item = (VertexId, &Vertex)> {
