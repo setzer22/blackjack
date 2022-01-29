@@ -11,8 +11,6 @@ pub mod graph_node_ui;
 
 pub mod node_finder;
 
-pub mod serialization;
-
 pub mod viewport_manager;
 
 pub mod viewport_split;

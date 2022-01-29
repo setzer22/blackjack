@@ -9,7 +9,8 @@ use egui_wgpu_backend::{RenderPass, ScreenDescriptor};
 use egui_winit_platform::{Platform, PlatformDescriptor};
 
 use self::{
-    application_context::ApplicationContext, graph_editor::GraphEditor, viewport_3d::Viewport3d,
+    application_context::ApplicationContext, graph_editor::GraphEditor, root_ui::AppRootAction,
+    viewport_3d::Viewport3d,
 };
 
 pub struct RootViewport {
@@ -39,6 +40,9 @@ pub mod root_graph;
 
 /// The egui code for the root viewport
 pub mod root_ui;
+
+/// Serialization code to load / store graphs
+pub mod serialization;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 enum OffscreenViewport {
@@ -81,7 +85,6 @@ impl RootViewport {
             offscreen_viewports,
         }
     }
-
 
     pub fn on_winit_event(&mut self, event: winit::event::Event<()>) {
         // NOTE: Winit has a feature we don't use, which causes additional
@@ -128,9 +131,17 @@ impl RootViewport {
 
     pub fn setup(&mut self, render_ctx: &mut RenderContext) {
         self.app_context.setup(render_ctx);
+
+        let args: Vec<String> = std::env::args().collect();
+        if let Some(load_path) = args.get(1) {
+            self.handle_root_action(AppRootAction::Load(std::path::PathBuf::from(load_path)))
+                .expect("Error loading scene from cli arg");
+        }
     }
 
     pub fn update(&mut self, render_ctx: &mut RenderContext) {
+        let mut actions = vec![];
+
         self.graph_editor.update(
             self.screen_descriptor.scale_factor,
             self.offscreen_viewports[&OffscreenViewport::GraphEditor].rect,
@@ -144,7 +155,9 @@ impl RootViewport {
         self.platform.begin_frame();
 
         egui::TopBottomPanel::top("top_menubar").show(&self.platform.context(), |ui| {
-            Self::top_menubar(ui);
+            if let Some(menubar_action) = Self::top_menubar(ui) {
+                actions.push(menubar_action);
+            }
         });
 
         egui::CentralPanel::default().show(&self.platform.context(), |ui| {
@@ -158,6 +171,25 @@ impl RootViewport {
             &self.graph_editor.state,
             render_ctx,
         );
+
+        for action in actions {
+            // TODO: Don't panic, report error to user in modal dialog
+            self.handle_root_action(action)
+                .expect("Error executing action");
+        }
+    }
+
+    pub fn handle_root_action(&mut self, action: AppRootAction) -> Result<()> {
+        match action {
+            AppRootAction::Save(path) => {
+                serialization::save(&self.graph_editor.state, path)?;
+                Ok(())
+            }
+            AppRootAction::Load(path) => {
+                self.graph_editor.state = serialization::load(path)?;
+                Ok(())
+            }
+        }
     }
 
     pub fn render(&mut self, render_ctx: &mut RenderContext) {

@@ -15,8 +15,6 @@ pub struct ApplicationContext {
     /// partition the state either horizontally or vertically. This separation
     /// is dynamic, very similar to Blender's UI model
     pub split_tree: SplitTree,
-    /// When set, the file path stored in the inner string will be loaded.
-    pub load_op: Option<String>,
 
     pub debug_meshes: DebugMeshes,
 }
@@ -26,7 +24,6 @@ impl ApplicationContext {
         ApplicationContext {
             mesh: None,
             split_tree: SplitTree::default_tree(),
-            load_op: None,
             debug_meshes: DebugMeshes::new(renderer),
         }
     }

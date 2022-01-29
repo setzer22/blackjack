@@ -1,7 +1,16 @@
+use std::path::PathBuf;
+
 use super::*;
 
+pub enum AppRootAction {
+    Save(PathBuf),
+    Load(PathBuf),
+}
+
 impl RootViewport {
-    pub fn top_menubar(ui: &mut egui::Ui) {
+    pub fn top_menubar(ui: &mut egui::Ui) -> Option<AppRootAction> {
+        let mut action = None;
+
         // When set, will load a new editor state at the end of this function
         egui::menu::bar(ui, |ui| {
             ui.menu_button("File", |ui| {
@@ -11,22 +20,21 @@ impl RootViewport {
                         .add_filter("Blackjack Models", &["blj"])
                         .save_file();
                     if let Some(path) = file_location {
-                        // TODO: Do not panic for this. Show error modal instead.
-                        //serialization::save(state, ctx, path).expect("Serialization error");
+                        action = Some(AppRootAction::Save(path))
                     }
                 }
                 if ui.button("Load").clicked() {
                     let file_location = rfd::FileDialog::new()
                         .add_filter("Blackjack Models", &["blj"])
                         .pick_file();
-                    // TODO: Avoid panic
                     if let Some(path) = file_location {
-                        //loaded_state =
-                        //Some(serialization::load(ctx, path).expect("Deserialization error"));
+                        action = Some(AppRootAction::Load(path))
                     }
                 }
             });
         });
+
+        action
     }
 
     pub fn show_leaf(ui: &mut egui::Ui, payload: &mut Self, name: &str) {
