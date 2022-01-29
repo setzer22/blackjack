@@ -867,7 +867,10 @@ pub fn extrude_faces(mesh: &mut HalfEdgeMesh, faces: &[FaceId], amount: f32) -> 
 
             mesh.add_debug_halfedge(h, DebugMark::green("bvl"));
 
-            let push = mesh.face_normal(face) * amount;
+            let push = mesh
+                .face_normal(face)
+                .ok_or_else(|| anyhow!("Attempted to extrude a face with only two vertices."))?
+                * amount;
 
             move_ops
                 .entry(src)
