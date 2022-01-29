@@ -135,9 +135,7 @@ impl<'a> HalfEdgeTraversal<'a> for Traversal<'a, HalfEdgeId> {
     }
 
     fn face_or_boundary(&'a self) -> Result<Option<FaceId>, TraversalError> {
-        self.and_then(|valid| {
-            Ok(valid.inner[valid.location].face)
-        })
+        self.and_then(|valid| Ok(valid.inner[valid.location].face))
     }
 }
 

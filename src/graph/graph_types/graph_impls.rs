@@ -135,7 +135,7 @@ impl Graph {
     }
 
     pub fn connection(&self, input: InputId) -> Option<OutputId> {
-        self.connections.get(&input).map(|x| *x)
+        self.connections.get(&input).copied()
     }
 
     pub fn any_param_type(&self, param: AnyParameterId) -> Result<DataType> {
@@ -165,17 +165,17 @@ impl Node {
     }
 
     pub fn input_ids(&self) -> impl Iterator<Item = InputId> + '_ {
-        self.inputs.iter().map(|(name, id)| *id)
+        self.inputs.iter().map(|(_name, id)| *id)
     }
 
     pub fn output_ids(&self) -> impl Iterator<Item = OutputId> + '_ {
-        self.outputs.iter().map(|(name, id)| *id)
+        self.outputs.iter().map(|(_name, id)| *id)
     }
 
     pub fn get_input(&self, name: &str) -> Result<InputId> {
         self.inputs
             .iter()
-            .find(|(param_name, id)| param_name == name)
+            .find(|(param_name, _id)| param_name == name)
             .map(|x| x.1)
             .ok_or_else(|| anyhow!("Node {:?} has no parameter named {}", self.id, name))
     }
@@ -183,7 +183,7 @@ impl Node {
     pub fn get_output(&self, name: &str) -> Result<OutputId> {
         self.outputs
             .iter()
-            .find(|(param_name, id)| param_name == name)
+            .find(|(param_name, _id)| param_name == name)
             .map(|x| x.1)
             .ok_or_else(|| anyhow!("Node {:?} has no parameter named {}", self.id, name))
     }
@@ -191,8 +191,7 @@ impl Node {
     /// Can this node be enabled on the UI? I.e. does it output a mesh?
     pub fn can_be_enabled(&self, graph: &Graph) -> bool {
         self.outputs(graph)
-            .find(|output| output.typ == DataType::Mesh)
-            .is_some()
+            .any(|output| output.typ == DataType::Mesh)
     }
 
     /// Executable nodes are used to produce side effects, like exporting files.

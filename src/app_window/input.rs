@@ -1,4 +1,7 @@
-use winit::event::{ElementState, MouseButton, WindowEvent};
+use winit::{
+    dpi::PhysicalPosition,
+    event::{ElementState, MouseButton, WindowEvent},
+};
 
 use crate::prelude::*;
 
@@ -7,22 +10,62 @@ pub struct InputSystem {
     pub mouse: MouseInput,
 }
 
+/// Transforms a window-relative position `pos` into viewport relative
+/// coordinates for a viewport at `viewport_rect`, with a `zoom_level` in a
+/// window using a hiDPI scaling of `parent_scale`.
+pub fn viewport_relative_position(
+    position: PhysicalPosition<f64>,
+    parent_scale: f32,
+    viewport_rect: egui::Rect,
+    zoom_level: f32,
+) -> PhysicalPosition<f64> {
+    let mut position = position;
+    position.x -= (viewport_rect.min.x * parent_scale) as f64;
+    position.y -= (viewport_rect.min.y * parent_scale) as f64;
+    position.x *= zoom_level as f64;
+    position.y *= zoom_level as f64;
+    position
+}
+
 impl InputSystem {
     /// Called every frame, updates the input data structures
     pub fn update(&mut self) {
         self.mouse.update();
     }
 
-    /// Called when a new `winit` window event is received.
-    pub fn on_window_event(&mut self, event: &WindowEvent) {
+    /// Called when a new `winit` window event is received. The `viewport_rect`
+    /// and `parent_scaling` are used to translate mouse events to
+    /// viewport-relative coordinates
+    pub fn on_window_event(
+        &mut self,
+        event: &WindowEvent,
+        parent_scale: f32,
+        viewport_rect: egui::Rect,
+    ) {
+        let mouse_in_viewport = self
+            .mouse
+            .last_pos_raw
+            .map(|pos| viewport_rect.contains(egui::pos2(pos.x, pos.y)))
+            .unwrap_or(false);
+
         match event {
-            // Cursor moved
+            // Cursor moves are always registered. The raw (untransformed) mouse
+            // position is also stored so we know if the mosue is over the
+            // viewport on the next events.
             WindowEvent::CursorMoved { position, .. } => {
+                self.mouse.last_pos_raw = Some(Vec2::new(position.x as f32, position.y as f32));
+
+                let position = viewport_relative_position(
+                    *position,
+                    parent_scale,
+                    viewport_rect,
+                    1.0, // zoom doesn't affect cursor on this viewport
+                );
                 self.mouse
                     .on_cursor_move(Vec2::new(position.x as f32, position.y as f32));
             }
-
-            WindowEvent::MouseWheel { delta, .. } => match delta {
+            // Wheel events will only get registered when the cursor is inside the viewport
+            WindowEvent::MouseWheel { delta, .. } if mouse_in_viewport => match delta {
                 winit::event::MouseScrollDelta::LineDelta(_, y) => {
                     self.mouse.on_wheel_scroll(*y as f32);
                 }
@@ -30,8 +73,20 @@ impl InputSystem {
                     self.mouse.on_wheel_scroll(pos.y as f32);
                 }
             },
-
-            WindowEvent::MouseInput { button, state, .. } => {
+            // Button events are a bit different: Presses can register inside
+            // the viewport but releases will register anywhere.
+            WindowEvent::MouseInput {
+                button,
+                state: state @ ElementState::Pressed,
+                ..
+            } if mouse_in_viewport => {
+                self.mouse.on_button_event(*button, *state);
+            }
+            WindowEvent::MouseInput {
+                button,
+                state: state @ ElementState::Released,
+                ..
+            } => {
                 self.mouse.on_button_event(*button, *state);
             }
             _ => {}
@@ -42,6 +97,7 @@ impl InputSystem {
 pub struct MouseInput {
     buttons: Input<MouseButton>,
     last_pos: Option<Vec2>,
+    last_pos_raw: Option<Vec2>,
     delta: Vec2,
     wheel_delta: f32,
 }
@@ -94,12 +150,14 @@ impl Default for MouseInput {
         Self {
             buttons: Input::new(),
             last_pos: Default::default(),
+            last_pos_raw: Default::default(),
             delta: Default::default(),
             wheel_delta: Default::default(),
         }
     }
 }
 
+#[derive(Default)]
 pub struct Input<Button> {
     pressed: HashSet<Button>,
     just_pressed: HashSet<Button>,

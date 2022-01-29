@@ -1,9 +1,9 @@
-use slotmap::SlotMap;
 use glam::Vec3;
-use std::{any::Any, collections::HashMap};
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
+use slotmap::SlotMap;
+use std::collections::HashMap;
 
-use crate::prelude::{HalfEdgeMesh, SVec};
+use crate::prelude::SVec;
 
 mod id_types;
 pub use id_types::*;
@@ -34,9 +34,9 @@ pub enum InputParamMetadata {
 pub enum InputParamValue {
     Vector(Vec3),
     Scalar(f32),
-    Selection{ 
-        text: String, 
-        selection: Option<Vec<u32>>
+    Selection {
+        text: String,
+        selection: Option<Vec<u32>>,
     },
     /// Used for parameters that can't have a value because they only accept
     /// connections.

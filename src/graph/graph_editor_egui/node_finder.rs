@@ -24,7 +24,7 @@ impl NodeFinder {
     /// the next frame.
     pub fn show(&mut self, ui: &mut Ui) -> Option<GraphNodeType> {
         let background_color = color_from_hex("#3f3f3f").unwrap();
-        let titlebar_color = background_color.linear_multiply(0.8);
+        let _titlebar_color = background_color.linear_multiply(0.8);
         let text_color = color_from_hex("#fefefe").unwrap();
 
         ui.visuals_mut().widgets.noninteractive.fg_stroke = Stroke::new(2.0, text_color);
@@ -53,7 +53,7 @@ impl NodeFinder {
                                 submitted_archetype = Some(archetype);
                                 query_submit = false;
                             }
-                            if ui.selectable_label(false, &archetype_name).clicked() {
+                            if ui.selectable_label(false, archetype_name).clicked() {
                                 submitted_archetype = Some(archetype);
                             }
                         }
@@ -62,6 +62,6 @@ impl NodeFinder {
             });
         });
 
-        return submitted_archetype;
+        submitted_archetype
     }
 }

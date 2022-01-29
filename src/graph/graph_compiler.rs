@@ -1,5 +1,3 @@
-use egui::any::TypeMap;
-
 use crate::{graph::poly_asm::PolyAsmProgram, prelude::graph::*, prelude::*};
 
 use self::outputs_cache::OutputsCache;
@@ -34,7 +32,7 @@ where
         let addr = match graph[param].value() {
             InputParamValue::Vector(val) => Ok(program.mem_alloc_raw(val)),
             InputParamValue::Scalar(val) => Ok(program.mem_alloc_raw(val)),
-            InputParamValue::Selection { text, selection } => {
+            InputParamValue::Selection { text: _, selection } => {
                 Ok(program.mem_alloc_raw(selection.ok_or_else(|| {
                     anyhow!("Error parsing selection for parameter {:?}", param_name)
                 })?))
@@ -55,7 +53,7 @@ where
             }
             InputParamValue::NewFile { path } => {
                 let path: std::path::PathBuf =
-                    path.ok_or_else(|| anyhow!("Path is not set"))?.clone();
+                    path.ok_or_else(|| anyhow!("Path is not set"))?;
                 Ok(program.mem_alloc_raw(path))
             }
         }?;
@@ -204,6 +202,6 @@ pub fn compile_graph(graph: &Graph, final_node: NodeId) -> Result<PolyAsmProgram
     let mut program = PolyAsmProgram::new();
     let mut outputs_cache = OutputsCache::default();
 
-    gen_code_for_node(&mut program, &graph, final_node, &mut outputs_cache)?;
+    gen_code_for_node(&mut program, graph, final_node, &mut outputs_cache)?;
     Ok(program)
 }

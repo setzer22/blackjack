@@ -1,30 +1,23 @@
 use std::sync::Arc;
 
-use crate::{prelude::*, rendergraph::GridRoutine};
+use crate::{prelude::*, rendergraph::grid_routine::GridRoutine};
 
 use glam::Mat4;
-use rend3::{
-    types::{DirectionalLight, Mesh, Object, ResourceHandle, SampleCount},
-    Renderer,
-};
-use rend3_egui::EguiRenderRoutine;
-use rend3_routine::{PbrRenderRoutine, TonemappingRoutine};
+use rend3_routine::pbr::PbrRoutine;
 use wgpu::{Features, Surface, TextureFormat};
 
-use crate::rendergraph::{self, wireframe_pass::WireframeRoutine};
-
 pub struct RenderContext {
-    pub renderer: Arc<Renderer>,
-    pub pbr_routine: PbrRenderRoutine,
-    pub tonemapping_routine: TonemappingRoutine,
-    pub wireframe_routine: WireframeRoutine,
-    pub egui_routine: EguiRenderRoutine,
+    pub renderer: Arc<r3::Renderer>,
+
+    pub base_graph: r3::BaseRenderGraph,
+    pub pbr_routine: r3::PbrRoutine,
+    pub tonemapping_routine: r3::TonemappingRoutine,
     pub grid_routine: GridRoutine,
     pub surface: Arc<Surface>,
     pub texture_format: TextureFormat,
 
-    pub objects: Vec<ResourceHandle<Object>>,
-    lights: Vec<ResourceHandle<DirectionalLight>>,
+    pub objects: Vec<r3::ObjectHandle>,
+    lights: Vec<r3::DirectionalLightHandle>,
 }
 
 impl RenderContext {
@@ -49,45 +42,27 @@ impl RenderContext {
             rend3::types::PresentMode::Mailbox,
         );
 
-        let renderer = rend3::Renderer::new(
+        let renderer = r3::Renderer::new(
             iad,
+            r3::Handedness::Left,
             Some(window_size.width as f32 / window_size.height as f32),
         )
         .unwrap();
 
-        let render_texture_options = rend3_routine::RenderTextureOptions {
-            resolution: glam::UVec2::new(window_size.width, window_size.height),
-            samples: SampleCount::One,
-        };
-        let mut pbr_routine =
-            rend3_routine::PbrRenderRoutine::new(&renderer, render_texture_options);
-        let tonemapping_routine = rend3_routine::TonemappingRoutine::new(
-            &renderer,
-            render_texture_options.resolution,
-            format,
-        );
-
-        let egui_routine = EguiRenderRoutine::new(
-            &renderer,
-            format,
-            SampleCount::One,
-            window_size.width,
-            window_size.height,
-            window.scale_factor() as f32,
-        );
+        let base_graph = r3::BaseRenderGraph::new(&renderer);
+        let mut data_core = renderer.data_core.lock();
+        let pbr_routine = PbrRoutine::new(&renderer, &mut data_core, &base_graph.interfaces);
+        let tonemapping_routine =
+            r3::TonemappingRoutine::new(&renderer, &base_graph.interfaces, format);
+        drop(data_core); // Release the lock
 
         let grid_routine = GridRoutine::new(&renderer.device);
-
-        let wireframe_routine = WireframeRoutine::new(&renderer.device, &pbr_routine);
-
-        pbr_routine.set_ambient_color(glam::Vec4::ONE * 0.25);
 
         RenderContext {
             renderer,
             pbr_routine,
+            base_graph,
             tonemapping_routine,
-            egui_routine,
-            wireframe_routine,
             grid_routine,
             surface,
             texture_format: format,
@@ -100,24 +75,22 @@ impl RenderContext {
         self.objects.clear();
     }
 
-    pub fn add_mesh_as_object(&mut self, mesh: Mesh) {
+    pub fn add_mesh_as_object(&mut self, mesh: r3::Mesh) {
         let mesh_handle = self.renderer.add_mesh(mesh);
-        let material = rend3_routine::material::PbrMaterial {
-            albedo: rend3_routine::material::AlbedoComponent::Value(glam::Vec4::new(
-                0.8, 0.1, 0.1, 1.0,
-            )),
-            ..rend3_routine::material::PbrMaterial::default()
+        let material = r3::PbrMaterial {
+            albedo: r3::AlbedoComponent::Value(glam::Vec4::new(0.8, 0.1, 0.1, 1.0)),
+            ..Default::default()
         };
         let material_handle = self.renderer.add_material(material);
-        let object = rend3::types::Object {
-            mesh: mesh_handle,
+        let object = r3::Object {
+            mesh_kind: r3::ObjectMeshKind::Static(mesh_handle),
             material: material_handle,
             transform: glam::Mat4::IDENTITY,
         };
         self.objects.push(self.renderer.add_object(object));
     }
 
-    pub fn add_object(&mut self, object: Object) {
+    pub fn add_object(&mut self, object: r3::Object) {
         self.objects.push(self.renderer.add_object(object));
     }
 
@@ -131,8 +104,9 @@ impl RenderContext {
         });
     }
 
+    #[allow(dead_code)]
     pub fn project_point(&self, point: Vec3, screen_size: Vec2) -> Vec2 {
-        let camera_manager = self.renderer.camera_manager.read();
+        let camera_manager = &self.renderer.data_core.lock().camera_manager;
 
         let clip = camera_manager.view_proj().project_point3(point);
         let clip = Vec2::new(clip.x, -clip.y);
@@ -140,48 +114,12 @@ impl RenderContext {
         zero_to_one * screen_size
     }
 
-    pub fn add_light(&mut self, light: DirectionalLight) {
+    pub fn add_light(&mut self, light: r3::DirectionalLight) {
         let handle = self.renderer.add_directional_light(light);
         self.lights.push(handle);
     }
 
-    pub fn render_frame(&mut self, egui_platform: Option<&mut egui_winit_platform::Platform>) {
-        let frame = rend3::util::output::OutputFrame::Surface {
-            surface: Arc::clone(&self.surface),
-        };
-        let (cmd_bufs, ready) = self.renderer.ready();
-
-        let egui_paint_jobs;
-
-        let mut graph = rend3::RenderGraph::new();
-
-        rendergraph::add_default_rendergraph(
-            &mut graph,
-            &ready,
-            &self.pbr_routine,
-            None,
-            &self.tonemapping_routine,
-            &self.wireframe_routine,
-            &self.grid_routine,
-            rend3::types::SampleCount::One,
-        );
-
-        if let Some(platform) = egui_platform {
-            let (_output, paint_commands) = platform.end_frame(None);
-            egui_paint_jobs = platform.context().tessellate(paint_commands);
-            let input = rend3_egui::Input {
-                clipped_meshes: &egui_paint_jobs,
-                context: platform.context(),
-            };
-
-            let surface = graph.add_surface_texture();
-            self.egui_routine.add_to_graph(&mut graph, input, surface);
-        };
-
-        graph.execute(&self.renderer, frame, cmd_bufs, &ready);
-    }
-
-    pub fn on_resize(&mut self, width: u32, height: u32, scale_factor: f32) {
+    pub fn on_resize(&mut self, width: u32, height: u32) {
         rend3::configure_surface(
             &self.surface,
             &self.renderer.device,
@@ -189,17 +127,5 @@ impl RenderContext {
             glam::uvec2(width, height),
             rend3::types::PresentMode::Mailbox,
         );
-
-        self.renderer.set_aspect_ratio(width as f32 / height as f32 * 2.0);
-
-        let size = UVec2::new(width, height);
-        let options = rend3_routine::RenderTextureOptions {
-            resolution: size,
-            samples: SampleCount::One,
-        };
-
-        self.pbr_routine.resize(&self.renderer, options);
-        self.tonemapping_routine.resize(size);
-        self.egui_routine.resize(width, height, scale_factor);
     }
 }

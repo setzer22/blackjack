@@ -156,20 +156,14 @@ impl GraphNodeType {
             GraphNodeType::MergeMeshes => NodeDescriptor {
                 op_name,
                 label,
-                inputs: vec![
-                    in_mesh!("A"),
-                    in_mesh!("B"),
-                ],
+                inputs: vec![in_mesh!("A"), in_mesh!("B")],
                 outputs: vec![out_mesh!("out_mesh")],
                 is_executable: false,
             },
             GraphNodeType::ExportObj => NodeDescriptor {
                 op_name,
                 label,
-                inputs: vec![
-                    in_mesh!("mesh"),
-                    in_file!("export_path"),
-                ],
+                inputs: vec![in_mesh!("mesh"), in_file!("export_path")],
                 outputs: vec![],
                 is_executable: true,
             },

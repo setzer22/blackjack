@@ -1,9 +1,9 @@
 use self::{graph_node_ui::*, node_finder::NodeFinder};
 use crate::prelude::*;
-use editor_state::EditorState;
+use editor_state::GraphEditorState;
 use egui::*;
 
-use super::graph_types::{AnyParameterId, DataType};
+use super::graph_types::AnyParameterId;
 
 pub mod editor_state;
 
@@ -11,68 +11,7 @@ pub mod graph_node_ui;
 
 pub mod node_finder;
 
-pub mod serialization;
-
-/// Returns true if dirty
-pub fn draw_app(ctx: &CtxRef, state: &mut EditorState) -> bool {
-    let screen_rect = ctx.available_rect();
-    let screen_size = ctx.available_rect().size();
-    egui::TopBottomPanel::bottom("graph_panel").show(ctx, |ui| {
-        let panel_height = screen_size.y * 0.5 - 4.0;
-        ui.set_min_height(panel_height);
-        ui.label("Graph editor");
-        let clip_rect = {
-            let mut r = screen_rect;
-            r.set_top(panel_height);
-            r
-        };
-        draw_graph_editor(ctx, state, clip_rect);
-    });
-
-    // When set, will load a new editor state at the end of this function
-    let mut loaded_state: Option<EditorState> = None;
-
-    egui::TopBottomPanel::top("top_menu").show(ctx, |ui| {
-        egui::menu::bar(ui, |ui| {
-            egui::menu::menu(ui, "File", |ui| {
-                if ui.button("Save As...").clicked() {
-                    let file_location = rfd::FileDialog::new()
-                        .set_file_name("Untitled.blj")
-                        .add_filter("Blackjack Models", &["blj"])
-                        .save_file();
-                    if let Some(path) = file_location {
-                        // TODO: Do not panic for this. Show error modal instead.
-                        serialization::save(state, ctx, path).expect("Serialization error");
-                    }
-                }
-                if ui.button("Load").clicked() {
-                    let file_location = rfd::FileDialog::new()
-                        .add_filter("Blackjack Models", &["blj"])
-                        .pick_file();
-                    // TODO: Avoid panic
-                    if let Some(path) = file_location {
-                        loaded_state =
-                            Some(serialization::load(ctx, path).expect("Deserialization error"));
-                    }
-                }
-            });
-        })
-    });
-
-    if let Some(new_state) = loaded_state {
-        *state = new_state
-    }
-
-    if let Some(path) = state.load_op.take() {
-        // TODO: Duplicate code
-        *state = serialization::load(ctx, path.into()).expect("Deserialization error");
-    }
-
-    // TODO: Return the actual dirty flag and use it.
-    true
-}
-
-pub fn draw_graph_editor(ctx: &CtxRef, state: &mut EditorState, clip_rect: Rect) {
+pub fn draw_graph_editor(ctx: &CtxRef, state: &mut GraphEditorState) {
     let mouse = &ctx.input().pointer;
     let cursor_pos = mouse.hover_pos().unwrap_or(Pos2::ZERO);
 
@@ -83,33 +22,29 @@ pub fn draw_graph_editor(ctx: &CtxRef, state: &mut EditorState, clip_rect: Rect)
     // executed at the end of this function.
     let mut delayed_responses: Vec<DrawGraphNodeResponse> = vec![];
 
-    /* Draw nodes */
-    let nodes = state.graph.iter_nodes().collect::<Vec<_>>();
-    for node_id in nodes {
-        let mut node_area = Area::new(node_id);
-        if let Some(pos) = state.node_position_ops.remove(&node_id) {
-            node_area = node_area.current_pos(pos);
-        }
-
-        node_area.show(ctx, |ui| {
-            ui.set_clip_rect(clip_rect);
-            let response = show_graph_node(
-                &mut state.graph,
+    CentralPanel::default().show(ctx, |ui| {
+        /* Draw nodes */
+        let nodes = state.graph.iter_nodes().collect::<Vec<_>>(); // avoid borrow checker
+        for node_id in nodes {
+            let response = GraphNodeWidget {
+                position: state.node_positions.get_mut(&node_id).unwrap(),
+                graph: &mut state.graph,
+                port_locations: &mut port_locations,
                 node_id,
-                ui,
-                &mut port_locations,
-                state.connection_in_progress,
-                state
+                ongoing_drag: state.connection_in_progress,
+                active: state
                     .active_node
                     .map(|active| active == node_id)
                     .unwrap_or(false),
-            );
+                pan: state.pan_zoom.pan,
+            }
+            .show(ui);
 
             if let Some(response) = response {
                 delayed_responses.push(response);
             }
-        });
-    }
+        }
+    });
 
     /* Draw the node finder, if open */
     let mut should_close_node_finder = false;
@@ -121,7 +56,7 @@ pub fn draw_graph_editor(ctx: &CtxRef, state: &mut EditorState, clip_rect: Rect)
         node_finder_area.show(ctx, |ui| {
             if let Some(node_archetype) = node_finder.show(ui) {
                 let new_node = state.graph.add_node(node_archetype.to_descriptor());
-                state.node_position_ops.insert(new_node, cursor_pos);
+                state.node_positions.insert(new_node, cursor_pos);
                 should_close_node_finder = true;
             }
         });
@@ -138,7 +73,7 @@ pub fn draw_graph_editor(ctx: &CtxRef, state: &mut EditorState, clip_rect: Rect)
 
     if let Some((_, ref locator)) = state.connection_in_progress {
         let painter = ctx.layer_painter(LayerId::background());
-        let start_pos = port_locations[&locator];
+        let start_pos = port_locations[locator];
         painter.line_segment([start_pos, cursor_pos], connection_stroke)
     }
 
@@ -187,6 +122,7 @@ pub fn draw_graph_editor(ctx: &CtxRef, state: &mut EditorState, clip_rect: Rect)
             }
             DrawGraphNodeResponse::DeleteNode(node_id) => {
                 state.graph.remove_node(node_id);
+                state.node_positions.remove(&node_id);
                 // Make sure to not leave references to old nodes hanging
                 if state.active_node.map(|x| x == node_id).unwrap_or(false) {
                     state.active_node = None;
@@ -219,5 +155,9 @@ pub fn draw_graph_editor(ctx: &CtxRef, state: &mut EditorState, clip_rect: Rect)
     }
     if ctx.input().key_pressed(Key::Escape) {
         state.node_finder = None;
+    }
+
+    if ctx.input().pointer.middle_down() {
+        state.pan_zoom.pan += ctx.input().pointer.delta();
     }
 }

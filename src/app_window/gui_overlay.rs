@@ -25,7 +25,7 @@ pub fn draw_gui_overlays(
         let point = mesh.vertex_position(v);
         let mut point = project_point(render_ctx, window_size, egui_ctx, point);
         point.y *= 0.5;
-        
+
         painter.text(
             egui::pos2(point.x, point.y),
             egui::Align2::CENTER_BOTTOM,

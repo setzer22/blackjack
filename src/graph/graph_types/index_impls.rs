@@ -1,4 +1,3 @@
-
 use super::*;
 
 macro_rules! impl_index_traits {

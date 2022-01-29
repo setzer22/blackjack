@@ -1,7 +1,7 @@
-use egui::any::TypeMap;
+use type_map::TypeMap;
 
-use crate::{prelude::graph::*, prelude::*};
 use crate::graph::poly_asm::MemAddr;
+use crate::{prelude::graph::*, prelude::*};
 
 /// During compilation, it is necessary to map output parameter ids to the
 /// memory addresses where those outputs will be stored. Since memory addresses
@@ -18,7 +18,7 @@ impl OutputsCache {
         addr: MemAddr<T>,
     ) {
         let cache: &mut HashMap<OutputId, MemAddr<T>> =
-            self.inner.get_mut_or_insert_with(|| Default::default());
+            self.inner.entry().or_insert_with(Default::default);
         cache.insert(param_id, addr);
     }
 
@@ -27,7 +27,7 @@ impl OutputsCache {
         param_id: OutputId,
     ) -> Option<MemAddr<T>> {
         let cache: &mut HashMap<OutputId, MemAddr<T>> =
-            self.inner.get_mut_or_insert_with(|| Default::default());
-        cache.get(&param_id).map(|x| *x)
+            self.inner.entry().or_insert_with(Default::default);
+        cache.get(&param_id).copied()
     }
 }
