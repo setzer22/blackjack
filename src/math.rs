@@ -31,8 +31,7 @@ pub trait ToEgui<Out> {
     fn to_egui(self) -> Out;
 }
 
-impl ToEgui<egui::Pos2> for PhysicalPosition<f64>
-{
+impl ToEgui<egui::Pos2> for PhysicalPosition<f64> {
     fn to_egui(self) -> egui::Pos2 {
         egui::pos2(self.x as f32, self.y as f32)
     }
@@ -42,9 +41,7 @@ pub trait ToWinit<Out> {
     fn to_winit(self) -> Out;
 }
 
-impl ToWinit<winit::dpi::PhysicalPosition<f64>> for egui::Pos2
-where
-{
+impl ToWinit<winit::dpi::PhysicalPosition<f64>> for egui::Pos2 {
     fn to_winit(self) -> winit::dpi::PhysicalPosition<f64> {
         winit::dpi::PhysicalPosition {
             x: self.x.into(),

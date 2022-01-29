@@ -32,7 +32,7 @@ where
         let addr = match graph[param].value() {
             InputParamValue::Vector(val) => Ok(program.mem_alloc_raw(val)),
             InputParamValue::Scalar(val) => Ok(program.mem_alloc_raw(val)),
-            InputParamValue::Selection { text, selection } => {
+            InputParamValue::Selection { text: _, selection } => {
                 Ok(program.mem_alloc_raw(selection.ok_or_else(|| {
                     anyhow!("Error parsing selection for parameter {:?}", param_name)
                 })?))

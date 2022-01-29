@@ -118,7 +118,7 @@ pub enum PolyAsmInstruction {
     ExportObj {
         in_mesh: MemAddr<HalfEdgeMesh>,
         export_path: MemAddr<std::path::PathBuf>,
-    }
+    },
 }
 
 pub struct PolyAsmProgram {
@@ -161,13 +161,13 @@ impl PolyAsmProgram {
     pub fn mem_retrieve<T: Send + Sync + 'static>(&mut self, addr: MemAddr<T>) -> Result<T> {
         self.memory
             .remove_one::<T>(addr.to_raw())
-            .map_err(|err| anyhow!("Error retrieving from mem"))
+            .map_err(|_err| anyhow!("Error retrieving from mem"))
     }
 
     pub fn mem_fetch<T: Send + Sync + 'static + Clone>(&self, addr: MemAddr<T>) -> Result<T> {
         self.memory
             .get::<T>(addr.to_raw())
-            .map_err(|err| anyhow!("Memory fetch error for address {:?}", addr))
+            .map_err(|_err| anyhow!("Memory fetch error for address {:?}", addr))
             .map(|x| (*x).clone())
     }
 
@@ -177,7 +177,7 @@ impl PolyAsmProgram {
     ) -> Result<hecs::Ref<T>> {
         self.memory
             .get::<T>(addr.to_raw())
-            .map_err(|err| anyhow!("Memory fetch error for address {:?}", addr))
+            .map_err(|_err| anyhow!("Memory fetch error for address {:?}", addr))
     }
 
     pub fn add_operation(&mut self, op: PolyAsmInstruction) {
@@ -316,7 +316,10 @@ impl PolyAsmProgram {
                 self.mem_store(*out_mesh, result)?;
                 self.output_register = Some(*out_mesh);
             }
-            PolyAsmInstruction::ExportObj { in_mesh, export_path } => {
+            PolyAsmInstruction::ExportObj {
+                in_mesh,
+                export_path,
+            } => {
                 let mesh = &*self.mem_fetch_ref(*in_mesh)?;
                 let export_path = self.mem_fetch(*export_path)?;
                 mesh.to_wavefront_obj(export_path)?;

@@ -75,10 +75,18 @@ impl InputSystem {
             },
             // Button events are a bit different: Presses can register inside
             // the viewport but releases will register anywhere.
-            WindowEvent::MouseInput { button, state: state@ElementState::Pressed, .. } if mouse_in_viewport => {
+            WindowEvent::MouseInput {
+                button,
+                state: state @ ElementState::Pressed,
+                ..
+            } if mouse_in_viewport => {
                 self.mouse.on_button_event(*button, *state);
             }
-            WindowEvent::MouseInput { button, state: state@ElementState::Released, .. } => {
+            WindowEvent::MouseInput {
+                button,
+                state: state @ ElementState::Released,
+                ..
+            } => {
                 self.mouse.on_button_event(*button, *state);
             }
             _ => {}

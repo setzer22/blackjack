@@ -1,4 +1,3 @@
-
 /// Contains debug visualization code that will draw vertices, edges and faces.
 pub mod debug_viz;
 

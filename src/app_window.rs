@@ -64,7 +64,6 @@ impl AppWindow {
     }
 
     pub fn run_app(mut self, event_loop: EventLoop<()>) {
-
         self.root_viewport.setup(&mut self.render_ctx);
 
         event_loop.run(move |event, _, control| {

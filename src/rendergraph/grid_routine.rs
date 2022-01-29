@@ -26,7 +26,7 @@ impl GridRoutine {
             source: wgpu::ShaderSource::Wgsl(include_str!("grid_shader.wgsl").into()),
         });
 
-        let uniform_buffer = device.create_buffer(&BufferDescriptor {
+        let _uniform_buffer = device.create_buffer(&BufferDescriptor {
             label: Some("Grid uniform buffer"),
             size: std::mem::size_of::<GridRoutineUniform>() as u64,
             usage: BufferUsages::UNIFORM | BufferUsages::MAP_WRITE,
@@ -127,7 +127,7 @@ impl GridRoutine {
         let pt_handle = builder.passthrough_ref(self);
 
         builder.build(
-            move |pt, renderer, encoder_or_pass, temps, ready, graph_data| {
+            move |pt, _renderer, encoder_or_pass, temps, _ready, graph_data| {
                 let this = pt.get(pt_handle);
                 let rpass = encoder_or_pass.get_rpass(rpass_handle);
                 let grid_uniform_bg = graph_data.get_data(temps, grid_uniform_handle).unwrap();
@@ -187,6 +187,12 @@ impl GridRoutine {
     ) {
         let grid_uniform_bg = graph.add_data::<BindGroup>();
         self.create_bind_groups(graph, grid_uniform_bg);
-        self.grid_pass(graph, state.color, state.depth, state.resolve, grid_uniform_bg);
+        self.grid_pass(
+            graph,
+            state.color,
+            state.depth,
+            state.resolve,
+            grid_uniform_bg,
+        );
     }
 }

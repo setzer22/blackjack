@@ -1,4 +1,3 @@
-
 /// The main type definitions of the graph data structure
 pub mod graph_types;
 

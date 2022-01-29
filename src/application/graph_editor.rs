@@ -1,7 +1,6 @@
 use crate::{app_window::input::viewport_relative_position, prelude::*};
 use egui_wgpu_backend::{RenderPass, ScreenDescriptor};
 use egui_winit_platform::{Platform, PlatformDescriptor};
-use tri_mesh::prelude::EuclideanSpace;
 
 use crate::graph::graph_editor_egui::editor_state::GraphEditorState;
 

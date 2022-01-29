@@ -1,4 +1,7 @@
-use crate::{graph::graph_editor_egui::editor_state::{GraphEditorState, PanZoom}, prelude::*};
+use crate::{
+    graph::graph_editor_egui::editor_state::{GraphEditorState, PanZoom},
+    prelude::*,
+};
 use std::path::PathBuf;
 
 use crate::prelude::graph::{Graph, NodeId};

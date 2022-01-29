@@ -1,4 +1,3 @@
-use egui::InputState;
 use winit::event::MouseButton;
 
 use crate::app_window::input::InputSystem;

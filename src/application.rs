@@ -1,4 +1,4 @@
-use std::{rc::Rc, sync::Arc};
+use std::sync::Arc;
 
 use crate::{prelude::*, rendergraph::grid_routine::GridRoutine};
 use egui::{FontDefinitions, Style};
@@ -6,8 +6,8 @@ use egui_wgpu_backend::{RenderPass, ScreenDescriptor};
 use egui_winit_platform::{Platform, PlatformDescriptor};
 
 use self::{
-    application_context::ApplicationContext, graph_editor::GraphEditor, root_ui::AppRootAction,
-    viewport_3d::Viewport3d, app_viewport::AppViewport,
+    app_viewport::AppViewport, application_context::ApplicationContext, graph_editor::GraphEditor,
+    root_ui::AppRootAction, viewport_3d::Viewport3d,
 };
 
 pub struct RootViewport {
@@ -44,7 +44,7 @@ pub mod serialization;
 /// An egui widget that draws an offscreen-rendered texture
 pub mod app_viewport;
 
-/// An egui container to draw a recursive tree of resizable horizontal/vertical splits 
+/// An egui container to draw a recursive tree of resizable horizontal/vertical splits
 pub mod viewport_split;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]

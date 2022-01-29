@@ -1,7 +1,7 @@
 use type_map::TypeMap;
 
-use crate::{prelude::graph::*, prelude::*};
 use crate::graph::poly_asm::MemAddr;
+use crate::{prelude::graph::*, prelude::*};
 
 /// During compilation, it is necessary to map output parameter ids to the
 /// memory addresses where those outputs will be stored. Since memory addresses

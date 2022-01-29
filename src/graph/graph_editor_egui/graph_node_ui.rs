@@ -1,9 +1,8 @@
 use crate::color_hex_utils::*;
 use crate::prelude::graph::*;
-use crate::prelude::*;
+
 use egui::*;
 use epaint::*;
-use glam::Vec3;
 
 pub type PortLocations = std::collections::HashMap<AnyParameterId, Pos2>;
 
@@ -64,7 +63,7 @@ impl<'a> GraphNodeWidget<'a> {
         active: bool,
     ) -> Option<DrawGraphNodeResponse> {
         let margin = egui::vec2(15.0, 5.0);
-        let field_separation = 5.0;
+        let _field_separation = 5.0;
         let mut response: Option<DrawGraphNodeResponse> = None;
 
         let background_color = color_from_hex("#3f3f3f").unwrap();

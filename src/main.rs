@@ -32,4 +32,3 @@ fn main() {
     let (app_window, event_loop) = app_window::AppWindow::new();
     app_window.run_app(event_loop);
 }
-
