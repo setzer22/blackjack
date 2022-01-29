@@ -135,10 +135,11 @@ impl GraphEditor {
 
         // Debug mouse pointer position
         // -- This is useful when mouse events are not being interpreted correctly.
+        /*
         if let Some(pos) = ctx.input().pointer.hover_pos() {
             ctx.debug_painter()
                 .circle(pos, 5.0, egui::Color32::GREEN, egui::Stroke::none());
-        }
+        } */
     }
 
     pub fn screen_descriptor(
