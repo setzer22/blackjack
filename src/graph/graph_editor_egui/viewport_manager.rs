@@ -1,28 +1,5 @@
 use egui::*;
 
-/// Contains several [AppViewport]s used in this app's UI
-pub struct AppViewports {
-    pub view_3d: AppViewport,
-    pub node_graph: AppViewport,
-}
-
-impl AppViewports {
-    pub fn new() -> Self {
-        Self {
-            view_3d: AppViewport::new(),
-            node_graph: AppViewport::new(),
-        }
-    }
-
-    pub fn set_3d_view_texture(&mut self, tex: TextureId) {
-        self.view_3d.texture_id = Some(tex);
-    }
-
-    pub fn set_node_graph_texture(&mut self, tex: TextureId) {
-        self.node_graph.texture_id = Some(tex);
-    }
-}
-
 /// This application renders several parts of the UI to offscreen textures which
 /// are then drawin inside an egui widget. This is the widget that handles this
 /// interaction.

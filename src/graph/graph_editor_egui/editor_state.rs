@@ -2,7 +2,6 @@ use crate::prelude::graph::*;
 use crate::prelude::*;
 
 use super::node_finder::NodeFinder;
-use super::viewport_manager::AppViewports;
 use super::viewport_split::{ViewportSplit, SplitTree};
 
 pub struct GraphEditorState {

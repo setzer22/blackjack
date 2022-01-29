@@ -6,12 +6,14 @@ pub use glam::{Mat4, Quat, UVec2, UVec3, Vec2, Vec3, Vec4};
 pub mod r3 {
     pub use rend3::{
         graph::{
-            ReadyData, RenderGraph, RenderPassHandle, RenderPassTarget, RenderPassTargets,
-            RenderTargetDescriptor, RenderTargetHandle, DataHandle, RenderPassDepthTarget, DepthHandle
+            DataHandle, DepthHandle, ReadyData, RenderGraph, RenderPassDepthTarget,
+            RenderPassHandle, RenderPassTarget, RenderPassTargets, RenderTargetDescriptor,
+            RenderTargetHandle,
         },
         types::{
-            DirectionalLight, Handedness, MaterialHandle, Mesh, MeshBuilder, MeshHandle, Object,
-            ObjectHandle, ObjectMeshKind, SampleCount, TextureFormat, TextureUsages,
+            DirectionalLight, DirectionalLightHandle, Handedness, MaterialHandle, Mesh,
+            MeshBuilder, MeshHandle, Object, ObjectHandle, ObjectMeshKind, SampleCount,
+            TextureFormat, TextureUsages,
         },
         Renderer,
     };

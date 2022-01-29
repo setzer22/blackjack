@@ -1,22 +1,13 @@
-use std::{rc::Rc, sync::Arc};
+use std::sync::Arc;
 
-use crate::{
-    graph::graph_editor_egui::viewport_manager::AppViewports, prelude::*,
-    rendergraph::grid_routine::GridRoutine,
-};
+use crate::{prelude::*, rendergraph::grid_routine::GridRoutine};
 
 use glam::Mat4;
-use rend3::{
-    types::{DirectionalLight, Mesh, Object, ResourceHandle, SampleCount},
-    Renderer,
-};
 use rend3_routine::pbr::PbrRoutine;
 use wgpu::{Features, Surface, TextureFormat};
 
-use crate::rendergraph;
-
 pub struct RenderContext {
-    pub renderer: Arc<Renderer>,
+    pub renderer: Arc<r3::Renderer>,
 
     pub base_graph: r3::BaseRenderGraph,
     pub pbr_routine: r3::PbrRoutine,
@@ -25,12 +16,8 @@ pub struct RenderContext {
     pub surface: Arc<Surface>,
     pub texture_format: TextureFormat,
 
-    pub objects: Vec<ResourceHandle<Object>>,
-    lights: Vec<ResourceHandle<DirectionalLight>>,
-}
-
-fn ambient_light() -> Vec4 {
-    Vec4::ONE * 0.25
+    pub objects: Vec<r3::ObjectHandle>,
+    lights: Vec<r3::DirectionalLightHandle>,
 }
 
 impl RenderContext {
@@ -88,7 +75,7 @@ impl RenderContext {
         self.objects.clear();
     }
 
-    pub fn add_mesh_as_object(&mut self, mesh: Mesh) {
+    pub fn add_mesh_as_object(&mut self, mesh: r3::Mesh) {
         let mesh_handle = self.renderer.add_mesh(mesh);
         let material = r3::PbrMaterial {
             albedo: r3::AlbedoComponent::Value(glam::Vec4::new(0.8, 0.1, 0.1, 1.0)),
@@ -103,7 +90,7 @@ impl RenderContext {
         self.objects.push(self.renderer.add_object(object));
     }
 
-    pub fn add_object(&mut self, object: Object) {
+    pub fn add_object(&mut self, object: r3::Object) {
         self.objects.push(self.renderer.add_object(object));
     }
 
@@ -117,6 +104,7 @@ impl RenderContext {
         });
     }
 
+    #[allow(dead_code)]
     pub fn project_point(&self, point: Vec3, screen_size: Vec2) -> Vec2 {
         let camera_manager = &self.renderer.data_core.lock().camera_manager;
 
@@ -126,108 +114,9 @@ impl RenderContext {
         zero_to_one * screen_size
     }
 
-    pub fn add_light(&mut self, light: DirectionalLight) {
+    pub fn add_light(&mut self, light: r3::DirectionalLight) {
         let handle = self.renderer.add_directional_light(light);
         self.lights.push(handle);
-    }
-
-    pub fn render_frame(
-        &mut self,
-        main_egui: &mut egui_winit_platform::Platform,
-        graph_egui: &mut egui_winit_platform::Platform,
-        app_viewports: &mut AppViewports,
-        zoom_level: f32,
-    ) {
-        let frame = rend3::util::output::OutputFrame::Surface {
-            surface: Arc::clone(&self.surface),
-        };
-        let (cmd_bufs, ready) = self.renderer.ready();
-
-
-        let mut graph = r3::RenderGraph::new();
-
-        let vwp_3d_res = app_viewports.view_3d.rect.size();
-        let grph_3d_res = app_viewports.node_graph.rect.size();
-        let to_uvec2 = |v: egui::Vec2| UVec2::new(v.x as u32, v.y as u32);
-
-        // TODO: What if we ever have multiple 3d viewports? There's no way to
-        // set the aspect ratio differently for different render passes in rend3
-        // right now. The camera is global.
-        //
-        // See: https://github.com/BVE-Reborn/rend3/issues/327
-        self.renderer.set_aspect_ratio(vwp_3d_res.x / vwp_3d_res.y);
-
-        let viewport_texture = rendergraph::blackjack_viewport_rendergraph(
-            &self.base_graph,
-            &mut graph,
-            &ready,
-            &self.pbr_routine,
-            &self.tonemapping_routine,
-            &self.grid_routine,
-            // The resolution needs to be scaled by the pixels-per-point
-            to_uvec2(vwp_3d_res * main_egui.context().pixels_per_point()),
-            r3::SampleCount::One,
-            ambient_light(),
-        );
-
-        let ppp = main_egui.context().pixels_per_point();
-
-        // This is completely nuts... 🤪 but I think I figured it out
-        //
-        // In this setup, UI scaling is used in two different places:
-        // - Egui winit platform, sets the raw_input screen size and pixels per
-        //   point according to scaling events
-        // - Egui wgpu backend, which uses the scaling to compute the screen
-        //   size, which is in turn used in two places:
-        //    - On the vertex shader, where egui meshes are convert to ndc.
-        //    - At the loop performing the draw calls, where it's used to clamp
-        //      the clip rects to stay whithin the screen size. -> this one is
-        //      actually an issue
-        //
-        // To achieve the "zooming" effect, we only need to touch the wgpu
-        // backend values.
-        // - First, we tell the wgpu backend that our screen is smaller than it
-        //   actually is. This makes the code on the vertex shader computing the
-        //   NDC just output bigger meshes relative to a (smaller) screen.
-        // - But this alone is not enough, because the clip rects are not
-        //   affected by this scale. This is why the code at the draw call loop
-        //   needs to scale the clip rects by the inverse of that amount.
-        //
-        // The scaling of the parent UI is another variable to consider, to make
-        // things a bit more interesting
-        // - A larger scale value makes the screen rect of the parent UI
-        //   *smaller*. This means that when fetching the value from the
-        //   `app_viewports`, the screen rect is not the actual size in pixels
-        //   the child UI needs to be drawn with.
-        //
-        // The "zoom effect" is not enough on its own, as making the same shapes
-        // larger, would also make the text // AA blurrier.
-        // - The way to fix this is by increasing egui's pixels_per_point with
-        //   the inverse of the zoom level. That means the more zoom we have,
-        //   the sharper things are going to be.
-        // - There is an additional consideration to be made: Calling
-        //   set_pixels_per_point like I'm doing below has a 1 frame of lag.
-        //   Instead, we need to hijack the raw_input so that the value is set,
-        //   according to the zoom level, at the start of the frame.
-        //
-        // Some scattered facts
-        // - The *inner* egui should be rendered using 1.0 pixels per point,
-        //   because there's no DPI in the offscreen texture (and there's zoom
-        //   instead)
-        // - The screen rect of the child UI is not important for zooming. It
-        //   only affects what egui perceives as usable screen space. Since the
-        //   nodes are drawn at absolute screen positions and there's no layout
-        //   using the screen size, it doesn't matter.
-        //
-        // WIP: An idea. All this could be encapsulated inside a NodeGraph
-        // object, which owns the egui platform, the egui routine, and listens
-        // to winit events. A different 'Blackjack' object would own the other
-        // (parent) egui, both platform and render routine. This encapsulation
-        // would allow easy replication of the graph UI, allowing multiple
-        // graphs per split and custom user layouts.
-
-
-        graph.execute(&self.renderer, frame, cmd_bufs, &ready);
     }
 
     pub fn on_resize(&mut self, width: u32, height: u32) {
@@ -238,7 +127,5 @@ impl RenderContext {
             glam::uvec2(width, height),
             rend3::types::PresentMode::Mailbox,
         );
-        self.renderer
-            .set_aspect_ratio(width as f32 / height as f32 * 2.0);
     }
 }

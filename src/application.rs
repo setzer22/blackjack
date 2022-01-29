@@ -168,7 +168,7 @@ impl RootViewport {
 
         self.app_context.update(
             &self.platform.context(),
-            &self.graph_editor.state,
+            &mut self.graph_editor.state,
             render_ctx,
         );
 

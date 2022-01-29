@@ -1,10 +1,15 @@
 use anyhow::Error;
 
 use crate::{
-    graph::graph_editor_egui::{editor_state::GraphEditorState, viewport_split::SplitTree},
-    prelude::debug_viz::DebugMeshes,
+    graph::graph_editor_egui::{
+        editor_state::{self, GraphEditorState},
+        viewport_split::SplitTree,
+    },
     prelude::*,
+    prelude::{debug_viz::DebugMeshes, graph::Graph},
 };
+
+use super::graph_editor::GraphEditor;
 
 pub struct ApplicationContext {
     /// The mesh is at the center of the application
@@ -41,7 +46,7 @@ impl ApplicationContext {
     pub fn update(
         &mut self,
         egui_ctx: &egui::CtxRef,
-        editor_state: &GraphEditorState,
+        editor_state: &mut GraphEditorState,
         render_ctx: &mut RenderContext,
     ) {
         // TODO: Instead of clearing all objects, make the app context own the
@@ -51,7 +56,12 @@ impl ApplicationContext {
         if let Err(err) = self.compile_and_update_mesh(editor_state) {
             self.paint_errors(egui_ctx, err);
         }
+        if let Err(err) = self.run_side_effects(editor_state) {
+            eprintln!("There was an errror executing side effect: {}", err);
+        }
+
         self.build_and_render_mesh(render_ctx);
+
     }
 
     pub fn build_and_render_mesh(&mut self, render_ctx: &mut RenderContext) {
@@ -86,6 +96,17 @@ impl ApplicationContext {
             self.mesh = Some(mesh);
         } else {
             self.mesh = None
+        }
+        Ok(())
+    }
+
+    pub fn run_side_effects(&mut self, editor_state: &mut GraphEditorState) -> Result<()> {
+        if let Some(side_effect) = editor_state.run_side_effect.take() {
+            let program =
+                crate::graph::graph_compiler::compile_graph(&editor_state.graph, side_effect)?;
+            // We ignore the result. The program is only executed to produce a
+            // side effect (e.g. exporting a mesh as OBJ)
+            let _ = program.execute();
         }
         Ok(())
     }
