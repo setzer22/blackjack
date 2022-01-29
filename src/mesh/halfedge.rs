@@ -688,16 +688,15 @@ impl HalfEdgeMesh {
     // Returns the normal of the face. The first three vertices are used to
     // compute the normal. If the vertices of the face are not coplanar,
     // the result will not be correct.
-    fn face_normal(&self, face: FaceId) -> Vec3 {
+    fn face_normal(&self, face: FaceId) -> Option<Vec3> {
         let verts = self.face_vertices(face);
-        // Will panic if face has two or less vertices. Note that faces with two
-        // vertices are possible (they get generated as part of the bevel
-        // operation). But this would only fail if the operation is used on one
-        // such face in the middle of an operation, not in normal operation.
-        let v01 = self.vertex_position(verts[0]) - self.vertex_position(verts[1]);
-        let v12 = self.vertex_position(verts[1]) - self.vertex_position(verts[2]);
-
-        v01.cross(v12).normalize()
+        if verts.len() >= 3 {
+            let v01 = self.vertex_position(verts[0]) - self.vertex_position(verts[1]);
+            let v12 = self.vertex_position(verts[1]) - self.vertex_position(verts[2]);
+            Some(v01.cross(v12).normalize())
+        } else {
+            None
+        }
     }
 }
 
