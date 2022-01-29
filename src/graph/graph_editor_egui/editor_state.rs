@@ -11,9 +11,8 @@ pub struct GraphEditorState {
     /// The currently active node. A program will be compiled to compute the
     /// result of this node and constantly updated in real-time.
     pub active_node: Option<NodeId>,
-    /// When a value is present on this hashmap for a node, the node will be
-    /// moved at the given position at the start of the next frame.
-    pub node_position_ops: HashMap<NodeId, egui::Pos2>,
+    /// The position of each node.
+    pub node_positions: HashMap<NodeId, egui::Pos2>,
     /// The node finder is used to create new nodes.
     pub node_finder: Option<NodeFinder>,
     /// When this option is set by the UI, the side effect encoded by the node
@@ -28,7 +27,7 @@ impl GraphEditorState {
             connection_in_progress: None,
             active_node: None,
             run_side_effect: None,
-            node_position_ops: HashMap::default(),
+            node_positions: HashMap::new(),
             node_finder: None,
         }
     }

@@ -22,32 +22,28 @@ pub fn draw_graph_editor(ctx: &CtxRef, state: &mut GraphEditorState) {
     // executed at the end of this function.
     let mut delayed_responses: Vec<DrawGraphNodeResponse> = vec![];
 
-    /* Draw nodes */
-    let nodes = state.graph.iter_nodes().collect::<Vec<_>>();
-    for node_id in nodes {
-        let mut node_area = Area::new(node_id);
-        if let Some(pos) = state.node_position_ops.remove(&node_id) {
-            node_area = node_area.current_pos(pos);
-        }
-
-        node_area.show(ctx, |ui| {
-            let response = show_graph_node(
-                &mut state.graph,
+    CentralPanel::default().show(ctx, |ui| {
+        /* Draw nodes */
+        let nodes = state.graph.iter_nodes().collect::<Vec<_>>(); // avoid borrow checker
+        for node_id in nodes {
+            let response = GraphNodeWidget {
+                position: state.node_positions.get_mut(&node_id).unwrap(),
+                graph: &mut state.graph,
+                port_locations: &mut port_locations,
                 node_id,
-                ui,
-                &mut port_locations,
-                state.connection_in_progress,
-                state
+                ongoing_drag: state.connection_in_progress,
+                active: state
                     .active_node
                     .map(|active| active == node_id)
                     .unwrap_or(false),
-            );
+            }
+            .show(ui);
 
             if let Some(response) = response {
                 delayed_responses.push(response);
             }
-        });
-    }
+        }
+    });
 
     /* Draw the node finder, if open */
     let mut should_close_node_finder = false;
@@ -59,7 +55,7 @@ pub fn draw_graph_editor(ctx: &CtxRef, state: &mut GraphEditorState) {
         node_finder_area.show(ctx, |ui| {
             if let Some(node_archetype) = node_finder.show(ui) {
                 let new_node = state.graph.add_node(node_archetype.to_descriptor());
-                state.node_position_ops.insert(new_node, cursor_pos);
+                state.node_positions.insert(new_node, cursor_pos);
                 should_close_node_finder = true;
             }
         });
@@ -125,6 +121,7 @@ pub fn draw_graph_editor(ctx: &CtxRef, state: &mut GraphEditorState) {
             }
             DrawGraphNodeResponse::DeleteNode(node_id) => {
                 state.graph.remove_node(node_id);
+                state.node_positions.remove(&node_id);
                 // Make sure to not leave references to old nodes hanging
                 if state.active_node.map(|x| x == node_id).unwrap_or(false) {
                     state.active_node = None;
