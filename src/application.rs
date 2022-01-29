@@ -1,16 +1,13 @@
 use std::{rc::Rc, sync::Arc};
 
-use crate::{
-    app_window, graph::graph_editor_egui::viewport_manager::AppViewport, prelude::*,
-    rendergraph::grid_routine::GridRoutine,
-};
+use crate::{prelude::*, rendergraph::grid_routine::GridRoutine};
 use egui::{FontDefinitions, Style};
 use egui_wgpu_backend::{RenderPass, ScreenDescriptor};
 use egui_winit_platform::{Platform, PlatformDescriptor};
 
 use self::{
     application_context::ApplicationContext, graph_editor::GraphEditor, root_ui::AppRootAction,
-    viewport_3d::Viewport3d,
+    viewport_3d::Viewport3d, app_viewport::AppViewport,
 };
 
 pub struct RootViewport {
@@ -43,6 +40,9 @@ pub mod root_ui;
 
 /// Serialization code to load / store graphs
 pub mod serialization;
+
+/// An egui widget that draws an offscreen-rendered texture
+pub mod app_viewport;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 enum OffscreenViewport {
