@@ -22,7 +22,7 @@ mod graph;
 /// The halfedge graph data structure and main edit operations
 mod mesh;
 
-/// Some utility math types
+/// Some utility math types and conversions
 mod math;
 
 fn main() {

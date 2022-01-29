@@ -1,4 +1,4 @@
-use crate::{graph::graph_editor_egui::editor_state::GraphEditorState, prelude::*};
+use crate::{graph::graph_editor_egui::editor_state::{GraphEditorState, PanZoom}, prelude::*};
 use std::path::PathBuf;
 
 use crate::prelude::graph::{Graph, NodeId};
@@ -8,6 +8,8 @@ use serde::{Deserialize, Serialize};
 struct SerializedEditorState {
     pub graph: Graph,
     pub active_node: Option<NodeId>,
+    pub node_positions: HashMap<NodeId, egui::Pos2>,
+    pub pan_zoom: PanZoom,
 }
 
 impl SerializedEditorState {
@@ -15,6 +17,8 @@ impl SerializedEditorState {
         SerializedEditorState {
             graph: editor_state.graph.clone(),
             active_node: editor_state.active_node.clone(),
+            node_positions: editor_state.node_positions.clone(),
+            pan_zoom: editor_state.pan_zoom,
         }
     }
 
@@ -22,6 +26,8 @@ impl SerializedEditorState {
         let mut state = GraphEditorState::new();
         state.graph = self.graph;
         state.active_node = self.active_node;
+        state.node_positions = self.node_positions;
+        state.pan_zoom = self.pan_zoom;
         state
     }
 }

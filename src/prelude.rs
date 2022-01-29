@@ -37,4 +37,4 @@ pub use crate::mesh::halfedge::*;
 pub use crate::mesh::debug_viz;
 pub use crate::mesh::halfedge;
 
-pub use crate::math::{ToOrd, ToVec, Vec3Ord};
+pub use crate::math::*;

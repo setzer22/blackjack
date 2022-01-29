@@ -36,7 +36,7 @@ pub fn draw_graph_editor(ctx: &CtxRef, state: &mut GraphEditorState) {
                     .active_node
                     .map(|active| active == node_id)
                     .unwrap_or(false),
-                pan: state.pan,
+                pan: state.pan_zoom.pan,
             }
             .show(ui);
 
@@ -158,6 +158,6 @@ pub fn draw_graph_editor(ctx: &CtxRef, state: &mut GraphEditorState) {
     }
 
     if ctx.input().pointer.middle_down() {
-        state.pan += ctx.input().pointer.delta();
+        state.pan_zoom.pan += ctx.input().pointer.delta();
     }
 }

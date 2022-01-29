@@ -1,6 +1,7 @@
 use crate::{app_window::input::viewport_relative_position, prelude::*};
 use egui_wgpu_backend::{RenderPass, ScreenDescriptor};
 use egui_winit_platform::{Platform, PlatformDescriptor};
+use tri_mesh::prelude::EuclideanSpace;
 
 use crate::graph::graph_editor_egui::editor_state::GraphEditorState;
 
@@ -8,7 +9,6 @@ pub struct GraphEditor {
     pub state: GraphEditorState,
     pub platform: Platform,
     pub renderpass: RenderPass,
-    pub zoom_level: f32,
     pub raw_mouse_position: Option<egui::Pos2>,
 }
 
@@ -30,11 +30,14 @@ impl GraphEditor {
                 style: egui::Style::default(),
             }),
             renderpass: RenderPass::new(device, format, 1),
-            zoom_level: 1.0,
             // The mouse position, in window coordinates. Stored to hide other
             // window events from egui when the cursor is not over the viewport
             raw_mouse_position: None,
         }
+    }
+
+    pub fn zoom_level(&self) -> f32 {
+        self.state.pan_zoom.zoom
     }
 
     /// Handles most window events, but ignores resize / dpi change events,
@@ -70,23 +73,32 @@ impl GraphEditor {
                         *position,
                         parent_scale,
                         viewport_rect,
-                        self.zoom_level,
+                        self.zoom_level(),
                     );
                 }
-
                 winit::event::WindowEvent::MouseWheel { delta, .. } if mouse_in_viewport => {
+                    let mouse_pos = if let Some(raw_pos) = self.raw_mouse_position {
+                        viewport_relative_position(
+                            raw_pos.to_winit(),
+                            parent_scale,
+                            viewport_rect,
+                            1.0,
+                        )
+                        .to_egui()
+                    } else {
+                        egui::pos2(0.0, 0.0)
+                    }
+                    .to_vec2();
                     match delta {
                         winit::event::MouseScrollDelta::LineDelta(_, dy) => {
-                            self.zoom_level += *dy as f32 * 8.0 * 0.01;
-                            self.zoom_level = self
-                                .zoom_level
-                                .clamp(Self::ZOOM_LEVEL_MIN, Self::ZOOM_LEVEL_MAX);
+                            self.state
+                                .pan_zoom
+                                .adjust_zoom(-*dy as f32 * 8.0 * 0.01, mouse_pos);
                         }
                         winit::event::MouseScrollDelta::PixelDelta(pos) => {
-                            self.zoom_level -= pos.y as f32 * 0.01;
-                            self.zoom_level = self
-                                .zoom_level
-                                .clamp(Self::ZOOM_LEVEL_MIN, Self::ZOOM_LEVEL_MAX);
+                            self.state
+                                .pan_zoom
+                                .adjust_zoom(-pos.y as f32 * 0.01, mouse_pos);
                         }
                     }
                 }
@@ -105,8 +117,8 @@ impl GraphEditor {
             // SAFETY: This dummy window id is never getting sent back to winit
             window_id: unsafe { winit::window::WindowId::dummy() },
             event: winit::event::WindowEvent::Resized(winit::dpi::PhysicalSize::new(
-                (viewport_rect.width() * self.zoom_level * parent_scale) as u32,
-                (viewport_rect.height() * self.zoom_level * parent_scale) as u32,
+                (viewport_rect.width() * self.zoom_level() * parent_scale) as u32,
+                (viewport_rect.height() * self.zoom_level() * parent_scale) as u32,
             )),
         };
         self.platform.handle_event(&fake_resize_event);
@@ -114,7 +126,7 @@ impl GraphEditor {
 
     pub fn update(&mut self, parent_scale: f32, viewport_rect: egui::Rect) {
         self.resize_platform(parent_scale, viewport_rect);
-        self.platform.raw_input_mut().pixels_per_point = Some(1.0 / self.zoom_level);
+        self.platform.raw_input_mut().pixels_per_point = Some(1.0 / self.zoom_level());
         self.platform.begin_frame();
 
         let ctx = self.platform.context();
@@ -135,8 +147,8 @@ impl GraphEditor {
         parent_scale: f32,
     ) -> ScreenDescriptor {
         ScreenDescriptor {
-            physical_width: (viewport_rect.width() * parent_scale * self.zoom_level) as u32,
-            physical_height: (viewport_rect.height() * parent_scale * self.zoom_level) as u32,
+            physical_width: (viewport_rect.width() * parent_scale * self.zoom_level()) as u32,
+            physical_height: (viewport_rect.height() * parent_scale * self.zoom_level()) as u32,
             scale_factor: 1.0,
         }
     }
@@ -201,7 +213,7 @@ impl GraphEditor {
                         rpass,
                         &paint_jobs,
                         &screen_descriptor,
-                        this.zoom_level,
+                        this.zoom_level(),
                     )
                     .unwrap();
             },
