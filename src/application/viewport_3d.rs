@@ -4,22 +4,6 @@ use winit::event::MouseButton;
 use crate::app_window::input::InputSystem;
 use crate::{prelude::*, rendergraph};
 
-// WIP: Reimplement what we had before.
-// - The viewport should own the camera and respond to input events
-// - Get rid of the input manager?
-// - Leave a todo note somewhere to handle multiple cameras once that happens
-// - Resize logic on the `update()`, as usual.
-//
-// - The app context needs to own the current mesh, and generate it continuously
-//   in its update() call.
-
-// - We can get rid of most of the logic in the render_context, which is now
-//   just a container of handles wrapping a r3::Renderer
-
-// - Think how serialization will work. We probably need to implement
-//   serialization at the root, and use return values from the child UIs to
-//   enable it.
-
 pub struct Viewport3d {
     camera: OrbitCamera,
     input: InputSystem,
