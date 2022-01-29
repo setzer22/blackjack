@@ -50,8 +50,11 @@ impl GraphEditorState {
 
 
 impl PanZoom {
-    pub fn adjust_zoom(&mut self, zoom_delta: f32, point: egui::Vec2) {
-        self.zoom += dbg!(zoom_delta);
+    pub fn adjust_zoom(&mut self, zoom_delta: f32, point: egui::Vec2, zoom_min: f32, zoom_max: f32) {
+        let zoom_clamped = (self.zoom + zoom_delta).clamp(zoom_min, zoom_max);
+        let zoom_delta = zoom_clamped - self.zoom;
+
+        self.zoom += zoom_delta;
         self.pan += point * zoom_delta;
     }
 }

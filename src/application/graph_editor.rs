@@ -91,14 +91,20 @@ impl GraphEditor {
                     .to_vec2();
                     match delta {
                         winit::event::MouseScrollDelta::LineDelta(_, dy) => {
-                            self.state
-                                .pan_zoom
-                                .adjust_zoom(-*dy as f32 * 8.0 * 0.01, mouse_pos);
+                            self.state.pan_zoom.adjust_zoom(
+                                -*dy as f32 * 8.0 * 0.01,
+                                mouse_pos,
+                                Self::ZOOM_LEVEL_MIN,
+                                Self::ZOOM_LEVEL_MAX,
+                            );
                         }
                         winit::event::MouseScrollDelta::PixelDelta(pos) => {
-                            self.state
-                                .pan_zoom
-                                .adjust_zoom(-pos.y as f32 * 0.01, mouse_pos);
+                            self.state.pan_zoom.adjust_zoom(
+                                -pos.y as f32 * 0.01,
+                                mouse_pos,
+                                Self::ZOOM_LEVEL_MIN,
+                                Self::ZOOM_LEVEL_MAX,
+                            );
                         }
                     }
                 }
