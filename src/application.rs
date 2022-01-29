@@ -44,6 +44,9 @@ pub mod serialization;
 /// An egui widget that draws an offscreen-rendered texture
 pub mod app_viewport;
 
+/// An egui container to draw a recursive tree of resizable horizontal/vertical splits 
+pub mod viewport_split;
+
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 enum OffscreenViewport {
     GraphEditor,

@@ -1,15 +1,11 @@
 use anyhow::Error;
 
 use crate::{
-    graph::graph_editor_egui::{
-        editor_state::{self, GraphEditorState},
-        viewport_split::SplitTree,
-    },
+    graph::graph_editor_egui::editor_state::GraphEditorState, prelude::debug_viz::DebugMeshes,
     prelude::*,
-    prelude::{debug_viz::DebugMeshes, graph::Graph},
 };
 
-use super::graph_editor::GraphEditor;
+use super::viewport_split::SplitTree;
 
 pub struct ApplicationContext {
     /// The mesh is at the center of the application
@@ -61,7 +57,6 @@ impl ApplicationContext {
         }
 
         self.build_and_render_mesh(render_ctx);
-
     }
 
     pub fn build_and_render_mesh(&mut self, render_ctx: &mut RenderContext) {

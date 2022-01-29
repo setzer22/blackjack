@@ -1,7 +1,5 @@
 use egui::*;
 
-use super::editor_state::GraphEditorState;
-
 #[derive(Clone)]
 pub enum ViewportSplitKind {
     Horizontal,

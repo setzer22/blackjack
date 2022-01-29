@@ -3,17 +3,13 @@ use crate::prelude::*;
 use editor_state::GraphEditorState;
 use egui::*;
 
-use super::graph_types::{AnyParameterId, DataType};
+use super::graph_types::AnyParameterId;
 
 pub mod editor_state;
 
 pub mod graph_node_ui;
 
 pub mod node_finder;
-
-pub mod viewport_manager;
-
-pub mod viewport_split;
 
 pub fn draw_graph_editor(ctx: &CtxRef, state: &mut GraphEditorState) {
     let mouse = &ctx.input().pointer;
