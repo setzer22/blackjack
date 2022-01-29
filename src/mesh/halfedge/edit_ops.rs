@@ -736,7 +736,7 @@ fn bevel_edges_connectivity(
                 let h2_d = duplicated_edges.contains(h2);
                 let h_n = !h_b && !h_d;
                 let h2_n = !h2_b && !h2_d;
-                
+
                 h_b && h2_n || h_d && h2_b || h_d && h2_n || h_n && h2_b
             })
             .collect::<SVecN<_, 16>>();
