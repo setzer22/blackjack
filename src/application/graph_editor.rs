@@ -83,6 +83,7 @@ impl GraphEditor {
                     );
                 }
                 winit::event::WindowEvent::MouseWheel { delta, .. } if mouse_in_viewport => {
+                    println!("[Node Editor] {:?}", delta);
                     let mouse_pos = if let Some(raw_pos) = self.raw_mouse_position {
                         viewport_relative_position(
                             raw_pos.to_winit(),
