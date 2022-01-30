@@ -22,12 +22,14 @@ pub fn draw_graph_editor(ctx: &CtxRef, state: &mut GraphEditorState) {
     // executed at the end of this function.
     let mut delayed_responses: Vec<DrawGraphNodeResponse> = vec![];
 
-    CentralPanel::default().show(ctx, |ui| {
+    // Used to detect when the background was clicked, to dismiss certain states
+    let mut click_on_background = false;
 
+    CentralPanel::default().show(ctx, |ui| {
         /* Draw nodes */
         let nodes = state.graph.iter_nodes().collect::<Vec<_>>(); // avoid borrow checker
         for node_id in nodes {
-            let response = GraphNodeWidget {
+            let responses = GraphNodeWidget {
                 position: state.node_positions.get_mut(&node_id).unwrap(),
                 graph: &mut state.graph,
                 port_locations: &mut port_locations,
@@ -45,9 +47,13 @@ pub fn draw_graph_editor(ctx: &CtxRef, state: &mut GraphEditorState) {
             }
             .show(ui);
 
-            if let Some(response) = response {
-                delayed_responses.push(response);
-            }
+            // Actions executed later
+            delayed_responses.extend(responses);
+        }
+
+        let r = ui.allocate_rect(ui.min_rect(), Sense::click());
+        if r.clicked() {
+            click_on_background = true;
         }
     });
 
@@ -174,8 +180,7 @@ pub fn draw_graph_editor(ctx: &CtxRef, state: &mut GraphEditorState) {
         state.pan_zoom.pan += ctx.input().pointer.delta();
     }
 
-    // HACK: This is a way to detect when the background was clicked
-    if !ctx.wants_pointer_input() && ctx.input().pointer.primary_down() {
+    if click_on_background {
         state.selected_node = None;
         state.node_finder = None;
     }

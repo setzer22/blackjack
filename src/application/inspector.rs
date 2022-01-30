@@ -1,4 +1,7 @@
-use crate::prelude::*;
+use crate::{
+    graph::graph_editor_egui::editor_state::{self, GraphEditorState},
+    prelude::*,
+};
 use egui::*;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -45,7 +48,12 @@ pub struct SpreadsheetTab {
 }
 
 impl InspectorTabs {
-    pub fn ui(&mut self, ui: &mut Ui, mesh: Option<&HalfEdgeMesh>) {
+    pub fn ui(
+        &mut self,
+        ui: &mut Ui,
+        mesh: Option<&HalfEdgeMesh>,
+        editor_state: &mut GraphEditorState,
+    ) {
         ui.horizontal(|ui| {
             ui.selectable_value(
                 &mut self.current_view,
@@ -60,14 +68,27 @@ impl InspectorTabs {
         });
         ui.separator();
         match self.current_view {
-            InspectorTab::Properties => self.properties.ui(ui),
+            InspectorTab::Properties => self.properties.ui(ui, editor_state),
             InspectorTab::Spreadsheet => self.spreadsheet.ui(ui, mesh),
         }
     }
 }
 impl PropertiesTab {
-    fn ui(&self, ui: &mut Ui) {
-        ui.label("The inspector goes here");
+    fn ui(&self, ui: &mut Ui, editor_state: &mut GraphEditorState) {
+        let graph = &mut editor_state.graph;
+        if let Some(node) = editor_state.selected_node {
+            let node = &graph[node];
+            let inputs = node.inputs.clone();
+            for (param_name, param) in inputs {
+                if graph.connection(param).is_some() {
+                    ui.label(param_name);
+                } else {
+                    graph[param].value_widget(&param_name, ui);
+                }
+            }
+        } else {
+            ui.label("No node selected. Click a node's title to select it.");
+        }
     }
 }
 impl SpreadsheetTab {
