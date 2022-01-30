@@ -1,4 +1,5 @@
 use crate::color_hex_utils::*;
+use crate::math::*;
 use crate::prelude::graph::*;
 
 use egui::*;
@@ -10,6 +11,7 @@ pub enum DrawGraphNodeResponse {
     ConnectEventStarted(NodeId, AnyParameterId),
     ConnectEventEnded(AnyParameterId),
     SetActiveNode(NodeId),
+    SelectNode(NodeId),
     RunNodeSideEffect(NodeId),
     ClearActiveNode,
     DeleteNode(NodeId),
@@ -23,6 +25,7 @@ pub struct GraphNodeWidget<'a> {
     pub node_id: NodeId,
     pub ongoing_drag: Option<(NodeId, AnyParameterId)>,
     pub active: bool,
+    pub selected: bool,
     pub pan: egui::Vec2,
 }
 
@@ -35,17 +38,22 @@ impl<'a> GraphNodeWidget<'a> {
             Layout::default(),
         );
 
-        let node_resp = Self::show_graph_node(
+        let mut node_resp = Self::show_graph_node(
             self.graph,
             self.node_id,
             &mut child_ui,
             self.port_locations,
             self.ongoing_drag,
             self.active,
+            self.selected,
         );
 
         let resp = ui.allocate_rect(child_ui.min_rect(), Sense::drag());
         *self.position += resp.drag_delta();
+
+        if node_resp.is_none() && resp.clicked_by(PointerButton::Primary) {
+            node_resp = Some(DrawGraphNodeResponse::SelectNode(self.node_id));
+        }
 
         node_resp
     }
@@ -61,18 +69,20 @@ impl<'a> GraphNodeWidget<'a> {
         port_locations: &mut PortLocations,
         ongoing_drag: Option<(NodeId, AnyParameterId)>,
         active: bool,
+        selected: bool,
     ) -> Option<DrawGraphNodeResponse> {
         let margin = egui::vec2(15.0, 5.0);
         let _field_separation = 5.0;
         let mut response: Option<DrawGraphNodeResponse> = None;
 
         let background_color = color_from_hex("#3f3f3f").unwrap();
-        let titlebar_color = background_color.linear_multiply(0.8);
+        let titlebar_color = background_color.lighten(0.8);
         let text_color = color_from_hex("#fefefe").unwrap();
 
         ui.visuals_mut().widgets.noninteractive.fg_stroke = Stroke::new(2.0, text_color);
 
         // Preallocate shapes to paint below contents
+        let outline_shape = ui.painter().add(Shape::Noop);
         let background_shape = ui.painter().add(Shape::Noop);
 
         let outer_rect_bounds = ui.available_rect_before_wrap();
@@ -264,7 +274,7 @@ impl<'a> GraphNodeWidget<'a> {
         // NOTE: This code is a bit more involve than it needs to be because egui
         // does not support drawing rectangles with asymmetrical round corners.
 
-        let shape = {
+        let (shape, outline) = {
             let corner_radius = 4.0;
 
             let titlebar_height = title_height + margin.y;
@@ -299,10 +309,25 @@ impl<'a> GraphNodeWidget<'a> {
                 stroke: Stroke::none(),
             });
 
-            Shape::Vec(vec![titlebar, body, bottom_body])
+            let outline = if selected {
+                Shape::Rect(RectShape {
+                    rect: titlebar_rect
+                        .union(body_rect)
+                        .union(bottom_body_rect)
+                        .expand(1.0),
+                    corner_radius: 4.0,
+                    fill: Color32::WHITE.lighten(0.8),
+                    stroke: Stroke::none(),
+                })
+            } else {
+                Shape::Noop
+            };
+
+            (Shape::Vec(vec![titlebar, body, bottom_body]), outline)
         };
 
         ui.painter().set(background_shape, shape);
+        ui.painter().set(outline_shape, outline);
         ui.allocate_rect(outer_rect, Sense::hover());
 
         // Titlebar buttons

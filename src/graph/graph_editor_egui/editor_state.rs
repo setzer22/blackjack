@@ -17,6 +17,9 @@ pub struct GraphEditorState {
     /// The currently active node. A program will be compiled to compute the
     /// result of this node and constantly updated in real-time.
     pub active_node: Option<NodeId>,
+    /// The currently selected node. Some interface actions depend on the
+    /// currently selected node.
+    pub selected_node: Option<NodeId>,
     /// The position of each node.
     pub node_positions: HashMap<NodeId, egui::Pos2>,
     /// The node finder is used to create new nodes.
@@ -34,6 +37,7 @@ impl GraphEditorState {
             graph: Graph::new(),
             connection_in_progress: None,
             active_node: None,
+            selected_node: None,
             run_side_effect: None,
             node_positions: HashMap::new(),
             node_finder: None,

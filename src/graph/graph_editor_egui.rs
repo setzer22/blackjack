@@ -22,7 +22,8 @@ pub fn draw_graph_editor(ctx: &CtxRef, state: &mut GraphEditorState) {
     // executed at the end of this function.
     let mut delayed_responses: Vec<DrawGraphNodeResponse> = vec![];
 
-    CentralPanel::default().show(ctx, |ui| {
+    let r = CentralPanel::default().show(ctx, |ui| {
+
         /* Draw nodes */
         let nodes = state.graph.iter_nodes().collect::<Vec<_>>(); // avoid borrow checker
         for node_id in nodes {
@@ -35,6 +36,10 @@ pub fn draw_graph_editor(ctx: &CtxRef, state: &mut GraphEditorState) {
                 active: state
                     .active_node
                     .map(|active| active == node_id)
+                    .unwrap_or(false),
+                selected: state
+                    .selected_node
+                    .map(|selected| selected == node_id)
                     .unwrap_or(false),
                 pan: state.pan_zoom.pan,
             }
@@ -116,6 +121,9 @@ pub fn draw_graph_editor(ctx: &CtxRef, state: &mut GraphEditorState) {
             DrawGraphNodeResponse::SetActiveNode(node_id) => {
                 state.active_node = Some(node_id);
             }
+            DrawGraphNodeResponse::SelectNode(node_id) => {
+                state.selected_node = Some(node_id);
+            }
             DrawGraphNodeResponse::ClearActiveNode => {
                 state.active_node = None;
             }
@@ -128,6 +136,9 @@ pub fn draw_graph_editor(ctx: &CtxRef, state: &mut GraphEditorState) {
                 // Make sure to not leave references to old nodes hanging
                 if state.active_node.map(|x| x == node_id).unwrap_or(false) {
                     state.active_node = None;
+                }
+                if state.selected_node.map(|x| x == node_id).unwrap_or(false) {
+                    state.selected_node = None;
                 }
                 if state.run_side_effect.map(|x| x == node_id).unwrap_or(false) {
                     state.run_side_effect = None;
@@ -162,4 +173,11 @@ pub fn draw_graph_editor(ctx: &CtxRef, state: &mut GraphEditorState) {
     if ctx.input().pointer.middle_down() {
         state.pan_zoom.pan += ctx.input().pointer.delta();
     }
+
+    // HACK: This is a way to detect when the background was clicked
+    if !ctx.wants_pointer_input() && ctx.input().pointer.primary_down() {
+        state.selected_node = None;
+        state.node_finder = None;
+    }
+
 }
