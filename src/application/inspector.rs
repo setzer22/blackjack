@@ -1,7 +1,4 @@
-use crate::{
-    graph::graph_editor_egui::editor_state::{self, GraphEditorState},
-    prelude::*,
-};
+use crate::{graph::graph_editor_egui::editor_state::GraphEditorState, prelude::*};
 use egui::*;
 
 #[derive(Clone, Copy, PartialEq, Eq)]

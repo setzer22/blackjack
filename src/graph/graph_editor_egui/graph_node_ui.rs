@@ -38,34 +38,14 @@ impl<'a> GraphNodeWidget<'a> {
             Layout::default(),
         );
 
-        let mut node_responses = Self::show_graph_node(
-            self.graph,
-            self.node_id,
-            &mut child_ui,
-            self.port_locations,
-            self.ongoing_drag,
-            self.position,
-            self.active,
-            self.selected,
-        );
-
-        node_responses
+        Self::show_graph_node(self, &mut child_ui)
     }
 
     /// Draws this node. Also fills in the list of port locations with all of its ports.
     /// Returns a response showing whether a drag event was started.
     /// Parameters:
     /// - **ongoing_drag**: Is there a port drag event currently going on?
-    fn show_graph_node(
-        graph: &mut Graph,
-        node_id: NodeId,
-        ui: &mut Ui,
-        port_locations: &mut PortLocations,
-        ongoing_drag: Option<(NodeId, AnyParameterId)>,
-        position: &mut Pos2,
-        active: bool,
-        selected: bool,
-    ) -> Vec<DrawGraphNodeResponse> {
+    fn show_graph_node(self, ui: &mut Ui) -> Vec<DrawGraphNodeResponse> {
         let margin = egui::vec2(15.0, 5.0);
         let _field_separation = 5.0;
         let mut responses = Vec::<DrawGraphNodeResponse>::new();
@@ -96,7 +76,7 @@ impl<'a> GraphNodeWidget<'a> {
         child_ui.vertical(|ui| {
             ui.horizontal(|ui| {
                 ui.add(Label::new(
-                    RichText::new(&graph[node_id].label)
+                    RichText::new(&self.graph[self.node_id].label)
                         .text_style(TextStyle::Button)
                         .color(color_from_hex("#fefefe").unwrap()),
                 ));
@@ -105,19 +85,19 @@ impl<'a> GraphNodeWidget<'a> {
             title_height = ui.min_size().y;
 
             // First pass: Draw the inner fields. Compute port heights
-            let inputs = graph[node_id].inputs.clone();
+            let inputs = self.graph[self.node_id].inputs.clone();
             for (param_name, param) in inputs {
                 let height_before = ui.min_rect().bottom();
-                if graph.connection(param).is_some() {
+                if self.graph.connection(param).is_some() {
                     ui.label(param_name);
                 } else {
-                    graph[param].value_widget(&param_name, ui);
+                    self.graph[param].value_widget(&param_name, ui);
                 }
                 let height_after = ui.min_rect().bottom();
                 input_port_heights.push((height_before + height_after) / 2.0);
             }
 
-            let outputs = graph[node_id].outputs.clone();
+            let outputs = self.graph[self.node_id].outputs.clone();
             for (param_name, _param) in outputs {
                 let height_before = ui.min_rect().bottom();
                 ui.label(&param_name);
@@ -128,11 +108,11 @@ impl<'a> GraphNodeWidget<'a> {
             // Button row
             ui.horizontal(|ui| {
                 // Show 'Enable' button for nodes that output a mesh
-                if graph[node_id].can_be_enabled(graph) {
+                if self.graph[self.node_id].can_be_enabled(self.graph) {
                     ui.horizontal(|ui| {
-                        if !active {
+                        if !self.active {
                             if ui.button("👁 Set active").clicked() {
-                                responses.push(DrawGraphNodeResponse::SetActiveNode(node_id));
+                                responses.push(DrawGraphNodeResponse::SetActiveNode(self.node_id));
                             }
                         } else {
                             let button = egui::Button::new(
@@ -146,8 +126,8 @@ impl<'a> GraphNodeWidget<'a> {
                     });
                 }
                 // Show 'Run' button for executable nodes
-                if graph[node_id].is_executable() && ui.button("⛭ Run").clicked() {
-                    responses.push(DrawGraphNodeResponse::RunNodeSideEffect(node_id));
+                if self.graph[self.node_id].is_executable() && ui.button("⛭ Run").clicked() {
+                    responses.push(DrawGraphNodeResponse::RunNodeSideEffect(self.node_id));
                 }
             })
         });
@@ -218,12 +198,12 @@ impl<'a> GraphNodeWidget<'a> {
         }
 
         // Input ports
-        for ((_, param), port_height) in graph[node_id]
+        for ((_, param), port_height) in self.graph[self.node_id]
             .inputs
             .iter()
             .zip(input_port_heights.into_iter())
         {
-            let should_draw = match graph[*param].kind() {
+            let should_draw = match self.graph[*param].kind() {
                 InputParamKind::ConnectionOnly => true,
                 InputParamKind::ConstantOnly => false,
                 InputParamKind::ConnectionOrConstant => true,
@@ -233,20 +213,20 @@ impl<'a> GraphNodeWidget<'a> {
                 let pos_left = pos2(port_left, port_height);
                 draw_port(
                     ui,
-                    graph,
-                    node_id,
+                    self.graph,
+                    self.node_id,
                     pos_left,
                     &mut responses,
                     AnyParameterId::Input(*param),
-                    port_locations,
-                    ongoing_drag,
-                    graph.connection(*param).is_some(),
+                    self.port_locations,
+                    self.ongoing_drag,
+                    self.graph.connection(*param).is_some(),
                 );
             }
         }
 
         // Output ports
-        for ((_, param), port_height) in graph[node_id]
+        for ((_, param), port_height) in self.graph[self.node_id]
             .outputs
             .iter()
             .zip(output_port_heights.into_iter())
@@ -254,13 +234,13 @@ impl<'a> GraphNodeWidget<'a> {
             let pos_right = pos2(port_right, port_height);
             draw_port(
                 ui,
-                graph,
-                node_id,
+                self.graph,
+                self.node_id,
                 pos_right,
                 &mut responses,
                 AnyParameterId::Output(*param),
-                port_locations,
-                ongoing_drag,
+                self.port_locations,
+                self.ongoing_drag,
                 false,
             );
         }
@@ -304,7 +284,7 @@ impl<'a> GraphNodeWidget<'a> {
                 stroke: Stroke::none(),
             });
 
-            let outline = if selected {
+            let outline = if self.selected {
                 Shape::Rect(RectShape {
                     rect: titlebar_rect
                         .union(body_rect)
@@ -328,19 +308,20 @@ impl<'a> GraphNodeWidget<'a> {
 
         // Titlebar buttons
         if Self::close_button(ui, outer_rect).clicked() {
-            responses.push(DrawGraphNodeResponse::DeleteNode(node_id));
+            responses.push(DrawGraphNodeResponse::DeleteNode(self.node_id));
         };
 
         let window_response = ui.allocate_rect(outer_rect, Sense::click_and_drag());
 
         // Movement
-        *position += window_response.drag_delta();
+        *self.position += window_response.drag_delta();
 
-        // Node selection 
+        // Node selection
+        //
         // HACK: Only set the select response when no other response is active.
         // This prevents some issues.
         if responses.is_empty() && window_response.clicked_by(PointerButton::Primary) {
-            responses.push(DrawGraphNodeResponse::SelectNode(node_id));
+            responses.push(DrawGraphNodeResponse::SelectNode(self.node_id));
         }
 
         responses
