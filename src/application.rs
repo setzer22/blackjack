@@ -88,7 +88,7 @@ impl RootViewport {
             },
             renderpass: RenderPass::new(&renderer.device, screen_format, 1),
             app_context: ApplicationContext::new(renderer),
-            graph_editor: GraphEditor::new(&renderer.device, window_size, screen_format),
+            graph_editor: GraphEditor::new(&renderer.device, window_size, screen_format, scale_factor as f32),
             viewport_3d: Viewport3d::new(),
             offscreen_viewports,
             inspector_tabs: InspectorTabs::new(),

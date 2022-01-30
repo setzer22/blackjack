@@ -26,7 +26,7 @@ impl SerializedEditorState {
     }
 
     pub fn into_state(self) -> GraphEditorState {
-        let mut state = GraphEditorState::new();
+        let mut state = GraphEditorState::new(1.0);
         state.graph = self.graph;
         state.active_node = self.active_node;
         state.node_positions = self.node_positions;

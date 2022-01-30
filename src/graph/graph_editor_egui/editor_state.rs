@@ -32,7 +32,7 @@ pub struct GraphEditorState {
 }
 
 impl GraphEditorState {
-    pub fn new() -> Self {
+    pub fn new(default_zoom: f32) -> Self {
         Self {
             graph: Graph::new(),
             connection_in_progress: None,
@@ -43,15 +43,9 @@ impl GraphEditorState {
             node_finder: None,
             pan_zoom: PanZoom {
                 pan: egui::Vec2::ZERO,
-                zoom: 1.0,
+                zoom: default_zoom,
             },
         }
-    }
-}
-
-impl Default for GraphEditorState {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
