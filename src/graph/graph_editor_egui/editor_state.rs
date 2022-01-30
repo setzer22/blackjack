@@ -49,7 +49,6 @@ impl GraphEditorState {
                 pan: egui::Vec2::ZERO,
                 zoom: default_zoom,
             },
-
         }
     }
 }
