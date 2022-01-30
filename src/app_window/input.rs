@@ -45,7 +45,11 @@ impl InputSystem {
         let mouse_in_viewport = self
             .mouse
             .last_pos_raw
-            .map(|pos| viewport_rect.contains(egui::pos2(pos.x, pos.y)))
+            .map(|pos| {
+                viewport_rect
+                    .scale_from_origin(parent_scale)
+                    .contains(egui::pos2(pos.x, pos.y))
+            })
             .unwrap_or(false);
 
         match event {

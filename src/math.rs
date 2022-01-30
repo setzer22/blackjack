@@ -65,3 +65,17 @@ impl ColorUtils for egui::Color32 {
         )
     }
 }
+
+pub trait RectUtils {
+    /// Scales the rect by the given `scale` factor relative to the origin at (0,0)
+    fn scale_from_origin(&self, scale: f32) -> Self;
+}
+
+impl RectUtils for egui::Rect {
+    fn scale_from_origin(&self, scale: f32) -> Self {
+        let mut result = *self;
+        result.min = (self.min.to_vec2() * scale).to_pos2();
+        result.max = (self.max.to_vec2() * scale).to_pos2();
+        result
+    }
+}
