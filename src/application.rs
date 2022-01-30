@@ -7,7 +7,7 @@ use egui_winit_platform::{Platform, PlatformDescriptor};
 
 use self::{
     app_viewport::AppViewport, application_context::ApplicationContext, graph_editor::GraphEditor,
-    root_ui::AppRootAction, viewport_3d::Viewport3d,
+    inspector::InspectorTabs, root_ui::AppRootAction, viewport_3d::Viewport3d,
 };
 
 pub struct RootViewport {
@@ -19,6 +19,7 @@ pub struct RootViewport {
     viewport_3d: Viewport3d,
     /// Stores the egui texture ids for the child viewports.
     offscreen_viewports: HashMap<OffscreenViewport, AppViewport>,
+    inspector_tabs: InspectorTabs,
 }
 
 /// The application context is state that is global to an instance of blackjack.
@@ -46,6 +47,9 @@ pub mod app_viewport;
 
 /// An egui container to draw a recursive tree of resizable horizontal/vertical splits
 pub mod viewport_split;
+
+/// The properties and spreadsheet inspector code
+pub mod inspector;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 enum OffscreenViewport {
@@ -86,6 +90,7 @@ impl RootViewport {
             graph_editor: GraphEditor::new(&renderer.device, window_size, screen_format),
             viewport_3d: Viewport3d::new(),
             offscreen_viewports,
+            inspector_tabs: InspectorTabs::new(),
         }
     }
 

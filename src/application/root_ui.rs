@@ -56,7 +56,7 @@ impl RootViewport {
                     .show(ui, ui.available_size());
             }
             "inspector" => {
-                ui.label("Properties inspector goes here");
+                payload.inspector_tabs.ui(ui, payload.app_context.mesh.as_ref())
             }
             _ => panic!("Invalid split name {}", name),
         }
