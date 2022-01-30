@@ -62,6 +62,10 @@ pub enum InputParamKind {
     ConnectionOrConstant,
 }
 
+fn shown_inline_default() -> bool {
+    true
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InputParam {
     id: InputId,
@@ -79,6 +83,7 @@ pub struct InputParam {
     /// Back-reference to the node containing this parameter.
     node: NodeId,
     /// When true, the node is shown inline inside the node graph.
+    #[serde(default = "shown_inline_default")]
     pub shown_inline: bool,
 }
 
