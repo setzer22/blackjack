@@ -68,9 +68,11 @@ impl RootViewport {
                     .unwrap()
                     .show(ui, ui.available_size());
             }
-            "inspector" => payload
-                .inspector_tabs
-                .ui(ui, payload.app_context.mesh.as_ref(), &mut payload.graph_editor.state),
+            "inspector" => payload.inspector_tabs.ui(
+                ui,
+                payload.app_context.mesh.as_ref(),
+                &mut payload.graph_editor.state,
+            ),
             _ => panic!("Invalid split name {}", name),
         }
     }

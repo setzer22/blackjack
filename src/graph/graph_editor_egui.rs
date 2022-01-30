@@ -184,5 +184,4 @@ pub fn draw_graph_editor(ctx: &CtxRef, state: &mut GraphEditorState) {
         state.selected_node = None;
         state.node_finder = None;
     }
-
 }
