@@ -69,17 +69,14 @@ impl InputSystem {
                     .on_cursor_move(Vec2::new(position.x as f32, position.y as f32));
             }
             // Wheel events will only get registered when the cursor is inside the viewport
-            WindowEvent::MouseWheel { delta, .. } if mouse_in_viewport => {
-                println!("[3d viewport] {:?}", delta);
-                match delta {
-                    winit::event::MouseScrollDelta::LineDelta(_, y) => {
-                        self.mouse.on_wheel_scroll(*y as f32);
-                    }
-                    winit::event::MouseScrollDelta::PixelDelta(pos) => {
-                        self.mouse.on_wheel_scroll(pos.y as f32);
-                    }
+            WindowEvent::MouseWheel { delta, .. } if mouse_in_viewport => match delta {
+                winit::event::MouseScrollDelta::LineDelta(_, y) => {
+                    self.mouse.on_wheel_scroll(*y as f32);
                 }
-            }
+                winit::event::MouseScrollDelta::PixelDelta(pos) => {
+                    self.mouse.on_wheel_scroll(pos.y as f32);
+                }
+            },
             // Button events are a bit different: Presses can register inside
             // the viewport but releases will register anywhere.
             WindowEvent::MouseInput {
