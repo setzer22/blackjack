@@ -20,6 +20,7 @@ pub struct RootViewport {
     /// Stores the egui texture ids for the child viewports.
     offscreen_viewports: HashMap<OffscreenViewport, AppViewport>,
     inspector_tabs: InspectorTabs,
+    diagnostics_open: bool,
 }
 
 /// The application context is state that is global to an instance of blackjack.
@@ -91,6 +92,7 @@ impl RootViewport {
             viewport_3d: Viewport3d::new(),
             offscreen_viewports,
             inspector_tabs: InspectorTabs::new(),
+            diagnostics_open: false,
         }
     }
 
@@ -164,7 +166,7 @@ impl RootViewport {
         self.platform.begin_frame();
 
         egui::TopBottomPanel::top("top_menubar").show(&self.platform.context(), |ui| {
-            if let Some(menubar_action) = Self::top_menubar(ui) {
+            if let Some(menubar_action) = self.top_menubar(ui) {
                 actions.push(menubar_action);
             }
         });
@@ -174,6 +176,8 @@ impl RootViewport {
             split_tree.show(ui, self, Self::show_leaf);
             self.app_context.split_tree = split_tree;
         });
+
+        self.diagnostics_ui(&self.platform.context());
 
         self.app_context.update(
             &self.platform.context(),

@@ -22,7 +22,7 @@ pub fn draw_graph_editor(ctx: &CtxRef, state: &mut GraphEditorState) {
     // executed at the end of this function.
     let mut delayed_responses: Vec<DrawGraphNodeResponse> = vec![];
 
-    let r = CentralPanel::default().show(ctx, |ui| {
+    CentralPanel::default().show(ctx, |ui| {
 
         /* Draw nodes */
         let nodes = state.graph.iter_nodes().collect::<Vec<_>>(); // avoid borrow checker
