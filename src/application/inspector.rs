@@ -70,19 +70,33 @@ impl InspectorTabs {
         }
     }
 }
+
+pub fn tiny_checkbox(ui: &mut Ui, value: &mut bool) {
+    let mut child_ui = ui.child_ui(ui.available_rect_before_wrap(), *ui.layout());
+    child_ui.spacing_mut().icon_spacing = 0.0;
+    child_ui.spacing_mut().interact_size = egui::vec2(16.0, 16.0);
+    child_ui.checkbox(value, "");
+    ui.add_space(24.0);
+}
+
 impl PropertiesTab {
     fn ui(&self, ui: &mut Ui, editor_state: &mut GraphEditorState) {
         let graph = &mut editor_state.graph;
         if let Some(node) = editor_state.selected_node {
             let node = &graph[node];
             let inputs = node.inputs.clone();
-            for (param_name, param) in inputs {
-                if graph.connection(param).is_some() {
-                    ui.label(param_name);
-                } else {
-                    graph[param].value_widget(&param_name, ui);
+            ui.vertical(|ui| {
+                for (param_name, param) in inputs {
+                    if graph.connection(param).is_some() {
+                        ui.label(param_name);
+                    } else {
+                        ui.horizontal(|ui| {
+                            tiny_checkbox(ui, &mut graph[param].shown_inline);
+                            graph[param].value_widget(&param_name, ui);
+                        });
+                    }
                 }
-            }
+            });
         } else {
             ui.label("No node selected. Click a node's title to select it.");
         }

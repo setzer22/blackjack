@@ -89,15 +89,17 @@ impl<'a> GraphNodeWidget<'a> {
 
             // First pass: Draw the inner fields. Compute port heights
             let inputs = self.graph[self.node_id].inputs.clone();
-            for (param_name, param) in inputs {
-                let height_before = ui.min_rect().bottom();
-                if self.graph.connection(param).is_some() {
-                    ui.label(param_name);
-                } else {
-                    self.graph[param].value_widget(&param_name, ui);
+            for (param_name, param_id) in inputs {
+                if self.graph[param_id].shown_inline {
+                    let height_before = ui.min_rect().bottom();
+                    if self.graph.connection(param_id).is_some() {
+                        ui.label(param_name);
+                    } else {
+                        self.graph[param_id].value_widget(&param_name, ui);
+                    }
+                    let height_after = ui.min_rect().bottom();
+                    input_port_heights.push((height_before + height_after) / 2.0);
                 }
-                let height_after = ui.min_rect().bottom();
-                input_port_heights.push((height_before + height_after) / 2.0);
             }
 
             let outputs = self.graph[self.node_id].outputs.clone();
@@ -323,7 +325,6 @@ impl<'a> GraphNodeWidget<'a> {
         // Movement
         *self.position += window_response.drag_delta();
         if window_response.drag_delta().length_sq() > 0.0 {
-            dbg!(window_response.id);
             responses.push(DrawGraphNodeResponse::RaiseNode(self.node_id));
         }
 
