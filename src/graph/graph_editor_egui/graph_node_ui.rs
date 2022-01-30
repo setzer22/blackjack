@@ -16,6 +16,8 @@ pub enum DrawGraphNodeResponse {
     ClearActiveNode,
     DeleteNode(NodeId),
     DisconnectEvent(InputId),
+    /// Emitted when a node is interacted with, and should be raised
+    RaiseNode(NodeId),
 }
 
 pub struct GraphNodeWidget<'a> {
@@ -33,9 +35,10 @@ impl<'a> GraphNodeWidget<'a> {
     pub const MAX_NODE_SIZE: [f32; 2] = [200.0, 200.0];
 
     pub fn show(self, ui: &mut Ui) -> Vec<DrawGraphNodeResponse> {
-        let mut child_ui = ui.child_ui(
+        let mut child_ui = ui.child_ui_with_id_source(
             Rect::from_min_size(*self.position + self.pan, Self::MAX_NODE_SIZE.into()),
             Layout::default(),
+            self.node_id,
         );
 
         Self::show_graph_node(self, &mut child_ui)
@@ -311,10 +314,18 @@ impl<'a> GraphNodeWidget<'a> {
             responses.push(DrawGraphNodeResponse::DeleteNode(self.node_id));
         };
 
-        let window_response = ui.allocate_rect(outer_rect, Sense::click_and_drag());
+        let window_response = ui.interact(
+            outer_rect,
+            Id::new((self.node_id, "window")),
+            Sense::click_and_drag(),
+        );
 
         // Movement
         *self.position += window_response.drag_delta();
+        if window_response.drag_delta().length_sq() > 0.0 {
+            dbg!(window_response.id);
+            responses.push(DrawGraphNodeResponse::RaiseNode(self.node_id));
+        }
 
         // Node selection
         //
@@ -322,6 +333,7 @@ impl<'a> GraphNodeWidget<'a> {
         // This prevents some issues.
         if responses.is_empty() && window_response.clicked_by(PointerButton::Primary) {
             responses.push(DrawGraphNodeResponse::SelectNode(self.node_id));
+            responses.push(DrawGraphNodeResponse::RaiseNode(self.node_id));
         }
 
         responses

@@ -11,6 +11,9 @@ pub struct PanZoom {
 
 pub struct GraphEditorState {
     pub graph: Graph,
+    /// Nodes are drawn in this order. Draw order is important because nodes
+    /// that are drawn last are on top.
+    pub node_order: Vec<NodeId>,
     /// An ongoing connection interaction: The mouse has dragged away from a
     /// port and the user is holding the click
     pub connection_in_progress: Option<(NodeId, AnyParameterId)>,
@@ -35,6 +38,7 @@ impl GraphEditorState {
     pub fn new(default_zoom: f32) -> Self {
         Self {
             graph: Graph::new(),
+            node_order: Vec::new(),
             connection_in_progress: None,
             active_node: None,
             selected_node: None,
@@ -45,6 +49,7 @@ impl GraphEditorState {
                 pan: egui::Vec2::ZERO,
                 zoom: default_zoom,
             },
+
         }
     }
 }
