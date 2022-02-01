@@ -15,9 +15,15 @@ impl GraphEditor {
     pub const ZOOM_LEVEL_MIN: f32 = 0.5;
     pub const ZOOM_LEVEL_MAX: f32 = 10.0;
 
-    pub fn new(device: &wgpu::Device, window_size: UVec2, format: r3::TextureFormat) -> Self {
+    pub fn new(
+        device: &wgpu::Device,
+        window_size: UVec2,
+        format: r3::TextureFormat,
+        parent_scale: f32,
+    ) -> Self {
         Self {
-            state: GraphEditorState::new(),
+            // Set default zoom to the inverse of ui scale to preserve dpi
+            state: GraphEditorState::new(1.0 / parent_scale),
             platform: Platform::new(PlatformDescriptor {
                 // The width here is not really relevant, and will be reset on
                 // the next resize event.
@@ -53,7 +59,7 @@ impl GraphEditor {
         let mut event = event.clone();
         let mouse_in_viewport = self
             .raw_mouse_position
-            .map(|pos| viewport_rect.contains(pos))
+            .map(|pos| viewport_rect.scale_from_origin(parent_scale).contains(pos))
             .unwrap_or(false);
 
         #[allow(clippy::single_match)]

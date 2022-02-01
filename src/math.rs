@@ -49,3 +49,33 @@ impl ToWinit<winit::dpi::PhysicalPosition<f64>> for egui::Pos2 {
         }
     }
 }
+
+pub trait ColorUtils {
+    /// Multiplies the color rgb values by `factor`, keeping alpha untouched.
+    fn lighten(&self, factor: f32) -> Self;
+}
+
+impl ColorUtils for egui::Color32 {
+    fn lighten(&self, factor: f32) -> Self {
+        egui::Color32::from_rgba_premultiplied(
+            (self.r() as f32 * factor) as u8,
+            (self.g() as f32 * factor) as u8,
+            (self.b() as f32 * factor) as u8,
+            self.a(),
+        )
+    }
+}
+
+pub trait RectUtils {
+    /// Scales the rect by the given `scale` factor relative to the origin at (0,0)
+    fn scale_from_origin(&self, scale: f32) -> Self;
+}
+
+impl RectUtils for egui::Rect {
+    fn scale_from_origin(&self, scale: f32) -> Self {
+        let mut result = *self;
+        result.min = (self.min.to_vec2() * scale).to_pos2();
+        result.max = (self.max.to_vec2() * scale).to_pos2();
+        result
+    }
+}

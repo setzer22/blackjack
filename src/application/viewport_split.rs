@@ -16,16 +16,16 @@ pub struct ViewportSplit {
 }
 
 impl ViewportSplit {
-    pub fn vertical() -> Self {
+    pub fn vertical(fraction: f32) -> Self {
         Self {
-            fraction: 0.5,
+            fraction,
             separator_width: 10.0,
             kind: ViewportSplitKind::Vertical,
         }
     }
-    pub fn horizontal() -> Self {
+    pub fn horizontal(fraction: f32) -> Self {
         Self {
-            fraction: 0.5,
+            fraction,
             separator_width: 10.0,
             kind: ViewportSplitKind::Horizontal,
         }
@@ -156,15 +156,13 @@ impl SplitTree {
 
     pub fn default_tree() -> SplitTree {
         SplitTree::Split {
-            left: Box::new(SplitTree::Leaf("3d_view".into())),
-            /* NOTE: Uncomment once we add the properties inspector
-            Box::new(SplitTree::Split {
-                left: Box::new(SplitTree::Leaf("inspector".into())),
-                right: Box::new(SplitTree::Leaf("3d_view".into())),
-                split: ViewportSplit::horizontal(),
-            }), */
+            left: Box::new(SplitTree::Split {
+                left: Box::new(SplitTree::Leaf("3d_view".into())),
+                right: Box::new(SplitTree::Leaf("inspector".into())),
+                split: ViewportSplit::horizontal(0.66),
+            }),
             right: Box::new(SplitTree::Leaf("graph_editor".into())),
-            split: ViewportSplit::vertical(),
+            split: ViewportSplit::vertical(0.5),
         }
     }
 }

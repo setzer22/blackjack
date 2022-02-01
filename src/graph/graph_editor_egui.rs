@@ -22,11 +22,20 @@ pub fn draw_graph_editor(ctx: &CtxRef, state: &mut GraphEditorState) {
     // executed at the end of this function.
     let mut delayed_responses: Vec<DrawGraphNodeResponse> = vec![];
 
+    // Used to detect when the background was clicked, to dismiss certain states
+    let mut click_on_background = false;
+
+    debug_assert_eq!(
+        state.node_order.iter().copied().collect::<HashSet<_>>(),
+        state.graph.iter_nodes().collect::<HashSet<_>>(),
+        "The node_order field of the GraphEditorState was left in an \
+        inconsistent state. It has either more or less values than the graph."
+    );
+
     CentralPanel::default().show(ctx, |ui| {
         /* Draw nodes */
-        let nodes = state.graph.iter_nodes().collect::<Vec<_>>(); // avoid borrow checker
-        for node_id in nodes {
-            let response = GraphNodeWidget {
+        for node_id in state.node_order.iter().copied() {
+            let responses = GraphNodeWidget {
                 position: state.node_positions.get_mut(&node_id).unwrap(),
                 graph: &mut state.graph,
                 port_locations: &mut port_locations,
@@ -36,13 +45,21 @@ pub fn draw_graph_editor(ctx: &CtxRef, state: &mut GraphEditorState) {
                     .active_node
                     .map(|active| active == node_id)
                     .unwrap_or(false),
+                selected: state
+                    .selected_node
+                    .map(|selected| selected == node_id)
+                    .unwrap_or(false),
                 pan: state.pan_zoom.pan,
             }
             .show(ui);
 
-            if let Some(response) = response {
-                delayed_responses.push(response);
-            }
+            // Actions executed later
+            delayed_responses.extend(responses);
+        }
+
+        let r = ui.allocate_rect(ui.min_rect(), Sense::click());
+        if r.clicked() {
+            click_on_background = true;
         }
     });
 
@@ -59,6 +76,7 @@ pub fn draw_graph_editor(ctx: &CtxRef, state: &mut GraphEditorState) {
                 state
                     .node_positions
                     .insert(new_node, cursor_pos - state.pan_zoom.pan);
+                state.node_order.push(new_node);
                 should_close_node_finder = true;
             }
         });
@@ -116,6 +134,9 @@ pub fn draw_graph_editor(ctx: &CtxRef, state: &mut GraphEditorState) {
             DrawGraphNodeResponse::SetActiveNode(node_id) => {
                 state.active_node = Some(node_id);
             }
+            DrawGraphNodeResponse::SelectNode(node_id) => {
+                state.selected_node = Some(node_id);
+            }
             DrawGraphNodeResponse::ClearActiveNode => {
                 state.active_node = None;
             }
@@ -129,9 +150,13 @@ pub fn draw_graph_editor(ctx: &CtxRef, state: &mut GraphEditorState) {
                 if state.active_node.map(|x| x == node_id).unwrap_or(false) {
                     state.active_node = None;
                 }
+                if state.selected_node.map(|x| x == node_id).unwrap_or(false) {
+                    state.selected_node = None;
+                }
                 if state.run_side_effect.map(|x| x == node_id).unwrap_or(false) {
                     state.run_side_effect = None;
                 }
+                state.node_order.retain(|id| *id != node_id);
             }
             DrawGraphNodeResponse::DisconnectEvent(input_id) => {
                 let corresp_output = state
@@ -142,6 +167,15 @@ pub fn draw_graph_editor(ctx: &CtxRef, state: &mut GraphEditorState) {
                 state.graph.remove_connection(input_id);
                 state.connection_in_progress =
                     Some((other_node, AnyParameterId::Output(corresp_output)));
+            }
+            DrawGraphNodeResponse::RaiseNode(node_id) => {
+                let old_pos = state
+                    .node_order
+                    .iter()
+                    .position(|id| *id == node_id)
+                    .expect("Node to be raised should be in `node_order`");
+                state.node_order.remove(old_pos);
+                state.node_order.push(node_id);
             }
         }
     }
@@ -161,5 +195,10 @@ pub fn draw_graph_editor(ctx: &CtxRef, state: &mut GraphEditorState) {
 
     if ctx.input().pointer.middle_down() {
         state.pan_zoom.pan += ctx.input().pointer.delta();
+    }
+
+    if click_on_background {
+        state.selected_node = None;
+        state.node_finder = None;
     }
 }

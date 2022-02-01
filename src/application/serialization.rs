@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize)]
 struct SerializedEditorState {
     pub graph: Graph,
+    pub node_order: Option<Vec<NodeId>>,
     pub active_node: Option<NodeId>,
     pub node_positions: HashMap<NodeId, egui::Pos2>,
     pub pan_zoom: PanZoom,
@@ -19,6 +20,7 @@ impl SerializedEditorState {
     pub fn from_state(editor_state: &GraphEditorState) -> Self {
         SerializedEditorState {
             graph: editor_state.graph.clone(),
+            node_order: Some(editor_state.node_order.clone()),
             active_node: editor_state.active_node,
             node_positions: editor_state.node_positions.clone(),
             pan_zoom: editor_state.pan_zoom,
@@ -26,8 +28,11 @@ impl SerializedEditorState {
     }
 
     pub fn into_state(self) -> GraphEditorState {
-        let mut state = GraphEditorState::new();
+        let mut state = GraphEditorState::new(1.0);
         state.graph = self.graph;
+        state.node_order = self
+            .node_order
+            .unwrap_or_else(|| state.graph.iter_nodes().collect());
         state.active_node = self.active_node;
         state.node_positions = self.node_positions;
         state.pan_zoom = self.pan_zoom;

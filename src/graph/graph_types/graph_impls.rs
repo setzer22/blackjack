@@ -34,6 +34,7 @@ impl Graph {
                         metadata: smallvec![],
                         kind: ConnectionOrConstant,
                         node: node_id,
+                        shown_inline: true,
                     },
                     InputDescriptor::Mesh => InputParam {
                         id,
@@ -42,6 +43,7 @@ impl Graph {
                         metadata: smallvec![],
                         kind: ConnectionOnly,
                         node: node_id,
+                        shown_inline: true,
                     },
                     InputDescriptor::Selection => InputParam {
                         id,
@@ -53,6 +55,7 @@ impl Graph {
                         metadata: smallvec![],
                         kind: ConnectionOrConstant,
                         node: node_id,
+                        shown_inline: true,
                     },
                     InputDescriptor::Scalar { default, min, max } => InputParam {
                         id,
@@ -61,6 +64,7 @@ impl Graph {
                         metadata: smallvec![InputParamMetadata::MinMaxScalar { min, max }],
                         kind: ConnectionOrConstant,
                         node: node_id,
+                        shown_inline: true,
                     },
                     InputDescriptor::Enum { values } => InputParam {
                         id,
@@ -72,6 +76,7 @@ impl Graph {
                         metadata: smallvec![],
                         kind: ConstantOnly,
                         node: node_id,
+                        shown_inline: true,
                     },
                     InputDescriptor::NewFile => InputParam {
                         id,
@@ -80,6 +85,7 @@ impl Graph {
                         metadata: smallvec![],
                         kind: ConstantOnly,
                         node: node_id,
+                        shown_inline: true,
                     },
                 });
                 (input_name, input_id)
