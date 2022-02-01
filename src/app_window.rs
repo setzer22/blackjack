@@ -24,7 +24,7 @@ impl AppWindow {
         let event_loop = winit::event_loop::EventLoop::new();
         let window = {
             let mut builder = winit::window::WindowBuilder::new();
-            builder = builder.with_title("My Window");
+            builder = builder.with_title("Blackjack");
             builder.build(&event_loop).expect("Could not build window")
         };
 
