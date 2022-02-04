@@ -493,9 +493,9 @@ impl HalfEdgeMesh {
                 }
             }
 
-            //if count != vertex_degree[&v] {
-                //bail!("At least one of the vertices is not a polygon fan, but some other nonmanifold structure instead.")
-            //}
+            if count != vertex_degree[&v] {
+                bail!("At least one of the vertices is not a polygon fan, but some other nonmanifold structure instead.")
+            }
         }
 
         Ok(mesh)
@@ -699,6 +699,18 @@ impl HalfEdgeMesh {
         } else {
             None
         }
+    }
+
+    pub fn num_halfedges(&self) -> usize {
+        self.halfedges.len()
+    }
+
+    pub fn num_vertices(&self) -> usize {
+        self.vertices.len()
+    }
+
+    pub fn num_faces(&self) -> usize {
+        self.faces.len()
     }
 }
 

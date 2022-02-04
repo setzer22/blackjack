@@ -329,8 +329,14 @@ impl PolyAsmProgram {
                 mesh.to_wavefront_obj(export_path)?;
             }
             PolyAsmInstruction::LinearSubdivide { in_mesh, out_mesh } => {
-                let new_mesh =
-                    halfedge::edit_ops::linear_subdivision(&*self.mem_fetch_ref(*in_mesh)?)?;
+                //let new_mesh =
+                //halfedge::edit_ops::linear_subdivision(&*self.mem_fetch_ref(*in_mesh)?)?;
+
+                let new_mesh = halfedge::compact_mesh::CompactMesh::from_halfedge(
+                    &*self.mem_fetch_ref(*in_mesh)?,
+                )?
+                .to_halfedge();
+
                 self.mem_store(*out_mesh, new_mesh)?;
                 self.output_register = Some(*out_mesh);
             }
