@@ -192,6 +192,13 @@ fn gen_code_for_node(
             };
             program.add_operation(operation);
         }
+        "LinearSubdivide" => {
+            let operation = PolyAsmInstruction::LinearSubdivide {
+                in_mesh: input!("in_mesh"),
+                out_mesh: output!("out_mesh"),
+            };
+            program.add_operation(operation);
+        }
         invalid => return Err(anyhow!("Unknown op_name {}", invalid)),
     }
     Ok(())

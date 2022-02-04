@@ -115,6 +115,10 @@ pub enum PolyAsmInstruction {
         b: MemAddr<HalfEdgeMesh>,
         out_mesh: MemAddr<HalfEdgeMesh>,
     },
+    LinearSubdivide {
+        in_mesh: MemAddr<HalfEdgeMesh>,
+        out_mesh: MemAddr<HalfEdgeMesh>,
+    },
     ExportObj {
         in_mesh: MemAddr<HalfEdgeMesh>,
         export_path: MemAddr<std::path::PathBuf>,
@@ -323,6 +327,12 @@ impl PolyAsmProgram {
                 let mesh = &*self.mem_fetch_ref(*in_mesh)?;
                 let export_path = self.mem_fetch(*export_path)?;
                 mesh.to_wavefront_obj(export_path)?;
+            }
+            PolyAsmInstruction::LinearSubdivide { in_mesh, out_mesh } => {
+                let new_mesh =
+                    halfedge::edit_ops::linear_subdivision(&*self.mem_fetch_ref(*in_mesh)?)?;
+                self.mem_store(*out_mesh, new_mesh)?;
+                self.output_register = Some(*out_mesh);
             }
         }
         Ok(())

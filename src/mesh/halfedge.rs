@@ -26,6 +26,9 @@ pub mod edit_ops;
 /// Import / Export of HalfEdgeMesh data structure to Wavefront OBJ files
 pub mod wavefront_obj;
 
+/// A compact halfedge graph specifically optimized for some operations
+pub mod compact_mesh;
+
 /// HalfEdge meshes are a type of linked list. This means it is sometimes
 /// impossible to ensure some algorithms will terminate when the mesh is
 /// malformed. To ensure the code never goes into an infinite loop, this max
@@ -491,9 +494,9 @@ impl HalfEdgeMesh {
                 }
             }
 
-            if count != vertex_degree[&v] {
-                bail!("At least one of the vertices is not a polygon fan, but some other nonmanifold structure instead.")
-            }
+            //if count != vertex_degree[&v] {
+                //bail!("At least one of the vertices is not a polygon fan, but some other nonmanifold structure instead.")
+            //}
         }
 
         Ok(mesh)

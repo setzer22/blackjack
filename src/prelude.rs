@@ -38,3 +38,4 @@ pub use crate::mesh::debug_viz;
 pub use crate::mesh::halfedge;
 
 pub use crate::math::*;
+pub use crate::utils::*;
