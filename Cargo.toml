@@ -14,6 +14,7 @@ edition = "2021"
 # Forked crates
 egui_wgpu_backend = { git = "https://github.com/setzer22/egui_wgpu_backend", rev = "3abd9145aaf2c79417d2ea2207df52f4e302ae28" }
 wavefront_rs = { git = "https://github.com/setzer22/wavefront_rs", rev = "e303f33" }
+slotmap = { git = "https://github.com/setzer22/slotmap", features = ["serde"], rev = "d6de4490" }
 
 # Git dependencies
 egui_winit_platform = { git = "https://github.com/hasenbanck/egui_winit_platform", rev = "eea97f778a17c7f97f3cf1758f3ebb5ff6251e11" }
@@ -29,8 +30,6 @@ env_logger = { version = "0.9", default-features = false, features = ["termcolor
 winit = { version = "0.26" }
 wgpu = "0.12"
 pollster = "0.2"
-generational-arena = "0.2" 
-slotmap = { version = "1.0", features = ["serde"] }
 smallvec = { version = "1.7.0", features = ["serde"] }
 itertools = "0.10"
 anyhow = { version = "1.0", features = ["backtrace"] }
@@ -50,3 +49,4 @@ type-map = "0.5"
 # commented out in any commits to the 'main' branch
 # egui_wgpu_backend = { path = "../egui_wgpu_backend" }
 # egui_winit_platform = { path = "../egui_winit_platform" }
+

@@ -1,9 +1,9 @@
 use crate::prelude::*;
 
-use generational_arena::Arena;
 use glam::*;
 use itertools::Itertools;
 use smallvec::SmallVec;
+use slotmap::SlotMap;
 
 /// Implements indexing traits so the mesh data structure can be used to access
 /// vertex, face or halfedge information using ids as indices.
@@ -85,9 +85,9 @@ impl DebugMark {
 
 #[derive(Default, Debug, Clone)]
 pub struct HalfEdgeMesh {
-    vertices: Arena<Vertex>,
-    faces: Arena<Face>,
-    halfedges: Arena<HalfEdge>,
+    vertices: SlotMap<VertexId, Vertex>,
+    faces: SlotMap<FaceId, Face>,
+    halfedges: SlotMap<HalfEdgeId, HalfEdge>,
 
     debug_edges: HashMap<HalfEdgeId, DebugMark>,
     debug_vertices: HashMap<VertexId, DebugMark>,
@@ -197,8 +197,7 @@ impl HalfEdgeMesh {
         let mut indices = vec![];
         let mut next_index = 0;
 
-        for (face_idx, _face) in self.faces.iter() {
-            let face_id = FaceId(face_idx);
+        for (face_id, _face) in self.faces.iter() {
             if done_faces.contains(&face_id) {
                 continue;
             }
@@ -525,15 +524,15 @@ impl HalfEdgeMesh {
     }
 
     pub fn iter_vertices(&self) -> impl Iterator<Item = (VertexId, &Vertex)> {
-        self.vertices.iter().map(|(idx, v)| (VertexId(idx), v))
+        self.vertices.iter()
     }
 
     pub fn iter_faces(&self) -> impl Iterator<Item = (FaceId, &Face)> {
-        self.faces.iter().map(|(idx, f)| (FaceId(idx), f))
+        self.faces.iter()
     }
 
     pub fn iter_halfedges(&self) -> impl Iterator<Item = (HalfEdgeId, &HalfEdge)> {
-        self.halfedges.iter().map(|(idx, h)| (HalfEdgeId(idx), h))
+        self.halfedges.iter()
     }
 
     /// Sets the position for a given vertex
@@ -554,37 +553,37 @@ impl HalfEdgeMesh {
 
     /// Adds a new vertex to the mesh, disconnected from everything else. Returns its handle.
     fn alloc_vertex(&mut self, position: Vec3, halfedge: Option<HalfEdgeId>) -> VertexId {
-        VertexId(self.vertices.insert(Vertex { position, halfedge }))
+        self.vertices.insert(Vertex { position, halfedge })
     }
 
     /// Adds a new face to the mesh, disconnected from everything else. Returns its handle.
     fn alloc_face(&mut self, halfedge: Option<HalfEdgeId>) -> FaceId {
-        FaceId(self.faces.insert(Face { halfedge }))
+        self.faces.insert(Face { halfedge })
     }
 
     /// Removes a face from the mesh. This does not attempt to preserve mesh
     /// connectivity and should only be used as part of internal operations.
     fn remove_face(&mut self, face: FaceId) {
-        self.faces.remove(face.0);
+        self.faces.remove(face);
     }
 
     /// Removes a halfedge from the mesh. This does not attempt to preserve mesh
     /// connectivity and should only be used as part of internal operations.
     fn remove_halfedge(&mut self, halfedge: HalfEdgeId) {
-        self.halfedges.remove(halfedge.0);
+        self.halfedges.remove(halfedge);
         self.debug_edges.remove(&halfedge);
     }
 
     /// Removes a vertex from the mesh. This does not attempt to preserve mesh
     /// connectivity and should only be used as part of internal operations.
     fn remove_vertex(&mut self, vertex: VertexId) {
-        self.vertices.remove(vertex.0);
+        self.vertices.remove(vertex);
         self.debug_vertices.remove(&vertex);
     }
 
     /// Adds a new vertex to the mesh, disconnected from everything else. Returns its handle.
     fn alloc_halfedge(&mut self, halfedge: HalfEdge) -> HalfEdgeId {
-        HalfEdgeId(self.halfedges.insert(halfedge))
+        self.halfedges.insert(halfedge)
     }
 
     pub fn vertex_debug_mark(&self, vertex: VertexId) -> Option<DebugMark> {
