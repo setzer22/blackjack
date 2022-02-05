@@ -26,16 +26,20 @@ pub struct CompactMesh {
     pub edge: Vec<u32>,
     pub face: Vec<u32>,
     pub vertex_positions: Vec<Vec3>,
-
-    pub num_halfedges: usize,
-    pub num_vertices: usize,
-    pub num_faces: usize,
+    pub counts: MeshCounts,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct MeshCounts {
+    /// The number of vertices
     pub num_vertices: usize,
+    /// The number of halfedges. Note that this is not the same as the number of
+    /// edges times two, because in a CompactMesh, a boundary edge only has a
+    /// single halfedge instead of two.
     pub num_halfedges: usize,
+    /// The number of edges.
+    pub num_edges: usize,
+    /// The number of faces
     pub num_faces: usize,
 }
 
@@ -46,11 +50,13 @@ impl MeshCounts {
         let h_0 = self.num_halfedges;
         let v_0 = self.num_vertices;
         let f_0 = self.num_faces;
+        let e_0 = self.num_edges;
 
         MeshCounts {
             num_halfedges: h_0 * 4,
             num_faces: h_0,
-            num_vertices: v_0 + f_0 + (h_0 / 2),
+            num_vertices: v_0 + f_0 + e_0,
+            num_edges: 2 * e_0 + h_0,
         }
     }
 }
@@ -160,27 +166,32 @@ impl CompactMesh {
             edge,
             face,
             vertex_positions,
-            num_halfedges,
-            num_vertices,
-            num_faces,
+            counts: MeshCounts {
+                num_halfedges,
+                num_vertices,
+                num_faces,
+                // NOTE: We increment the counter after adding the edge, so the
+                // last value is also the count
+                num_edges: edge_id_counter as usize,
+            },
         })
     }
 
     pub fn to_halfedge(&self) -> HalfEdgeMesh {
         let mut mesh = HalfEdgeMesh::default();
 
-        let mut h_idx_to_id = Vec::with_capacity(self.num_halfedges);
-        for _ in 0..self.num_halfedges {
+        let mut h_idx_to_id = Vec::with_capacity(self.counts.num_halfedges);
+        for _ in 0..self.counts.num_halfedges {
             h_idx_to_id.push(mesh.alloc_halfedge(HalfEdge::default()));
         }
 
-        let mut v_idx_to_id = Vec::with_capacity(self.num_vertices);
-        for v in 0..self.num_vertices {
+        let mut v_idx_to_id = Vec::with_capacity(self.counts.num_vertices);
+        for v in 0..self.counts.num_vertices {
             v_idx_to_id.push(mesh.alloc_vertex(self.vertex_positions[v], None));
         }
 
-        let mut f_idx_to_id = Vec::with_capacity(self.num_faces);
-        for _ in 0..self.num_faces {
+        let mut f_idx_to_id = Vec::with_capacity(self.counts.num_faces);
+        for _ in 0..self.counts.num_faces {
             f_idx_to_id.push(mesh.alloc_face(None));
         }
 
@@ -216,11 +227,12 @@ impl CompactMesh {
         use rayon::prelude::*;
 
         // After subdivision, we have 4 times as many halfedges, exactly.
-        let mut new_twin: Vec<Option<NonMaxU32>> = vec![None; self.num_halfedges * 4];
-        let mut new_next = vec![0u32; self.num_halfedges * 4];
-        let mut new_prev = vec![0u32; self.num_halfedges * 4];
-        let mut new_vert = vec![0u32; self.num_halfedges * 4];
-        let mut new_face = vec![0u32; self.num_halfedges * 4];
+        let mut new_twin: Vec<Option<NonMaxU32>> = vec![None; self.counts.num_halfedges * 4];
+        let mut new_next = vec![0u32; self.counts.num_halfedges * 4];
+        let mut new_prev = vec![0u32; self.counts.num_halfedges * 4];
+        let mut new_vert = vec![0u32; self.counts.num_halfedges * 4];
+        let mut new_edge = vec![0u32; self.counts.num_halfedges * 4];
+        let mut new_face = vec![0u32; self.counts.num_halfedges * 4];
 
         // NOTE: The expressions, when taken literally as described in the paper
         // are not very concurrency-friendly. The code mutates the vectors with
@@ -237,11 +249,20 @@ impl CompactMesh {
             new_next.par_chunks_mut(4),
             new_prev.par_chunks_mut(4),
             new_vert.par_chunks_mut(4),
+            new_edge.par_chunks_mut(4),
             new_face.par_chunks_mut(4),
         )
             .into_par_iter()
             .enumerate()
-            .for_each(|(h, (twin, next, prev, vert, face))| {
+            .for_each(|(h, (twin, next, prev, vert, edge, face))| {
+
+                // Common expressions used in some of the rules below
+                let v_d = self.counts.num_vertices as u32;
+                let f_d = self.counts.num_faces as u32;
+                let e_d = self.counts.num_edges as u32;
+                let h_prev = self.prev[h];
+
+
                 // (a) Halfedge's twin rule
                 twin[0] = self.twin[h]
                     .and_then(|twin_h| NonMaxU32::new(4 * self.next[twin_h.get() as usize] + 3));
@@ -263,19 +284,32 @@ impl CompactMesh {
                 prev[3] = (4 * h + 2) as u32;
 
                 // (d) Halfedge's vertex rule
-                let v_d = self.num_vertices as u32;
-                let f_d = self.num_faces as u32;
-                let h_prev = self.prev[h];
-
                 vert[0] = self.vert[h];
                 vert[1] = v_d + f_d + self.edge[h];
                 vert[2] = v_d + self.face[h];
                 vert[3] = v_d + f_d + self.edge[h_prev as usize];
 
                 // (e) Halfedge's edge rule
-                // - NOTE: Blackjack has no dedicated edegs, but this is still
-                //   needed to compute the value of the refinement rule for
-                //   `vert` and can't be computed analytically
+                let h_gt_twin_h = self.twin[h]
+                    .map(|twin_h| (h as u32) < twin_h.get())
+                    .unwrap_or(true);
+                let hp_gt_twin_hp = self.twin[h_prev as usize]
+                    .map(|twhin_hp| (h_prev as u32) < twhin_hp.get())
+                    .unwrap_or(true);
+
+
+                edge[0] = if h_gt_twin_h {
+                    2 * self.edge[h]
+                } else {
+                    2 * self.edge[h] + 1
+                };
+                edge[1] = 2 * e_d + h as u32;
+                edge[2] = 2 * e_d + h_prev as u32;
+                edge[3] = if hp_gt_twin_hp {
+                    2 * self.edge[h_prev as usize] + 1
+                } else {
+                    2 * self.edge[h_prev as usize]
+                };
 
                 // (f) Halfedges's face rule
                 face[0] = h as u32;
@@ -300,6 +334,7 @@ pub mod test {
         let cube_counts = MeshCounts {
             num_vertices: 8,
             num_halfedges: 24,
+            num_edges: 12,
             num_faces: 6,
         };
         let cube_counts_cumulative: Vec<MeshCounts> = (0..4)
@@ -315,35 +350,40 @@ pub mod test {
                 MeshCounts {
                     num_vertices: 26,
                     num_halfedges: 48 * 2,
+                    num_edges: 48,
                     num_faces: 24,
                 },
                 MeshCounts {
                     num_vertices: 98,
                     num_halfedges: 192 * 2,
+                    num_edges: 192,
                     num_faces: 96,
                 },
                 MeshCounts {
                     num_vertices: 386,
                     num_halfedges: 768 * 2,
+                    num_edges: 768,
                     num_faces: 384,
                 },
                 MeshCounts {
                     num_vertices: 1538,
                     num_halfedges: 3072 * 2,
+                    num_edges: 3072,
                     num_faces: 1536,
                 }
             ]
         );
 
         // A quad, after successive levels of subdivision
-        // -- Unlike the cube, this has a boundary.
+        // -- Unlike the cube, this has some halfedges in the boundary.
         let quad_count = MeshCounts {
             num_vertices: 4,
-            num_halfedges: 8,
+            num_halfedges: 4,
+            num_edges: 4,
             num_faces: 1,
         };
 
-        let quad_counts_cumulative: Vec<MeshCounts> = (0..1)
+        let quad_counts_cumulative: Vec<MeshCounts> = (0..4)
             .scan(quad_count, |acc, _| {
                 *acc = acc.subdiv();
                 Some(*acc)
@@ -354,25 +394,28 @@ pub mod test {
             &[
                 MeshCounts {
                     num_vertices: 9,
-                    num_halfedges: 12 * 2,
+                    num_halfedges: 16,
+                    num_edges: 12,
                     num_faces: 4,
                 },
-                /*
                 MeshCounts {
                     num_vertices: 25,
-                    num_halfedges: 40 * 2,
+                    num_halfedges: 64,
+                    num_edges: 40,
                     num_faces: 16,
                 },
                 MeshCounts {
                     num_vertices: 81,
-                    num_halfedges: 144 * 2,
+                    num_halfedges: 256,
+                    num_edges: 144,
                     num_faces: 64,
                 },
                 MeshCounts {
                     num_vertices: 289,
-                    num_halfedges: 544 * 2,
+                    num_halfedges: 1024,
+                    num_edges: 544,
                     num_faces: 256,
-                } */
+                },
             ]
         );
     }
