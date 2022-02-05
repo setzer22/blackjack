@@ -73,7 +73,7 @@ pub enum PolyAsmInstruction {
         center: MemAddr<Vec3>,
         normal: MemAddr<Vec3>,
         right: MemAddr<Vec3>,
-        size: MemAddr<Vec2>,
+        size: MemAddr<Vec3>,
         out_mesh: MemAddr<HalfEdgeMesh>,
     },
     ChamferVertices {
@@ -213,7 +213,7 @@ impl PolyAsmProgram {
                 let size = self.mem_fetch(*size)?;
                 self.mem_store(
                     *out_mesh,
-                    halfedge::primitives::Quad::build(center, normal, right, size),
+                    halfedge::primitives::Quad::build(center, normal, right, size.truncate()),
                 )?;
                 self.output_register = Some(*out_mesh);
             }
