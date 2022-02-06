@@ -318,7 +318,16 @@ impl CompactMesh {
                 face[3] = h as u32;
             });
 
-        todo!()
+        CompactMesh {
+            twin: new_twin,
+            prev: new_prev,
+            next: new_next,
+            vert: new_vert,
+            edge: new_edge,
+            face: new_face,
+            vertex_positions: todo!(),
+            counts: self.counts.subdiv(),
+        }
     }
 }
 
