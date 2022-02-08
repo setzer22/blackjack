@@ -33,7 +33,7 @@ impl Box {
         HalfEdgeMesh::build_from_polygons(
             &[v1, v2, v3, v4, v5, v6, v7, v8],
             &[
-                &[0usize, 1, 2, 3],
+                &[0, 1, 2, 3],
                 &[4, 5, 6, 7],
                 &[4, 7, 1, 0],
                 &[3, 2, 6, 5],
@@ -59,7 +59,7 @@ impl Quad {
         let v3 = center - hsize.x * right - hsize.y * forward;
         let v4 = center + hsize.x * right - hsize.y * forward;
 
-        HalfEdgeMesh::build_from_polygons(&[v1, v2, v3, v4], &[&[0usize, 1, 2, 3]])
+        HalfEdgeMesh::build_from_polygons(&[v1, v2, v3, v4], &[&[0, 1, 2, 3]])
             .expect("Quad construction should not fail")
     }
 }

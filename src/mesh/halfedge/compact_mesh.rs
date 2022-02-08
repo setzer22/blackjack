@@ -207,6 +207,7 @@ impl CompactMesh {
 
             mesh[h_id] = HalfEdge {
                 // If twin id is none, a twin boundary halfedge will be created later
+                // in the `add_boundary_halfedges` call.
                 twin: twin_id,
                 next: Some(next_id),
                 vertex: Some(vert_id),
@@ -216,7 +217,8 @@ impl CompactMesh {
             mesh[face_id].halfedge = Some(h_id);
         }
 
-        // TODO: Fix boundary halfedges, if any
+        // The CompactMesh has no boundary halfedges, so we create them here
+        mesh.add_boundary_halfedges();
 
         mesh
     }
