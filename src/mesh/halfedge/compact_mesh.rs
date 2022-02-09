@@ -1,7 +1,6 @@
-use std::{char::MAX, sync::atomic::Ordering};
-
 use atomic_float::AtomicF32;
 use nonmax::NonMaxU32;
+use std::{ops::Sub, sync::atomic::Ordering};
 
 use crate::prelude::*;
 
@@ -17,9 +16,16 @@ use crate::prelude::*;
 /// - A `HalfEdgeMesh` represents a boundary with a halfedge whose twin exists,
 ///   but points to a None face, whereas in the `CompactMesh` the twin does not
 ///   exist (non-existence is encoded as u32::MAX, via NonMaxU32)
-/// -
+///
+/// There is a const parameter, `Subdivided` that indicates whether this mesh
+/// has been subdivided. This is useful because the subdivision algorithm can
+/// substantially speed up successive subdivisions for all iterations but the
+/// first. We use a const generic to make sure rust will monomorphize the calls
+/// that use the Subdivided parameter to create specialized versions of the
+/// code.
 #[derive(Debug)]
-pub struct CompactMesh {
+#[allow(non_upper_case_globals)]
+pub struct CompactMesh<const Subdivided: bool> {
     /// Index is either Some(idx) or None. Uses NonMaxU32 to ensure elements are
     /// the same size as `u32`.
     pub twin: Vec<Option<NonMaxU32>>,
@@ -30,11 +36,6 @@ pub struct CompactMesh {
     pub face: Vec<u32>,
     pub vertex_positions: Vec<Vec3>,
     pub counts: MeshCounts,
-    /// Indicates whether some elements of this mesh can be computed
-    /// analytically during subdivision. For instance, after one level of
-    /// subdivision the `next` vector can be analytically computed as
-    /// > ` h mod 4 == 3 ? h − 3 : h + 1`
-    pub analytical_subdiv: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -69,9 +70,9 @@ impl MeshCounts {
     }
 }
 
-impl CompactMesh {
-    /// Constructs a [`CompactMesh`] from a [`HalfEdgeMesh`].
-    pub fn from_halfedge(mesh: &HalfEdgeMesh) -> Result<CompactMesh> {
+#[allow(non_upper_case_globals)]
+impl<const Subdivided: bool> CompactMesh<Subdivided> {
+    pub fn from_halfedge(mesh: &HalfEdgeMesh) -> Result<CompactMesh<false>> {
         // Create mappings between ids and indices in the compact arrays. This
         // is necessary because slotmap makes no guarantees about the structure
         // of the indices, and in practice there could be arbitrarily large gaps
@@ -182,7 +183,6 @@ impl CompactMesh {
                 // last value is also the count
                 num_edges: edge_id_counter as usize,
             },
-            analytical_subdiv: false,
         })
     }
 
@@ -204,15 +204,29 @@ impl CompactMesh {
             f_idx_to_id.push(mesh.alloc_face(None));
         }
 
+        // Compute analytical expressions. Boxing the iterators is necessary to
+        // make type checking work
+        let next_iter: Box<dyn Iterator<Item = _>> = if Subdivided {
+            Box::new((0..self.counts.num_halfedges).map(|h| self.get_next(h) as u32))
+        } else {
+            Box::new(self.next.iter_cpy())
+        };
+
+        let face_iter: Box<dyn Iterator<Item = _>> = if Subdivided {
+            Box::new((0..self.counts.num_halfedges).map(|h| self.get_face(h) as u32))
+        } else {
+            Box::new(self.face.iter_cpy())
+        };
+
         for (h, (twin, next, vert, face)) in
-            itertools::multizip((&self.twin, &self.next, &self.vert, &self.face)).enumerate()
+            itertools::multizip((&self.twin, next_iter, &self.vert, face_iter)).enumerate()
         {
             let h_id = h_idx_to_id[h];
 
             let twin_id = twin.map(|idx| h_idx_to_id[idx.get() as usize]);
-            let next_id = h_idx_to_id[*next as usize];
+            let next_id = h_idx_to_id[next as usize];
             let vert_id = v_idx_to_id[*vert as usize];
-            let face_id = f_idx_to_id[*face as usize];
+            let face_id = f_idx_to_id[face as usize];
 
             mesh[h_id] = HalfEdge {
                 // If twin id is none, a twin boundary halfedge will be created later
@@ -232,102 +246,190 @@ impl CompactMesh {
         mesh
     }
 
+    /// Generates the twin pointer for the 4 halfedges spawning from `h` during
+    /// subdivision and stores them in `twin[0..4]`.
+    pub fn halfedge_refinement_twin_rule(&self, h: usize, twin: &mut [Option<NonMaxU32>]) {
+        // (a) Halfedge's twin rule
+        twin[0] = self.twin[h]
+            .and_then(|twin_h| NonMaxU32::new(4 * self.get_next(twin_h.get() as usize) as u32 + 3));
+        twin[1] = NonMaxU32::new(4 * self.get_next(h) as u32 + 2);
+        twin[2] = NonMaxU32::new(4 * self.get_prev(h) as u32 + 1);
+        twin[3] = self.twin[self.get_prev(h) as usize]
+            .and_then(|twin_prev_h| NonMaxU32::new(4 * twin_prev_h.get()));
+    }
+
+    /// Generates the next pointer for the 4 halfedges spawning from `h` during
+    /// subdivision and stores them in `next[0..4]`
+    pub fn halfedge_refinement_next_rule(&self, h: usize, next: &mut [u32]) {
+        next[0] = (4 * h + 1) as u32;
+        next[1] = (4 * h + 2) as u32;
+        next[2] = (4 * h + 3) as u32;
+        next[3] = (4 * h) as u32;
+    }
+
+    /// Generates the prev pointer for the 4 halfedges spawning from `h` during
+    /// subdivision and stores them in `prev[0..4]`
+    pub fn halfedge_refinement_prev_rule(&self, h: usize, prev: &mut [u32]) {
+        prev[0] = (4 * h + 3) as u32;
+        prev[1] = (4 * h) as u32;
+        prev[2] = (4 * h + 1) as u32;
+        prev[3] = (4 * h + 2) as u32;
+    }
+
+    /// Generates the vert pointer for the 4 halfedges spawning from `h` during
+    /// subdivision and stores them in `vert[0..4]`
+    pub fn halfedge_refinement_vertex_rule(&self, h: usize, vert: &mut [u32]) {
+        let v_d = self.counts.num_vertices as u32;
+        let f_d = self.counts.num_faces as u32;
+
+        vert[0] = self.vert[h];
+        vert[1] = v_d + f_d + self.edge[h];
+        vert[2] = v_d + self.get_face(h) as u32;
+        vert[3] = v_d + f_d + self.edge[self.get_prev(h) as usize];
+    }
+
+    /// Generates the edge pointer for the 4 halfedges spawning from `h` during
+    /// subdivision and stores them in `edge[0..4]`
+    pub fn halfedge_refinement_edge_rule(&self, h: usize, edge: &mut [u32]) {
+        let e_d = self.counts.num_edges as u32;
+        let h_prev = self.get_prev(h);
+        let h_gt_twin_h = self.twin[h]
+            .map(|twin_h| (h as u32) < twin_h.get())
+            .unwrap_or(true);
+        let hp_gt_twin_hp = self.twin[h_prev as usize]
+            .map(|twhin_hp| (h_prev as u32) < twhin_hp.get())
+            .unwrap_or(true);
+
+        edge[0] = if h_gt_twin_h {
+            2 * self.edge[h]
+        } else {
+            2 * self.edge[h] + 1
+        };
+        edge[1] = 2 * e_d + h as u32;
+        edge[2] = 2 * e_d + h_prev as u32;
+        edge[3] = if hp_gt_twin_hp {
+            2 * self.edge[h_prev as usize] + 1
+        } else {
+            2 * self.edge[h_prev as usize]
+        };
+    }
+
+    /// Generates the face pointer for the 4 halfedges spawning from `h` during
+    /// subdivision and stores them in `face[0..4]`
+    pub fn halfedge_refinement_face_rule(&self, h: usize, face: &mut [u32]) {
+        face[0] = h as u32;
+        face[1] = h as u32;
+        face[2] = h as u32;
+        face[3] = h as u32;
+    }
+
+    /// Returns the next of a given halfedge h. This will use an analytical
+    /// expression if the mesh has been subdivided at least once.
+    pub fn get_next(&self, h: usize) -> usize {
+        if Subdivided {
+            if h % 4 == 3 {
+                h - 3
+            } else {
+                h + 1
+            }
+        } else {
+            self.next[h] as usize
+        }
+    }
+
+    /// Returns the prev of a given halfedge h. This will use an analytical
+    /// expression if the mesh has been subdivided at least once.
+    pub fn get_prev(&self, h: usize) -> usize {
+        if Subdivided {
+            if h % 4 == 0 {
+                h + 3
+            } else {
+                h - 1
+            }
+        } else {
+            self.prev[h] as usize
+        }
+    }
+
+    /// Returns the face of a given halfedge h. This will use an analytical
+    /// expression if the mesh has been subdivided at least once.
+    pub fn get_face(&self, h: usize) -> usize {
+        if Subdivided {
+            h / 4
+        } else {
+            self.face[h] as usize
+        }
+    }
+
     /// See "A HalfEdge Refinement Rule for Parallel Catmull-Clark"
     /// https://onrendering.com/data/papers/catmark/HalfedgeCatmullClark.pdf
-    pub fn subdivide(&self) -> CompactMesh {
+    pub fn subdivide(&self) -> CompactMesh<true> {
         use rayon::prelude::*;
 
         // Compute the counts for the new mesh
         let new_counts = self.counts.subdiv();
 
+        // When the mesh has been subdivided at least once, the halfedges will
+        // follow a certain structure, allowing some of the computations to be
+        // skipped. This is represented by some of the vectors being empty.
+
         // After subdivision, we have 4 times as many halfedges, exactly.
         let mut new_twin: Vec<Option<NonMaxU32>> = vec![None; new_counts.num_halfedges];
-        let mut new_next = vec![0u32; new_counts.num_halfedges];
-        let mut new_prev = vec![0u32; new_counts.num_halfedges];
+        let mut new_next = if Subdivided {
+            vec![]
+        } else {
+            vec![0u32; new_counts.num_halfedges]
+        };
+        let mut new_prev = if Subdivided {
+            vec![]
+        } else {
+            vec![0u32; new_counts.num_halfedges]
+        };
         let mut new_vert = vec![0u32; new_counts.num_halfedges];
         let mut new_edge = vec![0u32; new_counts.num_halfedges];
-        let mut new_face = vec![0u32; new_counts.num_halfedges];
+        let mut new_face = if Subdivided {
+            vec![]
+        } else {
+            vec![0u32; new_counts.num_halfedges]
+        };
 
-        // NOTE: The expressions, when taken literally as described in the paper
-        // are not very concurrency-friendly. The code mutates the vectors with
-        // expressions like `twin[4h+0] = ...` which implies mutable access to
-        // the vector from different threads.
-        //
-        // Instead of iterating over h, we iterate over mutable chunks of 4
-        // values in the new vectors. By calling enumerate() on this iterator of
-        // chunks, the index matches the `h` in the expressions from the paper
-        // and the provided slices naturally span from 4h+0 to 4h+3
+        // NOTE: We partition the mutable space in the vector into 4-element
+        // windows. Window `h` corresponds to halfedges 4h+0..4h+3, using the
+        // paper nomenclature
 
-        (
-            new_twin.par_chunks_mut(4),
-            new_next.par_chunks_mut(4),
-            new_prev.par_chunks_mut(4),
-            new_vert.par_chunks_mut(4),
-            new_edge.par_chunks_mut(4),
-            new_face.par_chunks_mut(4),
-        )
-            .into_par_iter()
-            .enumerate()
-            .for_each(|(h, (twin, next, prev, vert, edge, face))| {
-                // Common expressions used in some of the rules below
-                let v_d = self.counts.num_vertices as u32;
-                let f_d = self.counts.num_faces as u32;
-                let e_d = self.counts.num_edges as u32;
-                let h_prev = self.prev[h];
-
-                // (a) Halfedge's twin rule
-                twin[0] = self.twin[h]
-                    .and_then(|twin_h| NonMaxU32::new(4 * self.next[twin_h.get() as usize] + 3));
-                twin[1] = NonMaxU32::new(4 * self.next[h] + 2);
-                twin[2] = NonMaxU32::new(4 * self.prev[h] + 1);
-                twin[3] = self.twin[self.prev[h] as usize]
-                    .and_then(|twin_prev_h| NonMaxU32::new(4 * twin_prev_h.get()));
-
-                //  (b) Halfedge's next rule
-                next[0] = (4 * h + 1) as u32;
-                next[1] = (4 * h + 2) as u32;
-                next[2] = (4 * h + 3) as u32;
-                next[3] = (4 * h) as u32;
-
-                // (c) Halfedge's previous rule
-                prev[0] = (4 * h + 3) as u32;
-                prev[1] = (4 * h) as u32;
-                prev[2] = (4 * h + 1) as u32;
-                prev[3] = (4 * h + 2) as u32;
-
-                // (d) Halfedge's vertex rule
-                vert[0] = self.vert[h];
-                vert[1] = v_d + f_d + self.edge[h];
-                vert[2] = v_d + self.face[h];
-                vert[3] = v_d + f_d + self.edge[h_prev as usize];
-
-                // (e) Halfedge's edge rule
-                let h_gt_twin_h = self.twin[h]
-                    .map(|twin_h| (h as u32) < twin_h.get())
-                    .unwrap_or(true);
-                let hp_gt_twin_hp = self.twin[h_prev as usize]
-                    .map(|twhin_hp| (h_prev as u32) < twhin_hp.get())
-                    .unwrap_or(true);
-
-                edge[0] = if h_gt_twin_h {
-                    2 * self.edge[h]
-                } else {
-                    2 * self.edge[h] + 1
-                };
-                edge[1] = 2 * e_d + h as u32;
-                edge[2] = 2 * e_d + h_prev as u32;
-                edge[3] = if hp_gt_twin_hp {
-                    2 * self.edge[h_prev as usize] + 1
-                } else {
-                    2 * self.edge[h_prev as usize]
-                };
-
-                // (f) Halfedges's face rule
-                face[0] = h as u32;
-                face[1] = h as u32;
-                face[2] = h as u32;
-                face[3] = h as u32;
-            });
+        if Subdivided {
+            (
+                new_twin.par_chunks_mut(4),
+                new_vert.par_chunks_mut(4),
+                new_edge.par_chunks_mut(4),
+            )
+                .into_par_iter()
+                .enumerate()
+                .for_each(|(h, (twin, vert, edge))| {
+                    self.halfedge_refinement_twin_rule(h, twin);
+                    self.halfedge_refinement_vertex_rule(h, vert);
+                    self.halfedge_refinement_edge_rule(h, edge);
+                });
+        } else {
+            (
+                new_twin.par_chunks_mut(4),
+                new_next.par_chunks_mut(4),
+                new_prev.par_chunks_mut(4),
+                new_vert.par_chunks_mut(4),
+                new_edge.par_chunks_mut(4),
+                new_face.par_chunks_mut(4),
+            )
+                .into_par_iter()
+                .enumerate()
+                .for_each(|(h, (twin, next, prev, vert, edge, face))| {
+                    self.halfedge_refinement_twin_rule(h, twin);
+                    self.halfedge_refinement_next_rule(h, next);
+                    self.halfedge_refinement_prev_rule(h, prev);
+                    self.halfedge_refinement_vertex_rule(h, vert);
+                    self.halfedge_refinement_edge_rule(h, edge);
+                    self.halfedge_refinement_face_rule(h, face);
+                });
+        }
 
         // The threads need shared access to the vector of atomics, so we have
         // to put them in a vector of atomic floats
@@ -335,32 +437,42 @@ impl CompactMesh {
         let new_vertex_positions =
             unsafe { transmute_vec::<Vec3, AtomicVec3>(vec![Vec3::ZERO; new_counts.num_vertices]) };
 
+        // If the mesh is subdivided, the cycle mesh is 4
         let mut cycle_lengths = Vec::new();
-        (0..self.counts.num_halfedges)
-            .into_par_iter()
-            .map(|h| {
-                let mut cycle_len = 1;
-                let mut hh = self.next[h] as usize;
-                while hh != h {
-                    cycle_len += 1;
-                    hh = self.next[hh] as usize;
-                    if cycle_len > MAX_LOOP_ITERATIONS {
-                        break;
+        if !Subdivided {
+            (0..self.counts.num_halfedges)
+                .into_par_iter()
+                .map(|h| {
+                    let mut cycle_len = 1;
+                    let mut hh = self.get_next(h) as usize;
+                    while hh != h {
+                        cycle_len += 1;
+                        hh = self.get_next(hh) as usize;
+                        if cycle_len > MAX_LOOP_ITERATIONS {
+                            break;
+                        }
                     }
-                }
-                cycle_len as u32
-            })
-            .collect_into_vec(&mut cycle_lengths);
+                    cycle_len as u32
+                })
+                .collect_into_vec(&mut cycle_lengths);
+        }
+        let get_cycle_length = move |h: usize| {
+            if Subdivided {
+                4
+            } else {
+                cycle_lengths[h]
+            }
+        };
 
         let mut valences = Vec::new();
         (0..self.counts.num_halfedges)
             .into_par_iter()
             .map(|h| {
                 let mut valence = 1;
-                let mut hh = self.next[self.twin[h]?.get() as usize] as usize;
+                let mut hh = self.get_next(self.twin[h]?.get() as usize) as usize;
                 while hh != h {
                     valence += 1;
-                    hh = self.next[self.twin[hh]?.get() as usize] as usize;
+                    hh = self.get_next(self.twin[hh]?.get() as usize) as usize;
                     if valence > MAX_LOOP_ITERATIONS {
                         break;
                     }
@@ -376,9 +488,9 @@ impl CompactMesh {
         (0..self.counts.num_halfedges)
             .into_par_iter()
             .for_each(|h| {
-                let m = cycle_lengths[h] as f32;
+                let m = get_cycle_length(h) as f32;
                 let v = self.vert[h] as usize;
-                let i = self.counts.num_vertices + self.face[h] as usize;
+                let i = self.counts.num_vertices + self.get_face(h) as usize;
                 new_vertex_positions[i].fetch_add(
                     self.vertex_positions[v] / m,
                     // NOTE: Relaxed ordering should be okay here. We only care
@@ -395,7 +507,7 @@ impl CompactMesh {
                 // TODO: Detect boundary
 
                 let v = self.vert[h] as usize;
-                let i = self.counts.num_vertices + self.face[h] as usize;
+                let i = self.counts.num_vertices + self.get_face(h) as usize;
                 let j = self.counts.num_vertices + self.counts.num_faces + self.edge[h] as usize;
 
                 // NOTE: Same rationale as above for relaxed ordering. The
@@ -416,7 +528,7 @@ impl CompactMesh {
 
                 let n = valences[h].unwrap().get() as f32;
                 let v = self.vert[h] as usize;
-                let i = self.counts.num_vertices + self.face[h] as usize;
+                let i = self.counts.num_vertices + self.get_face(h) as usize;
                 let j = self.counts.num_vertices + self.counts.num_faces + self.edge[h] as usize;
 
                 let inc = (4.0 * new_vertex_positions[j].load(Ordering::Relaxed)
@@ -440,8 +552,15 @@ impl CompactMesh {
             face: new_face,
             vertex_positions: new_vertex_positions,
             counts: new_counts,
-            analytical_subdiv: true,
         }
+    }
+
+    pub fn subdivide_multi(&self, iterations: usize) -> CompactMesh<true> {
+        let mut mesh = self.subdivide();
+        for _ in 0..(iterations - 1) {
+            mesh = mesh.subdivide();
+        }
+        mesh
     }
 }
 

@@ -2,6 +2,7 @@ use std::marker::PhantomData;
 
 use crate::prelude::*;
 use anyhow::anyhow;
+use halfedge::compact_mesh::CompactMesh;
 
 type RawMemAddr = hecs::Entity;
 
@@ -329,11 +330,11 @@ impl PolyAsmProgram {
                 mesh.to_wavefront_obj(export_path)?;
             }
             PolyAsmInstruction::LinearSubdivide { in_mesh, out_mesh } => {
-                let new_mesh = halfedge::compact_mesh::CompactMesh::from_halfedge(
+                let new_mesh = CompactMesh::<false>::from_halfedge(
                     &*self.mem_fetch_ref(*in_mesh)?,
                 )?;
 
-                let subdivided = new_mesh.subdivide_halfedge_refinement().to_halfedge();
+                let subdivided = new_mesh.subdivide_multi(3).to_halfedge();
 
                 self.mem_store(*out_mesh, subdivided)?;
                 self.output_register = Some(*out_mesh);
