@@ -1,3 +1,6 @@
+use std::{char::MAX, sync::atomic::Ordering};
+
+use atomic_float::AtomicF32;
 use nonmax::NonMaxU32;
 
 use crate::prelude::*;
@@ -27,6 +30,11 @@ pub struct CompactMesh {
     pub face: Vec<u32>,
     pub vertex_positions: Vec<Vec3>,
     pub counts: MeshCounts,
+    /// Indicates whether some elements of this mesh can be computed
+    /// analytically during subdivision. For instance, after one level of
+    /// subdivision the `next` vector can be analytically computed as
+    /// > ` h mod 4 == 3 ? h − 3 : h + 1`
+    pub analytical_subdiv: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -174,6 +182,7 @@ impl CompactMesh {
                 // last value is also the count
                 num_edges: edge_id_counter as usize,
             },
+            analytical_subdiv: false,
         })
     }
 
@@ -225,16 +234,19 @@ impl CompactMesh {
 
     /// See "A HalfEdge Refinement Rule for Parallel Catmull-Clark"
     /// https://onrendering.com/data/papers/catmark/HalfedgeCatmullClark.pdf
-    pub fn subdivide_halfedge_refinement(&self) -> CompactMesh {
+    pub fn subdivide(&self) -> CompactMesh {
         use rayon::prelude::*;
 
+        // Compute the counts for the new mesh
+        let new_counts = self.counts.subdiv();
+
         // After subdivision, we have 4 times as many halfedges, exactly.
-        let mut new_twin: Vec<Option<NonMaxU32>> = vec![None; self.counts.num_halfedges * 4];
-        let mut new_next = vec![0u32; self.counts.num_halfedges * 4];
-        let mut new_prev = vec![0u32; self.counts.num_halfedges * 4];
-        let mut new_vert = vec![0u32; self.counts.num_halfedges * 4];
-        let mut new_edge = vec![0u32; self.counts.num_halfedges * 4];
-        let mut new_face = vec![0u32; self.counts.num_halfedges * 4];
+        let mut new_twin: Vec<Option<NonMaxU32>> = vec![None; new_counts.num_halfedges];
+        let mut new_next = vec![0u32; new_counts.num_halfedges];
+        let mut new_prev = vec![0u32; new_counts.num_halfedges];
+        let mut new_vert = vec![0u32; new_counts.num_halfedges];
+        let mut new_edge = vec![0u32; new_counts.num_halfedges];
+        let mut new_face = vec![0u32; new_counts.num_halfedges];
 
         // NOTE: The expressions, when taken literally as described in the paper
         // are not very concurrency-friendly. The code mutates the vectors with
@@ -257,13 +269,11 @@ impl CompactMesh {
             .into_par_iter()
             .enumerate()
             .for_each(|(h, (twin, next, prev, vert, edge, face))| {
-
                 // Common expressions used in some of the rules below
                 let v_d = self.counts.num_vertices as u32;
                 let f_d = self.counts.num_faces as u32;
                 let e_d = self.counts.num_edges as u32;
                 let h_prev = self.prev[h];
-
 
                 // (a) Halfedge's twin rule
                 twin[0] = self.twin[h]
@@ -299,7 +309,6 @@ impl CompactMesh {
                     .map(|twhin_hp| (h_prev as u32) < twhin_hp.get())
                     .unwrap_or(true);
 
-
                 edge[0] = if h_gt_twin_h {
                     2 * self.edge[h]
                 } else {
@@ -320,6 +329,108 @@ impl CompactMesh {
                 face[3] = h as u32;
             });
 
+        // The threads need shared access to the vector of atomics, so we have
+        // to put them in a vector of atomic floats
+        // SAFETY: Vec3 and AtomicVec3 have the exact same memory layout
+        let new_vertex_positions =
+            unsafe { transmute_vec::<Vec3, AtomicVec3>(vec![Vec3::ZERO; new_counts.num_vertices]) };
+
+        let mut cycle_lengths = Vec::new();
+        (0..self.counts.num_halfedges)
+            .into_par_iter()
+            .map(|h| {
+                let mut cycle_len = 1;
+                let mut hh = self.next[h] as usize;
+                while hh != h {
+                    cycle_len += 1;
+                    hh = self.next[hh] as usize;
+                    if cycle_len > MAX_LOOP_ITERATIONS {
+                        break;
+                    }
+                }
+                cycle_len as u32
+            })
+            .collect_into_vec(&mut cycle_lengths);
+
+        let mut valences = Vec::new();
+        (0..self.counts.num_halfedges)
+            .into_par_iter()
+            .map(|h| {
+                let mut valence = 1;
+                let mut hh = self.next[self.twin[h]?.get() as usize] as usize;
+                while hh != h {
+                    valence += 1;
+                    hh = self.next[self.twin[hh]?.get() as usize] as usize;
+                    if valence > MAX_LOOP_ITERATIONS {
+                        break;
+                    }
+                }
+                NonMaxU32::new(valence as u32)
+            })
+            .collect_into_vec(&mut valences);
+
+        //println!("Cycle lengths: {:?}", cycle_lengths);
+        //println!("Valences: {:?}", valences);
+
+        // --- Face points ---
+        (0..self.counts.num_halfedges)
+            .into_par_iter()
+            .for_each(|h| {
+                let m = cycle_lengths[h] as f32;
+                let v = self.vert[h] as usize;
+                let i = self.counts.num_vertices + self.face[h] as usize;
+                new_vertex_positions[i].fetch_add(
+                    self.vertex_positions[v] / m,
+                    // NOTE: Relaxed ordering should be okay here. We only care
+                    // that this is incremented exactly once per halfedge in the
+                    // face, not the order in which threads do it.
+                    Ordering::Relaxed,
+                );
+            });
+
+        // --- Smooth edge points ---
+        (0..self.counts.num_halfedges)
+            .into_par_iter()
+            .for_each(|h| {
+                // TODO: Detect boundary
+
+                let v = self.vert[h] as usize;
+                let i = self.counts.num_vertices + self.face[h] as usize;
+                let j = self.counts.num_vertices + self.counts.num_faces + self.edge[h] as usize;
+
+                // NOTE: Same rationale as above for relaxed ordering. The
+                // vertices in `i` are not being iterated in this loop, so the
+                // load() does not read a value that change due to a data races.
+
+                let inc = (self.vertex_positions[v]
+                    + new_vertex_positions[i].load(Ordering::Relaxed))
+                    / 4.0;
+                new_vertex_positions[j].fetch_add(inc, Ordering::Relaxed)
+            });
+
+        // --- Smooth vertex points ---
+        (0..self.counts.num_halfedges)
+            .into_par_iter()
+            .for_each(|h| {
+                // TODO: Detect boundary
+
+                let n = valences[h].unwrap().get() as f32;
+                let v = self.vert[h] as usize;
+                let i = self.counts.num_vertices + self.face[h] as usize;
+                let j = self.counts.num_vertices + self.counts.num_faces + self.edge[h] as usize;
+
+                let inc = (4.0 * new_vertex_positions[j].load(Ordering::Relaxed)
+                    - new_vertex_positions[i].load(Ordering::Relaxed)
+                    + (n - 3.0) * self.vertex_positions[v])
+                    / (n * n);
+
+                new_vertex_positions[v].fetch_add(inc, Ordering::Relaxed);
+            });
+
+        // SAFETY: Same as above, Vec3 and AtomicVec3 have the same memory layout
+        let new_vertex_positions =
+            unsafe { transmute_vec::<AtomicVec3, Vec3>(new_vertex_positions) };
+
         CompactMesh {
             twin: new_twin,
             prev: new_prev,
@@ -327,10 +438,47 @@ impl CompactMesh {
             vert: new_vert,
             edge: new_edge,
             face: new_face,
-            vertex_positions: todo!(),
-            counts: self.counts.subdiv(),
+            vertex_positions: new_vertex_positions,
+            counts: new_counts,
+            analytical_subdiv: true,
         }
     }
+}
+
+/// A counterpart to `glam::Vec3` with atomics in its `x`, `y`, `z` fields.
+#[repr(C)]
+struct AtomicVec3 {
+    pub x: AtomicF32,
+    pub y: AtomicF32,
+    pub z: AtomicF32,
+}
+
+impl AtomicVec3 {
+    /// Calls `fetch_add` on each of the inner atomic values internally. Note
+    /// that there is one atomic operation per dimension.
+    pub fn fetch_add(&self, v: Vec3, order: Ordering) {
+        self.x.fetch_add(v.x, order);
+        self.y.fetch_add(v.y, order);
+        self.z.fetch_add(v.z, order);
+    }
+
+    pub fn load(&self, order: Ordering) -> Vec3 {
+        Vec3::new(self.x.load(order), self.y.load(order), self.z.load(order))
+    }
+}
+
+/// Transmutes a vector of `T`s into a vector of `U`s.
+///
+/// # Safety
+/// This is only safe when `T` and `U` have the same size, plus all the
+/// additional safety considerations required when calling `transmute::<T,U>`
+unsafe fn transmute_vec<T, U>(v: Vec<T>) -> Vec<U> {
+    let mut v = std::mem::ManuallyDrop::new(v);
+    let ptr = v.as_mut_ptr();
+    let len = v.len();
+    let cap = v.capacity();
+
+    Vec::from_raw_parts(ptr as *mut U, len, cap)
 }
 
 #[cfg(test)]

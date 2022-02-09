@@ -44,6 +44,7 @@ rayon = "1.5.1"
 nonmax = "0.5"
 slotmap = { version = "1.0", features = ["serde"] }
 num-traits = "0.2.14"
+atomic_float = "0.1"
 
 [patch.crates-io]
 # NOTE: These patches are only used for development, and should be left

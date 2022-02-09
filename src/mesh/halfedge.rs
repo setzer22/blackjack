@@ -35,7 +35,7 @@ pub mod compact_mesh;
 /// number of iterations will be performed before giving an error. This error
 /// should be large enough, as faces with a very large number of vertices may
 /// trigger it.
-const MAX_LOOP_ITERATIONS: usize = 32;
+pub const MAX_LOOP_ITERATIONS: usize = 32;
 
 #[derive(Debug, Default, Clone)]
 pub struct HalfEdge {
