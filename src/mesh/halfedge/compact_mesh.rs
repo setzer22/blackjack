@@ -1,6 +1,6 @@
 use atomic_float::AtomicF32;
 use nonmax::NonMaxU32;
-use std::{ops::Sub, sync::atomic::Ordering};
+use std::sync::atomic::Ordering;
 
 use crate::prelude::*;
 
@@ -248,7 +248,7 @@ impl<const Subdivided: bool> CompactMesh<Subdivided> {
 
     /// Generates the twin pointer for the 4 halfedges spawning from `h` during
     /// subdivision and stores them in `twin[0..4]`.
-    pub fn halfedge_refinement_twin_rule(&self, h: usize, twin: &mut [Option<NonMaxU32>]) {
+    fn halfedge_refinement_twin_rule(&self, h: usize, twin: &mut [Option<NonMaxU32>]) {
         // (a) Halfedge's twin rule
         twin[0] = self.twin[h]
             .and_then(|twin_h| NonMaxU32::new(4 * self.get_next(twin_h.get() as usize) as u32 + 3));
@@ -258,27 +258,9 @@ impl<const Subdivided: bool> CompactMesh<Subdivided> {
             .and_then(|twin_prev_h| NonMaxU32::new(4 * twin_prev_h.get()));
     }
 
-    /// Generates the next pointer for the 4 halfedges spawning from `h` during
-    /// subdivision and stores them in `next[0..4]`
-    pub fn halfedge_refinement_next_rule(&self, h: usize, next: &mut [u32]) {
-        next[0] = (4 * h + 1) as u32;
-        next[1] = (4 * h + 2) as u32;
-        next[2] = (4 * h + 3) as u32;
-        next[3] = (4 * h) as u32;
-    }
-
-    /// Generates the prev pointer for the 4 halfedges spawning from `h` during
-    /// subdivision and stores them in `prev[0..4]`
-    pub fn halfedge_refinement_prev_rule(&self, h: usize, prev: &mut [u32]) {
-        prev[0] = (4 * h + 3) as u32;
-        prev[1] = (4 * h) as u32;
-        prev[2] = (4 * h + 1) as u32;
-        prev[3] = (4 * h + 2) as u32;
-    }
-
     /// Generates the vert pointer for the 4 halfedges spawning from `h` during
     /// subdivision and stores them in `vert[0..4]`
-    pub fn halfedge_refinement_vertex_rule(&self, h: usize, vert: &mut [u32]) {
+    fn halfedge_refinement_vertex_rule(&self, h: usize, vert: &mut [u32]) {
         let v_d = self.counts.num_vertices as u32;
         let f_d = self.counts.num_faces as u32;
 
@@ -290,7 +272,7 @@ impl<const Subdivided: bool> CompactMesh<Subdivided> {
 
     /// Generates the edge pointer for the 4 halfedges spawning from `h` during
     /// subdivision and stores them in `edge[0..4]`
-    pub fn halfedge_refinement_edge_rule(&self, h: usize, edge: &mut [u32]) {
+    fn halfedge_refinement_edge_rule(&self, h: usize, edge: &mut [u32]) {
         let e_d = self.counts.num_edges as u32;
         let h_prev = self.get_prev(h);
         let h_gt_twin_h = self.twin[h]
@@ -312,15 +294,6 @@ impl<const Subdivided: bool> CompactMesh<Subdivided> {
         } else {
             2 * self.edge[h_prev as usize]
         };
-    }
-
-    /// Generates the face pointer for the 4 halfedges spawning from `h` during
-    /// subdivision and stores them in `face[0..4]`
-    pub fn halfedge_refinement_face_rule(&self, h: usize, face: &mut [u32]) {
-        face[0] = h as u32;
-        face[1] = h as u32;
-        face[2] = h as u32;
-        face[3] = h as u32;
     }
 
     /// Returns the next of a given halfedge h. This will use an analytical
@@ -375,61 +348,25 @@ impl<const Subdivided: bool> CompactMesh<Subdivided> {
 
         // After subdivision, we have 4 times as many halfedges, exactly.
         let mut new_twin: Vec<Option<NonMaxU32>> = vec![None; new_counts.num_halfedges];
-        let mut new_next = if Subdivided {
-            vec![]
-        } else {
-            vec![0u32; new_counts.num_halfedges]
-        };
-        let mut new_prev = if Subdivided {
-            vec![]
-        } else {
-            vec![0u32; new_counts.num_halfedges]
-        };
         let mut new_vert = vec![0u32; new_counts.num_halfedges];
         let mut new_edge = vec![0u32; new_counts.num_halfedges];
-        let mut new_face = if Subdivided {
-            vec![]
-        } else {
-            vec![0u32; new_counts.num_halfedges]
-        };
 
         // NOTE: We partition the mutable space in the vector into 4-element
         // windows. Window `h` corresponds to halfedges 4h+0..4h+3, using the
         // paper nomenclature
 
-        if Subdivided {
-            (
-                new_twin.par_chunks_mut(4),
-                new_vert.par_chunks_mut(4),
-                new_edge.par_chunks_mut(4),
-            )
-                .into_par_iter()
-                .enumerate()
-                .for_each(|(h, (twin, vert, edge))| {
-                    self.halfedge_refinement_twin_rule(h, twin);
-                    self.halfedge_refinement_vertex_rule(h, vert);
-                    self.halfedge_refinement_edge_rule(h, edge);
-                });
-        } else {
-            (
-                new_twin.par_chunks_mut(4),
-                new_next.par_chunks_mut(4),
-                new_prev.par_chunks_mut(4),
-                new_vert.par_chunks_mut(4),
-                new_edge.par_chunks_mut(4),
-                new_face.par_chunks_mut(4),
-            )
-                .into_par_iter()
-                .enumerate()
-                .for_each(|(h, (twin, next, prev, vert, edge, face))| {
-                    self.halfedge_refinement_twin_rule(h, twin);
-                    self.halfedge_refinement_next_rule(h, next);
-                    self.halfedge_refinement_prev_rule(h, prev);
-                    self.halfedge_refinement_vertex_rule(h, vert);
-                    self.halfedge_refinement_edge_rule(h, edge);
-                    self.halfedge_refinement_face_rule(h, face);
-                });
-        }
+        (
+            new_twin.par_chunks_mut(4),
+            new_vert.par_chunks_mut(4),
+            new_edge.par_chunks_mut(4),
+        )
+            .into_par_iter()
+            .enumerate()
+            .for_each(|(h, (twin, vert, edge))| {
+                self.halfedge_refinement_twin_rule(h, twin);
+                self.halfedge_refinement_vertex_rule(h, vert);
+                self.halfedge_refinement_edge_rule(h, edge);
+            });
 
         // The threads need shared access to the vector of atomics, so we have
         // to put them in a vector of atomic floats
@@ -545,11 +482,12 @@ impl<const Subdivided: bool> CompactMesh<Subdivided> {
 
         CompactMesh {
             twin: new_twin,
-            prev: new_prev,
-            next: new_next,
+            // NOTE: Empty vecs represent analytically computed properties
+            prev: vec![],
+            next: vec![],
             vert: new_vert,
             edge: new_edge,
-            face: new_face,
+            face: vec![],
             vertex_positions: new_vertex_positions,
             counts: new_counts,
         }
