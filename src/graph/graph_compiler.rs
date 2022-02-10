@@ -192,10 +192,11 @@ fn gen_code_for_node(
             };
             program.add_operation(operation);
         }
-        "LinearSubdivide" => {
-            let operation = PolyAsmInstruction::LinearSubdivide {
+        "CatmullClarkSubdivide" => {
+            let operation = PolyAsmInstruction::CatmullClarkSubdivide {
                 in_mesh: input!("in_mesh"),
                 out_mesh: output!("out_mesh"),
+                iterations: input!("iterations"),
             };
             program.add_operation(operation);
         }

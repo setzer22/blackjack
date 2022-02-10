@@ -427,6 +427,7 @@ impl HalfEdgeMesh {
     /// forming a loop across the boundaries of the mesh. The new halfedges will
     /// be marked as boundary with a None face.
     fn add_boundary_halfedges(&mut self) {
+        /* TODO: Is it safe to remove this?
         // Make vertices in the boundary point to a halfedge that is also on the
         // boundary.
         //
@@ -463,7 +464,7 @@ impl HalfEdgeMesh {
         }
         for (v, h) in defer_vertex_halfedge_replacement {
             self[v].halfedge = Some(h);
-        }
+        } */
 
         // Clone to avoid double-borrow issues
         // TODO: Again, this could be optimized. Don't care for now.
@@ -499,12 +500,13 @@ impl HalfEdgeMesh {
             }
         }
 
+        /* TODO: Is it safe to remove this?
         // Cycle the halfedge pointers for vertices again. Original code says it
         // makes this to make "traversal easier" :shrug:
         let vertices: Vec<VertexId> = self.iter_vertices().map(|(v, _)| v).collect(); // Yet another spurious copy.
         for v in vertices {
             self[v].halfedge = Some(self.at_vertex(v).halfedge().twin().next().end());
-        }
+        } */
     }
 
     fn halfedge_loop(&self, h0: HalfEdgeId) -> SVec<HalfEdgeId> {

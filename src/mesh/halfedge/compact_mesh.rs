@@ -72,6 +72,7 @@ impl MeshCounts {
 
 #[allow(non_upper_case_globals)]
 impl<const Subdivided: bool> CompactMesh<Subdivided> {
+    #[profiling::function]
     pub fn from_halfedge(mesh: &HalfEdgeMesh) -> Result<CompactMesh<false>> {
         // Create mappings between ids and indices in the compact arrays. This
         // is necessary because slotmap makes no guarantees about the structure
@@ -186,6 +187,7 @@ impl<const Subdivided: bool> CompactMesh<Subdivided> {
         })
     }
 
+    #[profiling::function]
     pub fn to_halfedge(&self) -> HalfEdgeMesh {
         let mut mesh = HalfEdgeMesh::default();
 
@@ -204,19 +206,9 @@ impl<const Subdivided: bool> CompactMesh<Subdivided> {
             f_idx_to_id.push(mesh.alloc_face(None));
         }
 
-        // Compute analytical expressions. Boxing the iterators is necessary to
-        // make type checking work
-        let next_iter: Box<dyn Iterator<Item = _>> = if Subdivided {
-            Box::new((0..self.counts.num_halfedges).map(|h| self.get_next(h) as u32))
-        } else {
-            Box::new(self.next.iter_cpy())
-        };
-
-        let face_iter: Box<dyn Iterator<Item = _>> = if Subdivided {
-            Box::new((0..self.counts.num_halfedges).map(|h| self.get_face(h) as u32))
-        } else {
-            Box::new(self.face.iter_cpy())
-        };
+        // Compute analytical expressions.
+        let next_iter = (0..self.counts.num_halfedges).map(|h| self.get_next(h) as u32);
+        let face_iter = (0..self.counts.num_halfedges).map(|h| self.get_face(h) as u32);
 
         for (h, (twin, next, vert, face)) in
             itertools::multizip((&self.twin, next_iter, &self.vert, face_iter)).enumerate()
@@ -336,6 +328,7 @@ impl<const Subdivided: bool> CompactMesh<Subdivided> {
 
     /// See "A HalfEdge Refinement Rule for Parallel Catmull-Clark"
     /// https://onrendering.com/data/papers/catmark/HalfedgeCatmullClark.pdf
+    #[profiling::function]
     pub fn subdivide(&self) -> CompactMesh<true> {
         use rayon::prelude::*;
 
@@ -493,6 +486,7 @@ impl<const Subdivided: bool> CompactMesh<Subdivided> {
         }
     }
 
+    #[profiling::function]
     pub fn subdivide_multi(&self, iterations: usize) -> CompactMesh<true> {
         let mut mesh = self.subdivide();
         for _ in 0..(iterations - 1) {

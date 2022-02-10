@@ -116,7 +116,8 @@ pub enum PolyAsmInstruction {
         b: MemAddr<HalfEdgeMesh>,
         out_mesh: MemAddr<HalfEdgeMesh>,
     },
-    LinearSubdivide {
+    CatmullClarkSubdivide {
+        iterations: MemAddr<f32>,
         in_mesh: MemAddr<HalfEdgeMesh>,
         out_mesh: MemAddr<HalfEdgeMesh>,
     },
@@ -329,15 +330,18 @@ impl PolyAsmProgram {
                 let export_path = self.mem_fetch(*export_path)?;
                 mesh.to_wavefront_obj(export_path)?;
             }
-            PolyAsmInstruction::LinearSubdivide { in_mesh, out_mesh } => {
+            PolyAsmInstruction::CatmullClarkSubdivide { in_mesh, out_mesh, iterations } => {
                 let new_mesh = CompactMesh::<false>::from_halfedge(
                     &*self.mem_fetch_ref(*in_mesh)?,
                 )?;
+                let iterations = self.mem_fetch(*iterations)?;
 
-                let subdivided = new_mesh.subdivide_multi(3).to_halfedge();
+                let subdivided = new_mesh.subdivide_multi(iterations as usize).to_halfedge();
 
                 self.mem_store(*out_mesh, subdivided)?;
                 self.output_register = Some(*out_mesh);
+
+                profiling::finish_frame!();
             }
         }
         Ok(())

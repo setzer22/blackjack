@@ -12,7 +12,7 @@ pub enum GraphNodeType {
     VectorMath,
     MergeMeshes,
     ExportObj,
-    LinearSubdivide,
+    CatmullClarkSubdivide,
 }
 
 macro_rules! in_vector {
@@ -168,10 +168,10 @@ impl GraphNodeType {
                 outputs: vec![],
                 is_executable: true,
             },
-            GraphNodeType::LinearSubdivide => NodeDescriptor {
+            GraphNodeType::CatmullClarkSubdivide => NodeDescriptor {
                 op_name,
                 label,
-                inputs: vec![in_mesh!("in_mesh")],
+                inputs: vec![in_mesh!("in_mesh"), in_scalar!("iterations", 1.0, 1.0, 7.0)],
                 outputs: vec![out_mesh!("out_mesh")],
                 is_executable: false,
             }
@@ -193,7 +193,7 @@ impl GraphNodeType {
             GraphNodeType::VectorMath => "Vector math",
             GraphNodeType::MergeMeshes => "Merge meshes",
             GraphNodeType::ExportObj => "OBJ Export",
-            GraphNodeType::LinearSubdivide => "Subdivide",
+            GraphNodeType::CatmullClarkSubdivide => "Catmull Clark",
         }
     }
 
@@ -210,7 +210,7 @@ impl GraphNodeType {
             GraphNodeType::VectorMath => "VectorMath",
             GraphNodeType::MergeMeshes => "MergeMeshes",
             GraphNodeType::ExportObj => "ExportObj",
-            GraphNodeType::LinearSubdivide => "LinearSubdivide",
+            GraphNodeType::CatmullClarkSubdivide => "CatmullClarkSubdivide",
         }
     }
 }
