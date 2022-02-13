@@ -1,8 +1,8 @@
 use crate::prelude::*;
 
-use generational_arena::Arena;
 use glam::*;
 use itertools::Itertools;
+use slotmap::SlotMap;
 use smallvec::SmallVec;
 
 /// Implements indexing traits so the mesh data structure can be used to access
@@ -35,7 +35,7 @@ pub mod compact_mesh;
 /// number of iterations will be performed before giving an error. This error
 /// should be large enough, as faces with a very large number of vertices may
 /// trigger it.
-const MAX_LOOP_ITERATIONS: usize = 32;
+pub const MAX_LOOP_ITERATIONS: usize = 32;
 
 #[derive(Debug, Default, Clone)]
 pub struct HalfEdge {
@@ -85,9 +85,9 @@ impl DebugMark {
 
 #[derive(Default, Debug, Clone)]
 pub struct HalfEdgeMesh {
-    vertices: Arena<Vertex>,
-    faces: Arena<Face>,
-    halfedges: Arena<HalfEdge>,
+    vertices: SlotMap<VertexId, Vertex>,
+    faces: SlotMap<FaceId, Face>,
+    halfedges: SlotMap<HalfEdgeId, HalfEdge>,
 
     debug_edges: HashMap<HalfEdgeId, DebugMark>,
     debug_vertices: HashMap<VertexId, DebugMark>,
@@ -197,8 +197,7 @@ impl HalfEdgeMesh {
         let mut indices = vec![];
         let mut next_index = 0;
 
-        for (face_idx, _face) in self.faces.iter() {
-            let face_id = FaceId(face_idx);
+        for (face_id, _face) in self.faces.iter() {
             if done_faces.contains(&face_id) {
                 continue;
             }
@@ -293,7 +292,7 @@ impl HalfEdgeMesh {
         polygons: &[Polygon],
     ) -> Result<Self>
     where
-        Index: Into<usize> + 'static + Eq + PartialEq + core::hash::Hash + Copy,
+        Index: num_traits::AsPrimitive<usize> + 'static + Eq + PartialEq + core::hash::Hash + Copy,
         Polygon: AsRef<[Index]>,
     {
         let mut mesh = Self::default();
@@ -319,10 +318,9 @@ impl HalfEdgeMesh {
             // Compute correspondence between vertices and indices. Also fill in vertex degree data.
             for index in polygon {
                 // Create the vertex if it doesn't exist
-                let idx = Into::<usize>::into(*index); // ugh
-                let position = positions
-                    .get(idx)
-                    .ok_or_else(|| anyhow!("Out-of-bounds index in the polygon array {}", idx))?;
+                let position = positions.get(index.as_()).ok_or_else(|| {
+                    anyhow!("Out-of-bounds index in the polygon array {}", index.as_())
+                })?;
                 let v_id = index_to_vertex
                     .entry(*index)
                     .or_insert_with(|| mesh.alloc_vertex(*position, None));
@@ -381,44 +379,6 @@ impl HalfEdgeMesh {
             }
         }
 
-        // Make vertices in the boundary point to a halfedge that is also on the
-        // boundary.
-        //
-        // NOTE: @setzer22 The original code did this, but it didn't explain why
-        // and it's not immediately obvious.
-
-        // NOTE: We need to use this vector to defer the actual mutation because
-        // we can't iterate the mesh and do queries at the same time. It could
-        // be optimized by separating the generational arenas as separate
-        // borrows and using those. But the loss in clarity is not worth it.
-        let mut defer_vertex_halfedge_replacement = vec![];
-
-        for (v_id, vertex) in mesh.iter_vertices() {
-            let h0 = vertex.halfedge.expect("Should have halfedge by now");
-            let mut h = h0;
-
-            let mut counter = 0;
-
-            loop {
-                if counter > MAX_LOOP_ITERATIONS {
-                    panic!("Max number of iterations reached. Is the mesh malformed?");
-                }
-                counter += 1;
-
-                if mesh[h].twin.is_none() {
-                    defer_vertex_halfedge_replacement.push((v_id, h));
-                    break;
-                }
-                h = mesh.at_halfedge(h).twin().next().end();
-                if h == h0 {
-                    break;
-                }
-            }
-        }
-        for (v, h) in defer_vertex_halfedge_replacement {
-            mesh[v].halfedge = Some(h);
-        }
-
         // Construct the boundary halfedges. Right now, the boundary consists of
         // incomplete edges, i.e. half edges that do not have a twin. Leaving it
         // like this would complicate some kinds of traversal because we can't
@@ -428,47 +388,7 @@ impl HalfEdgeMesh {
         // closed boundary. It's easier to imagine this by thinking of a hole in
         // the mesh, but it works just as well if you think about the "outside"
         // of a quad grid as a hole, as the loop would go all around the quad
-
-        // Clone to avoid double-borrow issues
-        // TODO: Again, this could be optimized. Don't care for now.
-        let halfedges: Vec<HalfEdgeId> = mesh.iter_halfedges().map(|(h, _)| h).collect();
-
-        for &h0 in halfedges.iter() {
-            let mut boundary_halfedges = Vec::<HalfEdgeId>::new();
-            if mesh[h0].twin.is_none() {
-                let mut h_it = h0;
-                loop {
-                    let t = mesh.alloc_halfedge(HalfEdge::default());
-                    boundary_halfedges.push(t);
-                    mesh[h_it].twin = Some(t);
-                    mesh[t].twin = Some(h_it);
-                    mesh[t].vertex = Some(mesh.at_halfedge(h_it).next().vertex().end());
-
-                    // Look for the next outgoing halfedge for this vertex
-                    // that's in the boundary
-                    h_it = mesh.at_halfedge(h_it).next().end();
-                    while h_it != h0 && mesh[h_it].twin.is_some() {
-                        // Twin-next cycles around the outgoing halfedges of a vertex
-                        h_it = mesh.at_halfedge(h_it).twin().next().end();
-                    }
-
-                    if h_it == h0 {
-                        break;
-                    }
-                }
-            }
-
-            for (&b_h, &b_h_next) in boundary_halfedges.iter().rev().circular_tuple_windows() {
-                mesh[b_h].next = Some(b_h_next);
-            }
-        }
-
-        // Cycle the halfedge pointers for vertices again. Original code says it
-        // makes this to make "traversal easier" :shrug:
-        let vertices: Vec<VertexId> = mesh.iter_vertices().map(|(v, _)| v).collect(); // Yet another spurious copy.
-        for v in vertices {
-            mesh[v].halfedge = Some(mesh.at_vertex(v).halfedge().twin().next().end());
-        }
+        mesh.add_boundary_halfedges();
 
         // Do some final manifoldness checks
         for (v, vertex) in mesh.iter_vertices() {
@@ -494,12 +414,99 @@ impl HalfEdgeMesh {
                 }
             }
 
-            //if count != vertex_degree[&v] {
-                //bail!("At least one of the vertices is not a polygon fan, but some other nonmanifold structure instead.")
-            //}
+            if count != vertex_degree[&v] {
+                bail!("At least one of the vertices is not a polygon fan, but some other nonmanifold structure instead.")
+            }
         }
 
         Ok(mesh)
+    }
+
+    /// Given a `self` in an inconsistent state, where some halfedges have no
+    /// `twin` (because it's in the boundary), this method adds twin halfedges
+    /// forming a loop across the boundaries of the mesh. The new halfedges will
+    /// be marked as boundary with a None face.
+    fn add_boundary_halfedges(&mut self) {
+        /* TODO: Is it safe to remove this?
+        // Make vertices in the boundary point to a halfedge that is also on the
+        // boundary.
+        //
+        // NOTE: @setzer22 The original code did this, but it didn't explain why
+        // and it's not immediately obvious.
+
+        // NOTE: We need to use this vector to defer the actual mutation because
+        // we can't iterate the mesh and do queries at the same time. It could
+        // be optimized by separating the generational arenas as separate
+        // borrows and using those. But the loss in clarity is not worth it.
+        let mut defer_vertex_halfedge_replacement = vec![];
+
+        for (v_id, vertex) in self.iter_vertices() {
+            let h0 = vertex.halfedge.expect("Should have halfedge by now");
+            let mut h = h0;
+
+            let mut counter = 0;
+
+            loop {
+                if counter > MAX_LOOP_ITERATIONS {
+                    panic!("Max number of iterations reached. Is the self malformed?");
+                }
+                counter += 1;
+
+                if self[h].twin.is_none() {
+                    defer_vertex_halfedge_replacement.push((v_id, h));
+                    break;
+                }
+                h = self.at_halfedge(h).twin().next().end();
+                if h == h0 {
+                    break;
+                }
+            }
+        }
+        for (v, h) in defer_vertex_halfedge_replacement {
+            self[v].halfedge = Some(h);
+        } */
+
+        // Clone to avoid double-borrow issues
+        // TODO: Again, this could be optimized. Don't care for now.
+        let halfedges: Vec<HalfEdgeId> = self.iter_halfedges().map(|(h, _)| h).collect();
+
+        for &h0 in halfedges.iter() {
+            let mut boundary_halfedges = Vec::<HalfEdgeId>::new();
+            if self[h0].twin.is_none() {
+                let mut h_it = h0;
+                loop {
+                    let t = self.alloc_halfedge(HalfEdge::default());
+                    boundary_halfedges.push(t);
+                    self[h_it].twin = Some(t);
+                    self[t].twin = Some(h_it);
+                    self[t].vertex = Some(self.at_halfedge(h_it).next().vertex().end());
+
+                    // Look for the next outgoing halfedge for this vertex
+                    // that's in the boundary
+                    h_it = self.at_halfedge(h_it).next().end();
+                    while h_it != h0 && self[h_it].twin.is_some() {
+                        // Twin-next cycles around the outgoing halfedges of a vertex
+                        h_it = self.at_halfedge(h_it).twin().next().end();
+                    }
+
+                    if h_it == h0 {
+                        break;
+                    }
+                }
+            }
+
+            for (&b_h, &b_h_next) in boundary_halfedges.iter().rev().circular_tuple_windows() {
+                self[b_h].next = Some(b_h_next);
+            }
+        }
+
+        /* TODO: Is it safe to remove this?
+        // Cycle the halfedge pointers for vertices again. Original code says it
+        // makes this to make "traversal easier" :shrug:
+        let vertices: Vec<VertexId> = self.iter_vertices().map(|(v, _)| v).collect(); // Yet another spurious copy.
+        for v in vertices {
+            self[v].halfedge = Some(self.at_vertex(v).halfedge().twin().next().end());
+        } */
     }
 
     fn halfedge_loop(&self, h0: HalfEdgeId) -> SVec<HalfEdgeId> {
@@ -525,15 +532,15 @@ impl HalfEdgeMesh {
     }
 
     pub fn iter_vertices(&self) -> impl Iterator<Item = (VertexId, &Vertex)> {
-        self.vertices.iter().map(|(idx, v)| (VertexId(idx), v))
+        self.vertices.iter()
     }
 
     pub fn iter_faces(&self) -> impl Iterator<Item = (FaceId, &Face)> {
-        self.faces.iter().map(|(idx, f)| (FaceId(idx), f))
+        self.faces.iter()
     }
 
     pub fn iter_halfedges(&self) -> impl Iterator<Item = (HalfEdgeId, &HalfEdge)> {
-        self.halfedges.iter().map(|(idx, h)| (HalfEdgeId(idx), h))
+        self.halfedges.iter()
     }
 
     /// Sets the position for a given vertex
@@ -554,37 +561,37 @@ impl HalfEdgeMesh {
 
     /// Adds a new vertex to the mesh, disconnected from everything else. Returns its handle.
     fn alloc_vertex(&mut self, position: Vec3, halfedge: Option<HalfEdgeId>) -> VertexId {
-        VertexId(self.vertices.insert(Vertex { position, halfedge }))
+        self.vertices.insert(Vertex { position, halfedge })
     }
 
     /// Adds a new face to the mesh, disconnected from everything else. Returns its handle.
     fn alloc_face(&mut self, halfedge: Option<HalfEdgeId>) -> FaceId {
-        FaceId(self.faces.insert(Face { halfedge }))
+        self.faces.insert(Face { halfedge })
     }
 
     /// Removes a face from the mesh. This does not attempt to preserve mesh
     /// connectivity and should only be used as part of internal operations.
     fn remove_face(&mut self, face: FaceId) {
-        self.faces.remove(face.0);
+        self.faces.remove(face);
     }
 
     /// Removes a halfedge from the mesh. This does not attempt to preserve mesh
     /// connectivity and should only be used as part of internal operations.
     fn remove_halfedge(&mut self, halfedge: HalfEdgeId) {
-        self.halfedges.remove(halfedge.0);
+        self.halfedges.remove(halfedge);
         self.debug_edges.remove(&halfedge);
     }
 
     /// Removes a vertex from the mesh. This does not attempt to preserve mesh
     /// connectivity and should only be used as part of internal operations.
     fn remove_vertex(&mut self, vertex: VertexId) {
-        self.vertices.remove(vertex.0);
+        self.vertices.remove(vertex);
         self.debug_vertices.remove(&vertex);
     }
 
     /// Adds a new vertex to the mesh, disconnected from everything else. Returns its handle.
     fn alloc_halfedge(&mut self, halfedge: HalfEdge) -> HalfEdgeId {
-        HalfEdgeId(self.halfedges.insert(halfedge))
+        self.halfedges.insert(halfedge)
     }
 
     pub fn vertex_debug_mark(&self, vertex: VertexId) -> Option<DebugMark> {
@@ -700,6 +707,18 @@ impl HalfEdgeMesh {
         } else {
             None
         }
+    }
+
+    pub fn num_halfedges(&self) -> usize {
+        self.halfedges.len()
+    }
+
+    pub fn num_vertices(&self) -> usize {
+        self.vertices.len()
+    }
+
+    pub fn num_faces(&self) -> usize {
+        self.faces.len()
     }
 }
 

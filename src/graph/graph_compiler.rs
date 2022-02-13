@@ -192,11 +192,28 @@ fn gen_code_for_node(
             };
             program.add_operation(operation);
         }
-        "LinearSubdivide" => {
-            let operation = PolyAsmInstruction::LinearSubdivide {
-                in_mesh: input!("in_mesh"),
-                out_mesh: output!("out_mesh"),
+        "MeshSubdivide" => {
+            let technique: MemAddr<String> = input!("technique");
+            let technique_str = program
+                .mem_fetch(technique)
+                .map_err(|err| anyhow!("Expected constant.").context(err))?;
+
+            let operation = match technique_str.as_str() {
+                "linear" => PolyAsmInstruction::LinearSubdivide {
+                    in_mesh: input!("in_mesh"),
+                    out_mesh: output!("out_mesh"),
+                    iterations: input!("iterations"),
+                },
+                "catmull-clark" => PolyAsmInstruction::CatmullClarkSubdivide {
+                    in_mesh: input!("in_mesh"),
+                    out_mesh: output!("out_mesh"),
+                    iterations: input!("iterations"),
+                },
+                invalid => {
+                    bail!("Invalid MeshSubdivide technique: {}", invalid)
+                }
             };
+
             program.add_operation(operation);
         }
         invalid => return Err(anyhow!("Unknown op_name {}", invalid)),

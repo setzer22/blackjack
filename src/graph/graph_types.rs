@@ -141,7 +141,7 @@ pub enum InputDescriptor {
     Mesh,
     Selection,
     Scalar { default: f32, min: f32, max: f32 },
-    Enum { values: Vec<String> },
+    Enum { default: Option<u32>, values: Vec<String> },
     NewFile,
 }
 

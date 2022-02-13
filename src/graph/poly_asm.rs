@@ -2,6 +2,7 @@ use std::marker::PhantomData;
 
 use crate::prelude::*;
 use anyhow::anyhow;
+use halfedge::compact_mesh::CompactMesh;
 
 type RawMemAddr = hecs::Entity;
 
@@ -73,7 +74,7 @@ pub enum PolyAsmInstruction {
         center: MemAddr<Vec3>,
         normal: MemAddr<Vec3>,
         right: MemAddr<Vec3>,
-        size: MemAddr<Vec2>,
+        size: MemAddr<Vec3>,
         out_mesh: MemAddr<HalfEdgeMesh>,
     },
     ChamferVertices {
@@ -116,6 +117,12 @@ pub enum PolyAsmInstruction {
         out_mesh: MemAddr<HalfEdgeMesh>,
     },
     LinearSubdivide {
+        iterations: MemAddr<f32>,
+        in_mesh: MemAddr<HalfEdgeMesh>,
+        out_mesh: MemAddr<HalfEdgeMesh>,
+    },
+    CatmullClarkSubdivide {
+        iterations: MemAddr<f32>,
         in_mesh: MemAddr<HalfEdgeMesh>,
         out_mesh: MemAddr<HalfEdgeMesh>,
     },
@@ -213,7 +220,7 @@ impl PolyAsmProgram {
                 let size = self.mem_fetch(*size)?;
                 self.mem_store(
                     *out_mesh,
-                    halfedge::primitives::Quad::build(center, normal, right, size),
+                    halfedge::primitives::Quad::build(center, normal, right, size.truncate()),
                 )?;
                 self.output_register = Some(*out_mesh);
             }
@@ -328,11 +335,31 @@ impl PolyAsmProgram {
                 let export_path = self.mem_fetch(*export_path)?;
                 mesh.to_wavefront_obj(export_path)?;
             }
-            PolyAsmInstruction::LinearSubdivide { in_mesh, out_mesh } => {
+            PolyAsmInstruction::LinearSubdivide {
+                in_mesh,
+                out_mesh,
+                iterations,
+            }
+            | PolyAsmInstruction::CatmullClarkSubdivide {
+                in_mesh,
+                out_mesh,
+                iterations,
+            } => {
                 let new_mesh =
-                    halfedge::edit_ops::linear_subdivision(&*self.mem_fetch_ref(*in_mesh)?)?;
-                self.mem_store(*out_mesh, new_mesh)?;
+                    CompactMesh::<false>::from_halfedge(&*self.mem_fetch_ref(*in_mesh)?)?;
+                let iterations = self.mem_fetch(*iterations)?;
+
+                let is_catmull_clark =
+                    matches!(instr, PolyAsmInstruction::CatmullClarkSubdivide { .. });
+
+                let subdivided = new_mesh
+                    .subdivide_multi(iterations as usize, is_catmull_clark)
+                    .to_halfedge();
+
+                self.mem_store(*out_mesh, subdivided)?;
                 self.output_register = Some(*out_mesh);
+
+                profiling::finish_frame!();
             }
         }
         Ok(())

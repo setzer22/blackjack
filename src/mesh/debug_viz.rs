@@ -71,9 +71,9 @@ impl DebugMeshes {
     }
 
     pub fn add_halfedge_debug(&mut self, render_ctx: &mut RenderContext, mesh: &HalfEdgeMesh) {
-        const VERTEX_THICKNESS: f32 = 0.07;
-        const EDGE_THICKNESS: f32 = 0.05;
-        const HALFEDGE_SEPARATION: f32 = 0.03;
+        const VERTEX_THICKNESS: f32 = 0.03;
+        const EDGE_THICKNESS: f32 = 0.02;
+        const HALFEDGE_SEPARATION: f32 = 0.01;
 
         for (v_id, vertex) in mesh.iter_vertices() {
             let material = self.get_material(&render_ctx.renderer, mesh.vertex_debug_mark(v_id));

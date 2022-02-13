@@ -6,7 +6,7 @@ macro_rules! impl_index_traits {
             type Output = $output_type;
 
             fn index(&self, index: $id_type) -> &Self::Output {
-                self.$arena.get(index.0).unwrap_or_else(|| {
+                self.$arena.get(index).unwrap_or_else(|| {
                     panic!(
                         "{} index error for {:?}. Has the value been deleted?",
                         stringify!($id_type),
@@ -18,7 +18,7 @@ macro_rules! impl_index_traits {
 
         impl std::ops::IndexMut<$id_type> for HalfEdgeMesh {
             fn index_mut(&mut self, index: $id_type) -> &mut Self::Output {
-                self.$arena.get_mut(index.0).unwrap_or_else(|| {
+                self.$arena.get_mut(index).unwrap_or_else(|| {
                     panic!(
                         "{} index error for {:?}. Has the value been deleted?",
                         stringify!($id_type),
@@ -38,12 +38,12 @@ macro_rules! impl_index_ops {
     ($field_name:ident, $field_name_mut:ident, $id_type:ty, $output_type:ty, $arena:ident) => {
         /// Try to immutably borrow data
         pub fn $field_name(&self, id: $id_type) -> Option<&$output_type> {
-            self.$arena.get(id.0)
+            self.$arena.get(id)
         }
 
         /// Try to mutably borrow data
         pub fn $field_name_mut(&mut self, id: $id_type) -> Option<&mut $output_type> {
-            self.$arena.get_mut(id.0)
+            self.$arena.get_mut(id)
         }
     };
 }
