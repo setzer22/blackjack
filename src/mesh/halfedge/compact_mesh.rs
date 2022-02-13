@@ -328,8 +328,11 @@ impl<const Subdivided: bool> CompactMesh<Subdivided> {
 
     /// See "A HalfEdge Refinement Rule for Parallel Catmull-Clark"
     /// https://onrendering.com/data/papers/catmark/HalfedgeCatmullClark.pdf
+    /// 
+    /// If `catmull_clark` is set to true, smooth subdivision using the Catmull
+    /// Clark algorithm is performed, otherwise linear subdivision is performed.
     #[profiling::function]
-    pub fn subdivide(&self) -> CompactMesh<true> {
+    pub fn subdivide(&self, catmull_clark: bool) -> CompactMesh<true> {
         use rayon::prelude::*;
 
         // Compute the counts for the new mesh
@@ -435,8 +438,10 @@ impl<const Subdivided: bool> CompactMesh<Subdivided> {
                 let i = self.counts.num_vertices + self.get_face(h) as usize;
                 let j = self.counts.num_vertices + self.counts.num_faces + self.edge[h] as usize;
 
-                // Handle boundary edges as a separate case
-                if self.twin[h].is_some() {
+                // Handle boundary edges as a separate case. During linear
+                // subidivision, we simply treat all edges as boundary to apply
+                // the simpler rule.
+                if self.twin[h].is_some() && catmull_clark {
                     // NOTE: Same rationale as above for relaxed ordering. The
                     // vertices in `i` are not being iterated in this loop, so the
                     // load() does not read a value that changes during this loop
@@ -447,7 +452,7 @@ impl<const Subdivided: bool> CompactMesh<Subdivided> {
                 } else {
                     let v_end = self.vert[self.get_next(h)] as usize;
                     let midpoint = (self.vertex_positions[v] + self.vertex_positions[v_end]) / 2.0;
-                    new_vertex_positions[j].fetch_add(midpoint, Ordering::Relaxed)
+                    new_vertex_positions[j].store(midpoint, Ordering::Relaxed)
                 }
             });
 
@@ -456,8 +461,11 @@ impl<const Subdivided: bool> CompactMesh<Subdivided> {
             .into_par_iter()
             .for_each(|h| {
                 let v = self.vert[h] as usize;
-                // If there is a valence, the vertex is not in the boundary
-                if let Some(n) = valences[h].map(|x| x.get() as f32) {
+                // If there is a valence, the vertex is not in the boundary.
+                // Same as above, the complex rule is only applied for catmull
+                // clark subdivision
+                if valences[h].is_some() && catmull_clark {
+                    let n = valences[h].unwrap().get() as f32;
                     let i = self.counts.num_vertices + self.get_face(h) as usize;
                     let j =
                         self.counts.num_vertices + self.counts.num_faces + self.edge[h] as usize;
@@ -491,10 +499,10 @@ impl<const Subdivided: bool> CompactMesh<Subdivided> {
     }
 
     #[profiling::function]
-    pub fn subdivide_multi(&self, iterations: usize) -> CompactMesh<true> {
-        let mut mesh = self.subdivide();
+    pub fn subdivide_multi(&self, iterations: usize, catmull_clark: bool) -> CompactMesh<true> {
+        let mut mesh = self.subdivide(catmull_clark);
         for _ in 0..(iterations - 1) {
-            mesh = mesh.subdivide();
+            mesh = mesh.subdivide(catmull_clark);
         }
         mesh
     }

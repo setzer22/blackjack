@@ -12,7 +12,7 @@ pub enum GraphNodeType {
     VectorMath,
     MergeMeshes,
     ExportObj,
-    CatmullClarkSubdivide,
+    MeshSubdivide,
 }
 
 macro_rules! in_vector {
@@ -72,7 +72,10 @@ macro_rules! in_file {
 
 macro_rules! in_enum {
     ($name:expr, $( $values:expr ),+) => {
-        ($name.to_owned(), InputDescriptor::Enum { values: vec![$( $values.to_owned() ),+] })
+        ($name.to_owned(), InputDescriptor::Enum { default: None, values: vec![$( $values.to_owned() ),+] })
+    };
+    ($name:expr, default $default:expr, $( $values:expr ),+) => {
+        ($name.to_owned(), InputDescriptor::Enum { default: Some($default), values: vec![$( $values.to_owned() ),+] })
     };
 }
 
@@ -168,13 +171,17 @@ impl GraphNodeType {
                 outputs: vec![],
                 is_executable: true,
             },
-            GraphNodeType::CatmullClarkSubdivide => NodeDescriptor {
+            GraphNodeType::MeshSubdivide => NodeDescriptor {
                 op_name,
                 label,
-                inputs: vec![in_mesh!("in_mesh"), in_scalar!("iterations", 1.0, 1.0, 7.0)],
+                inputs: vec![
+                    in_mesh!("in_mesh"),
+                    in_scalar!("iterations", 1.0, 1.0, 7.0),
+                    in_enum!("technique", default 0, "linear", "catmull-clark"),
+                ],
                 outputs: vec![out_mesh!("out_mesh")],
                 is_executable: false,
-            }
+            },
         }
     }
 
@@ -193,7 +200,7 @@ impl GraphNodeType {
             GraphNodeType::VectorMath => "Vector math",
             GraphNodeType::MergeMeshes => "Merge meshes",
             GraphNodeType::ExportObj => "OBJ Export",
-            GraphNodeType::CatmullClarkSubdivide => "Catmull Clark",
+            GraphNodeType::MeshSubdivide => "Subdivide",
         }
     }
 
@@ -210,7 +217,7 @@ impl GraphNodeType {
             GraphNodeType::VectorMath => "VectorMath",
             GraphNodeType::MergeMeshes => "MergeMeshes",
             GraphNodeType::ExportObj => "ExportObj",
-            GraphNodeType::CatmullClarkSubdivide => "CatmullClarkSubdivide",
+            GraphNodeType::MeshSubdivide => "MeshSubdivide",
         }
     }
 }

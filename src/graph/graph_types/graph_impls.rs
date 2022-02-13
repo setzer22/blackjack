@@ -66,12 +66,12 @@ impl Graph {
                         node: node_id,
                         shown_inline: true,
                     },
-                    InputDescriptor::Enum { values } => InputParam {
+                    InputDescriptor::Enum { default, values } => InputParam {
                         id,
                         typ: DataType::Enum,
                         value: InputParamValue::Enum {
                             values,
-                            selection: None,
+                            selection: default,
                         },
                         metadata: smallvec![],
                         kind: ConstantOnly,
