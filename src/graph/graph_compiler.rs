@@ -170,6 +170,11 @@ fn gen_code_for_node(
                     b: input!("B"),
                     out_vec: output!("out_vec"),
                 },
+                "MUL" => PolyAsmInstruction::VectorMul {
+                    a: input!("A"),
+                    b: input!("B"),
+                    out_vec: output!("out_vec"),
+                },
                 invalid => {
                     bail!("Invalid VectorMath operation: {}", invalid)
                 }

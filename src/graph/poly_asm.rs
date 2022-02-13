@@ -111,6 +111,11 @@ pub enum PolyAsmInstruction {
         b: MemAddr<Vec3>,
         out_vec: MemAddr<Vec3>,
     },
+    VectorMul {
+        a: MemAddr<Vec3>,
+        b: MemAddr<Vec3>,
+        out_vec: MemAddr<Vec3>,
+    },
     MergeMeshes {
         a: MemAddr<HalfEdgeMesh>,
         b: MemAddr<HalfEdgeMesh>,
@@ -312,6 +317,11 @@ impl PolyAsmProgram {
                 let a = self.mem_fetch(*a)?;
                 let b = self.mem_fetch(*b)?;
                 self.mem_store(*out_vec, a - b)?;
+            }
+            PolyAsmInstruction::VectorMul { a, b, out_vec } => {
+                let a = self.mem_fetch(*a)?;
+                let b = self.mem_fetch(*b)?;
+                self.mem_store(*out_vec, a * b)?;
             }
             PolyAsmInstruction::MergeMeshes { a, b, out_mesh } => {
                 let result = {
