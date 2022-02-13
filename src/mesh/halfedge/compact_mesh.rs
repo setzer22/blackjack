@@ -411,9 +411,6 @@ impl<const Subdivided: bool> CompactMesh<Subdivided> {
             })
             .collect_into_vec(&mut valences);
 
-        //println!("Cycle lengths: {:?}", cycle_lengths);
-        //println!("Valences: {:?}", valences);
-
         // --- Face points ---
         (0..self.counts.num_halfedges)
             .into_par_iter()
@@ -434,39 +431,46 @@ impl<const Subdivided: bool> CompactMesh<Subdivided> {
         (0..self.counts.num_halfedges)
             .into_par_iter()
             .for_each(|h| {
-                // TODO: Detect boundary
-
                 let v = self.vert[h] as usize;
                 let i = self.counts.num_vertices + self.get_face(h) as usize;
                 let j = self.counts.num_vertices + self.counts.num_faces + self.edge[h] as usize;
 
-                // NOTE: Same rationale as above for relaxed ordering. The
-                // vertices in `i` are not being iterated in this loop, so the
-                // load() does not read a value that change due to a data races.
-
-                let inc = (self.vertex_positions[v]
-                    + new_vertex_positions[i].load(Ordering::Relaxed))
-                    / 4.0;
-                new_vertex_positions[j].fetch_add(inc, Ordering::Relaxed)
+                // Handle boundary edges as a separate case
+                if self.twin[h].is_some() {
+                    // NOTE: Same rationale as above for relaxed ordering. The
+                    // vertices in `i` are not being iterated in this loop, so the
+                    // load() does not read a value that changes during this loop
+                    let inc = (self.vertex_positions[v]
+                        + new_vertex_positions[i].load(Ordering::Relaxed))
+                        / 4.0;
+                    new_vertex_positions[j].fetch_add(inc, Ordering::Relaxed)
+                } else {
+                    let v_end = self.vert[self.get_next(h)] as usize;
+                    let midpoint = (self.vertex_positions[v] + self.vertex_positions[v_end]) / 2.0;
+                    new_vertex_positions[j].fetch_add(midpoint, Ordering::Relaxed)
+                }
             });
 
         // --- Smooth vertex points ---
         (0..self.counts.num_halfedges)
             .into_par_iter()
             .for_each(|h| {
-                // TODO: Detect boundary
-
-                let n = valences[h].unwrap().get() as f32;
                 let v = self.vert[h] as usize;
-                let i = self.counts.num_vertices + self.get_face(h) as usize;
-                let j = self.counts.num_vertices + self.counts.num_faces + self.edge[h] as usize;
+                // If there is a valence, the vertex is not in the boundary
+                if let Some(n) = valences[h].map(|x| x.get() as f32) {
+                    let i = self.counts.num_vertices + self.get_face(h) as usize;
+                    let j =
+                        self.counts.num_vertices + self.counts.num_faces + self.edge[h] as usize;
 
-                let inc = (4.0 * new_vertex_positions[j].load(Ordering::Relaxed)
-                    - new_vertex_positions[i].load(Ordering::Relaxed)
-                    + (n - 3.0) * self.vertex_positions[v])
-                    / (n * n);
+                    let inc = (4.0 * new_vertex_positions[j].load(Ordering::Relaxed)
+                        - new_vertex_positions[i].load(Ordering::Relaxed)
+                        + (n - 3.0) * self.vertex_positions[v])
+                        / (n * n);
 
-                new_vertex_positions[v].fetch_add(inc, Ordering::Relaxed);
+                    new_vertex_positions[v].fetch_add(inc, Ordering::Relaxed);
+                } else {
+                    new_vertex_positions[v].store(self.vertex_positions[v], Ordering::Relaxed);
+                }
             });
 
         // SAFETY: Same as above, Vec3 and AtomicVec3 have the same memory layout
@@ -511,6 +515,14 @@ impl AtomicVec3 {
         self.x.fetch_add(v.x, order);
         self.y.fetch_add(v.y, order);
         self.z.fetch_add(v.z, order);
+    }
+
+    /// Calls `store` on each of the inner atomic values internally. Note
+    /// that there is one atomic operation per dimension.
+    pub fn store(&self, v: Vec3, order: Ordering) {
+        self.x.store(v.x, order);
+        self.y.store(v.y, order);
+        self.z.store(v.z, order);
     }
 
     pub fn load(&self, order: Ordering) -> Vec3 {
