@@ -150,7 +150,7 @@ impl GraphNodeType {
                 op_name,
                 label,
                 inputs: vec![
-                    in_enum!("vec_op", "ADD", "SUB"),
+                    in_enum!("vec_op", "ADD", "SUB", "MUL"),
                     in_vector!("A", Vec3::ZERO),
                     in_vector!("B", Vec3::ZERO),
                 ],
