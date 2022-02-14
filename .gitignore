@@ -2,3 +2,4 @@
 gen/
 target/
 Cargo.lock
+.cargo/
