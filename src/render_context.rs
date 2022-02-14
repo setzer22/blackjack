@@ -3,9 +3,8 @@ use std::sync::Arc;
 use crate::{prelude::*, rendergraph::grid_routine::GridRoutine};
 
 use glam::Mat4;
-use rend3::RendererMode;
 use rend3_routine::pbr::PbrRoutine;
-use wgpu::{Features, Surface, TextureFormat};
+use wgpu::{Surface, TextureFormat};
 
 pub struct RenderContext {
     pub renderer: Arc<r3::Renderer>,
@@ -27,8 +26,8 @@ impl RenderContext {
         let iad = rend3::create_iad(
             None,
             None,
-            Some(RendererMode::CpuPowered),
-            Some(Features::POLYGON_MODE_LINE),
+            None,
+            None,
         )
         .await
         .unwrap();
