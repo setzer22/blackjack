@@ -27,7 +27,7 @@ impl RenderContext {
             None,
             None,
             None,
-            Some(Features::POLYGON_MODE_LINE),
+            None,
         ))
         .unwrap();
 
