@@ -59,6 +59,9 @@ env_logger = { version = "0.9", default-features = false, features = ["termcolor
 profiling = "1.0"
 log = "0.4"
 console_log = "0.2"
+wasm-bindgen-futures = "0.4"
+
+
 
 
 [patch.crates-io]
@@ -66,4 +69,4 @@ console_log = "0.2"
 # commented out in any commits to the 'main' branch
 # egui_wgpu_backend = { path = "../egui_wgpu_backend" }
 # egui_winit_platform = { path = "../egui_winit_platform" }
-
+cargo-run-wasm = { path = "../cargo-run-wasm" }

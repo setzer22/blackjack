@@ -28,13 +28,26 @@ pub mod math;
 /// General utility methods and helper traits
 pub mod utils;
 
-fn main() {
+async fn async_main() {
     // Setup logging
     #[cfg(not(target_arch = "wasm32"))]
     env_logger::init();
     #[cfg(target_arch = "wasm32")]
     console_log::init_with_level(log::Level::Debug).unwrap();
 
-    let (app_window, event_loop) = app_window::AppWindow::new();
+    let (app_window, event_loop) = app_window::AppWindow::new().await;
     app_window.run_app(event_loop);
+}
+
+fn main() {
+    #[cfg(target_arch = "wasm32")]
+    {
+        wasm_bindgen_futures::spawn_local(async_main());
+    }
+
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        pollster::block_on(async_main());
+    }
 }

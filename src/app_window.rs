@@ -20,7 +20,7 @@ pub struct AppWindow {
 }
 
 impl AppWindow {
-    pub fn new() -> (Self, EventLoop<()>) {
+    pub async fn new() -> (Self, EventLoop<()>) {
         let event_loop = winit::event_loop::EventLoop::new();
         let window = {
             let mut builder = winit::window::WindowBuilder::new();
@@ -30,7 +30,7 @@ impl AppWindow {
 
         let window_size = window.inner_size();
         let scale_factor = window.scale_factor();
-        let render_ctx = RenderContext::new(&window);
+        let render_ctx = RenderContext::new(&window).await;
         let root_viewport = RootViewport::new(
             &render_ctx.renderer,
             UVec2::new(window_size.width, window_size.height),
