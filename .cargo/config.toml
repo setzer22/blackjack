@@ -4,5 +4,8 @@
 linker = "/usr/bin/clang"
 rustflags = ["-Clink-arg=-fuse-ld=lld", "-Zshare-generics=y"]
 
+[target.wasm32-unknown-unknown]
+rustflags=["--cfg=web_sys_unstable_apis"]
+
 [alias]
 run-wasm = "run --release --package run-wasm --"
