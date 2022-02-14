@@ -30,7 +30,10 @@ pub mod utils;
 
 fn main() {
     // Setup logging
+    #[cfg(not(target_arch = "wasm32"))]
     env_logger::init();
+    #[cfg(target_arch = "wasm32")]
+    console_log::init_with_level(log::Level::Debug).unwrap();
 
     let (app_window, event_loop) = app_window::AppWindow::new();
     app_window.run_app(event_loop);
