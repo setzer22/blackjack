@@ -69,4 +69,3 @@ wasm-bindgen-futures = "0.4"
 # commented out in any commits to the 'main' branch
 # egui_wgpu_backend = { path = "../egui_wgpu_backend" }
 # egui_winit_platform = { path = "../egui_winit_platform" }
-cargo-run-wasm = { path = "../cargo-run-wasm" }
