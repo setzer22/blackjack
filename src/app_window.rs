@@ -1,5 +1,5 @@
 use crate::{application::RootViewport, prelude::*};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use winit::{
     event::{Event, WindowEvent},
@@ -66,13 +66,13 @@ impl AppWindow {
 
     fn on_main_events_cleared(&mut self) {
         // Record the frame time at the start of the frame.
-        let frame_start_time = Instant::now();
+        let frame_start_time = instant::Instant::now();
 
         self.root_viewport.update(&mut self.render_ctx);
         self.root_viewport.render(&mut self.render_ctx);
 
         // Sleep for the remaining time to cap at 60Hz
-        let elapsed = Instant::now().duration_since(frame_start_time);
+        let elapsed = instant::Instant::now().duration_since(frame_start_time);
         let remaining = Duration::from_secs_f32(1.0 / 60.0).saturating_sub(elapsed);
         spin_sleep::sleep(remaining);
     }
