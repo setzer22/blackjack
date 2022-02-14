@@ -28,6 +28,20 @@ impl AppWindow {
             builder.build(&event_loop).expect("Could not build window")
         };
 
+        #[cfg(target_arch = "wasm32")]
+        {
+            use winit::platform::web::WindowExtWebSys;
+    
+            let canvas = window.canvas();
+    
+            let window = web_sys::window().unwrap();
+            let document = window.document().unwrap();
+            let body = document.body().unwrap();
+    
+            body.append_child(&canvas)
+                .expect("Append canvas to HTML body");
+        }
+
         let window_size = window.inner_size();
         let scale_factor = window.scale_factor();
         let render_ctx = RenderContext::new(&window).await;

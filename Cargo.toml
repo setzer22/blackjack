@@ -60,9 +60,7 @@ profiling = "1.0"
 log = "0.4"
 console_log = "0.2"
 wasm-bindgen-futures = "0.4"
-
-
-
+web-sys = { version = "0.3.53" }
 
 [patch.crates-io]
 # NOTE: These patches are only used for development, and should be left
