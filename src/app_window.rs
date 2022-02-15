@@ -1,5 +1,4 @@
 use crate::{application::RootViewport, prelude::*};
-use std::time::Duration;
 
 use winit::{
     event::{Event, WindowEvent},
@@ -64,7 +63,18 @@ impl AppWindow {
         )
     }
 
+    #[cfg(target_arch = "wasm32")]
     fn on_main_events_cleared(&mut self) {
+        //TODO request_animation_frame ?
+        self.root_viewport.update(&mut self.render_ctx);
+        self.root_viewport.render(&mut self.render_ctx);
+
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn on_main_events_cleared(&mut self) {
+        use std::time::Duration;
+
         // Record the frame time at the start of the frame.
         let frame_start_time = instant::Instant::now();
 
