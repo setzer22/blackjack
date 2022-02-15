@@ -1,15 +1,15 @@
 use super::halfedge::HalfEdgeMesh;
+use crate::asset_manager::asset_manager;
 use crate::prelude::*;
 
 /// Loads a wavefront obj file from a given path and returns a Rend3 mesh
 /// @CopyPaste from wavefront_obj.rs
 fn load_obj_mesh(path: &str) -> r3::Mesh {
-    use std::fs::File;
     use std::io::BufReader;
     use wavefront_rs::obj;
     use wavefront_rs::obj::entity::Entity;
 
-    let mut reader = BufReader::new(File::open(path).expect("File at path"));
+    let mut reader = BufReader::new(asset_manager::get(path).expect("File at path"));
     let mut positions = vec![];
     let mut indices = vec![];
 

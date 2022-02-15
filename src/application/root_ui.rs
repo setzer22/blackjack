@@ -8,6 +8,22 @@ pub enum AppRootAction {
 }
 
 impl RootViewport {
+
+    #[cfg(target_arch = "wasm32")]
+    pub fn top_menubar(&mut self, ui: &mut egui::Ui) -> Option<AppRootAction> {
+        // When set, will load a new editor state at the end of this function
+        egui::menu::bar(ui, |ui| {
+            ui.menu_button("Help", |ui| {
+                if ui.button("Diagnosics").clicked() {
+                    self.diagnostics_open = true;
+                }
+            });
+        });
+
+        None
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn top_menubar(&mut self, ui: &mut egui::Ui) -> Option<AppRootAction> {
         let mut action = None;
 

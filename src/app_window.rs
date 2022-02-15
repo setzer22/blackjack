@@ -1,5 +1,4 @@
 use crate::{application::RootViewport, prelude::*};
-use std::time::{Duration, Instant};
 
 use winit::{
     event::{Event, WindowEvent},
@@ -20,7 +19,7 @@ pub struct AppWindow {
 }
 
 impl AppWindow {
-    pub fn new() -> (Self, EventLoop<()>) {
+    pub async fn new() -> (Self, EventLoop<()>) {
         let event_loop = winit::event_loop::EventLoop::new();
         let window = {
             let mut builder = winit::window::WindowBuilder::new();
@@ -28,9 +27,34 @@ impl AppWindow {
             builder.build(&event_loop).expect("Could not build window")
         };
 
+        #[cfg(target_arch = "wasm32")]
+        {
+            use winit::platform::web::WindowExtWebSys;
+            use wasm_bindgen::closure::Closure;
+            use wasm_bindgen::JsCast;
+    
+            let canvas = window.canvas();
+    
+            let window = web_sys::window().unwrap();
+            let document = window.document().unwrap();
+            let body = document.body().unwrap();
+    
+            body.append_child(&canvas)
+                .expect("Append canvas to HTML body");
+
+            // By default, right-clicks open a context menu.
+            // We don't want to do that (right clicks is handled by egui):
+            let event_name = "contextmenu";
+            let closure = Closure::wrap(Box::new(move |event: web_sys::MouseEvent| {
+                event.prevent_default();
+            }) as Box<dyn FnMut(_)>);
+            canvas.add_event_listener_with_callback(event_name, closure.as_ref().unchecked_ref()).unwrap();
+            closure.forget();
+        }
+
         let window_size = window.inner_size();
         let scale_factor = window.scale_factor();
-        let render_ctx = RenderContext::new(&window);
+        let render_ctx = RenderContext::new(&window).await;
         let root_viewport = RootViewport::new(
             &render_ctx.renderer,
             UVec2::new(window_size.width, window_size.height),
@@ -50,15 +74,26 @@ impl AppWindow {
         )
     }
 
+    #[cfg(target_arch = "wasm32")]
     fn on_main_events_cleared(&mut self) {
+        //TODO request_animation_frame ?
+        self.root_viewport.update(&mut self.render_ctx);
+        self.root_viewport.render(&mut self.render_ctx);
+
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn on_main_events_cleared(&mut self) {
+        use std::time::Duration;
+
         // Record the frame time at the start of the frame.
-        let frame_start_time = Instant::now();
+        let frame_start_time = instant::Instant::now();
 
         self.root_viewport.update(&mut self.render_ctx);
         self.root_viewport.render(&mut self.render_ctx);
 
         // Sleep for the remaining time to cap at 60Hz
-        let elapsed = Instant::now().duration_since(frame_start_time);
+        let elapsed = instant::Instant::now().duration_since(frame_start_time);
         let remaining = Duration::from_secs_f32(1.0 / 60.0).saturating_sub(elapsed);
         spin_sleep::sleep(remaining);
     }

@@ -4,7 +4,7 @@ use crate::{prelude::*, rendergraph::grid_routine::GridRoutine};
 
 use glam::Mat4;
 use rend3_routine::pbr::PbrRoutine;
-use wgpu::{Features, Surface, TextureFormat};
+use wgpu::{Surface, TextureFormat};
 
 pub struct RenderContext {
     pub renderer: Arc<r3::Renderer>,
@@ -21,14 +21,15 @@ pub struct RenderContext {
 }
 
 impl RenderContext {
-    pub fn new(window: &winit::window::Window) -> Self {
+    pub async fn new(window: &winit::window::Window) -> Self {
         let window_size = window.inner_size();
-        let iad = pollster::block_on(rend3::create_iad(
+        let iad = rend3::create_iad(
             None,
             None,
             None,
             None,
-        ))
+        )
+        .await
         .unwrap();
 
         let surface = Arc::new(unsafe { iad.instance.create_surface(&window) });

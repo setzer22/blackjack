@@ -2,6 +2,16 @@ use super::*;
 use crate::prelude::*;
 use egui::*;
 
+#[cfg(target_arch = "wasm32")]
+fn save_file() -> Option<std::path::PathBuf> {
+    None
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn save_file() -> Option<std::path::PathBuf> {
+    rfd::FileDialog::new().save_file()
+}
+
 impl InputParam {
     pub fn value_widget(&mut self, name: &str, ui: &mut Ui) {
         match &mut self.value {
@@ -69,7 +79,7 @@ impl InputParam {
                 ui.label(name);
                 ui.horizontal(|ui| {
                     if ui.button("Select").clicked() {
-                        *path = rfd::FileDialog::new().save_file();
+                        *path = save_file();
                     }
                     if let Some(ref path) = path {
                         ui.label(
