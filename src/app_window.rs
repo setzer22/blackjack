@@ -30,6 +30,8 @@ impl AppWindow {
         #[cfg(target_arch = "wasm32")]
         {
             use winit::platform::web::WindowExtWebSys;
+            use wasm_bindgen::closure::Closure;
+            use wasm_bindgen::JsCast;
     
             let canvas = window.canvas();
     
@@ -39,6 +41,15 @@ impl AppWindow {
     
             body.append_child(&canvas)
                 .expect("Append canvas to HTML body");
+
+            // By default, right-clicks open a context menu.
+            // We don't want to do that (right clicks is handled by egui):
+            let event_name = "contextmenu";
+            let closure = Closure::wrap(Box::new(move |event: web_sys::MouseEvent| {
+                event.prevent_default();
+            }) as Box<dyn FnMut(_)>);
+            canvas.add_event_listener_with_callback(event_name, closure.as_ref().unchecked_ref()).unwrap();
+            closure.forget();
         }
 
         let window_size = window.inner_size();
