@@ -28,6 +28,8 @@ pub mod math;
 /// General utility methods and helper traits
 pub mod utils;
 
+pub mod asset_manager;
+
 async fn async_main() {
     // Setup logging
     #[cfg(not(target_arch = "wasm32"))]
