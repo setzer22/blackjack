@@ -1,4 +1,4 @@
-use crate::{graph::graph_editor_egui::editor_state::GraphEditorState, prelude::*};
+use crate::prelude::*;
 use egui::*;
 
 #[derive(Clone, Copy, PartialEq, Eq)]

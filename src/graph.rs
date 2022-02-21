@@ -1,8 +1,5 @@
-/// The main type definitions of the graph data structure
-pub mod graph_types;
-
-/// The egui-based node editor
-pub mod graph_editor_egui;
+/// Provides implementations to the traits in `egui_node_graph` specific to blackjack
+pub mod node_graph_custom;
 
 /// A list of instructions to procedurally generate a mesh
 pub mod poly_asm;

@@ -1,4 +1,5 @@
 use super::*;
+use egui_node_graph::{InputParam, InputParamKind, NodeTemplateIter, NodeTemplateTrait};
 use strum::IntoEnumIterator;
 
 #[derive(Clone, Copy, strum_macros::EnumIter)]
@@ -13,6 +14,34 @@ pub enum GraphNodeType {
     MergeMeshes,
     ExportObj,
     MeshSubdivide,
+}
+
+pub enum InputDescriptor {
+    Vector {
+        default: Vec3,
+    },
+    Mesh,
+    Selection,
+    Scalar {
+        default: f32,
+        min: f32,
+        max: f32,
+    },
+    Enum {
+        default: Option<u32>,
+        values: Vec<String>,
+    },
+    NewFile,
+}
+
+pub struct OutputDescriptor(DataType);
+
+pub struct NodeDescriptor {
+    pub op_name: String,
+    pub label: String,
+    pub inputs: Vec<(String, InputDescriptor)>,
+    pub outputs: Vec<(String, OutputDescriptor)>,
+    pub is_executable: bool,
 }
 
 macro_rules! in_vector {
@@ -219,5 +248,103 @@ impl GraphNodeType {
             GraphNodeType::ExportObj => "ExportObj",
             GraphNodeType::MeshSubdivide => "MeshSubdivide",
         }
+    }
+}
+
+impl NodeTemplateTrait for GraphNodeType {
+    type NodeData = super::NodeData;
+
+    type DataType = super::DataType;
+
+    type ValueType = super::ValueType;
+
+    fn node_finder_label(&self) -> &str {
+        self.type_label()
+    }
+
+    fn node_graph_label(&self) -> String {
+        self.type_label().into()
+    }
+
+    fn user_data(&self) -> Self::NodeData {
+        Self::NodeData {
+            op_name: self.op_name().into(),
+            is_executable: match self {
+                GraphNodeType::ExportObj => true,
+                _ => false,
+            },
+        }
+    }
+
+    fn build_node(
+        &self,
+        graph: &mut egui_node_graph::Graph<Self::NodeData, Self::DataType, Self::ValueType>,
+        node_id: egui_node_graph::NodeId,
+    ) {
+        let descriptor = self.to_descriptor();
+        for input in descriptor.inputs {
+            let (typ, value, kind, shown_inline) = match input.1 {
+                InputDescriptor::Vector { default } => (
+                    DataType::Vector,
+                    ValueType::Vector(default),
+                    InputParamKind::ConnectionOrConstant,
+                    true,
+                ),
+                InputDescriptor::Mesh => (
+                    DataType::Mesh,
+                    ValueType::None,
+                    InputParamKind::ConnectionOnly,
+                    true,
+                ),
+                InputDescriptor::Selection => (
+                    DataType::Selection,
+                    ValueType::Selection {
+                        text: "".into(),
+                        selection: Some(vec![]),
+                    },
+                    InputParamKind::ConnectionOnly,
+                    true,
+                ),
+                InputDescriptor::Scalar { default, min, max } => (
+                    DataType::Scalar,
+                    ValueType::Scalar {
+                        value: default,
+                        min,
+                        max,
+                    },
+                    InputParamKind::ConnectionOrConstant,
+                    true,
+                ),
+                InputDescriptor::Enum { default, values } => (
+                    DataType::Enum,
+                    ValueType::Enum {
+                        values,
+                        selection: default,
+                    },
+                    InputParamKind::ConstantOnly,
+                    true,
+                ),
+                InputDescriptor::NewFile => (
+                    DataType::NewFile,
+                    ValueType::NewFile { path: None },
+                    InputParamKind::ConstantOnly,
+                    true,
+                ),
+            };
+            graph.add_input_param(node_id, input.0, typ, value, kind, shown_inline);
+        }
+
+        for output in descriptor.outputs {
+            graph.add_output_param(node_id, output.0, output.1 .0);
+        }
+    }
+}
+
+pub struct AllNodeTemplates;
+impl NodeTemplateIter for AllNodeTemplates {
+    type Item = GraphNodeType;
+
+    fn all_kinds(&self) -> Box<dyn Iterator<Item = &Self::Item> + '_> {
+        Box::new(GraphNodeType::all_types().map(|x| &x))
     }
 }

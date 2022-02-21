@@ -1,9 +1,6 @@
 use anyhow::Error;
 
-use crate::{
-    graph::graph_editor_egui::editor_state::GraphEditorState, prelude::debug_viz::DebugMeshes,
-    prelude::*,
-};
+use crate::{prelude::debug_viz::DebugMeshes, prelude::*};
 
 use super::viewport_split::SplitTree;
 
@@ -42,7 +39,7 @@ impl ApplicationContext {
     pub fn update(
         &mut self,
         egui_ctx: &egui::CtxRef,
-        editor_state: &mut GraphEditorState,
+        editor_state: &mut graph::GraphEditorState,
         render_ctx: &mut RenderContext,
     ) {
         // TODO: Instead of clearing all objects, make the app context own the
@@ -84,8 +81,11 @@ impl ApplicationContext {
         );
     }
 
-    pub fn compile_and_update_mesh(&mut self, editor_state: &GraphEditorState) -> Result<()> {
-        if let Some(active) = editor_state.active_node {
+    pub fn compile_and_update_mesh(
+        &mut self,
+        editor_state: &graph::GraphEditorState,
+    ) -> Result<()> {
+        if let Some(active) = editor_state.user_state.active_node {
             let program = crate::graph::graph_compiler::compile_graph(&editor_state.graph, active)?;
             let mesh = program.execute()?;
             self.mesh = Some(mesh);
@@ -95,8 +95,8 @@ impl ApplicationContext {
         Ok(())
     }
 
-    pub fn run_side_effects(&mut self, editor_state: &mut GraphEditorState) -> Result<()> {
-        if let Some(side_effect) = editor_state.run_side_effect.take() {
+    pub fn run_side_effects(&mut self, editor_state: &mut graph::GraphEditorState) -> Result<()> {
+        if let Some(side_effect) = editor_state.user_state.run_side_effect.take() {
             let program =
                 crate::graph::graph_compiler::compile_graph(&editor_state.graph, side_effect)?;
             // We ignore the result. The program is only executed to produce a

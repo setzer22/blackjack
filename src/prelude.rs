@@ -28,10 +28,6 @@ pub use std::collections::{HashMap, HashSet};
 
 pub use crate::render_context::RenderContext;
 
-pub mod graph {
-    pub use crate::graph::graph_types::*;
-}
-
 pub use crate::mesh::halfedge::*;
 
 pub use crate::mesh::debug_viz;
@@ -39,3 +35,8 @@ pub use crate::mesh::halfedge;
 
 pub use crate::math::*;
 pub use crate::utils::*;
+
+pub mod graph {
+    pub use crate::graph::node_graph_custom::{node_templates::*, *};
+    pub use egui_node_graph::{InputId, Node, NodeId, OutputId};
+}
