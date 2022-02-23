@@ -31,7 +31,7 @@ where
     } else {
         let addr = match graph[param].value() {
             ValueType::Vector(val) => Ok(program.mem_alloc_raw(*val)),
-            ValueType::Scalar { value, min, max } => Ok(program.mem_alloc_raw(*value)),
+            ValueType::Scalar { value, .. } => Ok(program.mem_alloc_raw(*value)),
             ValueType::Selection { text: _, selection } => {
                 Ok(program.mem_alloc_raw(selection.clone().ok_or_else(|| {
                     anyhow!("Error parsing selection for parameter {:?}", param_name)

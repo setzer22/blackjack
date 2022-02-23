@@ -1,4 +1,4 @@
-use std::collections::{hash_map::Entry, BTreeSet};
+use std::collections::BTreeSet;
 
 use anyhow::{anyhow, bail};
 use smallvec::SmallVec;

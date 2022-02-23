@@ -1,5 +1,5 @@
 use super::*;
-use egui_node_graph::{InputParam, InputParamKind, NodeTemplateIter, NodeTemplateTrait};
+use egui_node_graph::{InputParamKind, NodeTemplateIter, NodeTemplateTrait};
 use strum::IntoEnumIterator;
 
 #[derive(Clone, Copy, strum_macros::EnumIter)]
@@ -269,10 +269,8 @@ impl NodeTemplateTrait for GraphNodeType {
     fn user_data(&self) -> Self::NodeData {
         Self::NodeData {
             op_name: self.op_name().into(),
-            is_executable: match self {
-                GraphNodeType::ExportObj => true,
-                _ => false,
-            },
+            // TODO: Change this when more nodes are executable
+            is_executable: matches!(self, GraphNodeType::ExportObj),
         }
     }
 
