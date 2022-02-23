@@ -1,6 +1,8 @@
 use crate::prelude::*;
 use egui::RichText;
-use egui_node_graph::{DataTypeTrait, NodeDataTrait, NodeId, NodeResponse, UserResponseTrait};
+use egui_node_graph::{
+    DataTypeTrait, NodeDataTrait, NodeId, NodeResponse, UserResponseTrait, WidgetValueTrait,
+};
 use rend3::graph::DataHandle;
 use serde::{Deserialize, Serialize};
 
@@ -8,12 +10,13 @@ use self::node_templates::GraphNodeType;
 
 pub mod node_templates;
 
+#[derive(Clone, Serialize, Deserialize)]
 pub struct NodeData {
-    op_name: String,
-    is_executable: bool,
+    pub op_name: String,
+    pub is_executable: bool,
 }
 
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum DataType {
     Vector,
     Scalar,
@@ -48,7 +51,7 @@ pub enum ValueType {
     },
 }
 
-#[derive(Default)]
+#[derive(Default, Serialize, Deserialize)]
 pub struct CustomGraphState {
     /// When this option is set by the UI, the side effect encoded by the node
     /// will be executed at the start of the next frame.
@@ -126,10 +129,10 @@ impl NodeDataTrait for NodeData {
 
             if can_be_enabled {
                 ui.horizontal(|ui| {
-                    if is_active {
+                    if !is_active {
                         if ui.button("👁 Set active").clicked() {
                             responses.push(NodeResponse::User(CustomNodeResponse::SetActiveNode(
-                                self.node_id,
+                                node_id,
                             )));
                         }
                     } else {
@@ -144,12 +147,84 @@ impl NodeDataTrait for NodeData {
                 });
             }
             // Show 'Run' button for executable nodes
-            if graph[node_id].is_executable() && ui.button("⛭ Run").clicked() {
+            if self.is_executable && ui.button("⛭ Run").clicked() {
                 responses.push(NodeResponse::User(CustomNodeResponse::RunNodeSideEffect(
-                    self.node_id,
+                    node_id,
                 )));
             }
         });
         responses
+    }
+}
+
+impl WidgetValueTrait for ValueType {
+    fn value_widget(&mut self, param_name: &str, ui: &mut egui::Ui) {
+        match self {
+            ValueType::Vector(vector) => {
+                ui.label(param_name);
+
+                ui.horizontal(|ui| {
+                    ui.label("x");
+                    ui.add(egui::DragValue::new(&mut vector.x).speed(0.1));
+                    ui.label("y");
+                    ui.add(egui::DragValue::new(&mut vector.y).speed(0.1));
+                    ui.label("z");
+                    ui.add(egui::DragValue::new(&mut vector.z).speed(0.1));
+                });
+            }
+            ValueType::Scalar { value, min, max } => {
+                ui.horizontal(|ui| {
+                    ui.label(param_name);
+                    ui.add(egui::Slider::new(value, *min..=*max));
+                });
+            }
+            ValueType::Selection { text, selection } => {
+                if ui.text_edit_singleline(text).changed() {
+                    *selection = text
+                        .split(',')
+                        .map(|x| {
+                            x.parse::<u32>()
+                                .map_err(|_| anyhow::anyhow!("Cannot parse number"))
+                        })
+                        .collect::<Result<Vec<_>>>()
+                        .ok();
+                }
+            }
+            ValueType::None => {
+                ui.label(param_name);
+            }
+            ValueType::Enum { values, selection } => {
+                let selected = if let Some(selection) = selection {
+                    values[*selection as usize].clone()
+                } else {
+                    "".to_owned()
+                };
+                egui::ComboBox::from_label(param_name)
+                    .selected_text(selected)
+                    .show_ui(ui, |ui| {
+                        for (idx, value) in values.iter().enumerate() {
+                            ui.selectable_value(selection, Some(idx as u32), value);
+                        }
+                    });
+            }
+            ValueType::NewFile { path } => {
+                ui.label(param_name);
+                ui.horizontal(|ui| {
+                    if ui.button("Select").clicked() {
+                        *path = rfd::FileDialog::new().save_file();
+                    }
+                    if let Some(ref path) = path {
+                        ui.label(
+                            path.clone()
+                                .into_os_string()
+                                .into_string()
+                                .unwrap_or_else(|_| "<Invalid string>".to_owned()),
+                        );
+                    } else {
+                        ui.label("No file selected");
+                    }
+                });
+            }
+        }
     }
 }

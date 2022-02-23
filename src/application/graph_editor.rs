@@ -1,7 +1,4 @@
-use crate::{
-    app_window::input::viewport_relative_position,
-    prelude::*,
-};
+use crate::{app_window::input::viewport_relative_position, prelude::*};
 use egui_wgpu_backend::{RenderPass, ScreenDescriptor};
 use egui_winit_platform::{Platform, PlatformDescriptor};
 
@@ -147,8 +144,22 @@ impl GraphEditor {
 
         let ctx = self.platform.context();
 
-        // WIP: Widget value trait not yet implemented
-        self.state.draw_graph_editor(&ctx, graph::AllNodeTemplates);
+        let responses = self.state.draw_graph_editor(&ctx, graph::AllNodeTemplates);
+        for response in responses.node_responses {
+            if let egui_node_graph::NodeResponse::User(x) = response {
+                match x {
+                    graph::CustomNodeResponse::SetActiveNode(n) => {
+                        self.state.user_state.active_node = Some(n)
+                    }
+                    graph::CustomNodeResponse::ClearActiveNode => {
+                        self.state.user_state.active_node = None
+                    }
+                    graph::CustomNodeResponse::RunNodeSideEffect(n) => {
+                        self.state.user_state.run_side_effect = Some(n)
+                    }
+                }
+            }
+        }
 
         // Debug mouse pointer position
         // -- This is useful when mouse events are not being interpreted correctly.

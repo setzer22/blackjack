@@ -1,5 +1,6 @@
 use crate::prelude::*;
 use egui::*;
+use egui_node_graph::WidgetValueTrait;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum InspectorTab {
@@ -49,7 +50,7 @@ impl InspectorTabs {
         &mut self,
         ui: &mut Ui,
         mesh: Option<&HalfEdgeMesh>,
-        editor_state: &mut GraphEditorState,
+        editor_state: &mut graph::GraphEditorState,
     ) {
         ui.horizontal(|ui| {
             ui.selectable_value(
@@ -80,7 +81,7 @@ pub fn tiny_checkbox(ui: &mut Ui, value: &mut bool) {
 }
 
 impl PropertiesTab {
-    fn ui(&self, ui: &mut Ui, editor_state: &mut GraphEditorState) {
+    fn ui(&self, ui: &mut Ui, editor_state: &mut graph::GraphEditorState) {
         let graph = &mut editor_state.graph;
         if let Some(node) = editor_state.selected_node {
             let node = &graph[node];
@@ -92,7 +93,7 @@ impl PropertiesTab {
                     } else {
                         ui.horizontal(|ui| {
                             tiny_checkbox(ui, &mut graph[param].shown_inline);
-                            graph[param].value_widget(&param_name, ui);
+                            graph[param].value.value_widget(&param_name, ui);
                         });
                     }
                 }

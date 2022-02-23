@@ -344,7 +344,7 @@ pub struct AllNodeTemplates;
 impl NodeTemplateIter for AllNodeTemplates {
     type Item = GraphNodeType;
 
-    fn all_kinds(&self) -> Box<dyn Iterator<Item = &Self::Item> + '_> {
-        Box::new(GraphNodeType::all_types().map(|x| &x))
+    fn all_kinds(&self) -> Vec<Self::Item> {
+        GraphNodeType::all_types().collect()
     }
 }
