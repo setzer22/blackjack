@@ -7,6 +7,8 @@ use egui_node_graph::PanZoom;
 use serde::{Deserialize, Serialize};
 use slotmap::SecondaryMap;
 
+/// We don't serialize the whole editor state. Instead, we serialize just a few
+/// select fields.
 #[derive(Serialize, Deserialize)]
 struct SerializedEditorState {
     pub graph: graph::Graph,
