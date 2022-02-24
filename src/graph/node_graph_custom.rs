@@ -9,12 +9,25 @@ use self::node_templates::GraphNodeType;
 
 pub mod node_templates;
 
+/// A generic egui_node_graph graph, with blackjack-specific parameters
+pub type Graph = egui_node_graph::Graph<NodeData, DataType, ValueType>;
+/// The graph editor state, with blackjack-specific parameters
+pub type GraphEditorState = egui_node_graph::GraphEditorState<
+    NodeData,
+    DataType,
+    ValueType,
+    GraphNodeType,
+    CustomGraphState,
+>;
+
+/// Blackjack-specific per-node data.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct NodeData {
     pub op_name: String,
     pub is_executable: bool,
 }
 
+/// Blackjack-specific graph data types.
 #[derive(Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum DataType {
     Vector,
@@ -26,6 +39,7 @@ pub enum DataType {
     NewFile,
 }
 
+/// Blackjack-specific constant types (inline widget)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ValueType {
     /// Used for parameters that can't have a value because they only accept
@@ -50,6 +64,15 @@ pub enum ValueType {
     },
 }
 
+/// Blackjack-specific node responses (graph side-effects)
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CustomNodeResponse {
+    SetActiveNode(NodeId),
+    ClearActiveNode,
+    RunNodeSideEffect(NodeId),
+}
+
+/// Blackjack-specific global graph state
 #[derive(Default, Serialize, Deserialize)]
 pub struct CustomGraphState {
     /// When this option is set by the UI, the side effect encoded by the node
@@ -84,24 +107,9 @@ impl DataTypeTrait for DataType {
     }
 }
 
-pub type Graph = egui_node_graph::Graph<NodeData, DataType, ValueType>;
-pub type GraphEditorState = egui_node_graph::GraphEditorState<
-    NodeData,
-    DataType,
-    ValueType,
-    GraphNodeType,
-    CustomGraphState,
->;
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum CustomNodeResponse {
-    SetActiveNode(NodeId),
-    ClearActiveNode,
-    RunNodeSideEffect(NodeId),
-}
-
 impl UserResponseTrait for CustomNodeResponse {}
 
+/// The node data trait can be used to insert a custom UI inside nodes
 impl NodeDataTrait for NodeData {
     type Response = CustomNodeResponse;
     type UserState = CustomGraphState;
@@ -156,6 +164,7 @@ impl NodeDataTrait for NodeData {
     }
 }
 
+/// The widget value trait is used to determine how to display each [`ValueType`]
 impl WidgetValueTrait for ValueType {
     fn value_widget(&mut self, param_name: &str, ui: &mut egui::Ui) {
         match self {
@@ -223,6 +232,26 @@ impl WidgetValueTrait for ValueType {
                         ui.label("No file selected");
                     }
                 });
+            }
+        }
+    }
+}
+
+/// Blackjack's custom draw node graph function. It defers to egui_node_graph to
+/// draw the graph itself, then interprets any responses it got and applies the
+/// required side effects.
+pub fn draw_node_graph(ctx: &egui::CtxRef, state: &mut GraphEditorState) {
+    let responses = state.draw_graph_editor(ctx, graph::AllNodeTemplates);
+    for response in responses.node_responses {
+        if let egui_node_graph::NodeResponse::User(x) = response {
+            match x {
+                graph::CustomNodeResponse::SetActiveNode(n) => {
+                    state.user_state.active_node = Some(n)
+                }
+                graph::CustomNodeResponse::ClearActiveNode => state.user_state.active_node = None,
+                graph::CustomNodeResponse::RunNodeSideEffect(n) => {
+                    state.user_state.run_side_effect = Some(n)
+                }
             }
         }
     }

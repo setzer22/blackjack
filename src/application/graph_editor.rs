@@ -143,23 +143,7 @@ impl GraphEditor {
         self.platform.begin_frame();
 
         let ctx = self.platform.context();
-
-        let responses = self.state.draw_graph_editor(&ctx, graph::AllNodeTemplates);
-        for response in responses.node_responses {
-            if let egui_node_graph::NodeResponse::User(x) = response {
-                match x {
-                    graph::CustomNodeResponse::SetActiveNode(n) => {
-                        self.state.user_state.active_node = Some(n)
-                    }
-                    graph::CustomNodeResponse::ClearActiveNode => {
-                        self.state.user_state.active_node = None
-                    }
-                    graph::CustomNodeResponse::RunNodeSideEffect(n) => {
-                        self.state.user_state.run_side_effect = Some(n)
-                    }
-                }
-            }
-        }
+        graph::draw_node_graph(&ctx, &mut self.state);
 
         // Debug mouse pointer position
         // -- This is useful when mouse events are not being interpreted correctly.
