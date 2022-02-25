@@ -2,10 +2,8 @@ use crate::{app_window::input::viewport_relative_position, prelude::*};
 use egui_wgpu_backend::{RenderPass, ScreenDescriptor};
 use egui_winit_platform::{Platform, PlatformDescriptor};
 
-use crate::graph::graph_editor_egui::editor_state::GraphEditorState;
-
 pub struct GraphEditor {
-    pub state: GraphEditorState,
+    pub state: graph::GraphEditorState,
     pub platform: Platform,
     pub renderpass: RenderPass,
     pub raw_mouse_position: Option<egui::Pos2>,
@@ -23,7 +21,10 @@ impl GraphEditor {
     ) -> Self {
         Self {
             // Set default zoom to the inverse of ui scale to preserve dpi
-            state: GraphEditorState::new(1.0 / parent_scale),
+            state: graph::GraphEditorState::new(
+                1.0 / parent_scale,
+                graph::CustomGraphState::default(),
+            ),
             platform: Platform::new(PlatformDescriptor {
                 // The width here is not really relevant, and will be reset on
                 // the next resize event.
@@ -142,8 +143,7 @@ impl GraphEditor {
         self.platform.begin_frame();
 
         let ctx = self.platform.context();
-
-        crate::graph::graph_editor_egui::draw_graph_editor(&ctx, &mut self.state);
+        graph::draw_node_graph(&ctx, &mut self.state);
 
         // Debug mouse pointer position
         // -- This is useful when mouse events are not being interpreted correctly.

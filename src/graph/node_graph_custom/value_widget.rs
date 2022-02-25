@@ -1,12 +1,11 @@
 use super::*;
-use crate::prelude::*;
-use egui::*;
 
-impl InputParam {
-    pub fn value_widget(&mut self, name: &str, ui: &mut Ui) {
-        match &mut self.value {
-            InputParamValue::Vector(vector) => {
-                ui.label(name);
+/// The widget value trait is used to determine how to display each [`ValueType`]
+impl WidgetValueTrait for ValueType {
+    fn value_widget(&mut self, param_name: &str, ui: &mut egui::Ui) {
+        match self {
+            ValueType::Vector(vector) => {
+                ui.label(param_name);
 
                 ui.horizontal(|ui| {
                     ui.label("x");
@@ -17,26 +16,13 @@ impl InputParam {
                     ui.add(egui::DragValue::new(&mut vector.z).speed(0.1));
                 });
             }
-            InputParamValue::Scalar(scalar) => {
-                let mut min = f32::NEG_INFINITY;
-                let mut max = f32::INFINITY;
-                for metadata in &self.metadata {
-                    match metadata {
-                        InputParamMetadata::MinMaxScalar {
-                            min: min_val,
-                            max: max_val,
-                        } => {
-                            min = *min_val;
-                            max = *max_val;
-                        }
-                    }
-                }
+            ValueType::Scalar { value, min, max } => {
                 ui.horizontal(|ui| {
-                    ui.label(name);
-                    ui.add(Slider::new(scalar, min..=max));
+                    ui.label(param_name);
+                    ui.add(egui::Slider::new(value, *min..=*max));
                 });
             }
-            InputParamValue::Selection { text, selection } => {
+            ValueType::Selection { text, selection } => {
                 if ui.text_edit_singleline(text).changed() {
                     *selection = text
                         .split(',')
@@ -48,16 +34,16 @@ impl InputParam {
                         .ok();
                 }
             }
-            InputParamValue::None => {
-                ui.label(name);
+            ValueType::None => {
+                ui.label(param_name);
             }
-            InputParamValue::Enum { values, selection } => {
+            ValueType::Enum { values, selection } => {
                 let selected = if let Some(selection) = selection {
                     values[*selection as usize].clone()
                 } else {
                     "".to_owned()
                 };
-                ComboBox::from_label(name)
+                egui::ComboBox::from_label(param_name)
                     .selected_text(selected)
                     .show_ui(ui, |ui| {
                         for (idx, value) in values.iter().enumerate() {
@@ -65,8 +51,8 @@ impl InputParam {
                         }
                     });
             }
-            InputParamValue::NewFile { path } => {
-                ui.label(name);
+            ValueType::NewFile { path } => {
+                ui.label(param_name);
                 ui.horizontal(|ui| {
                     if ui.button("Select").clicked() {
                         *path = rfd::FileDialog::new().save_file();

@@ -23,26 +23,26 @@ where
         if let Some(addr) = outputs_cache.get(output) {
             Ok(addr)
         } else {
-            gen_code_for_node(program, graph, graph[output].node(), outputs_cache)?;
+            gen_code_for_node(program, graph, graph[output].node, outputs_cache)?;
             Ok(outputs_cache
                 .get(output)
                 .expect("Codegen should populate the cache"))
         }
     } else {
         let addr = match graph[param].value() {
-            InputParamValue::Vector(val) => Ok(program.mem_alloc_raw(val)),
-            InputParamValue::Scalar(val) => Ok(program.mem_alloc_raw(val)),
-            InputParamValue::Selection { text: _, selection } => {
-                Ok(program.mem_alloc_raw(selection.ok_or_else(|| {
+            ValueType::Vector(val) => Ok(program.mem_alloc_raw(*val)),
+            ValueType::Scalar { value, .. } => Ok(program.mem_alloc_raw(*value)),
+            ValueType::Selection { text: _, selection } => {
+                Ok(program.mem_alloc_raw(selection.clone().ok_or_else(|| {
                     anyhow!("Error parsing selection for parameter {:?}", param_name)
                 })?))
             }
-            InputParamValue::None => Err(anyhow!(
+            ValueType::None => Err(anyhow!(
                 "Parameter {} of node {:?} should have a connection",
                 param_name,
                 node_id
             )),
-            InputParamValue::Enum { values, selection } => {
+            ValueType::Enum { values, selection } => {
                 let selection = selection.ok_or_else(|| {
                     anyhow!("No selection has been made for parameter {}", param_name)
                 })?;
@@ -51,8 +51,9 @@ where
                 })?;
                 Ok(program.mem_alloc_raw(value))
             }
-            InputParamValue::NewFile { path } => {
-                let path: std::path::PathBuf = path.ok_or_else(|| anyhow!("Path is not set"))?;
+            ValueType::NewFile { path } => {
+                let path: std::path::PathBuf =
+                    path.clone().ok_or_else(|| anyhow!("Path is not set"))?;
                 Ok(program.mem_alloc_raw(path))
             }
         }?;
@@ -98,7 +99,7 @@ fn gen_code_for_node(
         };
     }
 
-    match graph[node_id].op_name.clone().as_str() {
+    match graph[node_id].user_data.op_name.clone().as_str() {
         "MakeBox" => {
             let operation = PolyAsmInstruction::MakeCube {
                 origin: input!("origin"),

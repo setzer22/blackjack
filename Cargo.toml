@@ -19,6 +19,8 @@ wavefront_rs = { git = "https://github.com/setzer22/wavefront_rs", rev = "e303f3
 egui_winit_platform = { git = "https://github.com/hasenbanck/egui_winit_platform", rev = "eea97f778a17c7f97f3cf1758f3ebb5ff6251e11" }
 rend3 = { git = "https://github.com/BVE-Reborn/rend3", rev = "6bf09d0dc4aea986bb6ffd5207b14a3ad1714cc2" }
 rend3-routine = { git = "https://github.com/BVE-Reborn/rend3", rev = "6bf09d0dc4aea986bb6ffd5207b14a3ad1714cc2" }
+# egui_node_graph = { git = "https://github.com/setzer22/egui_node_graph", rev = "e16968256aa9cffcd81704809019b082e68f266a" }
+egui_node_graph = { version = "*", features = ["persistence"] }
 
 # Crates.io crates
 egui = { version = "0.16", features = ["persistence"] }
@@ -52,4 +54,5 @@ profiling = { version = "1.0", features = ["profile-with-tracy"] }
 # commented out in any commits to the 'main' branch
 # egui_wgpu_backend = { path = "../egui_wgpu_backend" }
 # egui_winit_platform = { path = "../egui_winit_platform" }
+egui_node_graph = { path = "../egui_node_graph/egui_node_graph", features = ["persistence"] }
 
