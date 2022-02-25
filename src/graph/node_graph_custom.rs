@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use self::node_templates::GraphNodeType;
 
 pub mod node_templates;
+pub mod value_widget;
 
 /// A generic egui_node_graph graph, with blackjack-specific parameters
 pub type Graph = egui_node_graph::Graph<NodeData, DataType, ValueType>;
@@ -164,87 +165,22 @@ impl NodeDataTrait for NodeData {
     }
 }
 
-/// The widget value trait is used to determine how to display each [`ValueType`]
-impl WidgetValueTrait for ValueType {
-    fn value_widget(&mut self, param_name: &str, ui: &mut egui::Ui) {
-        match self {
-            ValueType::Vector(vector) => {
-                ui.label(param_name);
-
-                ui.horizontal(|ui| {
-                    ui.label("x");
-                    ui.add(egui::DragValue::new(&mut vector.x).speed(0.1));
-                    ui.label("y");
-                    ui.add(egui::DragValue::new(&mut vector.y).speed(0.1));
-                    ui.label("z");
-                    ui.add(egui::DragValue::new(&mut vector.z).speed(0.1));
-                });
-            }
-            ValueType::Scalar { value, min, max } => {
-                ui.horizontal(|ui| {
-                    ui.label(param_name);
-                    ui.add(egui::Slider::new(value, *min..=*max));
-                });
-            }
-            ValueType::Selection { text, selection } => {
-                if ui.text_edit_singleline(text).changed() {
-                    *selection = text
-                        .split(',')
-                        .map(|x| {
-                            x.parse::<u32>()
-                                .map_err(|_| anyhow::anyhow!("Cannot parse number"))
-                        })
-                        .collect::<Result<Vec<_>>>()
-                        .ok();
-                }
-            }
-            ValueType::None => {
-                ui.label(param_name);
-            }
-            ValueType::Enum { values, selection } => {
-                let selected = if let Some(selection) = selection {
-                    values[*selection as usize].clone()
-                } else {
-                    "".to_owned()
-                };
-                egui::ComboBox::from_label(param_name)
-                    .selected_text(selected)
-                    .show_ui(ui, |ui| {
-                        for (idx, value) in values.iter().enumerate() {
-                            ui.selectable_value(selection, Some(idx as u32), value);
-                        }
-                    });
-            }
-            ValueType::NewFile { path } => {
-                ui.label(param_name);
-                ui.horizontal(|ui| {
-                    if ui.button("Select").clicked() {
-                        *path = rfd::FileDialog::new().save_file();
-                    }
-                    if let Some(ref path) = path {
-                        ui.label(
-                            path.clone()
-                                .into_os_string()
-                                .into_string()
-                                .unwrap_or_else(|_| "<Invalid string>".to_owned()),
-                        );
-                    } else {
-                        ui.label("No file selected");
-                    }
-                });
-            }
-        }
-    }
-}
-
 /// Blackjack's custom draw node graph function. It defers to egui_node_graph to
 /// draw the graph itself, then interprets any responses it got and applies the
 /// required side effects.
 pub fn draw_node_graph(ctx: &egui::CtxRef, state: &mut GraphEditorState) {
     let responses = state.draw_graph_editor(ctx, graph::AllNodeTemplates);
     for response in responses.node_responses {
-        if let egui_node_graph::NodeResponse::User(x) = response {
-            match x {
+        match response {
+            NodeResponse::DeleteNode(node_id) => {
+                if state.user_state.active_node == Some(node_id) {
+                    state.user_state.active_node = None;
+                }
+                if state.user_state.run_side_effect == Some(node_id) {
+                    state.user_state.run_side_effect = None;
+                }
+            }
+            NodeResponse::User(response) => match response {
                 graph::CustomNodeResponse::SetActiveNode(n) => {
                     state.user_state.active_node = Some(n)
                 }
@@ -252,7 +188,8 @@ pub fn draw_node_graph(ctx: &egui::CtxRef, state: &mut GraphEditorState) {
                 graph::CustomNodeResponse::RunNodeSideEffect(n) => {
                     state.user_state.run_side_effect = Some(n)
                 }
-            }
+            },
+            _ => {}
         }
     }
 }
