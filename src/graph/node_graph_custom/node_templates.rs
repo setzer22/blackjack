@@ -16,203 +16,7 @@ pub enum GraphNodeType {
     MeshSubdivide,
 }
 
-pub enum InputDescriptor {
-    Vector {
-        default: Vec3,
-    },
-    Mesh,
-    Selection,
-    Scalar {
-        default: f32,
-        min: f32,
-        max: f32,
-    },
-    Enum {
-        default: Option<u32>,
-        values: Vec<String>,
-    },
-    NewFile,
-}
-
-pub struct OutputDescriptor(DataType);
-
-pub struct NodeDescriptor {
-    pub op_name: String,
-    pub label: String,
-    pub inputs: Vec<(String, InputDescriptor)>,
-    pub outputs: Vec<(String, OutputDescriptor)>,
-    pub is_executable: bool,
-}
-
-macro_rules! in_vector {
-    ($name:expr, $default:expr) => {
-        (
-            $name.to_owned(),
-            InputDescriptor::Vector { default: $default },
-        )
-    };
-}
-
-macro_rules! in_scalar {
-    ($name:expr, $default:expr, $min:expr, $max:expr) => {
-        (
-            $name.to_owned(),
-            InputDescriptor::Scalar {
-                default: $default,
-                max: $max,
-                min: $min,
-            },
-        )
-    };
-    ($name:expr) => {
-        in_scalar!($name, 0.0, -1.0, 2.0)
-    };
-}
-
-macro_rules! in_mesh {
-    ($name:expr) => {
-        ($name.to_owned(), InputDescriptor::Mesh)
-    };
-}
-
-macro_rules! out_mesh {
-    ($name:expr) => {
-        ($name.to_owned(), OutputDescriptor(DataType::Mesh))
-    };
-}
-
-macro_rules! out_vector {
-    ($name:expr) => {
-        ($name.to_owned(), OutputDescriptor(DataType::Vector))
-    };
-}
-
-macro_rules! in_selection {
-    ($name:expr) => {
-        ($name.to_owned(), InputDescriptor::Selection)
-    };
-}
-
-macro_rules! in_file {
-    ($name:expr) => {
-        ($name.to_owned(), InputDescriptor::NewFile)
-    };
-}
-
-macro_rules! in_enum {
-    ($name:expr, $( $values:expr ),+) => {
-        ($name.to_owned(), InputDescriptor::Enum { default: None, values: vec![$( $values.to_owned() ),+] })
-    };
-    ($name:expr, default $default:expr, $( $values:expr ),+) => {
-        ($name.to_owned(), InputDescriptor::Enum { default: Some($default), values: vec![$( $values.to_owned() ),+] })
-    };
-}
-
 impl GraphNodeType {
-    pub fn to_descriptor(&self) -> NodeDescriptor {
-        let label = self.type_label().into();
-        let op_name = self.op_name().into();
-        match self {
-            GraphNodeType::MakeBox => NodeDescriptor {
-                op_name,
-                label,
-                inputs: vec![
-                    in_vector!("origin", Vec3::ZERO),
-                    in_vector!("size", Vec3::ONE),
-                ],
-                outputs: vec![out_mesh!("out_mesh")],
-                is_executable: false,
-            },
-            GraphNodeType::MakeQuad => NodeDescriptor {
-                op_name,
-                label,
-                inputs: vec![
-                    in_vector!("center", Vec3::ZERO),
-                    in_vector!("normal", Vec3::Y),
-                    in_vector!("right", Vec3::X),
-                    in_vector!("size", Vec3::ONE),
-                ],
-                outputs: vec![out_mesh!("out_mesh")],
-                is_executable: false,
-            },
-            GraphNodeType::BevelEdges => NodeDescriptor {
-                op_name,
-                label,
-                inputs: vec![
-                    in_mesh!("in_mesh"),
-                    in_selection!("edges"),
-                    in_scalar!("amount", 0.0, 0.0, 1.0),
-                ],
-                outputs: vec![out_mesh!("out_mesh")],
-                is_executable: false,
-            },
-            GraphNodeType::ExtrudeFaces => NodeDescriptor {
-                op_name,
-                label,
-                inputs: vec![
-                    in_mesh!("in_mesh"),
-                    in_selection!("faces"),
-                    in_scalar!("amount", 0.0, 0.0, 1.0),
-                ],
-                outputs: vec![out_mesh!("out_mesh")],
-                is_executable: false,
-            },
-            GraphNodeType::ChamferVertices => NodeDescriptor {
-                op_name,
-                label,
-                inputs: vec![
-                    in_mesh!("in_mesh"),
-                    in_selection!("vertices"),
-                    in_scalar!("amount", 0.0, 0.0, 1.0),
-                ],
-                outputs: vec![out_mesh!("out_mesh")],
-                is_executable: false,
-            },
-            GraphNodeType::MakeVector => NodeDescriptor {
-                op_name,
-                label,
-                inputs: vec![in_scalar!("x"), in_scalar!("y"), in_scalar!("z")],
-                outputs: vec![out_vector!("out_vec")],
-                is_executable: false,
-            },
-            GraphNodeType::VectorMath => NodeDescriptor {
-                op_name,
-                label,
-                inputs: vec![
-                    in_enum!("vec_op", "ADD", "SUB", "MUL"),
-                    in_vector!("A", Vec3::ZERO),
-                    in_vector!("B", Vec3::ZERO),
-                ],
-                outputs: vec![out_vector!("out_vec")],
-                is_executable: false,
-            },
-            GraphNodeType::MergeMeshes => NodeDescriptor {
-                op_name,
-                label,
-                inputs: vec![in_mesh!("A"), in_mesh!("B")],
-                outputs: vec![out_mesh!("out_mesh")],
-                is_executable: false,
-            },
-            GraphNodeType::ExportObj => NodeDescriptor {
-                op_name,
-                label,
-                inputs: vec![in_mesh!("mesh"), in_file!("export_path")],
-                outputs: vec![],
-                is_executable: true,
-            },
-            GraphNodeType::MeshSubdivide => NodeDescriptor {
-                op_name,
-                label,
-                inputs: vec![
-                    in_mesh!("in_mesh"),
-                    in_scalar!("iterations", 1.0, 1.0, 7.0),
-                    in_enum!("technique", default 0, "linear", "catmull-clark"),
-                ],
-                outputs: vec![out_mesh!("out_mesh")],
-                is_executable: false,
-            },
-        }
-    }
 
     pub fn all_types() -> impl Iterator<Item = GraphNodeType> {
         GraphNodeType::iter()
@@ -279,61 +83,122 @@ impl NodeTemplateTrait for GraphNodeType {
         graph: &mut egui_node_graph::Graph<Self::NodeData, Self::DataType, Self::ValueType>,
         node_id: egui_node_graph::NodeId,
     ) {
-        let descriptor = self.to_descriptor();
-        for input in descriptor.inputs {
-            let (typ, value, kind, shown_inline) = match input.1 {
-                InputDescriptor::Vector { default } => (
-                    DataType::Vector,
-                    ValueType::Vector(default),
-                    InputParamKind::ConnectionOrConstant,
-                    true,
-                ),
-                InputDescriptor::Mesh => (
-                    DataType::Mesh,
-                    ValueType::None,
-                    InputParamKind::ConnectionOnly,
-                    true,
-                ),
-                InputDescriptor::Selection => (
-                    DataType::Selection,
-                    ValueType::Selection {
-                        text: "".into(),
-                        selection: Some(vec![]),
-                    },
-                    InputParamKind::ConnectionOnly,
-                    true,
-                ),
-                InputDescriptor::Scalar { default, min, max } => (
-                    DataType::Scalar,
-                    ValueType::Scalar {
-                        value: default,
-                        min,
-                        max,
-                    },
-                    InputParamKind::ConnectionOrConstant,
-                    true,
-                ),
-                InputDescriptor::Enum { default, values } => (
-                    DataType::Enum,
-                    ValueType::Enum {
-                        values,
-                        selection: default,
-                    },
-                    InputParamKind::ConstantOnly,
-                    true,
-                ),
-                InputDescriptor::NewFile => (
-                    DataType::NewFile,
-                    ValueType::NewFile { path: None },
-                    InputParamKind::ConstantOnly,
-                    true,
-                ),
+        macro_rules! input {
+            (Vector $name:expr, $value:expr) => {
+                input!(~ $name, DataType::Vector, ValueType::Vector($value),
+                       InputParamKind::ConnectionOrConstant)
             };
-            graph.add_input_param(node_id, input.0, typ, value, kind, shown_inline);
+            (Scalar $name:expr, $value:expr) => {
+                input!(Scalar $name, $value, -100.0, 100.0)
+            };
+            (Scalar $name:expr, $value:expr, $min:expr, $max:expr) => {
+                input!(~ $name, DataType::Scalar,
+                       ValueType::Scalar { value: $value, min: $min, max: $max },
+                       InputParamKind::ConnectionOrConstant)
+            };
+            (Mesh $name:expr) => {
+                input!(~ $name, DataType::Mesh,
+                       ValueType::None, InputParamKind::ConnectionOnly)
+            };
+            (Selection $name:expr) => {
+                input!(~ $name, DataType::Selection,
+                       ValueType::Selection { text: "".into(), selection: Some(vec![]) },
+                       InputParamKind::ConstantOnly)
+            };
+            (Enum $name:expr, [$($values:expr),*]) => {
+                input!(~ $name, DataType::Enum,
+                       ValueType::Enum { values: vec![$($values.into()),*], selection: None },
+                       InputParamKind::ConstantOnly)
+            };
+            (Enum $name:expr, default $default:expr, [$($values:expr),*]) => {
+                input!(~ $name, DataType::Enum,
+                       ValueType::Enum { values: vec![$($values.into()),*], selection: Some($default) },
+                       InputParamKind::ConstantOnly)
+            };
+            (NewFile $name:expr) => {
+                input!(~ $name, DataType::NewFile,
+                       ValueType::NewFile { path: None },
+                       InputParamKind::ConstantOnly)
+            };
+            (~ $name:expr, $data_type:expr, $value_type:expr, $param_kind:expr) => {
+                graph.add_input_param(
+                    node_id,
+                    $name.into(),
+                    $data_type,
+                    $value_type,
+                    $param_kind,
+                    true,
+                )
+            };
         }
 
-        for output in descriptor.outputs {
-            graph.add_output_param(node_id, output.0, output.1 .0);
+        macro_rules! output {
+            (Mesh $name:expr) => { output!(~ $name, DataType::Mesh) };
+            (Vector $name:expr) => { output!(~ $name, DataType::Vector) };
+            (Scalar $name:expr) => { output!(~ $name, DataType::Scalar) };
+            (~ $name:expr, $typ:expr) => {
+                graph.add_output_param(node_id, $name.into(), $typ)
+            }
+        }
+
+        match self {
+            GraphNodeType::MakeBox => {
+                input!(Vector "origin", Vec3::ZERO);
+                input!(Vector "size", Vec3::ONE);
+                output!(Mesh "out_mesh");
+            }
+            GraphNodeType::MakeQuad => {
+                input!(Vector "center", Vec3::ZERO);
+                input!(Vector "normal", Vec3::Y);
+                input!(Vector "right", Vec3::X);
+                input!(Vector "size", Vec3::ONE);
+                output!(Mesh "out_mesh");
+            }
+            GraphNodeType::BevelEdges => {
+                input!(Mesh "in_mesh");
+                input!(Selection "edges");
+                input!(Scalar "amount", 0.0, 0.0, 1.0);
+                output!(Mesh "out_mesh");
+            }
+            GraphNodeType::ExtrudeFaces => {
+                input!(Mesh "in_mesh");
+                input!(Selection "faces");
+                input!(Scalar "amount", 0.0, 0.0, 1.0);
+                output!(Mesh "out_mesh");
+            },
+            GraphNodeType::ChamferVertices => {
+                input!(Mesh "in_mesh");
+                input!(Selection "vertices");
+                input!(Scalar "amount", 0.0, 0.0, 1.0);
+                output!(Mesh "out_mesh");
+            },
+            GraphNodeType::MakeVector => {
+                input!(Scalar "x", 0.0);
+                input!(Scalar "y", 0.0);
+                input!(Scalar "z", 0.0);
+                output!(Vector "out_vec");
+            },
+            GraphNodeType::VectorMath => {
+                input!(Enum "vec_op", ["ADD", "SUB", "MUL"]);
+                input!(Vector "A", Vec3::ZERO);
+                input!(Vector "B", Vec3::ZERO);
+                output!(Vector "out_vec");
+            },
+            GraphNodeType::MergeMeshes => {
+                input!(Mesh "A");
+                input!(Mesh "B");
+                output!(Mesh "out_mesh");
+            },
+            GraphNodeType::ExportObj => {
+                input!(Mesh "mesh");
+                input!(NewFile "export_path");
+            },
+            GraphNodeType::MeshSubdivide => {
+                input!(Mesh "in_mesh");
+                input!(Scalar "iterations", 1.0, 1.0, 7.0);
+                input!(Enum "technique", default 0, ["linear", "catmull-clark"]);
+                output!(Mesh "out_mesh");
+            },
         }
     }
 }
