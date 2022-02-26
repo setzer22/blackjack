@@ -1,6 +1,6 @@
 use anyhow::Error;
 
-use crate::{prelude::debug_viz::DebugMeshes, prelude::*};
+use crate::{prelude::debug_viz::DebugMeshes, prelude::*, rendergraph::edge_routine::EdgeMaterial};
 
 use super::viewport_split::SplitTree;
 
@@ -58,14 +58,26 @@ impl ApplicationContext {
 
     pub fn build_and_render_mesh(&mut self, render_ctx: &mut RenderContext) {
         if let Some(mesh) = self.mesh.as_ref() {
-            self.debug_meshes.add_halfedge_debug(render_ctx, mesh);
+            //self.debug_meshes.add_halfedge_debug(render_ctx, mesh);
 
-            let (positions, indices) = mesh.generate_buffers();
-            let r3_mesh = r3::MeshBuilder::new(positions, r3::Handedness::Left)
+            let TriangleBuffers { positions, indices } = mesh.generate_triangle_buffers();
+            let tri_mesh = r3::MeshBuilder::new(positions, r3::Handedness::Left)
                 .with_indices(indices)
                 .build()
                 .unwrap();
-            render_ctx.add_mesh_as_object(r3_mesh);
+            render_ctx.add_mesh_as_object::<r3::PbrMaterial>(tri_mesh, None);
+
+            let LineBuffers { positions, indices } = mesh.generate_line_buffers();
+            let line_mesh = r3::MeshBuilder::new(positions, r3::Handedness::Left)
+                .with_indices(indices)
+                .build()
+                .unwrap();
+            let edge_material = EdgeMaterial {
+                base_color: Vec4::splat(1.0),
+                thickness: 1.0,
+                ..Default::default()
+            };
+            render_ctx.add_mesh_as_object(line_mesh, Some(edge_material));
         }
     }
 

@@ -2,6 +2,8 @@ use crate::prelude::*;
 
 pub mod grid_routine;
 
+pub mod edge_routine;
+
 /// Adds the necessary nodes to render the 3d viewport of the app. The viewport
 /// is rendered into a render target, and its handle is returned.
 #[allow(clippy::too_many_arguments)]
@@ -12,6 +14,7 @@ pub fn blackjack_viewport_rendergraph<'node>(
     pbr: &'node r3::PbrRoutine,
     tonemapping: &'node r3::TonemappingRoutine,
     grid: &'node grid_routine::GridRoutine,
+    edge: &'node edge_routine::EdgeRoutine,
     resolution: UVec2,
     samples: r3::SampleCount,
     ambient: Vec4,
@@ -34,6 +37,7 @@ pub fn blackjack_viewport_rendergraph<'node>(
     state.pbr_forward_rendering(graph, pbr, samples);
 
     grid.add_to_graph(graph, &state);
+    edge.add_to_graph(graph, base, &state);
 
     // Make the reference to the surface
     let output = graph.add_render_target(r3::RenderTargetDescriptor {

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::{prelude::*, rendergraph::grid_routine::GridRoutine};
+use crate::{prelude::*, rendergraph::{grid_routine::GridRoutine, edge_routine::EdgeRoutine}};
 use egui::{FontDefinitions, Style};
 use egui_wgpu_backend::{RenderPass, ScreenDescriptor};
 use egui_winit_platform::{Platform, PlatformDescriptor};
@@ -216,6 +216,7 @@ impl RootViewport {
             ref pbr_routine,
             ref tonemapping_routine,
             ref grid_routine,
+            ref edge_routine,
             ..
         } = render_ctx;
 
@@ -232,6 +233,7 @@ impl RootViewport {
                 pbr_routine,
                 tonemapping_routine,
                 grid_routine,
+                edge_routine,
             },
         );
         graph.execute(&render_ctx.renderer, frame, cmd_bufs, &ready);
@@ -243,4 +245,5 @@ pub struct ViewportRoutines<'a> {
     pbr_routine: &'a r3::PbrRoutine,
     tonemapping_routine: &'a r3::TonemappingRoutine,
     grid_routine: &'a GridRoutine,
+    edge_routine: &'a EdgeRoutine,
 }

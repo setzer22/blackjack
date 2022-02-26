@@ -1,10 +1,13 @@
 use std::sync::Arc;
 
-use crate::{prelude::*, rendergraph::grid_routine::GridRoutine};
+use crate::{
+    prelude::*,
+    rendergraph::{edge_routine::EdgeRoutine, grid_routine::GridRoutine},
+};
 
 use glam::Mat4;
 use rend3_routine::pbr::PbrRoutine;
-use wgpu::{Features, Surface, TextureFormat};
+use wgpu::{Surface, TextureFormat};
 
 pub struct RenderContext {
     pub renderer: Arc<r3::Renderer>,
@@ -13,6 +16,7 @@ pub struct RenderContext {
     pub pbr_routine: r3::PbrRoutine,
     pub tonemapping_routine: r3::TonemappingRoutine,
     pub grid_routine: GridRoutine,
+    pub edge_routine: EdgeRoutine,
     pub surface: Arc<Surface>,
     pub texture_format: TextureFormat,
 
@@ -23,13 +27,7 @@ pub struct RenderContext {
 impl RenderContext {
     pub fn new(window: &winit::window::Window) -> Self {
         let window_size = window.inner_size();
-        let iad = pollster::block_on(rend3::create_iad(
-            None,
-            None,
-            None,
-            None,
-        ))
-        .unwrap();
+        let iad = pollster::block_on(rend3::create_iad(None, None, Some(rend3::RendererMode::CpuPowered), None)).unwrap();
 
         let surface = Arc::new(unsafe { iad.instance.create_surface(&window) });
 
@@ -57,6 +55,7 @@ impl RenderContext {
         drop(data_core); // Release the lock
 
         let grid_routine = GridRoutine::new(&renderer.device);
+        let edge_routine = EdgeRoutine::new(&renderer, &base_graph);
 
         RenderContext {
             renderer,
@@ -64,6 +63,7 @@ impl RenderContext {
             base_graph,
             tonemapping_routine,
             grid_routine,
+            edge_routine,
             surface,
             texture_format: format,
             objects: vec![],
@@ -75,13 +75,17 @@ impl RenderContext {
         self.objects.clear();
     }
 
-    pub fn add_mesh_as_object(&mut self, mesh: r3::Mesh) {
+    pub fn add_mesh_as_object<M: r3::Material>(&mut self, mesh: r3::Mesh, material: Option<M>) {
         let mesh_handle = self.renderer.add_mesh(mesh);
-        let material = r3::PbrMaterial {
-            albedo: r3::AlbedoComponent::Value(glam::Vec4::new(0.8, 0.1, 0.1, 1.0)),
-            ..Default::default()
+        let material_handle = if let Some(material) = material {
+            self.renderer.add_material(material)
+        } else {
+            let material = r3::PbrMaterial {
+                albedo: r3::AlbedoComponent::Value(glam::Vec4::new(0.8, 0.1, 0.1, 1.0)),
+                ..Default::default()
+            };
+            self.renderer.add_material(material)
         };
-        let material_handle = self.renderer.add_material(material);
         let object = r3::Object {
             mesh_kind: r3::ObjectMeshKind::Static(mesh_handle),
             material: material_handle,

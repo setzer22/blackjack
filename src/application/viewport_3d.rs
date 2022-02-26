@@ -115,6 +115,7 @@ impl Viewport3d {
             viewport_routines.pbr_routine,
             viewport_routines.tonemapping_routine,
             viewport_routines.grid_routine,
+            viewport_routines.edge_routine,
             self.get_resolution(),
             r3::SampleCount::One,
             Self::ambient_light(),
