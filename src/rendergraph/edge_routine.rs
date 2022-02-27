@@ -40,18 +40,25 @@ pub struct EdgeRoutine {
 
 impl EdgeRoutine {
     pub fn new(renderer: &r3::Renderer, base: &r3::BaseRenderGraph) -> Self {
-
         let mut data_core = renderer.data_core.lock();
         data_core
             .material_manager
             .ensure_archetype::<EdgeMaterial>(&renderer.device, renderer.profile);
 
-        let shader = renderer.device.create_shader_module(&wgpu::ShaderModuleDescriptor {
-            label: Some("Shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("edge_viewport.wgsl").into()),
-        });
+        let shader_source = glsl_include::Context::new()
+            .include("rend3_common.wgsl", include_str!("rend3_common.wgsl"))
+            .expand(include_str!("edge_viewport.wgsl"))
+            .expect("Shader preprocessor");
 
-        let per_material = r3::PerMaterialArchetypeInterface::new(&renderer.device, renderer.profile);
+        let shader = renderer
+            .device
+            .create_shader_module(&wgpu::ShaderModuleDescriptor {
+                label: Some("Shader"),
+                source: wgpu::ShaderSource::Wgsl(shader_source.into()),
+            });
+
+        let per_material =
+            r3::PerMaterialArchetypeInterface::new(&renderer.device, renderer.profile);
         let forward_routine = r3::ForwardRoutine::new(
             renderer,
             &mut data_core,
@@ -146,7 +153,12 @@ impl EdgeRoutine {
         let cull_data = graph.add_data();
         self.add_pre_cull(graph, pre_cull_data);
         self.add_culling(graph, base, state, pre_cull_data, cull_data);
-        self.add_forward(graph, state.forward_uniform_bg, cull_data, state.color, state.depth);
-
+        self.add_forward(
+            graph,
+            state.forward_uniform_bg,
+            cull_data,
+            state.color,
+            state.depth,
+        );
     }
 }

@@ -22,6 +22,7 @@ egui_node_graph = { git = "https://github.com/setzer22/egui_node_graph", rev = "
 # rend3-routine = { git = "https://github.com/BVE-Reborn/rend3", rev = "6bf09d0dc4aea986bb6ffd5207b14a3ad1714cc2" }
 rend3 = "*"
 rend3-routine = "*"
+glsl-include = { git = "https://github.com/setzer22/glsl-include", rev = "d9b1ade" }
 
 # Crates.io crates
 egui = { version = "0.16", features = ["persistence"] }
@@ -49,7 +50,6 @@ slotmap = { version = "1.0", features = ["serde"] }
 num-traits = "0.2.14"
 atomic_float = "0.1"
 profiling = { version = "1.0", features = ["profile-with-tracy"] }
-glsl-include = "0.3.1"
 
 [patch.crates-io]
 # NOTE: These patches are only used for development, and should be left
