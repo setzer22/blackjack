@@ -17,9 +17,11 @@ wavefront_rs = { git = "https://github.com/setzer22/wavefront_rs", rev = "e303f3
 
 # Git dependencies
 egui_winit_platform = { git = "https://github.com/hasenbanck/egui_winit_platform", rev = "eea97f778a17c7f97f3cf1758f3ebb5ff6251e11" }
-rend3 = { git = "https://github.com/BVE-Reborn/rend3", rev = "6bf09d0dc4aea986bb6ffd5207b14a3ad1714cc2" }
-rend3-routine = { git = "https://github.com/BVE-Reborn/rend3", rev = "6bf09d0dc4aea986bb6ffd5207b14a3ad1714cc2" }
 egui_node_graph = { git = "https://github.com/setzer22/egui_node_graph", rev = "d8c31a5", features = ["persistence"] }
+# rend3 = { git = "https://github.com/BVE-Reborn/rend3", rev = "6bf09d0dc4aea986bb6ffd5207b14a3ad1714cc2" }
+# rend3-routine = { git = "https://github.com/BVE-Reborn/rend3", rev = "6bf09d0dc4aea986bb6ffd5207b14a3ad1714cc2" }
+rend3 = "*"
+rend3-routine = "*"
 
 # Crates.io crates
 egui = { version = "0.16", features = ["persistence"] }
@@ -47,6 +49,7 @@ slotmap = { version = "1.0", features = ["serde"] }
 num-traits = "0.2.14"
 atomic_float = "0.1"
 profiling = { version = "1.0", features = ["profile-with-tracy"] }
+glsl-include = "0.3.1"
 
 [patch.crates-io]
 # NOTE: These patches are only used for development, and should be left
@@ -54,4 +57,6 @@ profiling = { version = "1.0", features = ["profile-with-tracy"] }
 # egui_wgpu_backend = { path = "../egui_wgpu_backend" }
 # egui_winit_platform = { path = "../egui_winit_platform" }
 # egui_node_graph = { path = "../egui_node_graph/egui_node_graph", features = ["persistence"] }
+rend3 = { path = "../rend3/rend3" }
+rend3-routine = { path = "../rend3/rend3-routine" }
 

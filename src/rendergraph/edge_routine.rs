@@ -1,16 +1,18 @@
 use crate::prelude::*;
 use glam::Vec4;
 
-#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable, Default)]
+#[derive(Clone, Copy, Default)]
 #[repr(C, align(16))]
 pub struct EdgeMaterial {
     pub base_color: Vec4,
     pub thickness: f32,
-    // TODO: Is this padding necessary?
-    pub _pad1: f32,
-    pub _pad2: f32,
-    pub _pad3: f32,
 }
+
+// SAFETY: In theory, it's UB to cast pad bytes to u8, so we can't derive the
+// bytemuck traits. In practice, doing this is not a problem on any supported
+// platforms, and rend3 itself also relies on this.
+unsafe impl bytemuck::Pod for EdgeMaterial {}
+unsafe impl bytemuck::Zeroable for EdgeMaterial {}
 
 impl r3::Material for EdgeMaterial {
     const TEXTURE_COUNT: u32 = 0;
@@ -33,20 +35,23 @@ impl r3::Material for EdgeMaterial {
 /// A render routine made to draw edges for a mesh.
 pub struct EdgeRoutine {
     pub forward_routine: r3::ForwardRoutine<EdgeMaterial>,
-    // TODO: I don't think we need this?
-    //pub depth_routine: r3::DepthRoutine<EdgeRoutine>,
     pub per_material: r3::PerMaterialArchetypeInterface<EdgeMaterial>,
 }
 
 impl EdgeRoutine {
     pub fn new(renderer: &r3::Renderer, base: &r3::BaseRenderGraph) -> Self {
+
+        let mut data_core = renderer.data_core.lock();
+        data_core
+            .material_manager
+            .ensure_archetype::<EdgeMaterial>(&renderer.device, renderer.profile);
+
         let shader = renderer.device.create_shader_module(&wgpu::ShaderModuleDescriptor {
             label: Some("Shader"),
             source: wgpu::ShaderSource::Wgsl(include_str!("edge_viewport.wgsl").into()),
         });
 
-        let per_material = r3::PerMaterialArchetypeInterface::new(&renderer.device, renderer.mode);
-        let mut data_core = renderer.data_core.lock();
+        let per_material = r3::PerMaterialArchetypeInterface::new(&renderer.device, renderer.profile);
         let forward_routine = r3::ForwardRoutine::new(
             renderer,
             &mut data_core,
@@ -58,6 +63,7 @@ impl EdgeRoutine {
             None,
             false,
             "Edge Forward",
+            Some(wgpu::PrimitiveTopology::LineList),
         );
 
         Self {
@@ -89,7 +95,7 @@ impl EdgeRoutine {
         &'node self,
         graph: &mut r3::RenderGraph<'node>,
         base: &'node r3::BaseRenderGraph,
-        _state: &r3::BaseRenderGraphIntermediateState,
+        state: &r3::BaseRenderGraphIntermediateState,
         pre_cull_data_in: r3::DataHandle<wgpu::Buffer>,
         cull_data_out: r3::DataHandle<r3::PerMaterialArchetypeData>,
     ) {
@@ -98,6 +104,7 @@ impl EdgeRoutine {
             graph,
             pre_cull_data_in,
             cull_data_out,
+            state.skinned_data,
             &self.per_material,
             &base.gpu_culler,
             None,

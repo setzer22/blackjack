@@ -27,7 +27,13 @@ pub struct RenderContext {
 impl RenderContext {
     pub fn new(window: &winit::window::Window) -> Self {
         let window_size = window.inner_size();
-        let iad = pollster::block_on(rend3::create_iad(None, None, Some(rend3::RendererMode::CpuPowered), None)).unwrap();
+        let iad = pollster::block_on(rend3::create_iad(
+            None,
+            None,
+            Some(rend3::RendererProfile::CpuDriven),
+            None,
+        ))
+        .unwrap();
 
         let surface = Arc::new(unsafe { iad.instance.create_surface(&window) });
 

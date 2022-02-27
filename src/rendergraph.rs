@@ -36,8 +36,8 @@ pub fn blackjack_viewport_rendergraph<'node>(
     // Forward rendering
     state.pbr_forward_rendering(graph, pbr, samples);
 
-    grid.add_to_graph(graph, &state);
     edge.add_to_graph(graph, base, &state);
+    grid.add_to_graph(graph, &state);
 
     // Make the reference to the surface
     let output = graph.add_render_target(r3::RenderTargetDescriptor {

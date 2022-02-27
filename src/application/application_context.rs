@@ -75,7 +75,6 @@ impl ApplicationContext {
             let edge_material = EdgeMaterial {
                 base_color: Vec4::splat(1.0),
                 thickness: 1.0,
-                ..Default::default()
             };
             render_ctx.add_mesh_as_object(line_mesh, Some(edge_material));
         }

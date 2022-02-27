@@ -12,6 +12,11 @@ struct VertexOutput {
     [[location(0), interpolate(flat)]] color: vec4<f32>;
 };
 
+struct FragmentOutput {
+    [[builtin(frag_depth)]] depth: f32;
+    [[location(0)]] color: vec4<f32>;
+};
+
 struct Plane {
     inner: vec4<f32>;
 };
@@ -82,6 +87,11 @@ fn vs_main(
 }
 
 [[stage(fragment)]]
-fn fs_main(input: VertexOutput) -> [[location(0)]] vec4<f32> {
-    return vec4<f32>(0.0, 1.0, 0.0, 1.0);
+fn fs_main(input: VertexOutput) -> FragmentOutput {
+    var out : FragmentOutput;
+    out.color = vec4<f32>(0.0, 1.0, 0.0, 1.0);
+    // We want edges slightly over their actual positions towards the camera.
+    // This prevents z-fighting when drawing the wireframe over the mesh.
+    out.depth = input.clip_position.z * 1.01;
+    return out;
 }
