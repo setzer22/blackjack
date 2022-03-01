@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::{
     prelude::*,
-    rendergraph::{edge_routine::EdgeRoutine, grid_routine::GridRoutine},
+    rendergraph::{edge_routine::{EdgeRoutine, VertexRoutine}, grid_routine::GridRoutine, shader_manager::ShaderManager},
 };
 
 use glam::Mat4;
@@ -17,8 +17,10 @@ pub struct RenderContext {
     pub tonemapping_routine: r3::TonemappingRoutine,
     pub grid_routine: GridRoutine,
     pub edge_routine: EdgeRoutine,
+    pub vertex_routine: VertexRoutine,
     pub surface: Arc<Surface>,
     pub texture_format: TextureFormat,
+    pub shader_manager: ShaderManager,
 
     pub objects: Vec<r3::ObjectHandle>,
     lights: Vec<r3::DirectionalLightHandle>,
@@ -60,8 +62,10 @@ impl RenderContext {
             r3::TonemappingRoutine::new(&renderer, &base_graph.interfaces, format);
         drop(data_core); // Release the lock
 
+        let shader_manager = ShaderManager::new(&renderer.device);
         let grid_routine = GridRoutine::new(&renderer.device);
-        let edge_routine = EdgeRoutine::new(&renderer, &base_graph);
+        let edge_routine = EdgeRoutine::new(&renderer, &base_graph, &shader_manager);
+        let vertex_routine = VertexRoutine::new(&renderer, &base_graph, &shader_manager);
 
         RenderContext {
             renderer,
@@ -70,8 +74,10 @@ impl RenderContext {
             tonemapping_routine,
             grid_routine,
             edge_routine,
+            vertex_routine,
             surface,
             texture_format: format,
+            shader_manager,
             objects: vec![],
             lights: vec![],
         }

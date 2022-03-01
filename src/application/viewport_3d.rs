@@ -108,6 +108,7 @@ impl Viewport3d {
         ready: &r3::ReadyData,
         viewport_routines: super::ViewportRoutines<'node>,
     ) -> r3::RenderTargetHandle {
+        // TODO: Pass the viewport routines directly...
         rendergraph::blackjack_viewport_rendergraph(
             viewport_routines.base_graph,
             graph,
@@ -116,6 +117,7 @@ impl Viewport3d {
             viewport_routines.tonemapping_routine,
             viewport_routines.grid_routine,
             viewport_routines.edge_routine,
+            viewport_routines.vertex_routine,
             self.get_resolution(),
             r3::SampleCount::One,
             Self::ambient_light(),

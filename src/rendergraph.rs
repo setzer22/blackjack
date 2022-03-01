@@ -2,6 +2,8 @@ use crate::prelude::*;
 
 pub mod grid_routine;
 
+pub mod shader_manager;
+pub mod wire_routine;
 pub mod edge_routine;
 
 /// Adds the necessary nodes to render the 3d viewport of the app. The viewport
@@ -15,6 +17,7 @@ pub fn blackjack_viewport_rendergraph<'node>(
     tonemapping: &'node r3::TonemappingRoutine,
     grid: &'node grid_routine::GridRoutine,
     edge: &'node edge_routine::EdgeRoutine,
+    vertex: &'node edge_routine::VertexRoutine,
     resolution: UVec2,
     samples: r3::SampleCount,
     ambient: Vec4,
@@ -36,7 +39,8 @@ pub fn blackjack_viewport_rendergraph<'node>(
     // Forward rendering
     state.pbr_forward_rendering(graph, pbr, samples);
 
-    edge.add_to_graph(graph, base, &state);
+    //edge.add_to_graph(graph, base, &state);
+    vertex.add_to_graph(graph, base, &state);
     grid.add_to_graph(graph, &state);
 
     // Make the reference to the surface

@@ -1,6 +1,10 @@
 use anyhow::Error;
 
-use crate::{prelude::debug_viz::DebugMeshes, prelude::*, rendergraph::edge_routine::EdgeMaterial};
+use crate::{
+    prelude::debug_viz::DebugMeshes,
+    prelude::*,
+    rendergraph::edge_routine::{EdgeMaterial, VertexMaterial},
+};
 
 use super::viewport_split::SplitTree;
 
@@ -77,6 +81,16 @@ impl ApplicationContext {
                 thickness: 1.0,
             };
             render_ctx.add_mesh_as_object(line_mesh, Some(edge_material));
+
+            let PointBuffers { positions } = mesh.generate_point_buffers();
+            let point_mesh = r3::MeshBuilder::new(positions, r3::Handedness::Left)
+                .build()
+                .unwrap();
+            let vertex_material = VertexMaterial {
+                base_color: Vec4::splat(1.0),
+                thickness: 1.0,
+            };
+            render_ctx.add_mesh_as_object(point_mesh, Some(vertex_material))
         }
     }
 
