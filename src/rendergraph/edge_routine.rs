@@ -10,13 +10,6 @@ pub struct EdgeMaterial {
     pub thickness: f32,
 }
 
-#[derive(Clone, Copy, Default)]
-#[repr(C, align(16))]
-pub struct VertexMaterial {
-    pub base_color: Vec4,
-    pub thickness: f32,
-}
-
 macro_rules! impl_material {
     (material = $mat:ty, routine = $routine:ident, shader = $shader:expr, topology = $topology:expr) => {
         impl r3::Material for $mat {
@@ -75,12 +68,6 @@ macro_rules! impl_material {
     };
 }
 
-impl_material!(
-    material = VertexMaterial,
-    routine = VertexRoutine,
-    shader = "vertex_viewport",
-    topology = wgpu::PrimitiveTopology::PointList
-);
 impl_material!(
     material = EdgeMaterial,
     routine = EdgeRoutine,

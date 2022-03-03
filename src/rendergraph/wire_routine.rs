@@ -99,7 +99,7 @@ impl<M: r3::Material> WireRoutine<M> {
             forward_uniform_bg,
             cull_data_in,
             None,
-            "Glow forward pass",
+            "Wire routine",
             r3::SampleCount::One,
             color_target,
             None,

@@ -26,7 +26,7 @@ glsl-include = { git = "https://github.com/setzer22/glsl-include", rev = "d9b1ad
 
 # Crates.io crates
 egui = { version = "0.16", features = ["persistence"] }
-glam = { version = "0.20", features = ["serde"] }
+glam = { version = "0.20", features = ["serde", "bytemuck"] }
 env_logger = { version = "0.9", default-features = false, features = ["termcolor", "atty"] }
 winit = { version = "0.26" }
 wgpu = "0.12"

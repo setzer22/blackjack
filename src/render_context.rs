@@ -2,7 +2,10 @@ use std::sync::Arc;
 
 use crate::{
     prelude::*,
-    rendergraph::{edge_routine::{EdgeRoutine, VertexRoutine}, grid_routine::GridRoutine, shader_manager::ShaderManager},
+    rendergraph::{
+        edge_routine::EdgeRoutine, grid_routine::GridRoutine, point_routine::PointCloudRoutine,
+        shader_manager::ShaderManager,
+    },
 };
 
 use glam::Mat4;
@@ -17,7 +20,7 @@ pub struct RenderContext {
     pub tonemapping_routine: r3::TonemappingRoutine,
     pub grid_routine: GridRoutine,
     pub edge_routine: EdgeRoutine,
-    pub vertex_routine: VertexRoutine,
+    pub point_cloud_routine: PointCloudRoutine,
     pub surface: Arc<Surface>,
     pub texture_format: TextureFormat,
     pub shader_manager: ShaderManager,
@@ -65,7 +68,8 @@ impl RenderContext {
         let shader_manager = ShaderManager::new(&renderer.device);
         let grid_routine = GridRoutine::new(&renderer.device);
         let edge_routine = EdgeRoutine::new(&renderer, &base_graph, &shader_manager);
-        let vertex_routine = VertexRoutine::new(&renderer, &base_graph, &shader_manager);
+        let point_cloud_routine =
+            PointCloudRoutine::new(&renderer.device, &base_graph, &shader_manager);
 
         RenderContext {
             renderer,
@@ -74,7 +78,7 @@ impl RenderContext {
             tonemapping_routine,
             grid_routine,
             edge_routine,
-            vertex_routine,
+            point_cloud_routine,
             surface,
             texture_format: format,
             shader_manager,
@@ -85,6 +89,7 @@ impl RenderContext {
 
     pub fn clear_objects(&mut self) {
         self.objects.clear();
+        self.point_cloud_routine.clear_point_clouds();
     }
 
     pub fn add_mesh_as_object<M: r3::Material>(&mut self, mesh: r3::Mesh, material: Option<M>) {
