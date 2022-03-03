@@ -28,7 +28,7 @@ pub fn blackjack_viewport_rendergraph<'node>(
 
     // Preparing and uploading data
     state.pbr_pre_culling(graph);
-    state.create_frame_uniforms(graph, base, ambient);
+    state.create_frame_uniforms(graph, base, ambient, resolution);
 
     // Culling
     state.pbr_shadow_culling(graph, base, pbr);

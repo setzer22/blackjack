@@ -20,6 +20,7 @@ struct UniformData {
     inv_origin_view_proj: mat4x4<f32>;
     frustrum: Frustrum;
     ambient: vec4<f32>;
+    resolution: vec2<u32>;
 };
 
 [[group(0), binding(0)]]
