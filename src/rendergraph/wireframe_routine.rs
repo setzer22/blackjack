@@ -1,9 +1,8 @@
-use std::num::NonZeroU64;
-
+use super::common;
 use crate::prelude::r3;
 use glam::Vec3;
 use rend3::{
-    graph::{DataHandle, RenderTargetDescriptor},
+    graph::DataHandle,
     util::bind_merge::{BindGroupBuilder, BindGroupLayoutBuilder},
 };
 use rend3_routine::base::{BaseRenderGraph, BaseRenderGraphIntermediateState};
@@ -14,31 +13,27 @@ use wgpu::{
 
 use super::shader_manager::ShaderManager;
 
-pub struct PointCloudBuffer {
-    buffer: Buffer,
+/// Stores a wgpu buffer containing the edges of a wireframe
+pub struct WireframeBuffer {
+    /// Contains 2*len Vec3 elements
+    line_positions: Buffer,
+    /// Contains len Vec3 elements (color)
+    colors: Buffer,
+    /// Number of elements
     len: usize,
 }
 
-pub struct PointCloudRoutine {
+pub struct WireframeRoutine {
     bgl: BindGroupLayout,
     pipeline: RenderPipeline,
-    point_cloud_buffers: Vec<PointCloudBuffer>,
+    wireframe_buffers: Vec<WireframeBuffer>,
 }
 
-const PRIMITIVE_STATE: PrimitiveState = PrimitiveState {
-    topology: PrimitiveTopology::TriangleList,
-    strip_index_format: None,
-    front_face: FrontFace::Ccw,
-    cull_mode: Some(Face::Back),
-    unclipped_depth: false,
-    polygon_mode: PolygonMode::Fill,
-    conservative: false,
-};
-
-impl PointCloudRoutine {
+impl WireframeRoutine {
     pub fn new(device: &Device, base: &BaseRenderGraph, shader_manager: &ShaderManager) -> Self {
         let bgl = BindGroupLayoutBuilder::new()
-            // Binding 0 is the buffer with all the points
+            // Binding 0 is the buffer with line data, with 2*N points, each two
+            // points making a line segment
             .append(
                 ShaderStages::VERTEX,
                 BindingType::Buffer {
@@ -48,7 +43,17 @@ impl PointCloudRoutine {
                 },
                 None,
             )
-            .build(device, Some("point routine bgl"));
+            // Binding 1 is the buffer with color data, with N colors
+            .append(
+                ShaderStages::VERTEX,
+                BindingType::Buffer {
+                    ty: BufferBindingType::Storage { read_only: true },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                None,
+            )
+            .build(device, Some("wireframe routine bgl"));
 
         let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
             label: None,
@@ -56,59 +61,62 @@ impl PointCloudRoutine {
             push_constant_ranges: &[],
         });
 
-        let shader = shader_manager.get("point_cloud_draw");
+        let shader = shader_manager.get("edge_wireframe_draw");
 
         let pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
-            label: Some("point routine pipeline"),
+            label: Some("wireframe routine pipeline"),
             layout: Some(&pipeline_layout),
             vertex: shader.to_vertex_state(&[]),
-            primitive: PRIMITIVE_STATE,
-            depth_stencil: Some(DepthStencilState {
-                format: TextureFormat::Depth32Float,
-                depth_write_enabled: false,
-                depth_compare: CompareFunction::GreaterEqual,
-                stencil: StencilState::default(),
-                bias: DepthBiasState::default(),
-            }),
+            primitive: common::primitive_state(PrimitiveTopology::LineList),
+            depth_stencil: Some(common::depth_stencil(true)),
             multisample: MultisampleState::default(),
-            fragment: Some(shader.to_fragment_state(&[ColorTargetState {
-                format: TextureFormat::Rgba16Float,
-                blend: None,
-                write_mask: ColorWrites::all(),
-            }])),
+            fragment: Some(shader.to_fragment_state()),
             multiview: None,
         });
 
         Self {
             pipeline,
             bgl,
-            point_cloud_buffers: Vec::new(),
+            wireframe_buffers: Vec::new(),
         }
     }
 
-    pub fn add_point_cloud(&mut self, device: &Device, points: &[Vec3]) {
-        let buffer = device.create_buffer_init(&BufferInitDescriptor {
+    pub fn add_wireframe(&mut self, device: &Device, lines: &[Vec3], colors: &[Vec3]) {
+        let len = colors.len();
+        assert!(
+            lines.len() == colors.len() * 2,
+            "There must be exactly 2*N lines and N colors in a wireframe"
+        );
+
+        let line_positions = device.create_buffer_init(&BufferInitDescriptor {
             label: None,
-            contents: bytemuck::cast_slice(points),
+            contents: bytemuck::cast_slice(lines),
             usage: BufferUsages::STORAGE,
         });
-        self.point_cloud_buffers.push(PointCloudBuffer {
-            buffer,
-            len: points.len(),
+        let colors = device.create_buffer_init(&BufferInitDescriptor {
+            label: None,
+            contents: bytemuck::cast_slice(colors),
+            usage: BufferUsages::STORAGE,
+        });
+
+        self.wireframe_buffers.push(WireframeBuffer {
+            len,
+            line_positions,
+            colors,
         });
     }
 
-    pub fn clear_point_clouds(&mut self) {
+    pub fn clear(&mut self) {
         // Wgpu will deallocate resources when `Drop` is called for the buffers.
-        self.point_cloud_buffers.clear()
+        self.wireframe_buffers.clear()
     }
 
-    pub fn create_bind_groups<'node>(
+    fn create_bind_groups<'node>(
         &'node self,
         graph: &mut r3::RenderGraph<'node>,
         out_bgs: DataHandle<Vec<BindGroup>>,
     ) {
-        let mut builder = graph.add_node("Point cloud: create bind groups");
+        let mut builder = graph.add_node("Wireframe: create bind groups");
         let pt_handle = builder.passthrough_ref(self);
         let out_bgs = builder.add_data_output(out_bgs);
 
@@ -118,14 +126,13 @@ impl PointCloudRoutine {
                 graph_data.set_data(
                     out_bgs,
                     Some(
-                        self.point_cloud_buffers
+                        self.wireframe_buffers
                             .iter()
                             .map(|buffer| {
-                                BindGroupBuilder::new().append_buffer(&buffer.buffer).build(
-                                    &renderer.device,
-                                    None,
-                                    &this.bgl,
-                                )
+                                BindGroupBuilder::new()
+                                    .append_buffer(&buffer.line_positions)
+                                    .append_buffer(&buffer.colors)
+                                    .build(&renderer.device, None, &this.bgl)
                             })
                             .collect(),
                     ),
@@ -134,20 +141,19 @@ impl PointCloudRoutine {
         )
     }
 
-    pub fn draw_point_cloud<'node>(
+    fn draw_wireframe<'node>(
         &'node self,
         graph: &mut r3::RenderGraph<'node>,
         state: &BaseRenderGraphIntermediateState,
         in_bgs: DataHandle<Vec<BindGroup>>,
     ) {
-        let mut builder = graph.add_node("Point cloud: draw points");
+        let mut builder = graph.add_node("Wireframe: draw");
         let color = builder.add_render_target_output(state.color);
         let depth = builder.add_render_target_output(state.depth);
         let in_bgs = builder.add_data_input(in_bgs);
         let resolve = builder.add_optional_render_target_output(state.resolve);
         let pt_handle = builder.passthrough_ref(self);
         let forward_uniform_bg = builder.add_data_input(state.forward_uniform_bg);
-
 
         let rpass_handle = builder.add_renderpass(r3::RenderPassTargets {
             targets: vec![r3::RenderPassTarget {
@@ -173,9 +179,9 @@ impl PointCloudRoutine {
                 pass.set_pipeline(&this.pipeline);
 
                 pass.set_bind_group(0, forward_uniform_bg, &[]);
-                for (buffer, bg) in this.point_cloud_buffers.iter().zip(in_bgs.iter()) {
+                for (buffer, bg) in this.wireframe_buffers.iter().zip(in_bgs.iter()) {
                     pass.set_bind_group(1, bg, &[]);
-                    pass.draw(0..6, 0..dbg!(buffer.len) as u32);
+                    pass.draw(0..2, 0..buffer.len as u32);
                 }
             },
         );
@@ -188,6 +194,6 @@ impl PointCloudRoutine {
     ) {
         let bgs = graph.add_data();
         self.create_bind_groups(graph, bgs);
-        self.draw_point_cloud(graph, state, bgs);
+        self.draw_wireframe(graph, state, bgs);
     }
 }

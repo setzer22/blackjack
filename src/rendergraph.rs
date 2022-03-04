@@ -2,10 +2,17 @@ use crate::prelude::*;
 
 pub mod grid_routine;
 
-pub mod edge_routine;
-pub mod point_routine;
+/// Some common definitions to abstract wgpu boilerplate
+pub mod common;
+
+/// A render routine to draw wireframe meshes
+pub mod wireframe_routine;
+
+/// A render routine to draw point clouds
+pub mod point_cloud_routine;
+
+/// Shader manager struct which sets up loading with a basic preprocessor
 pub mod shader_manager;
-pub mod wire_routine;
 
 /// Adds the necessary nodes to render the 3d viewport of the app. The viewport
 /// is rendered into a render target, and its handle is returned.
@@ -17,8 +24,8 @@ pub fn blackjack_viewport_rendergraph<'node>(
     pbr: &'node r3::PbrRoutine,
     tonemapping: &'node r3::TonemappingRoutine,
     grid: &'node grid_routine::GridRoutine,
-    edge: &'node edge_routine::EdgeRoutine,
-    point_cloud: &'node point_routine::PointCloudRoutine,
+    wireframe: &'node wireframe_routine::WireframeRoutine,
+    point_cloud: &'node point_cloud_routine::PointCloudRoutine,
     resolution: UVec2,
     samples: r3::SampleCount,
     ambient: Vec4,
@@ -40,7 +47,7 @@ pub fn blackjack_viewport_rendergraph<'node>(
     // Forward rendering
     state.pbr_forward_rendering(graph, pbr, samples);
 
-    edge.add_to_graph(graph, base, &state);
+    wireframe.add_to_graph(graph, &state);
     point_cloud.add_to_graph(graph, &state);
     grid.add_to_graph(graph, &state);
 

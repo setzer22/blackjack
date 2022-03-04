@@ -1,3 +1,4 @@
+#include <utils.wgsl>
 #include <rend3_uniforms.wgsl>
 
 struct VertexOutput {
@@ -36,9 +37,7 @@ fn vs_main(
     [[builtin(vertex_index)]] vertex_idx: u32,
 ) -> VertexOutput {
     // Get the current point
-    let point = point_cloud.inner[instance_idx];
-    let point = vec3<f32>(point.x, point.y, point.z);
-
+    let point = unpack_v3(point_cloud.inner[instance_idx]);
 
     // Compute its clip space position
     let point_clip = uniforms.view_proj * vec4<f32>(point, 1.0);

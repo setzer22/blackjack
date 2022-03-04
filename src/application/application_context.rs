@@ -1,6 +1,6 @@
 use anyhow::Error;
 
-use crate::{prelude::debug_viz::DebugMeshes, prelude::*, rendergraph::edge_routine::EdgeMaterial};
+use crate::{prelude::debug_viz::DebugMeshes, prelude::*};
 
 use super::viewport_split::SplitTree;
 
@@ -67,16 +67,20 @@ impl ApplicationContext {
                 .unwrap();
             render_ctx.add_mesh_as_object::<r3::PbrMaterial>(tri_mesh, None);
 
-            let LineBuffers { positions, indices } = mesh.generate_line_buffers();
-            let line_mesh = r3::MeshBuilder::new(positions, r3::Handedness::Left)
-                .with_indices(indices)
-                .build()
-                .unwrap();
-            let edge_material = EdgeMaterial {
-                base_color: Vec4::splat(1.0),
-                thickness: 1.0,
-            };
-            render_ctx.add_mesh_as_object(line_mesh, Some(edge_material));
+            let LineBuffers { positions, .. } = mesh.generate_line_buffers();
+            if !positions.is_empty() {
+                let colors = (0..positions.len() / 2).map(|i| match i % 3 {
+                    0 => glam::vec3(1.0, 0.0, 0.0),
+                    1 => glam::vec3(0.0, 1.0, 0.0),
+                    2 => glam::vec3(0.0, 0.0, 1.0),
+                    _ => unreachable!(),
+                }).collect::<Vec<_>>();
+                render_ctx.wireframe_routine.add_wireframe(
+                    &render_ctx.renderer.device,
+                    &positions,
+                    &colors,
+                )
+            }
 
             let PointBuffers { positions } = mesh.generate_point_buffers();
             if !positions.is_empty() {

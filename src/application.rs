@@ -1,6 +1,12 @@
 use std::sync::Arc;
 
-use crate::{prelude::*, rendergraph::{grid_routine::GridRoutine, edge_routine::EdgeRoutine, point_routine::{PointCloudBuffer, PointCloudRoutine}}};
+use crate::{
+    prelude::*,
+    rendergraph::{
+        grid_routine::GridRoutine, point_cloud_routine::PointCloudRoutine,
+        wireframe_routine::WireframeRoutine,
+    },
+};
 use egui::{FontDefinitions, Style};
 use egui_wgpu_backend::{RenderPass, ScreenDescriptor};
 use egui_winit_platform::{Platform, PlatformDescriptor};
@@ -216,7 +222,7 @@ impl RootViewport {
             ref pbr_routine,
             ref tonemapping_routine,
             ref grid_routine,
-            ref edge_routine,
+            ref wireframe_routine,
             ref point_cloud_routine,
             ..
         } = render_ctx;
@@ -234,7 +240,7 @@ impl RootViewport {
                 pbr_routine,
                 tonemapping_routine,
                 grid_routine,
-                edge_routine,
+                wireframe_routine,
                 point_cloud_routine,
             },
         );
@@ -247,6 +253,6 @@ pub struct ViewportRoutines<'a> {
     pbr_routine: &'a r3::PbrRoutine,
     tonemapping_routine: &'a r3::TonemappingRoutine,
     grid_routine: &'a GridRoutine,
-    edge_routine: &'a EdgeRoutine,
+    wireframe_routine: &'a WireframeRoutine,
     point_cloud_routine: &'a PointCloudRoutine,
 }

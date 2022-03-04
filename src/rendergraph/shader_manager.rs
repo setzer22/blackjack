@@ -17,11 +17,15 @@ impl Shader {
         }
     }
 
-    pub fn to_fragment_state<'a>(&'a self, targets: &'a [ColorTargetState]) -> FragmentState {
+    pub fn to_fragment_state(&self) -> FragmentState {
         FragmentState {
             module: &self.module,
             entry_point: &self.fs_entry_point,
-            targets,
+            targets: &[ColorTargetState {
+                format: wgpu::TextureFormat::Rgba16Float,
+                blend: None,
+                write_mask: wgpu::ColorWrites::ALL,
+            }],
         }
     }
 }
@@ -36,6 +40,7 @@ impl ShaderManager {
 
         let mut context = glsl_include::Context::new();
         let context = context
+            .include("utils.wgsl", include_str!("utils.wgsl"))
             .include("rend3_common.wgsl", include_str!("rend3_common.wgsl"))
             .include("rend3_vertex.wgsl", include_str!("rend3_vertex.wgsl"))
             .include("rend3_object.wgsl", include_str!("rend3_object.wgsl"))
@@ -62,7 +67,7 @@ impl ShaderManager {
             };
         }
 
-        def_shader!("edge_viewport", "edge_viewport.wgsl");
+        def_shader!("edge_wireframe_draw", "edge_wireframe_draw.wgsl");
         def_shader!("point_cloud_draw", "point_cloud_draw.wgsl");
 
         Self { shaders }
