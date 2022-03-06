@@ -58,23 +58,15 @@ impl ApplicationContext {
 
     pub fn build_and_render_mesh(&mut self, render_ctx: &mut RenderContext) {
         if let Some(mesh) = self.mesh.as_ref() {
-            //self.debug_meshes.add_halfedge_debug(render_ctx, mesh);
-
-            let TriangleBuffers { positions, indices } = mesh.generate_triangle_buffers();
-            let tri_mesh = r3::MeshBuilder::new(positions, r3::Handedness::Left)
-                .with_indices(indices)
-                .build()
-                .unwrap();
-            render_ctx.add_mesh_as_object::<r3::PbrMaterial>(tri_mesh, None);
-
-            let LineBuffers { positions, .. } = mesh.generate_line_buffers();
+            let TriangleBuffers { positions, normals, colors } = mesh.generate_triangle_buffers();
             if !positions.is_empty() {
-                let colors = (0..positions.len() / 2).map(|i| match i % 3 {
-                    0 => glam::vec3(1.0, 0.0, 0.0),
-                    1 => glam::vec3(0.0, 1.0, 0.0),
-                    2 => glam::vec3(0.0, 0.0, 1.0),
-                    _ => unreachable!(),
-                }).collect::<Vec<_>>();
+                render_ctx
+                    .face_routine
+                    .add_faces(&render_ctx.renderer.device, &positions, &normals, &colors);
+            }
+
+            let LineBuffers { positions, colors } = mesh.generate_line_buffers();
+            if !positions.is_empty() {
                 render_ctx.wireframe_routine.add_wireframe(
                     &render_ctx.renderer.device,
                     &positions,

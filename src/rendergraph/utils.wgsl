@@ -18,3 +18,7 @@ fn pack_v3(v3: vec3<f32>) -> PackedVec3 {
 fn unpack_v3(v3: PackedVec3) -> vec3<f32> {
     return vec3<f32>(v3.x, v3.y, v3.z);
 }
+
+/// WGSL does not allow declaring storage arrays directly, so we need a wrapper
+/// struct to hold them.
+struct Vec3Array { inner: array<PackedVec3>; };

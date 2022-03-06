@@ -69,6 +69,7 @@ impl ShaderManager {
 
         def_shader!("edge_wireframe_draw", "edge_wireframe_draw.wgsl");
         def_shader!("point_cloud_draw", "point_cloud_draw.wgsl");
+        def_shader!("face_draw", "face_draw.wgsl");
 
         Self { shaders }
     }

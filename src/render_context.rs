@@ -4,7 +4,7 @@ use crate::{
     prelude::*,
     rendergraph::{
         grid_routine::GridRoutine, point_cloud_routine::PointCloudRoutine,
-        shader_manager::ShaderManager, wireframe_routine::WireframeRoutine,
+        shader_manager::ShaderManager, wireframe_routine::WireframeRoutine, face_routine::FaceRoutine,
     },
 };
 
@@ -20,6 +20,7 @@ pub struct RenderContext {
     pub tonemapping_routine: r3::TonemappingRoutine,
     pub grid_routine: GridRoutine,
     pub wireframe_routine: WireframeRoutine,
+    pub face_routine: FaceRoutine,
     pub point_cloud_routine: PointCloudRoutine,
     pub surface: Arc<Surface>,
     pub texture_format: TextureFormat,
@@ -71,6 +72,8 @@ impl RenderContext {
             WireframeRoutine::new(&renderer.device, &base_graph, &shader_manager);
         let point_cloud_routine =
             PointCloudRoutine::new(&renderer.device, &base_graph, &shader_manager);
+        let face_routine =
+            FaceRoutine::new(&renderer.device, &base_graph, &shader_manager);
 
         RenderContext {
             renderer,
@@ -80,6 +83,7 @@ impl RenderContext {
             grid_routine,
             wireframe_routine,
             point_cloud_routine,
+            face_routine,
             surface,
             texture_format: format,
             shader_manager,
@@ -92,6 +96,7 @@ impl RenderContext {
         self.objects.clear();
         self.point_cloud_routine.clear();
         self.wireframe_routine.clear();
+        self.face_routine.clear();
     }
 
     pub fn add_mesh_as_object<M: r3::Material>(&mut self, mesh: r3::Mesh, material: Option<M>) {

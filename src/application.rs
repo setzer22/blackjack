@@ -4,7 +4,7 @@ use crate::{
     prelude::*,
     rendergraph::{
         grid_routine::GridRoutine, point_cloud_routine::PointCloudRoutine,
-        wireframe_routine::WireframeRoutine,
+        wireframe_routine::WireframeRoutine, face_routine::FaceRoutine,
     },
 };
 use egui::{FontDefinitions, Style};
@@ -224,6 +224,7 @@ impl RootViewport {
             ref grid_routine,
             ref wireframe_routine,
             ref point_cloud_routine,
+            ref face_routine,
             ..
         } = render_ctx;
 
@@ -237,11 +238,12 @@ impl RootViewport {
             &ready,
             ViewportRoutines {
                 base_graph,
-                pbr_routine,
-                tonemapping_routine,
-                grid_routine,
-                wireframe_routine,
-                point_cloud_routine,
+                pbr: pbr_routine,
+                tonemapping: tonemapping_routine,
+                grid: grid_routine,
+                wireframe: wireframe_routine,
+                point_cloud: point_cloud_routine,
+                face: face_routine,
             },
         );
         graph.execute(&render_ctx.renderer, frame, cmd_bufs, &ready);
@@ -249,10 +251,11 @@ impl RootViewport {
 }
 
 pub struct ViewportRoutines<'a> {
-    base_graph: &'a r3::BaseRenderGraph,
-    pbr_routine: &'a r3::PbrRoutine,
-    tonemapping_routine: &'a r3::TonemappingRoutine,
-    grid_routine: &'a GridRoutine,
-    wireframe_routine: &'a WireframeRoutine,
-    point_cloud_routine: &'a PointCloudRoutine,
+    pub base_graph: &'a r3::BaseRenderGraph,
+    pub pbr: &'a r3::PbrRoutine,
+    pub tonemapping: &'a r3::TonemappingRoutine,
+    pub grid: &'a GridRoutine,
+    pub wireframe: &'a WireframeRoutine,
+    pub point_cloud: &'a PointCloudRoutine,
+    pub face: &'a FaceRoutine,
 }

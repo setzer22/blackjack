@@ -4,11 +4,12 @@ use super::*;
 /// This is suitable to be rendered with `wgpu::PrimitiveTopology::TriangleList`
 #[derive(Clone, Debug)]
 pub struct TriangleBuffers {
-    /// Vertex positions
+    /// Vertex positions, 3*N for N triangular faces
     pub positions: Vec<Vec3>,
-    /// Contains 3*N indices, where N is the number of triangles. Every three
-    /// indices represent a triangle.
-    pub indices: Vec<u32>,
+    /// Face normals, N, one per face
+    pub normals: Vec<Vec3>,
+    /// Vertex colors, N, one per face.
+    pub colors: Vec<Vec3>,
 }
 
 /// This representation is suitable to draw the halfedge's vertices using
@@ -26,7 +27,7 @@ pub struct PointBuffers {
 /// `wgpu::PrimitiveTopology::LineList`.
 pub struct LineBuffers {
     pub positions: Vec<Vec3>,
-    pub indices: Vec<u32>,
+    pub colors: Vec<Vec3>,
 }
 
 impl HalfEdgeMesh {
@@ -37,10 +38,8 @@ impl HalfEdgeMesh {
         let mut done_faces: HashSet<FaceId> = HashSet::new();
 
         let mut positions = vec![];
-        let mut indices = vec![];
-        // TODO: Indices are not doing *any* attempt at indexing. This needs to
-        // be optimized.
-        let mut next_index = 0;
+        let mut normals = vec![];
+        let mut colors = vec![];
 
         for (face_id, _face) in self.faces.iter() {
             // TODO: I think this is a leftover from an old refactor. It makes
@@ -50,6 +49,8 @@ impl HalfEdgeMesh {
                 continue;
             }
             done_faces.insert(face_id);
+
+            let normal = self.face_normal(face_id).unwrap_or(Vec3::ZERO);
 
             let vertices = self.face_vertices(face_id);
 
@@ -63,14 +64,12 @@ impl HalfEdgeMesh {
                 positions.push(v1_pos);
                 positions.push(v2_pos);
                 positions.push(v3_pos);
-                indices.push(next_index);
-                indices.push(next_index + 1);
-                indices.push(next_index + 2);
-                next_index += 3;
+                colors.push(Vec3::splat(1.0)); // TODO per-face colors
+                normals.push(normal);
             }
         }
 
-        TriangleBuffers { positions, indices }
+        TriangleBuffers { positions, colors, normals }
     }
 
     /// Generates the [`PointBuffers`] for this mesh. Suitable to be uploaded to
@@ -93,6 +92,7 @@ impl HalfEdgeMesh {
     pub fn generate_line_buffers(&self) -> LineBuffers {
         let mut visited = HashSet::new();
         let mut positions = Vec::new();
+        let mut colors = Vec::new();
         for (h, halfedge) in self.iter_halfedges() {
             let tw = halfedge.twin.expect("All halfedges should have a twin");
             if visited.contains(&tw) {
@@ -108,12 +108,19 @@ impl HalfEdgeMesh {
 
             positions.push(self.vertex_position(src));
             positions.push(self.vertex_position(dst));
+
+            if let Some(dbg_edge) = self.debug_edges.get(&h) {
+                let color = glam::Vec3::new(
+                    dbg_edge.color.r() as f32 / 255.0,
+                    dbg_edge.color.g() as f32 / 255.0,
+                    dbg_edge.color.b() as f32 / 255.0,
+                );
+                colors.push(color)
+            } else {
+                colors.push(Vec3::splat(1.0))
+            }
         }
 
-        LineBuffers {
-            // TODO: Indices are unused. Does it make sense to index this mesh?
-            indices: (0u32..positions.len() as u32).collect(),
-            positions,
-        }
+        LineBuffers { colors, positions }
     }
 }

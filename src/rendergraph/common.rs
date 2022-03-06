@@ -1,8 +1,8 @@
-pub fn primitive_state(topology: wgpu::PrimitiveTopology) -> wgpu::PrimitiveState {
+pub fn primitive_state(topology: wgpu::PrimitiveTopology, front_face: wgpu::FrontFace) -> wgpu::PrimitiveState {
     wgpu::PrimitiveState {
         topology,
         strip_index_format: None,
-        front_face: wgpu::FrontFace::Ccw,
+        front_face,
         cull_mode: Some(wgpu::Face::Back),
         unclipped_depth: false,
         polygon_mode: wgpu::PolygonMode::Fill,

@@ -11,14 +11,11 @@ struct FragmentOutput {
     [[location(0)]] color: vec4<f32>;
 };
 
-struct LinesArray { inner: array<PackedVec3>; };
-struct ColorsArray { inner: array<PackedVec3>; };
-
 [[group(1), binding(0)]]
-var<storage> lines: LinesArray;
+var<storage> lines: Vec3Array;
 
 [[group(1), binding(1)]]
-var<storage> colors: ColorsArray;
+var<storage> colors: Vec3Array;
 
 [[stage(vertex)]]
 fn vs_main(

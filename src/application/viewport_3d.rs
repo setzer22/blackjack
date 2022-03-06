@@ -110,14 +110,9 @@ impl Viewport3d {
     ) -> r3::RenderTargetHandle {
         // TODO: Pass the viewport routines directly...
         rendergraph::blackjack_viewport_rendergraph(
-            viewport_routines.base_graph,
             graph,
             ready,
-            viewport_routines.pbr_routine,
-            viewport_routines.tonemapping_routine,
-            viewport_routines.grid_routine,
-            viewport_routines.wireframe_routine,
-            viewport_routines.point_cloud_routine,
+            viewport_routines,
             self.get_resolution(),
             r3::SampleCount::One,
             Self::ambient_light(),

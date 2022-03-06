@@ -10,17 +10,8 @@ struct FragmentOutput {
     [[location(0)]] color: vec4<f32>;
 };
 
-// We want the right stride for vec3.
-struct PackedVec3 {
-    x: f32; y: f32; z: f32;
-};
-
-struct PointCloudArray {
-    inner: array<PackedVec3>;
-};
-
 [[group(1), binding(0)]]
-var<storage> point_cloud: PointCloudArray;
+var<storage> point_cloud: Vec3Array;
 
 var<private> screen_quad: array<vec2<f32>, 6> = array<vec2<f32>, 6>( 
     vec2<f32>(0.0, 1.0),
