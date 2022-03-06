@@ -1,0 +1,2 @@
+Matcap images obtained from: https://github.com/nidorx/matcaps
+Credit goes to original authors
