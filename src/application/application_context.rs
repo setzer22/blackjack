@@ -2,7 +2,7 @@ use anyhow::Error;
 
 use crate::{prelude::debug_viz::DebugMeshes, prelude::*};
 
-use super::viewport_split::SplitTree;
+use super::{viewport_3d::Viewport3dSettings, viewport_split::SplitTree};
 
 pub struct ApplicationContext {
     /// The mesh is at the center of the application
@@ -41,6 +41,7 @@ impl ApplicationContext {
         egui_ctx: &egui::CtxRef,
         editor_state: &mut graph::GraphEditorState,
         render_ctx: &mut RenderContext,
+        viewport_settings: &Viewport3dSettings,
     ) {
         // TODO: Instead of clearing all objects, make the app context own the
         // objects it's drawing and clear those instead.
@@ -53,32 +54,68 @@ impl ApplicationContext {
             eprintln!("There was an errror executing side effect: {}", err);
         }
 
-        self.build_and_render_mesh(render_ctx);
+        self.build_and_render_mesh(render_ctx, viewport_settings);
     }
 
-    pub fn build_and_render_mesh(&mut self, render_ctx: &mut RenderContext) {
+    pub fn build_and_render_mesh(
+        &mut self,
+        render_ctx: &mut RenderContext,
+        viewport_settings: &Viewport3dSettings,
+    ) {
         if let Some(mesh) = self.mesh.as_ref() {
-            let TriangleBuffers { positions, normals, colors } = mesh.generate_triangle_buffers();
-            if !positions.is_empty() {
-                render_ctx
-                    .face_routine
-                    .add_faces(&render_ctx.renderer.device, &positions, &normals, &colors);
+            // Base mesh
+            {
+                let VertexIndexBuffers {
+                    positions,
+                    normals,
+                    indices,
+                } = if viewport_settings.smooth_normals {
+                    mesh.generate_triangle_buffers_smooth()
+                } else {
+                    mesh.generate_triangle_buffers_flat()
+                };
+                if !positions.is_empty() {
+                    render_ctx.face_routine.add_base_mesh(
+                        &render_ctx.renderer,
+                        &positions,
+                        &normals,
+                        &indices,
+                    );
+                }
             }
 
-            let LineBuffers { positions, colors } = mesh.generate_line_buffers();
-            if !positions.is_empty() {
-                render_ctx.wireframe_routine.add_wireframe(
-                    &render_ctx.renderer.device,
-                    &positions,
-                    &colors,
-                )
+            // Face overlays
+            {
+                let FaceOverlayBuffers { positions, colors } = mesh.generate_face_overlay_buffers();
+                if !positions.is_empty() {
+                    render_ctx.face_routine.add_overlay_mesh(
+                        &render_ctx.renderer,
+                        &positions,
+                        &colors,
+                    );
+                }
             }
 
-            let PointBuffers { positions } = mesh.generate_point_buffers();
-            if !positions.is_empty() {
-                render_ctx
-                    .point_cloud_routine
-                    .add_point_cloud(&render_ctx.renderer.device, &positions);
+            // Edges
+            {
+                let LineBuffers { positions, colors } = mesh.generate_line_buffers();
+                if !positions.is_empty() {
+                    render_ctx.wireframe_routine.add_wireframe(
+                        &render_ctx.renderer.device,
+                        &positions,
+                        &colors,
+                    )
+                }
+            }
+
+            // Vertices
+            {
+                let PointBuffers { positions } = mesh.generate_point_buffers();
+                if !positions.is_empty() {
+                    render_ctx
+                        .point_cloud_routine
+                        .add_point_cloud(&render_ctx.renderer.device, &positions);
+                }
             }
         }
     }

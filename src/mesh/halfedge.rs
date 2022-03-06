@@ -745,6 +745,6 @@ pub mod test {
         let (a, b, c, d) = quad_abcd();
         let _q = hem.add_quad(a, b, c, d);
 
-        dbg!(hem.generate_triangle_buffers());
+        dbg!(hem.generate_triangle_buffers_flat());
     }
 }

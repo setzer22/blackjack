@@ -73,7 +73,7 @@ impl RenderContext {
         let point_cloud_routine =
             PointCloudRoutine::new(&renderer.device, &base_graph, &shader_manager);
         let face_routine =
-            FaceRoutine::new(&renderer.device, &base_graph, &shader_manager);
+            FaceRoutine::new(&renderer, &base_graph, &shader_manager);
 
         RenderContext {
             renderer,

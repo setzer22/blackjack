@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use wgpu::{ColorTargetState, FragmentState, VertexBufferLayout, VertexState};
+use wgpu::{ColorTargetState, FragmentState, VertexBufferLayout, VertexState, BlendState};
 
 pub struct Shader {
     pub fs_entry_point: String,
@@ -24,6 +24,18 @@ impl Shader {
             targets: &[ColorTargetState {
                 format: wgpu::TextureFormat::Rgba16Float,
                 blend: None,
+                write_mask: wgpu::ColorWrites::ALL,
+            }],
+        }
+    }
+
+    pub fn to_fragment_state_transparent(&self) -> FragmentState {
+        FragmentState {
+            module: &self.module,
+            entry_point: &self.fs_entry_point,
+            targets: &[ColorTargetState {
+                format: wgpu::TextureFormat::Rgba16Float,
+                blend: Some(BlendState::ALPHA_BLENDING),
                 write_mask: wgpu::ColorWrites::ALL,
             }],
         }
@@ -70,6 +82,7 @@ impl ShaderManager {
         def_shader!("edge_wireframe_draw", "edge_wireframe_draw.wgsl");
         def_shader!("point_cloud_draw", "point_cloud_draw.wgsl");
         def_shader!("face_draw", "face_draw.wgsl");
+        def_shader!("face_overlay_draw", "face_overlay_draw.wgsl");
 
         Self { shaders }
     }

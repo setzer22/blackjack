@@ -1,6 +1,7 @@
-use super::viewport_3d_routine::{Viewport3dRoutine, ViewportBuffers};
+use super::viewport_3d_routine::{DrawType, Viewport3dRoutine, ViewportBuffers};
 use crate::prelude::r3;
 use glam::Vec3;
+use rend3::managers::TextureManager;
 use rend3_routine::base::{BaseRenderGraph, BaseRenderGraphIntermediateState};
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
@@ -19,20 +20,33 @@ pub struct WireframeBuffer {
     len: usize,
 }
 
-impl ViewportBuffers for WireframeBuffer {
-    const NUM_BUFFERS: usize = 2;
+const NUM_BUFFERS: usize = 2;
+const NUM_TEXTURES: usize = 0;
 
-    fn get_wgpu_buffers(&self) -> Vec<&Buffer> {
-        vec![&self.line_positions, &self.colors]
+impl ViewportBuffers<NUM_BUFFERS, NUM_TEXTURES> for WireframeBuffer {
+    type Settings = ();
+    fn get_wgpu_buffers(&self, _settings: &()) -> [&Buffer; NUM_BUFFERS] {
+        [&self.line_positions, &self.colors]
     }
 
-    fn vertex_instance_counts(&self) -> (u32, u32) {
-        (2, self.len as u32)
+    fn get_wgpu_textures<'a>(
+        &'a self,
+        _texture_manager: &'a TextureManager,
+        _settings: &(),
+    ) -> [&'a TextureView; NUM_TEXTURES] {
+        []
+    }
+
+    fn get_draw_type(&self, _settings: &Self::Settings) -> DrawType<'_> {
+        DrawType::UseInstances {
+            num_vertices: 2,
+            num_instances: self.len,
+        }
     }
 }
 
 pub struct WireframeRoutine {
-    inner: Viewport3dRoutine<WireframeBuffer>,
+    inner: Viewport3dRoutine<NUM_BUFFERS, NUM_TEXTURES, WireframeBuffer>,
 }
 
 impl WireframeRoutine {
@@ -45,6 +59,7 @@ impl WireframeRoutine {
                 shader_manager.get("edge_wireframe_draw"),
                 PrimitiveTopology::LineList,
                 FrontFace::Ccw,
+                false,
             ),
         }
     }
@@ -83,6 +98,6 @@ impl WireframeRoutine {
         graph: &mut r3::RenderGraph<'node>,
         state: &BaseRenderGraphIntermediateState,
     ) {
-        self.inner.add_to_graph(graph, state);
+        self.inner.add_to_graph(graph, state, &());
     }
 }

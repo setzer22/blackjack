@@ -194,6 +194,7 @@ impl RootViewport {
             &self.platform.context(),
             &mut self.graph_editor.state,
             render_ctx,
+            &self.viewport_3d.settings,
         );
 
         for action in actions {

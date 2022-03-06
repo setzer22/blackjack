@@ -3,7 +3,7 @@
 
 struct VertexOutput {
     [[builtin(position)]] clip_position: vec4<f32>;
-    [[location(1)]] normal: vec3<f32>;
+    [[location(0)]] color: vec3<f32>;
 };
 
 struct FragmentOutput {
@@ -13,32 +13,26 @@ struct FragmentOutput {
 [[group(1), binding(0)]]
 var<storage> positions: Vec3Array;
 [[group(1), binding(1)]]
-var<storage> normals: Vec3Array;
-[[group(1), binding(2)]]
-var matcap: texture_2d<f32>;
+var<storage> colors: Vec3Array;
 
 [[stage(vertex)]]
 fn vs_main(
+    [[builtin(instance_index)]] instance_idx: u32,
     [[builtin(vertex_index)]] vertex_idx: u32,
 ) -> VertexOutput {
-    let position = unpack_v3(positions.inner[vertex_idx]);
-    let normal = unpack_v3(normals.inner[vertex_idx]);
+    let position = unpack_v3(positions.inner[instance_idx * 3u + vertex_idx]);
+    let color = unpack_v3(colors.inner[instance_idx]);
 
     var output : VertexOutput;
     output.clip_position = uniforms.view_proj * vec4<f32>(position, 1.0);
-    output.normal = normalize(normal);
+    output.color = color;
     return output;
 }
 
 [[stage(fragment)]]
 fn fs_main(input: VertexOutput) -> FragmentOutput {
     var out : FragmentOutput;
-
-    let muv = (uniforms.view * vec4<f32>(normalize(input.normal), 0.0)).xy;
-    let muv = muv * 0.5 + vec2<f32>(0.5, 0.5);
-
-    out.color = textureSample(matcap, primary_sampler, vec2<f32>(muv.x, 1.0 - muv.y));
-
+    out.color = vec4<f32>(input.color, 0.5);
     return out;
 }
 

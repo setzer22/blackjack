@@ -1,6 +1,5 @@
-use std::path::PathBuf;
-
 use super::*;
+use std::path::PathBuf;
 
 pub enum AppRootAction {
     Save(PathBuf),
@@ -55,11 +54,13 @@ impl RootViewport {
         // SplitTree. We should be using some kind of identifier instead
         match name {
             "3d_view" => {
-                payload
-                    .offscreen_viewports
-                    .get_mut(&OffscreenViewport::Viewport3d)
-                    .unwrap()
-                    .show(ui, ui.available_size());
+                payload.viewport_3d.show_ui(
+                    ui,
+                    payload
+                        .offscreen_viewports
+                        .get_mut(&OffscreenViewport::Viewport3d)
+                        .unwrap(),
+                );
             }
             "graph_editor" => {
                 payload

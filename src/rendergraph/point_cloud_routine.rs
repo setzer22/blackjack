@@ -1,6 +1,7 @@
 use crate::prelude::r3;
 use glam::Vec3;
 
+use rend3::managers::TextureManager;
 use rend3_routine::base::{BaseRenderGraph, BaseRenderGraphIntermediateState};
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
@@ -9,7 +10,7 @@ use wgpu::{
 
 use super::{
     shader_manager::ShaderManager,
-    viewport_3d_routine::{Viewport3dRoutine, ViewportBuffers},
+    viewport_3d_routine::{DrawType, Viewport3dRoutine, ViewportBuffers},
 };
 
 pub struct PointCloudBuffer {
@@ -17,21 +18,33 @@ pub struct PointCloudBuffer {
     len: usize,
 }
 
-impl ViewportBuffers for PointCloudBuffer {
-    const NUM_BUFFERS: usize = 1;
+const NUM_BUFFERS: usize = 1;
+const NUM_TEXTURES: usize = 0;
 
-    fn get_wgpu_buffers(&self) -> Vec<&Buffer> {
-        vec![&self.buffer]
+impl ViewportBuffers<NUM_BUFFERS, NUM_TEXTURES> for PointCloudBuffer {
+    type Settings = ();
+    fn get_wgpu_buffers(&self, _settings: &()) -> [&Buffer; NUM_BUFFERS] {
+        [&self.buffer]
     }
 
-    fn vertex_instance_counts(&self) -> (u32, u32) {
-        // 6 vertices to render quads
-        (6, self.len as u32)
+    fn get_wgpu_textures<'a>(
+        &'a self,
+        _texture_manager: &'a TextureManager,
+        _settings: &(),
+    ) -> [&'a TextureView; NUM_TEXTURES] {
+        []
+    }
+
+    fn get_draw_type(&self, _settings: &Self::Settings) -> DrawType<'_> {
+        DrawType::UseInstances {
+            num_vertices: 6,
+            num_instances: self.len,
+        }
     }
 }
 
 pub struct PointCloudRoutine {
-    inner: Viewport3dRoutine<PointCloudBuffer>,
+    inner: Viewport3dRoutine<NUM_BUFFERS, NUM_TEXTURES, PointCloudBuffer>,
 }
 
 impl PointCloudRoutine {
@@ -44,6 +57,7 @@ impl PointCloudRoutine {
                 shader_manager.get("point_cloud_draw"),
                 PrimitiveTopology::TriangleList,
                 FrontFace::Ccw,
+                false,
             ),
         }
     }
@@ -69,6 +83,6 @@ impl PointCloudRoutine {
         graph: &mut r3::RenderGraph<'node>,
         state: &BaseRenderGraphIntermediateState,
     ) {
-        self.inner.add_to_graph(graph, state);
+        self.inner.add_to_graph(graph, state, &());
     }
 }

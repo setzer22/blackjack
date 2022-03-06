@@ -1,4 +1,7 @@
-use crate::{application::ViewportRoutines, prelude::*};
+use crate::{
+    application::{viewport_3d::Viewport3dSettings, ViewportRoutines},
+    prelude::*,
+};
 
 pub mod grid_routine;
 
@@ -27,15 +30,10 @@ pub fn blackjack_viewport_rendergraph<'node>(
     graph: &mut r3::RenderGraph<'node>,
     ready: &r3::ReadyData,
     routines: ViewportRoutines<'node>,
-    /*
-    pbr: &'node r3::PbrRoutine,
-    tonemapping: &'node r3::TonemappingRoutine,
-    grid: &'node grid_routine::GridRoutine,
-    wireframe: &'node wireframe_routine::WireframeRoutine,
-    point_cloud: &'node point_cloud_routine::PointCloudRoutine, */
     resolution: UVec2,
     samples: r3::SampleCount,
     ambient: Vec4,
+    settings: &'node Viewport3dSettings,
 ) -> r3::RenderTargetHandle {
     // Create intermediate storage
     let state = r3::BaseRenderGraphIntermediateState::new(graph, ready, resolution, samples);
@@ -54,9 +52,16 @@ pub fn blackjack_viewport_rendergraph<'node>(
     // Forward rendering
     state.pbr_forward_rendering(graph, routines.pbr, samples);
 
-    routines.wireframe.add_to_graph(graph, &state);
-    routines.point_cloud.add_to_graph(graph, &state);
-    routines.face.add_to_graph(graph, &state);
+    if settings.render_edges {
+        routines.wireframe.add_to_graph(graph, &state);
+    }
+    if settings.render_vertices {
+        routines.point_cloud.add_to_graph(graph, &state);
+    }
+    if settings.render_faces {
+        routines.face.add_to_graph(graph, &state, settings);
+    }
+
     routines.grid.add_to_graph(graph, &state);
 
     // Make the reference to the surface
