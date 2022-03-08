@@ -91,7 +91,7 @@ impl Viewport3d {
             self.camera.yaw += self.input.mouse.cursor_delta().x * 2.0;
             self.camera.pitch += self.input.mouse.cursor_delta().y * 2.0;
         }
-        self.camera.distance += self.input.mouse.wheel_delta();
+        self.camera.distance += self.input.mouse.wheel_delta() * 0.25;
 
         // Compute view matrix
         let view = Mat4::from_translation(Vec3::Z * self.camera.distance)
