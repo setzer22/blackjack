@@ -53,8 +53,9 @@ fn vs_main(
 fn fs_main(input: VertexOutput) -> FragmentOutput {
     var out : FragmentOutput;
     out.color = vec4<f32>(0.2, 0.8, 0.2, 1.0);
-    // We want edges slightly over their actual positions towards the camera.
+    // We want vertices slightly over their actual positions towards the camera.
     // This prevents z-fighting when drawing the wireframe over the mesh.
+    // Value is 1.02, which is slightly above the 1.01 used for edges
     out.depth = input.clip_position.z * 1.02;
     return out;
 }
