@@ -52,7 +52,8 @@ atomic_float = "0.1"
 profiling = { version = "1.0", features = ["profile-with-tracy"] }
 image = { version = "0.24", default-features = false, features = ["png"] }
 
-[profile.dev.package.image]
+# Image loading is too slow in debug mode. This compiles all dependencies with optimizations.
+[profile.dev.package."*"]
 opt-level = 3
 
 [patch.crates-io]
