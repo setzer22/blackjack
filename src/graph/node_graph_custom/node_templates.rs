@@ -17,7 +17,6 @@ pub enum GraphNodeType {
 }
 
 impl GraphNodeType {
-
     pub fn all_types() -> impl Iterator<Item = GraphNodeType> {
         GraphNodeType::iter()
     }
@@ -165,40 +164,40 @@ impl NodeTemplateTrait for GraphNodeType {
                 input!(Selection "faces");
                 input!(Scalar "amount", 0.0, 0.0, 1.0);
                 output!(Mesh "out_mesh");
-            },
+            }
             GraphNodeType::ChamferVertices => {
                 input!(Mesh "in_mesh");
                 input!(Selection "vertices");
                 input!(Scalar "amount", 0.0, 0.0, 1.0);
                 output!(Mesh "out_mesh");
-            },
+            }
             GraphNodeType::MakeVector => {
                 input!(Scalar "x", 0.0);
                 input!(Scalar "y", 0.0);
                 input!(Scalar "z", 0.0);
                 output!(Vector "out_vec");
-            },
+            }
             GraphNodeType::VectorMath => {
                 input!(Enum "vec_op", ["ADD", "SUB", "MUL"]);
                 input!(Vector "A", Vec3::ZERO);
                 input!(Vector "B", Vec3::ZERO);
                 output!(Vector "out_vec");
-            },
+            }
             GraphNodeType::MergeMeshes => {
                 input!(Mesh "A");
                 input!(Mesh "B");
                 output!(Mesh "out_mesh");
-            },
+            }
             GraphNodeType::ExportObj => {
                 input!(Mesh "mesh");
                 input!(NewFile "export_path");
-            },
+            }
             GraphNodeType::MeshSubdivide => {
                 input!(Mesh "in_mesh");
                 input!(Scalar "iterations", 1.0, 1.0, 7.0);
                 input!(Enum "technique", default 0, ["linear", "catmull-clark"]);
                 output!(Mesh "out_mesh");
-            },
+            }
         }
     }
 }

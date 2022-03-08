@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use wgpu::{ColorTargetState, FragmentState, VertexBufferLayout, VertexState, BlendState};
+use wgpu::{BlendState, ColorTargetState, FragmentState, VertexBufferLayout, VertexState};
 
 pub struct Shader {
     pub fs_entry_point: String,

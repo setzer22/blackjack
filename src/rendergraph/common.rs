@@ -1,4 +1,7 @@
-pub fn primitive_state(topology: wgpu::PrimitiveTopology, front_face: wgpu::FrontFace) -> wgpu::PrimitiveState {
+pub fn primitive_state(
+    topology: wgpu::PrimitiveTopology,
+    front_face: wgpu::FrontFace,
+) -> wgpu::PrimitiveState {
     wgpu::PrimitiveState {
         topology,
         strip_index_format: None,

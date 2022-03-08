@@ -3,8 +3,8 @@ use std::sync::Arc;
 use crate::{
     prelude::*,
     rendergraph::{
-        grid_routine::GridRoutine, point_cloud_routine::PointCloudRoutine,
-        wireframe_routine::WireframeRoutine, face_routine::FaceRoutine,
+        face_routine::FaceRoutine, grid_routine::GridRoutine,
+        point_cloud_routine::PointCloudRoutine, wireframe_routine::WireframeRoutine,
     },
 };
 use egui::{FontDefinitions, Style};

@@ -3,8 +3,9 @@ use std::sync::Arc;
 use crate::{
     prelude::*,
     rendergraph::{
-        grid_routine::GridRoutine, point_cloud_routine::PointCloudRoutine,
-        shader_manager::ShaderManager, wireframe_routine::WireframeRoutine, face_routine::FaceRoutine,
+        face_routine::FaceRoutine, grid_routine::GridRoutine,
+        point_cloud_routine::PointCloudRoutine, shader_manager::ShaderManager,
+        wireframe_routine::WireframeRoutine,
     },
 };
 
@@ -72,8 +73,7 @@ impl RenderContext {
             WireframeRoutine::new(&renderer.device, &base_graph, &shader_manager);
         let point_cloud_routine =
             PointCloudRoutine::new(&renderer.device, &base_graph, &shader_manager);
-        let face_routine =
-            FaceRoutine::new(&renderer, &base_graph, &shader_manager);
+        let face_routine = FaceRoutine::new(&renderer, &base_graph, &shader_manager);
 
         RenderContext {
             renderer,

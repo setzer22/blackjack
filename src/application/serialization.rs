@@ -1,6 +1,4 @@
-use crate::{
-    prelude::*, prelude::graph::*
-};
+use crate::{prelude::graph::*, prelude::*};
 use std::path::PathBuf;
 
 use egui_node_graph::PanZoom;

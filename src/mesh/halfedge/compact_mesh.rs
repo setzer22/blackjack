@@ -328,7 +328,7 @@ impl<const Subdivided: bool> CompactMesh<Subdivided> {
 
     /// See "A HalfEdge Refinement Rule for Parallel Catmull-Clark"
     /// https://onrendering.com/data/papers/catmark/HalfedgeCatmullClark.pdf
-    /// 
+    ///
     /// If `catmull_clark` is set to true, smooth subdivision using the Catmull
     /// Clark algorithm is performed, otherwise linear subdivision is performed.
     #[profiling::function]

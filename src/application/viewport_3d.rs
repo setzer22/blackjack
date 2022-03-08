@@ -12,7 +12,6 @@ pub enum EdgeDrawMode {
     None,
 }
 
-
 #[derive(PartialEq, Eq)]
 pub enum FaceDrawMode {
     Flat,
@@ -217,9 +216,12 @@ impl Viewport3d {
     }
 }
 
-/// Draws the "Mesh Visuals" popup. 
+/// Draws the "Mesh Visuals" popup.
 /// This code was adapted from egui's Color Picker widget
-pub fn mesh_visuals_popup(ui: &mut egui::Ui, contents: impl FnOnce(&mut egui::Ui)) -> egui::Response {
+pub fn mesh_visuals_popup(
+    ui: &mut egui::Ui,
+    contents: impl FnOnce(&mut egui::Ui),
+) -> egui::Response {
     let popup_id = egui::Id::new("settings_popup");
     let mut button_response = ui.button("Mesh Visuals");
     if ui.style().explanation_tooltips {
