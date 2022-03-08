@@ -2,7 +2,10 @@ use anyhow::Error;
 
 use crate::{prelude::debug_viz::DebugMeshes, prelude::*};
 
-use super::{viewport_3d::{Viewport3dSettings, FaceDrawMode, EdgeDrawMode}, viewport_split::SplitTree};
+use super::{
+    viewport_3d::{EdgeDrawMode, FaceDrawMode, Viewport3dSettings},
+    viewport_split::SplitTree,
+};
 
 pub struct ApplicationContext {
     /// The mesh is at the center of the application
@@ -53,15 +56,16 @@ impl ApplicationContext {
         if let Err(err) = self.run_side_effects(editor_state) {
             eprintln!("There was an errror executing side effect: {}", err);
         }
-
-        self.build_and_render_mesh(render_ctx, viewport_settings);
+        if let Err(err) = self.build_and_render_mesh(render_ctx, viewport_settings) {
+            self.paint_errors(egui_ctx, err);
+        }
     }
 
     pub fn build_and_render_mesh(
         &mut self,
         render_ctx: &mut RenderContext,
         viewport_settings: &Viewport3dSettings,
-    ) {
+    ) -> Result<()> {
         if let Some(mesh) = self.mesh.as_ref() {
             // Base mesh
             {
@@ -70,12 +74,8 @@ impl ApplicationContext {
                     normals,
                     indices,
                 }) = match viewport_settings.face_mode {
-                    FaceDrawMode::Flat => {
-                        Some(mesh.generate_triangle_buffers_flat())
-                    }
-                    FaceDrawMode::Smooth => {
-                        Some(mesh.generate_triangle_buffers_smooth())
-                    }
+                    FaceDrawMode::Flat => Some(mesh.generate_triangle_buffers_flat()),
+                    FaceDrawMode::Smooth => Some(mesh.generate_triangle_buffers_smooth()?),
                     FaceDrawMode::None => None,
                 } {
                     if !positions.is_empty() {
@@ -104,12 +104,8 @@ impl ApplicationContext {
             // Edges
             {
                 if let Some(LineBuffers { positions, colors }) = match viewport_settings.edge_mode {
-                    EdgeDrawMode::HalfEdge => {
-                        Some(mesh.generate_halfedge_arrow_buffers())
-                    }
-                    EdgeDrawMode::FullEdge => {
-                        Some(mesh.generate_line_buffers())
-                    }
+                    EdgeDrawMode::HalfEdge => Some(mesh.generate_halfedge_arrow_buffers()?),
+                    EdgeDrawMode::FullEdge => Some(mesh.generate_line_buffers()?),
                     EdgeDrawMode::None => None,
                 } {
                     if !positions.is_empty() {
@@ -132,6 +128,7 @@ impl ApplicationContext {
                 }
             }
         }
+        Ok(())
     }
 
     pub fn paint_errors(&mut self, egui_ctx: &egui::CtxRef, err: Error) {

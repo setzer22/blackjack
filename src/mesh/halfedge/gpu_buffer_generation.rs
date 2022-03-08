@@ -49,6 +49,8 @@ impl HalfEdgeMesh {
         let mut normals = vec![];
 
         for (face_id, _face) in self.faces.iter() {
+            // We try to be a bit forgiving here. We don't want to stop
+            // rendering even if we have slightly malformed meshes.
             let normal = self.face_normal(face_id).unwrap_or(Vec3::ZERO);
 
             let vertices = self.face_vertices(face_id);
@@ -76,26 +78,26 @@ impl HalfEdgeMesh {
         }
     }
 
-    pub fn generate_triangle_buffers_smooth(&self) -> VertexIndexBuffers {
+    pub fn generate_triangle_buffers_smooth(&self) -> Result<VertexIndexBuffers> {
         let mut v_id_to_idx =
             slotmap::SecondaryMap::<VertexId, u32>::with_capacity(self.vertices.capacity());
         let mut positions = vec![];
         let mut normals = vec![];
 
-        self.iter_vertices().enumerate().for_each(|(idx, (id, v))| {
-            v_id_to_idx.insert(id, idx as u32);
-            positions.push(v.position);
+        self.iter_vertices()
+            .enumerate()
+            .try_for_each::<_, Result<()>>(|(idx, (id, v))| {
+                v_id_to_idx.insert(id, idx as u32);
+                positions.push(v.position);
 
-            let adjacent_faces = self
-                .at_vertex(id)
-                .adjacent_faces()
-                .expect("Can't generate smooth normals with disconnected vertex");
-            let mut normal = Vec3::ZERO;
-            for face in adjacent_faces.iter_cpy() {
-                normal += self.face_normal(face).unwrap_or(Vec3::ZERO);
-            }
-            normals.push(normal / adjacent_faces.len() as f32)
-        });
+                let adjacent_faces = self.at_vertex(id).adjacent_faces()?;
+                let mut normal = Vec3::ZERO;
+                for face in adjacent_faces.iter_cpy() {
+                    normal += self.face_normal(face).unwrap_or(Vec3::ZERO);
+                }
+                normals.push(normal / adjacent_faces.len() as f32);
+                Ok(())
+            })?;
 
         let mut indices = vec![];
         for (face_id, _face) in self.faces.iter() {
@@ -108,11 +110,11 @@ impl HalfEdgeMesh {
             }
         }
 
-        VertexIndexBuffers {
+        Ok(VertexIndexBuffers {
             positions,
             normals,
             indices,
-        }
+        })
     }
 
     pub fn generate_face_overlay_buffers(&self) -> FaceOverlayBuffers {
@@ -157,22 +159,23 @@ impl HalfEdgeMesh {
     /// This method panics if the mesh is malformed:
     /// - When a halfedge does not have a twin
     /// - When a halfedge does not have (src, dst) vertices
-    pub fn generate_line_buffers(&self) -> LineBuffers {
+    pub fn generate_line_buffers(&self) -> Result<LineBuffers> {
         let mut visited = HashSet::new();
         let mut positions = Vec::new();
         let mut colors = Vec::new();
         for (h, halfedge) in self.iter_halfedges() {
-            let tw = halfedge.twin.expect("All halfedges should have a twin");
+            let tw = halfedge
+                .twin
+                .ok_or(anyhow!("All halfedges should have a twin"))?;
             if visited.contains(&tw) {
                 continue;
             } else {
                 visited.insert(h);
             }
 
-            let (src, dst) = self
-                .at_halfedge(h)
-                .src_dst_pair()
-                .expect("All halfedges should have src and dst vertices");
+            let (src, dst) = self.at_halfedge(h).src_dst_pair().map_err(|err| {
+                anyhow!("All halfedges should have src and dst vertices: {}", err)
+            })?;
 
             positions.push(self.vertex_position(src));
             positions.push(self.vertex_position(dst));
@@ -189,18 +192,18 @@ impl HalfEdgeMesh {
             }
         }
 
-        LineBuffers { colors, positions }
+        Ok(LineBuffers { colors, positions })
     }
 
     /// Generates a variation of the [`LineBuffers`] which can be drawn in the
     /// exact same way, but instead of drawing a single line per edge, draws
     /// halfedges individually as tiny arrows.
-    pub fn generate_halfedge_arrow_buffers(&self) -> LineBuffers {
+    pub fn generate_halfedge_arrow_buffers(&self) -> Result<LineBuffers> {
         let mut colors = vec![];
         let mut positions = vec![];
 
         for (h, _) in self.iter_halfedges() {
-            let (src, dst) = self.at_halfedge(h).src_dst_pair().unwrap();
+            let (src, dst) = self.at_halfedge(h).src_dst_pair()?;
 
             let src_pos = self.vertex_position(src);
             let dst_pos = self.vertex_position(dst);
@@ -226,9 +229,9 @@ impl HalfEdgeMesh {
             let src_pos = src_pos + towards_face + bitangent * shrink;
             let dst_pos = dst_pos + towards_face - bitangent * shrink;
 
-            let normal = if let Some(face) = self.at_halfedge(h).face_or_boundary().unwrap() {
+            let normal = if let Some(face) = self.at_halfedge(h).face_or_boundary()? {
                 self.face_normal(face).unwrap_or(Vec3::ZERO)
-            } else if let Some(twin_face) = self.at_halfedge(h).twin().face_or_boundary().unwrap() {
+            } else if let Some(twin_face) = self.at_halfedge(h).twin().face_or_boundary()? {
                 self.face_normal(twin_face).unwrap_or(Vec3::ZERO)
             } else {
                 Vec3::ZERO
@@ -238,7 +241,10 @@ impl HalfEdgeMesh {
 
             positions.extend(&[src_pos, dst_pos]);
 
-            positions.extend(&[dst_pos, dst_pos + 0.30 * edge_length * tangent.lerp(-bitangent, 2.0 / 3.0)]);
+            positions.extend(&[
+                dst_pos,
+                dst_pos + 0.30 * edge_length * tangent.lerp(-bitangent, 2.0 / 3.0),
+            ]);
 
             if let Some(dbg_edge) = self.debug_edges.get(&h) {
                 let color = glam::Vec3::new(
@@ -254,6 +260,6 @@ impl HalfEdgeMesh {
             }
         }
 
-        LineBuffers { colors, positions }
+        Ok(LineBuffers { colors, positions })
     }
 }
