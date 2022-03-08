@@ -166,7 +166,7 @@ impl HalfEdgeMesh {
         for (h, halfedge) in self.iter_halfedges() {
             let tw = halfedge
                 .twin
-                .ok_or(anyhow!("All halfedges should have a twin"))?;
+                .ok_or_else(|| anyhow!("All halfedges should have a twin"))?;
             if visited.contains(&tw) {
                 continue;
             } else {
