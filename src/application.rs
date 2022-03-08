@@ -93,7 +93,7 @@ impl RootViewport {
                 scale_factor: scale_factor as f32,
             },
             renderpass: RenderPass::new(&renderer.device, screen_format, 1),
-            app_context: ApplicationContext::new(renderer),
+            app_context: ApplicationContext::new(),
             graph_editor: GraphEditor::new(
                 &renderer.device,
                 window_size,

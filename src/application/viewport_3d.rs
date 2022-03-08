@@ -153,7 +153,7 @@ impl Viewport3d {
     pub fn show_ui(&mut self, ui: &mut egui::Ui, offscreen_viewport: &mut AppViewport) {
         ui.vertical(|ui| {
             ui.horizontal(|ui| {
-                settings_popup(ui, |ui| {
+                mesh_visuals_popup(ui, |ui| {
                     ui.horizontal(|ui| {
                         ui.label("Edges:");
                         ui.selectable_value(
@@ -216,7 +216,10 @@ impl Viewport3d {
         });
     }
 }
-pub fn settings_popup(ui: &mut egui::Ui, contents: impl FnOnce(&mut egui::Ui)) -> egui::Response {
+
+/// Draws the "Mesh Visuals" popup.
+/// The code was adapted from egui's Color Picker widget
+pub fn mesh_visuals_popup(ui: &mut egui::Ui, contents: impl FnOnce(&mut egui::Ui)) -> egui::Response {
     let popup_id = egui::Id::new("settings_popup");
     let mut button_response = ui.button("Mesh Visuals");
     if ui.style().explanation_tooltips {
@@ -226,7 +229,6 @@ pub fn settings_popup(ui: &mut egui::Ui, contents: impl FnOnce(&mut egui::Ui)) -
     if button_response.clicked() {
         ui.memory().toggle_popup(popup_id);
     }
-    // TODO: make it easier to show a temporary popup that closes when you click outside it
     if ui.memory().is_popup_open(popup_id) {
         let area_response = egui::Area::new(popup_id)
             .order(egui::Order::Foreground)

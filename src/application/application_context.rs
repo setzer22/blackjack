@@ -1,6 +1,6 @@
 use anyhow::Error;
 
-use crate::{prelude::debug_viz::DebugMeshes, prelude::*};
+use crate::prelude::*;
 
 use super::{
     viewport_3d::{EdgeDrawMode, FaceDrawMode, Viewport3dSettings},
@@ -16,16 +16,13 @@ pub struct ApplicationContext {
     /// partition the state either horizontally or vertically. This separation
     /// is dynamic, very similar to Blender's UI model
     pub split_tree: SplitTree,
-
-    pub debug_meshes: DebugMeshes,
 }
 
 impl ApplicationContext {
-    pub fn new(renderer: &r3::Renderer) -> ApplicationContext {
+    pub fn new() -> ApplicationContext {
         ApplicationContext {
             mesh: None,
             split_tree: SplitTree::default_tree(),
-            debug_meshes: DebugMeshes::new(renderer),
         }
     }
 
@@ -166,5 +163,11 @@ impl ApplicationContext {
             let _ = program.execute();
         }
         Ok(())
+    }
+}
+
+impl Default for ApplicationContext {
+    fn default() -> Self {
+        Self::new()
     }
 }

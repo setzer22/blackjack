@@ -33,7 +33,6 @@ pub use crate::render_context::RenderContext;
 
 pub use crate::mesh::halfedge::*;
 
-pub use crate::mesh::debug_viz;
 pub use crate::mesh::halfedge;
 
 pub use crate::math::*;
