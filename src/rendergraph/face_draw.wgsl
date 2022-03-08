@@ -41,13 +41,3 @@ fn fs_main(input: VertexOutput) -> FragmentOutput {
 
     return out;
 }
-
-// WIP
-
-// TODO
-// - [x] Matcaps!
-// - [x] Need some controls to toggle various different elements of the viewport display
-// - Restore halfedge visualizations
-// - Draw matcap images on egui (+++)
-// - Face mesh indices -> Smooth normals
-// - Face selection

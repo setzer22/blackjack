@@ -5,12 +5,26 @@ use crate::{prelude::*, rendergraph};
 
 use super::app_viewport::AppViewport;
 
+#[derive(PartialEq, Eq)]
+pub enum EdgeDrawMode {
+    HalfEdge,
+    FullEdge,
+    None,
+}
+
+
+#[derive(PartialEq, Eq)]
+pub enum FaceDrawMode {
+    Flat,
+    Smooth,
+    None,
+}
+
 pub struct Viewport3dSettings {
-    pub smooth_normals: bool,
-    pub render_edges: bool,
-    pub render_faces: bool,
     pub render_vertices: bool,
     pub matcap: usize,
+    pub edge_mode: EdgeDrawMode,
+    pub face_mode: FaceDrawMode,
 }
 
 pub struct Viewport3d {
@@ -47,11 +61,10 @@ impl Viewport3d {
             viewport_rect: egui::Rect::from_min_size(egui::Pos2::ZERO, egui::Vec2::new(10.0, 10.0)),
             parent_scale: 1.0,
             settings: Viewport3dSettings {
-                render_edges: true,
-                render_faces: true,
+                edge_mode: EdgeDrawMode::FullEdge,
+                face_mode: FaceDrawMode::Flat,
                 render_vertices: true,
                 matcap: 0,
-                smooth_normals: false,
             },
         }
     }
@@ -140,24 +153,100 @@ impl Viewport3d {
     pub fn show_ui(&mut self, ui: &mut egui::Ui, offscreen_viewport: &mut AppViewport) {
         ui.vertical(|ui| {
             ui.horizontal(|ui| {
-                ui.checkbox(&mut self.settings.render_edges, "E");
-                ui.checkbox(&mut self.settings.render_vertices, "V");
-                ui.checkbox(&mut self.settings.render_faces, "F");
+                settings_popup(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.label("Edges:");
+                        ui.selectable_value(
+                            &mut self.settings.edge_mode,
+                            EdgeDrawMode::FullEdge,
+                            "Full",
+                        );
+                        ui.selectable_value(
+                            &mut self.settings.edge_mode,
+                            EdgeDrawMode::HalfEdge,
+                            "Half",
+                        );
+                        ui.selectable_value(
+                            &mut self.settings.edge_mode,
+                            EdgeDrawMode::None,
+                            "None",
+                        );
+                    });
 
-                if ui.button("<").clicked() {
-                    self.settings.matcap -= 1;
-                }
-                ui.add(egui::DragValue::new(&mut self.settings.matcap)
-                    .clamp_range(0..=crate::rendergraph::face_routine::NUM_MATCAPS-1));
-                if ui.button(">").clicked() {
-                    self.settings.matcap += 1;
-                }
+                    ui.horizontal(|ui| {
+                        ui.label("Vertices:");
+                        ui.checkbox(&mut self.settings.render_vertices, "");
+                    });
 
-                ui.checkbox(&mut self.settings.smooth_normals, "S");
+                    ui.horizontal(|ui| {
+                        ui.label("Faces:");
+                        ui.selectable_value(
+                            &mut self.settings.face_mode,
+                            FaceDrawMode::Flat,
+                            "Flat",
+                        );
+                        ui.selectable_value(
+                            &mut self.settings.face_mode,
+                            FaceDrawMode::Smooth,
+                            "Smooth",
+                        );
+                        ui.selectable_value(
+                            &mut self.settings.face_mode,
+                            FaceDrawMode::None,
+                            "None",
+                        );
+                    });
+
+                    ui.horizontal(|ui| {
+                        ui.label("Matcap:");
+                        if ui.button("<").clicked() {
+                            self.settings.matcap -= 1;
+                        }
+                        ui.add(
+                            egui::DragValue::new(&mut self.settings.matcap)
+                                .clamp_range(0..=crate::rendergraph::face_routine::NUM_MATCAPS - 1),
+                        );
+                        if ui.button(">").clicked() {
+                            self.settings.matcap += 1;
+                        }
+                    });
+                });
             });
             offscreen_viewport.show(ui, ui.available_size());
         });
     }
+}
+pub fn settings_popup(ui: &mut egui::Ui, contents: impl FnOnce(&mut egui::Ui)) -> egui::Response {
+    let popup_id = egui::Id::new("settings_popup");
+    let mut button_response = ui.button("Mesh Visuals");
+    if ui.style().explanation_tooltips {
+        button_response = button_response.on_hover_text("Click to edit mesh visuals");
+    }
+
+    if button_response.clicked() {
+        ui.memory().toggle_popup(popup_id);
+    }
+    // TODO: make it easier to show a temporary popup that closes when you click outside it
+    if ui.memory().is_popup_open(popup_id) {
+        let area_response = egui::Area::new(popup_id)
+            .order(egui::Order::Foreground)
+            .default_pos(button_response.rect.left_bottom() + egui::vec2(0.0, 10.0))
+            .show(ui.ctx(), |ui| {
+                ui.spacing_mut().slider_width = 210.0;
+                egui::Frame::popup(ui.style()).show(ui, |ui| {
+                    contents(ui);
+                });
+            })
+            .response;
+
+        if !button_response.clicked()
+            && (ui.input().key_pressed(egui::Key::Escape) || area_response.clicked_elsewhere())
+        {
+            ui.memory().close_popup();
+        }
+    }
+
+    button_response
 }
 
 impl Default for Viewport3d {

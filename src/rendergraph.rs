@@ -52,13 +52,15 @@ pub fn blackjack_viewport_rendergraph<'node>(
     // Forward rendering
     state.pbr_forward_rendering(graph, routines.pbr, samples);
 
-    if settings.render_edges {
+    use crate::application::viewport_3d::EdgeDrawMode::*;
+    if matches!(settings.edge_mode, FullEdge | HalfEdge) {
         routines.wireframe.add_to_graph(graph, &state);
     }
     if settings.render_vertices {
         routines.point_cloud.add_to_graph(graph, &state);
     }
-    if settings.render_faces {
+    use crate::application::viewport_3d::FaceDrawMode::*;
+    if matches!(settings.face_mode, Flat | Smooth) {
         routines.face.add_to_graph(graph, &state, settings);
     }
 

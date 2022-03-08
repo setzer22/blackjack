@@ -92,9 +92,7 @@ impl HalfEdgeMesh {
                 .expect("Can't generate smooth normals with disconnected vertex");
             let mut normal = Vec3::ZERO;
             for face in adjacent_faces.iter_cpy() {
-                normal += self
-                    .face_normal(face)
-                    .expect("Could not compute normal for face");
+                normal += self.face_normal(face).unwrap_or(Vec3::ZERO);
             }
             normals.push(normal / adjacent_faces.len() as f32)
         });
@@ -188,6 +186,71 @@ impl HalfEdgeMesh {
                 colors.push(color)
             } else {
                 colors.push(Vec3::splat(1.0))
+            }
+        }
+
+        LineBuffers { colors, positions }
+    }
+
+    /// Generates a variation of the [`LineBuffers`] which can be drawn in the
+    /// exact same way, but instead of drawing a single line per edge, draws
+    /// halfedges individually as tiny arrows.
+    pub fn generate_halfedge_arrow_buffers(&self) -> LineBuffers {
+        let mut colors = vec![];
+        let mut positions = vec![];
+
+        for (h, _) in self.iter_halfedges() {
+            let (src, dst) = self.at_halfedge(h).src_dst_pair().unwrap();
+
+            let src_pos = self.vertex_position(src);
+            let dst_pos = self.vertex_position(dst);
+            let edge_length = (dst_pos - src_pos).length();
+
+            let separation = edge_length * 0.1;
+            let shrink = edge_length * 0.2;
+
+            let midpoint = (src_pos + dst_pos) * 0.5;
+            let face_centroid = self
+                .at_halfedge(h)
+                .face()
+                .try_end()
+                .map(|face| self.face_vertex_average(face));
+            let towards_face = if let Ok(centroid) = face_centroid {
+                (centroid - midpoint).normalize() * separation
+            } else {
+                Vec3::ZERO
+            };
+
+            let bitangent = (dst_pos - src_pos).normalize();
+
+            let src_pos = src_pos + towards_face + bitangent * shrink;
+            let dst_pos = dst_pos + towards_face - bitangent * shrink;
+
+            let normal = if let Some(face) = self.at_halfedge(h).face_or_boundary().unwrap() {
+                self.face_normal(face).unwrap_or(Vec3::ZERO)
+            } else if let Some(twin_face) = self.at_halfedge(h).twin().face_or_boundary().unwrap() {
+                self.face_normal(twin_face).unwrap_or(Vec3::ZERO)
+            } else {
+                Vec3::ZERO
+            };
+
+            let tangent = normal.cross(bitangent);
+
+            positions.extend(&[src_pos, dst_pos]);
+
+            positions.extend(&[dst_pos, dst_pos + 0.30 * edge_length * tangent.lerp(-bitangent, 2.0 / 3.0)]);
+
+            if let Some(dbg_edge) = self.debug_edges.get(&h) {
+                let color = glam::Vec3::new(
+                    dbg_edge.color.r() as f32 / 255.0,
+                    dbg_edge.color.g() as f32 / 255.0,
+                    dbg_edge.color.b() as f32 / 255.0,
+                );
+                colors.push(color);
+                colors.push(color);
+            } else {
+                colors.push(Vec3::splat(1.0));
+                colors.push(Vec3::splat(1.0));
             }
         }
 

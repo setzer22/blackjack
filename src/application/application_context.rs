@@ -2,7 +2,7 @@ use anyhow::Error;
 
 use crate::{prelude::debug_viz::DebugMeshes, prelude::*};
 
-use super::{viewport_3d::Viewport3dSettings, viewport_split::SplitTree};
+use super::{viewport_3d::{Viewport3dSettings, FaceDrawMode, EdgeDrawMode}, viewport_split::SplitTree};
 
 pub struct ApplicationContext {
     /// The mesh is at the center of the application
@@ -65,22 +65,27 @@ impl ApplicationContext {
         if let Some(mesh) = self.mesh.as_ref() {
             // Base mesh
             {
-                let VertexIndexBuffers {
+                if let Some(VertexIndexBuffers {
                     positions,
                     normals,
                     indices,
-                } = if viewport_settings.smooth_normals {
-                    mesh.generate_triangle_buffers_smooth()
-                } else {
-                    mesh.generate_triangle_buffers_flat()
-                };
-                if !positions.is_empty() {
-                    render_ctx.face_routine.add_base_mesh(
-                        &render_ctx.renderer,
-                        &positions,
-                        &normals,
-                        &indices,
-                    );
+                }) = match viewport_settings.face_mode {
+                    FaceDrawMode::Flat => {
+                        Some(mesh.generate_triangle_buffers_flat())
+                    }
+                    FaceDrawMode::Smooth => {
+                        Some(mesh.generate_triangle_buffers_smooth())
+                    }
+                    FaceDrawMode::None => None,
+                } {
+                    if !positions.is_empty() {
+                        render_ctx.face_routine.add_base_mesh(
+                            &render_ctx.renderer,
+                            &positions,
+                            &normals,
+                            &indices,
+                        );
+                    }
                 }
             }
 
@@ -98,13 +103,22 @@ impl ApplicationContext {
 
             // Edges
             {
-                let LineBuffers { positions, colors } = mesh.generate_line_buffers();
-                if !positions.is_empty() {
-                    render_ctx.wireframe_routine.add_wireframe(
-                        &render_ctx.renderer.device,
-                        &positions,
-                        &colors,
-                    )
+                if let Some(LineBuffers { positions, colors }) = match viewport_settings.edge_mode {
+                    EdgeDrawMode::HalfEdge => {
+                        Some(mesh.generate_halfedge_arrow_buffers())
+                    }
+                    EdgeDrawMode::FullEdge => {
+                        Some(mesh.generate_line_buffers())
+                    }
+                    EdgeDrawMode::None => None,
+                } {
+                    if !positions.is_empty() {
+                        render_ctx.wireframe_routine.add_wireframe(
+                            &render_ctx.renderer.device,
+                            &positions,
+                            &colors,
+                        )
+                    }
                 }
             }
 

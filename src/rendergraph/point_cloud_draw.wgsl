@@ -30,13 +30,14 @@ fn vs_main(
     // Get the current point
     let point = unpack_v3(point_cloud.inner[instance_idx]);
 
+
     // Compute its clip space position
     let point_clip = uniforms.view_proj * vec4<f32>(point, 1.0);
 
     // Get the offset for the current vertex in the quad
     let screen_quad_vertex = screen_quad[vertex_idx];
     let pixel_size = vec2<f32>(1.0 / f32(uniforms.resolution.x), 1.0 / f32(uniforms.resolution.y));
-    let point_size = pixel_size * 8.0;
+    let point_size = pixel_size * 5.0;
     let vertex_offset = screen_quad_vertex * point_size;
 
     // The final position is the clip space position for the point, plus the
@@ -51,7 +52,7 @@ fn vs_main(
 [[stage(fragment)]]
 fn fs_main(input: VertexOutput) -> FragmentOutput {
     var out : FragmentOutput;
-    out.color = vec4<f32>(0.0, 1.0, 0.0, 1.0);
+    out.color = vec4<f32>(0.2, 0.8, 0.2, 1.0);
     // We want edges slightly over their actual positions towards the camera.
     // This prevents z-fighting when drawing the wireframe over the mesh.
     out.depth = input.clip_position.z * 1.02;

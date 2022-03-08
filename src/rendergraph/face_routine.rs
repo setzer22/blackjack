@@ -20,7 +20,7 @@ use super::{
 
 /// The number of matcap materials loaded in the routine. TODO: Matcaps should
 /// be eventually extendible at runtime.
-pub const NUM_MATCAPS: usize = 4;
+pub const NUM_MATCAPS: usize = 6;
 
 /// Represents the buffers to draw a base mesh. Unlike other structures using
 /// vertex pulling and instance ids to simulate indices, this buffer structure
@@ -130,10 +130,12 @@ impl FaceRoutine {
             };
         }
 
+        load_matcap!("E8DEE1_B5A6AA_CCBCC1_C4BBBC");
         load_matcap!("313131_BBBBBB_878787_A3A4A4");
         load_matcap!("326666_66CBC9_C0B8AE_52B3B4");
         load_matcap!("304FB1_69A1EF_5081DF_5C8CE6");
         load_matcap!("34352A_718184_50605E_6E6761");
+        load_matcap!("2E763A_78A0B7_B3D1CF_14F209");
 
         Self {
             matcaps: Arc::new(matcaps),
