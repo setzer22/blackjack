@@ -149,17 +149,17 @@ impl<const Subdivided: bool> CompactMesh<Subdivided> {
             match mesh.at_halfedge(h_id).twin().face_or_boundary()? {
                 Some(_) => {
                     twin.push(NonMaxU32::new(
-                        h_id_to_idx[h.twin.ok_or(anyhow!("No twin"))?],
+                        h_id_to_idx[h.twin.ok_or_else(|| anyhow!("No twin"))?],
                     ));
                 }
                 None => {
                     twin.push(None);
                 }
             }
-            next.push(h_id_to_idx[h.next.ok_or(anyhow!("No next"))?]);
+            next.push(h_id_to_idx[h.next.ok_or_else(|| anyhow!("No next"))?]);
             prev.push(h_id_to_idx[mesh.at_halfedge(h_id).previous().try_end()?]);
-            vert.push(v_id_to_idx[h.vertex.ok_or(anyhow!("No vertex"))?]);
-            face.push(f_id_to_idx[h.face.ok_or(anyhow!("No face"))?]);
+            vert.push(v_id_to_idx[h.vertex.ok_or_else(|| anyhow!("No vertex"))?]);
+            face.push(f_id_to_idx[h.face.ok_or_else(|| anyhow!("No face"))?]);
             edge.push(h_id_to_edge[h_id])
         }
 
@@ -328,7 +328,7 @@ impl<const Subdivided: bool> CompactMesh<Subdivided> {
 
     /// See "A HalfEdge Refinement Rule for Parallel Catmull-Clark"
     /// https://onrendering.com/data/papers/catmark/HalfedgeCatmullClark.pdf
-    /// 
+    ///
     /// If `catmull_clark` is set to true, smooth subdivision using the Catmull
     /// Clark algorithm is performed, otherwise linear subdivision is performed.
     #[profiling::function]

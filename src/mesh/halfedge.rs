@@ -29,6 +29,10 @@ pub mod wavefront_obj;
 /// A compact halfedge graph specifically optimized for some operations
 pub mod compact_mesh;
 
+/// Generate vertex and index buffers suitable to be uploaded to the GPU for rendering
+pub mod gpu_buffer_generation;
+pub use gpu_buffer_generation::*;
+
 /// HalfEdge meshes are a type of linked list. This means it is sometimes
 /// impossible to ensure some algorithms will terminate when the mesh is
 /// malformed. To ensure the code never goes into an infinite loop, this max
@@ -188,41 +192,6 @@ impl HalfEdgeMesh {
             .iter()
             .map(|e| self.at_halfedge(*e).vertex().end())
             .collect()
-    }
-
-    pub fn generate_buffers(&self) -> (Vec<Vec3>, Vec<u32>) {
-        let mut done_faces: HashSet<FaceId> = HashSet::new();
-
-        let mut positions = vec![];
-        let mut indices = vec![];
-        let mut next_index = 0;
-
-        for (face_id, _face) in self.faces.iter() {
-            if done_faces.contains(&face_id) {
-                continue;
-            }
-            done_faces.insert(face_id);
-
-            let vertices = self.face_vertices(face_id);
-
-            let v1 = vertices[0];
-
-            for (&v2, &v3) in vertices[1..].iter().tuple_windows() {
-                let v1_pos = self[v1].position;
-                let v2_pos = self[v2].position;
-                let v3_pos = self[v3].position;
-
-                positions.push(v1_pos);
-                positions.push(v2_pos);
-                positions.push(v3_pos);
-                indices.push(next_index);
-                indices.push(next_index + 1);
-                indices.push(next_index + 2);
-                next_index += 3;
-            }
-        }
-
-        (positions, indices)
     }
 
     pub fn edge_endpoints(&mut self, edge: HalfEdgeId) -> (VertexId, VertexId) {
@@ -776,6 +745,6 @@ pub mod test {
         let (a, b, c, d) = quad_abcd();
         let _q = hem.add_quad(a, b, c, d);
 
-        dbg!(hem.generate_buffers());
+        dbg!(hem.generate_triangle_buffers_flat());
     }
 }

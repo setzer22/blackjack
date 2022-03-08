@@ -1,10 +1,17 @@
 use std::sync::Arc;
 
-use crate::{prelude::*, rendergraph::grid_routine::GridRoutine};
+use crate::{
+    prelude::*,
+    rendergraph::{
+        face_routine::FaceRoutine, grid_routine::GridRoutine,
+        point_cloud_routine::PointCloudRoutine, shader_manager::ShaderManager,
+        wireframe_routine::WireframeRoutine,
+    },
+};
 
 use glam::Mat4;
 use rend3_routine::pbr::PbrRoutine;
-use wgpu::{Features, Surface, TextureFormat};
+use wgpu::{Surface, TextureFormat};
 
 pub struct RenderContext {
     pub renderer: Arc<r3::Renderer>,
@@ -13,8 +20,12 @@ pub struct RenderContext {
     pub pbr_routine: r3::PbrRoutine,
     pub tonemapping_routine: r3::TonemappingRoutine,
     pub grid_routine: GridRoutine,
+    pub wireframe_routine: WireframeRoutine,
+    pub face_routine: FaceRoutine,
+    pub point_cloud_routine: PointCloudRoutine,
     pub surface: Arc<Surface>,
     pub texture_format: TextureFormat,
+    pub shader_manager: ShaderManager,
 
     pub objects: Vec<r3::ObjectHandle>,
     lights: Vec<r3::DirectionalLightHandle>,
@@ -26,7 +37,7 @@ impl RenderContext {
         let iad = pollster::block_on(rend3::create_iad(
             None,
             None,
-            None,
+            Some(rend3::RendererProfile::CpuDriven),
             None,
         ))
         .unwrap();
@@ -56,7 +67,13 @@ impl RenderContext {
             r3::TonemappingRoutine::new(&renderer, &base_graph.interfaces, format);
         drop(data_core); // Release the lock
 
+        let shader_manager = ShaderManager::new(&renderer.device);
         let grid_routine = GridRoutine::new(&renderer.device);
+        let wireframe_routine =
+            WireframeRoutine::new(&renderer.device, &base_graph, &shader_manager);
+        let point_cloud_routine =
+            PointCloudRoutine::new(&renderer.device, &base_graph, &shader_manager);
+        let face_routine = FaceRoutine::new(&renderer, &base_graph, &shader_manager);
 
         RenderContext {
             renderer,
@@ -64,8 +81,12 @@ impl RenderContext {
             base_graph,
             tonemapping_routine,
             grid_routine,
+            wireframe_routine,
+            point_cloud_routine,
+            face_routine,
             surface,
             texture_format: format,
+            shader_manager,
             objects: vec![],
             lights: vec![],
         }
@@ -73,15 +94,22 @@ impl RenderContext {
 
     pub fn clear_objects(&mut self) {
         self.objects.clear();
+        self.point_cloud_routine.clear();
+        self.wireframe_routine.clear();
+        self.face_routine.clear();
     }
 
-    pub fn add_mesh_as_object(&mut self, mesh: r3::Mesh) {
+    pub fn add_mesh_as_object<M: r3::Material>(&mut self, mesh: r3::Mesh, material: Option<M>) {
         let mesh_handle = self.renderer.add_mesh(mesh);
-        let material = r3::PbrMaterial {
-            albedo: r3::AlbedoComponent::Value(glam::Vec4::new(0.8, 0.1, 0.1, 1.0)),
-            ..Default::default()
+        let material_handle = if let Some(material) = material {
+            self.renderer.add_material(material)
+        } else {
+            let material = r3::PbrMaterial {
+                albedo: r3::AlbedoComponent::Value(glam::Vec4::new(0.8, 0.1, 0.1, 1.0)),
+                ..Default::default()
+            };
+            self.renderer.add_material(material)
         };
-        let material_handle = self.renderer.add_material(material);
         let object = r3::Object {
             mesh_kind: r3::ObjectMeshKind::Static(mesh_handle),
             material: material_handle,

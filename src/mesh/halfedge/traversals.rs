@@ -196,6 +196,7 @@ pub trait VertexTraversalHelpers<'a> {
     fn outgoing_halfedges(&'a self) -> Result<SVec<HalfEdgeId>, TraversalError>;
     fn incoming_halfedges(&'a self) -> Result<SVec<HalfEdgeId>, TraversalError>;
     fn halfedge_to(&self, other: VertexId) -> Traversal<HalfEdgeId>;
+    fn adjacent_faces(&self) -> Result<SVec<FaceId>, TraversalError>;
 }
 
 impl<'a> VertexTraversalHelpers<'a> for Traversal<'a, VertexId> {
@@ -251,6 +252,16 @@ impl<'a> VertexTraversalHelpers<'a> for Traversal<'a, VertexId> {
                 inner: valid.inner,
                 location: h_to,
             })
+        })
+    }
+
+    /// Returns the polygon fan around this vertex.
+    fn adjacent_faces(&self) -> Result<SVec<FaceId>, TraversalError> {
+        self.and_then(|valid| {
+            self.outgoing_halfedges()?
+                .into_iter()
+                .map(|h| valid.inner.at_halfedge(h).face().try_end())
+                .collect::<Result<SVec<_>, _>>()
         })
     }
 }
@@ -349,216 +360,3 @@ impl<'a> HalfedgeTraversalHelpers<'a> for Traversal<'a, HalfEdgeId> {
         })
     }
 }
-
-/*
-#[derive(Clone)]
-pub enum HalfEdgeMeshTraversal<'a, L>
-where
-    L: Location,
-{
-    Valid {
-        inner: &'a HalfEdgeMesh,
-        location: L,
-    },
-    Error(TraversalError),
-}
-
-impl HalfEdgeMesh {
-    pub fn at_halfedge(&self, halfedge_id: HalfEdgeId) -> HalfEdgeMeshTraversal<'_, HalfEdgeId> {
-        HalfEdgeMeshTraversal::Valid {
-            inner: self,
-            location: halfedge_id,
-        }
-    }
-
-    pub fn at_face(&self, face_id: FaceId) -> HalfEdgeMeshTraversal<'_, FaceId> {
-        HalfEdgeMeshTraversal::Valid {
-            inner: self,
-            location: face_id,
-        }
-    }
-
-    pub fn at_vertex(&self, vertex_id: VertexId) -> HalfEdgeMeshTraversal<'_, VertexId> {
-        HalfEdgeMeshTraversal::Valid {
-            inner: self,
-            location: vertex_id,
-        }
-    }
-}
-
-impl<'a> HalfEdgeMeshTraversal<'a, VertexId> {
-    pub fn halfedge(&self) -> HalfEdgeMeshTraversal<'_, HalfEdgeId> {
-        self.map(|inner, location| {
-            if let Some(halfedge) = inner[location].halfedge {
-                HalfEdgeMeshTraversal::Valid {
-                    inner,
-                    location: halfedge,
-                }
-            } else {
-                HalfEdgeMeshTraversal::Error(TraversalError::VertexHasNoHalfedge(location))
-            }
-        })
-    }
-
-    /// Returns the halfedge that goes from the current vertex to `other`,
-    /// if any.
-    pub fn halfedge_to(&self, other: VertexId) -> Result<HalfEdgeId, TraversalError> {
-        self.outgoing_halfedges()
-            .into_iter()
-            .find(|&h| self.inner.at_halfedge(h).dst_vertex() == other)
-    }
-
-    pub fn outgoing_halfedges(&self) -> SVec<HalfEdgeId> {
-        let mut halfedges = SVec::new();
-        // Could be a disconnected vertex. Return an empty list in that case.
-        if let Some(h0) = self.inner[self.location].halfedge {
-            let mut h = h0;
-            loop {
-                halfedges.push(h);
-                h = self.inner.at_halfedge(h).cycle_around_fan().end();
-                if h == h0 {
-                    break;
-                }
-            }
-        }
-        halfedges
-    }
-}
-
-impl<'a> HalfEdgeMeshTraversal<'a, FaceId> {
-    pub fn halfedge(&self) -> HalfEdgeMeshTraversal<'_, HalfEdgeId> {
-        self.map(|inner, location| {
-            if let Some(halfedge) = inner[location].halfedge {
-                HalfEdgeMeshTraversal::Valid {
-                    inner,
-                    location: halfedge,
-                }
-            } else {
-                HalfEdgeMeshTraversal::Error(TraversalError::FaceHasNoHalfedge(location))
-            }
-        })
-    }
-
-    pub fn halfedges(&self) -> SVec<HalfEdgeId> {
-        let mut halfedges = SVec::new();
-
-        let h0 = self.halfedge().end();
-        let mut h = h0;
-        loop {
-            halfedges.push(h);
-            h = self.inner.at_halfedge(h).next().end();
-            if h == h0 {
-                break;
-            }
-        }
-        halfedges
-    }
-
-    pub fn vertices(&self) -> SVec<VertexId> {
-        self.halfedges()
-            .iter()
-            .map(|h| self.inner.at_halfedge(*h).vertex().end())
-            .collect()
-    }
-}
-
-impl<'a> HalfEdgeMeshTraversal<'a, HalfEdgeId> {
-    pub fn next(&self) -> HalfEdgeMeshTraversal<'_, HalfEdgeId> {
-        self.map(|inner, location| {
-            if let Some(next) = inner[location].next {
-                HalfEdgeMeshTraversal::Valid {
-                    inner,
-                    location: next,
-                }
-            } else {
-                HalfEdgeMeshTraversal::Error(TraversalError::HalfEdgeHasNoNext(location))
-            }
-        })
-    }
-
-    pub fn twin(&self) -> HalfEdgeMeshTraversal<'_, HalfEdgeId> {
-        self.map(|inner, location| {
-            if let Some(twin) = inner[location].twin {
-                HalfEdgeMeshTraversal::Valid {
-                    inner,
-                    location: twin,
-                }
-            } else {
-                HalfEdgeMeshTraversal::Error(TraversalError::HalfEdgeHasNoTwin(location))
-            }
-        })
-    }
-
-    pub fn vertex(&self) -> HalfEdgeMeshTraversal<'_, VertexId> {
-        self.map(|inner, location| {
-            if let Some(vertex) = inner[location].vertex {
-                HalfEdgeMeshTraversal::Valid {
-                    inner,
-                    location: vertex,
-                }
-            } else {
-                HalfEdgeMeshTraversal::Error(TraversalError::HalfEdgeHasNoVertex(location))
-            }
-        })
-    }
-
-    pub fn src_vertex(&self) -> VertexId {
-        self.vertex().end()
-    }
-
-    pub fn src_dst_pair(&self) -> (VertexId, VertexId) {
-        (self.src_vertex(), self.dst_vertex())
-    }
-
-    pub fn dst_vertex(&self) -> VertexId {
-        self.next().vertex().end()
-    }
-
-    pub fn face(&self) -> HalfEdgeMeshTraversal<'_, FaceId> {
-        self.map(|inner, location| {
-            if let Some(face) = inner[location].face {
-                HalfEdgeMeshTraversal::Valid {
-                    inner,
-                    location: face,
-                }
-            } else {
-                HalfEdgeMeshTraversal::Error(TraversalError::HalfEdgeHasNoFace(location))
-            }
-        })
-    }
-
-    pub fn is_boundary(&self) -> Result<bool, TraversalError> {
-        match self {
-            HalfEdgeMeshTraversal::Valid { inner, location } => Ok(inner[*location].face.is_none()),
-            HalfEdgeMeshTraversal::Error(err) => Err(*err),
-        }
-    }
-
-    /// Cycles around the polygon fan formed by this halfedge's outgoing vertex
-    pub fn cycle_around_fan(&self) -> HalfEdgeMeshTraversal<'_, HalfEdgeId> {
-        self.twin().next()
-    }
-}
-
-impl<'a, L> HalfEdgeMeshTraversal<'a, L>
-where
-    L: Location,
-{
-    pub fn end(&self) -> L {
-        match self {
-            HalfEdgeMeshTraversal::Valid { inner, location } => *location,
-            HalfEdgeMeshTraversal::Error(err) => panic!("Error during traversal: {:?}", err),
-        }
-    }
-
-    pub fn map<M: Location>(
-        &self,
-        mapper: impl FnOnce(&HalfEdgeMesh, L) -> HalfEdgeMeshTraversal<'_, M>,
-    ) -> HalfEdgeMeshTraversal<'_, M> {
-        match self {
-            HalfEdgeMeshTraversal::Valid { inner, location } => mapper(inner, *location),
-            HalfEdgeMeshTraversal::Error(err) => HalfEdgeMeshTraversal::Error(*err),
-        }
-    }
-}
-*/

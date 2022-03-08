@@ -128,7 +128,7 @@ pub fn cut_face(mesh: &mut halfedge::HalfEdgeMesh, v: VertexId, w: VertexId) -> 
         .iter()
         .find(|f| mesh.face_vertices(**f).contains(&w))
         .cloned()
-        .ok_or(anyhow!("cut_face: v and w must share a face"))?;
+        .ok_or_else(|| anyhow!("cut_face: v and w must share a face"))?;
 
     if mesh.at_vertex(v).halfedge_to(w).try_end().is_ok() {
         bail!("cut_face: v and w cannot share an edge")

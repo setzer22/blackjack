@@ -1,4 +1,3 @@
-
 /*
 /// This map is used in many operations when halfedges are still being built.
 /// Sometimes we need to keep this information to locate twins, and using

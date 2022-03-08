@@ -1,8 +1,11 @@
 use anyhow::Error;
 
-use crate::{prelude::debug_viz::DebugMeshes, prelude::*};
+use crate::prelude::*;
 
-use super::viewport_split::SplitTree;
+use super::{
+    viewport_3d::{EdgeDrawMode, FaceDrawMode, Viewport3dSettings},
+    viewport_split::SplitTree,
+};
 
 pub struct ApplicationContext {
     /// The mesh is at the center of the application
@@ -13,16 +16,13 @@ pub struct ApplicationContext {
     /// partition the state either horizontally or vertically. This separation
     /// is dynamic, very similar to Blender's UI model
     pub split_tree: SplitTree,
-
-    pub debug_meshes: DebugMeshes,
 }
 
 impl ApplicationContext {
-    pub fn new(renderer: &r3::Renderer) -> ApplicationContext {
+    pub fn new() -> ApplicationContext {
         ApplicationContext {
             mesh: None,
             split_tree: SplitTree::default_tree(),
-            debug_meshes: DebugMeshes::new(renderer),
         }
     }
 
@@ -41,6 +41,7 @@ impl ApplicationContext {
         egui_ctx: &egui::CtxRef,
         editor_state: &mut graph::GraphEditorState,
         render_ctx: &mut RenderContext,
+        viewport_settings: &Viewport3dSettings,
     ) {
         // TODO: Instead of clearing all objects, make the app context own the
         // objects it's drawing and clear those instead.
@@ -52,21 +53,79 @@ impl ApplicationContext {
         if let Err(err) = self.run_side_effects(editor_state) {
             eprintln!("There was an errror executing side effect: {}", err);
         }
-
-        self.build_and_render_mesh(render_ctx);
+        if let Err(err) = self.build_and_render_mesh(render_ctx, viewport_settings) {
+            self.paint_errors(egui_ctx, err);
+        }
     }
 
-    pub fn build_and_render_mesh(&mut self, render_ctx: &mut RenderContext) {
+    pub fn build_and_render_mesh(
+        &mut self,
+        render_ctx: &mut RenderContext,
+        viewport_settings: &Viewport3dSettings,
+    ) -> Result<()> {
         if let Some(mesh) = self.mesh.as_ref() {
-            self.debug_meshes.add_halfedge_debug(render_ctx, mesh);
+            // Base mesh
+            {
+                if let Some(VertexIndexBuffers {
+                    positions,
+                    normals,
+                    indices,
+                }) = match viewport_settings.face_mode {
+                    FaceDrawMode::Flat => Some(mesh.generate_triangle_buffers_flat()),
+                    FaceDrawMode::Smooth => Some(mesh.generate_triangle_buffers_smooth()?),
+                    FaceDrawMode::None => None,
+                } {
+                    if !positions.is_empty() {
+                        render_ctx.face_routine.add_base_mesh(
+                            &render_ctx.renderer,
+                            &positions,
+                            &normals,
+                            &indices,
+                        );
+                    }
+                }
+            }
 
-            let (positions, indices) = mesh.generate_buffers();
-            let r3_mesh = r3::MeshBuilder::new(positions, r3::Handedness::Left)
-                .with_indices(indices)
-                .build()
-                .unwrap();
-            render_ctx.add_mesh_as_object(r3_mesh);
+            // Face overlays
+            {
+                let FaceOverlayBuffers { positions, colors } = mesh.generate_face_overlay_buffers();
+                if !positions.is_empty() {
+                    render_ctx.face_routine.add_overlay_mesh(
+                        &render_ctx.renderer,
+                        &positions,
+                        &colors,
+                    );
+                }
+            }
+
+            // Edges
+            {
+                if let Some(LineBuffers { positions, colors }) = match viewport_settings.edge_mode {
+                    EdgeDrawMode::HalfEdge => Some(mesh.generate_halfedge_arrow_buffers()?),
+                    EdgeDrawMode::FullEdge => Some(mesh.generate_line_buffers()?),
+                    EdgeDrawMode::None => None,
+                } {
+                    if !positions.is_empty() {
+                        render_ctx.wireframe_routine.add_wireframe(
+                            &render_ctx.renderer.device,
+                            &positions,
+                            &colors,
+                        )
+                    }
+                }
+            }
+
+            // Vertices
+            {
+                let PointBuffers { positions } = mesh.generate_point_buffers();
+                if !positions.is_empty() {
+                    render_ctx
+                        .point_cloud_routine
+                        .add_point_cloud(&render_ctx.renderer.device, &positions);
+                }
+            }
         }
+        Ok(())
     }
 
     pub fn paint_errors(&mut self, egui_ctx: &egui::CtxRef, err: Error) {
@@ -104,5 +163,11 @@ impl ApplicationContext {
             let _ = program.execute();
         }
         Ok(())
+    }
+}
+
+impl Default for ApplicationContext {
+    fn default() -> Self {
+        Self::new()
     }
 }

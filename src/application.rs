@@ -1,6 +1,12 @@
 use std::sync::Arc;
 
-use crate::{prelude::*, rendergraph::grid_routine::GridRoutine};
+use crate::{
+    prelude::*,
+    rendergraph::{
+        face_routine::FaceRoutine, grid_routine::GridRoutine,
+        point_cloud_routine::PointCloudRoutine, wireframe_routine::WireframeRoutine,
+    },
+};
 use egui::{FontDefinitions, Style};
 use egui_wgpu_backend::{RenderPass, ScreenDescriptor};
 use egui_winit_platform::{Platform, PlatformDescriptor};
@@ -87,7 +93,7 @@ impl RootViewport {
                 scale_factor: scale_factor as f32,
             },
             renderpass: RenderPass::new(&renderer.device, screen_format, 1),
-            app_context: ApplicationContext::new(renderer),
+            app_context: ApplicationContext::new(),
             graph_editor: GraphEditor::new(
                 &renderer.device,
                 window_size,
@@ -188,6 +194,7 @@ impl RootViewport {
             &self.platform.context(),
             &mut self.graph_editor.state,
             render_ctx,
+            &self.viewport_3d.settings,
         );
 
         for action in actions {
@@ -216,6 +223,9 @@ impl RootViewport {
             ref pbr_routine,
             ref tonemapping_routine,
             ref grid_routine,
+            ref wireframe_routine,
+            ref point_cloud_routine,
+            ref face_routine,
             ..
         } = render_ctx;
 
@@ -229,9 +239,12 @@ impl RootViewport {
             &ready,
             ViewportRoutines {
                 base_graph,
-                pbr_routine,
-                tonemapping_routine,
-                grid_routine,
+                pbr: pbr_routine,
+                tonemapping: tonemapping_routine,
+                grid: grid_routine,
+                wireframe: wireframe_routine,
+                point_cloud: point_cloud_routine,
+                face: face_routine,
             },
         );
         graph.execute(&render_ctx.renderer, frame, cmd_bufs, &ready);
@@ -239,8 +252,11 @@ impl RootViewport {
 }
 
 pub struct ViewportRoutines<'a> {
-    base_graph: &'a r3::BaseRenderGraph,
-    pbr_routine: &'a r3::PbrRoutine,
-    tonemapping_routine: &'a r3::TonemappingRoutine,
-    grid_routine: &'a GridRoutine,
+    pub base_graph: &'a r3::BaseRenderGraph,
+    pub pbr: &'a r3::PbrRoutine,
+    pub tonemapping: &'a r3::TonemappingRoutine,
+    pub grid: &'a GridRoutine,
+    pub wireframe: &'a WireframeRoutine,
+    pub point_cloud: &'a PointCloudRoutine,
+    pub face: &'a FaceRoutine,
 }
