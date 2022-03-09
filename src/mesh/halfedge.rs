@@ -29,6 +29,9 @@ pub mod wavefront_obj;
 /// A compact halfedge graph specifically optimized for some operations
 pub mod compact_mesh;
 
+/// Types to represent a selection of a subset of faces, vertices or edges.
+pub mod selection;
+
 /// Generate vertex and index buffers suitable to be uploaded to the GPU for rendering
 pub mod gpu_buffer_generation;
 pub use gpu_buffer_generation::*;
