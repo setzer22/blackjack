@@ -3,6 +3,7 @@ use egui::RichText;
 use egui_node_graph::{
     DataTypeTrait, NodeDataTrait, NodeId, NodeResponse, UserResponseTrait, WidgetValueTrait,
 };
+use halfedge::selection::SelectionExpression;
 use serde::{Deserialize, Serialize};
 
 use self::node_templates::GraphNodeType;
@@ -54,7 +55,7 @@ pub enum ValueType {
     },
     Selection {
         text: String,
-        selection: Option<Vec<u32>>,
+        selection: Option<SelectionExpression>,
     },
     Enum {
         values: Vec<String>,

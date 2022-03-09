@@ -24,14 +24,7 @@ impl WidgetValueTrait for ValueType {
             }
             ValueType::Selection { text, selection } => {
                 if ui.text_edit_singleline(text).changed() {
-                    *selection = text
-                        .split(',')
-                        .map(|x| {
-                            x.parse::<u32>()
-                                .map_err(|_| anyhow::anyhow!("Cannot parse number"))
-                        })
-                        .collect::<Result<Vec<_>>>()
-                        .ok();
+                    *selection = SelectionExpression::parse(text).ok();
                 }
             }
             ValueType::None => {

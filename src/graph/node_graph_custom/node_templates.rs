@@ -101,7 +101,7 @@ impl NodeTemplateTrait for GraphNodeType {
             };
             (Selection $name:expr) => {
                 input!(~ $name, DataType::Selection,
-                       ValueType::Selection { text: "".into(), selection: Some(vec![]) },
+                       ValueType::Selection { text: "".into(), selection: Some(SelectionExpression::None) },
                        InputParamKind::ConstantOnly)
             };
             (Enum $name:expr, [$($values:expr),*]) => {

@@ -1,16 +1,17 @@
 use crate::prelude::*;
 use std::ops::Range;
 
+use serde::{Deserialize, Serialize};
 use slotmap::SlotMap;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SelectionFragment {
     Range(Range<u32>),
     Single(u32),
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum SelectionFragments {
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SelectionExpression {
     All,
     None,
     Explicit(Vec<SelectionFragment>),
@@ -23,12 +24,7 @@ pub enum SelectionKind {
     HalfEdges,
 }
 
-pub struct Selection {
-    pub kind: SelectionKind,
-    pub fragments: SelectionFragments,
-}
-
-impl SelectionFragments {
+impl SelectionExpression {
     /// Parses a [`SelectionFragments`] from a string input.
     ///
     /// Syntax Examples:
@@ -39,7 +35,7 @@ impl SelectionFragments {
     /// 0..5, 7..10, 13, 17, 22 // Select multiple ranges, and some single faces
     ///  // (empty string), selects nothing
     /// ```
-    pub fn parse(input: &str) -> Result<SelectionFragments> {
+    pub fn parse(input: &str) -> Result<SelectionExpression> {
         use nom_prelude::*;
         fn str2int(s: &str) -> u32 {
             s.parse().unwrap()
@@ -64,8 +60,8 @@ impl SelectionFragments {
             alt((range, single)).parse(input)
         }
 
-        fn fragments_all(input: &str) -> IResult<&str, SelectionFragments> {
-            map(tag("*"), |_| SelectionFragments::All).parse(input)
+        fn fragments_all(input: &str) -> IResult<&str, SelectionExpression> {
+            map(tag("*"), |_| SelectionExpression::All).parse(input)
         }
 
         fn whitespace(input: &str) -> IResult<&str, ()> {
@@ -76,15 +72,15 @@ impl SelectionFragments {
             map(tuple((whitespace, tag(","), whitespace)), |_| ()).parse(input)
         }
 
-        fn fragments_explicit(input: &str) -> IResult<&str, SelectionFragments> {
+        fn fragments_explicit(input: &str) -> IResult<&str, SelectionExpression> {
             map(
                 separated_list1(separator, selection_fragment),
-                SelectionFragments::Explicit,
+                SelectionExpression::Explicit,
             )
             .parse(input)
         }
 
-        fn fragments(input: &str) -> IResult<&str, SelectionFragments> {
+        fn fragments(input: &str) -> IResult<&str, SelectionExpression> {
             map(
                 tuple((whitespace, alt((fragments_all, fragments_explicit)))),
                 |(_, res)| res,
@@ -93,7 +89,7 @@ impl SelectionFragments {
         }
 
         if input.trim().is_empty() {
-            Ok(SelectionFragments::None)
+            Ok(SelectionExpression::None)
         } else {
             fragments(input)
                 .map_err(|err| anyhow::anyhow!("Error parsing selection: {}", err))
@@ -108,15 +104,6 @@ impl SelectionFragments {
     }
 }
 
-impl Selection {
-    pub fn new(kind: SelectionKind, input: &str) -> Result<Self> {
-        Ok(Self {
-            kind,
-            fragments: SelectionFragments::parse(input)?,
-        })
-    }
-}
-
 pub enum ResolvedSelection<Id: slotmap::Key> {
     All,
     None,
@@ -126,10 +113,10 @@ pub enum ResolvedSelection<Id: slotmap::Key> {
 impl HalfEdgeMesh {
     fn resolve_explicit_selection<T: slotmap::Key, U>(
         data: &SlotMap<T, U>,
-        fragments: SelectionFragments,
+        fragments: SelectionExpression,
     ) -> ResolvedSelection<T> {
         match fragments {
-            SelectionFragments::Explicit(ref fragments) => {
+            SelectionExpression::Explicit(ref fragments) => {
                 let mut ids = vec![];
                 // TODO: Optimize this
                 for (i, (id, _)) in data.iter().enumerate() {
@@ -147,21 +134,57 @@ impl HalfEdgeMesh {
                 }
                 ResolvedSelection::Explicit(ids)
             }
-            SelectionFragments::All => ResolvedSelection::All,
-            SelectionFragments::None => ResolvedSelection::None,
+            SelectionExpression::All => ResolvedSelection::All,
+            SelectionExpression::None => ResolvedSelection::None,
         }
     }
 
-    pub fn resolve_face_selection(&self, fragments: SelectionFragments) -> ResolvedSelection<FaceId> {
+    pub fn resolve_face_selection(
+        &self,
+        fragments: SelectionExpression,
+    ) -> ResolvedSelection<FaceId> {
         Self::resolve_explicit_selection(&self.faces, fragments)
     }
 
-    pub fn resolve_vertex_selection(&self, fragments: SelectionFragments) -> ResolvedSelection<VertexId> {
+    pub fn resolve_face_selection_full(&self, fragments: SelectionExpression) -> Vec<FaceId> {
+        match Self::resolve_explicit_selection(&self.faces, fragments) {
+            ResolvedSelection::All => self.faces.iter().map(|(a, _)| a).collect(),
+            ResolvedSelection::None => vec![],
+            ResolvedSelection::Explicit(v) => v,
+        }
+    }
+
+    pub fn resolve_vertex_selection(
+        &self,
+        fragments: SelectionExpression,
+    ) -> ResolvedSelection<VertexId> {
         Self::resolve_explicit_selection(&self.vertices, fragments)
     }
 
-    pub fn resolve_halfedge_selection(&self, fragments: SelectionFragments) -> ResolvedSelection<HalfEdgeId> {
+    pub fn resolve_vertex_selection_full(&self, fragments: SelectionExpression) -> Vec<VertexId> {
+        match Self::resolve_explicit_selection(&self.vertices, fragments) {
+            ResolvedSelection::All => self.vertices.iter().map(|(a, _)| a).collect(),
+            ResolvedSelection::None => vec![],
+            ResolvedSelection::Explicit(v) => v,
+        }
+    }
+
+    pub fn resolve_halfedge_selection(
+        &self,
+        fragments: SelectionExpression,
+    ) -> ResolvedSelection<HalfEdgeId> {
         Self::resolve_explicit_selection(&self.halfedges, fragments)
+    }
+
+    pub fn resolve_halfedge_selection_full(
+        &self,
+        fragments: SelectionExpression,
+    ) -> Vec<HalfEdgeId> {
+        match Self::resolve_explicit_selection(&self.halfedges, fragments) {
+            ResolvedSelection::All => self.halfedges.iter().map(|(a, _)| a).collect(),
+            ResolvedSelection::None => vec![],
+            ResolvedSelection::Explicit(v) => v,
+        }
     }
 }
 
@@ -172,44 +195,44 @@ mod test {
     #[test]
     #[rustfmt::skip]
     fn test_all() {
-        assert_eq!(SelectionFragments::parse("*").unwrap(), SelectionFragments::All);
-        assert_eq!(SelectionFragments::parse("   *").unwrap(), SelectionFragments::All);
-        assert_eq!(SelectionFragments::parse("*   ").unwrap(), SelectionFragments::All);
-        assert_eq!(SelectionFragments::parse("   *   ").unwrap(), SelectionFragments::All);
+        assert_eq!(SelectionExpression::parse("*").unwrap(), SelectionExpression::All);
+        assert_eq!(SelectionExpression::parse("   *").unwrap(), SelectionExpression::All);
+        assert_eq!(SelectionExpression::parse("*   ").unwrap(), SelectionExpression::All);
+        assert_eq!(SelectionExpression::parse("   *   ").unwrap(), SelectionExpression::All);
     }
 
     #[test]
     #[rustfmt::skip]
     fn test_none() {
-        assert_eq!(SelectionFragments::parse("").unwrap(), SelectionFragments::None);
-        assert_eq!(SelectionFragments::parse("   ").unwrap(), SelectionFragments::None);
+        assert_eq!(SelectionExpression::parse("").unwrap(), SelectionExpression::None);
+        assert_eq!(SelectionExpression::parse("   ").unwrap(), SelectionExpression::None);
     }
 
     #[test]
     #[rustfmt::skip]
     fn test_explicit() {
         use super::SelectionFragment::*;
-        fn expl(v: &[SelectionFragment]) -> SelectionFragments {
-            SelectionFragments::Explicit(v.to_vec())
+        fn expl(v: &[SelectionFragment]) -> SelectionExpression {
+            SelectionExpression::Explicit(v.to_vec())
         }
         
-        assert_eq!(SelectionFragments::parse("1").unwrap(), expl(&[Single(1)]));
-        assert_eq!(SelectionFragments::parse("1, 2, 3").unwrap(), expl(&[Single(1), Single(2), Single(3)]));
-        assert_eq!(SelectionFragments::parse("1,2,3").unwrap(), expl(&[Single(1), Single(2), Single(3)]));
-        assert_eq!(SelectionFragments::parse("1..5").unwrap(), expl(&[Range(1..5)]));
-        assert_eq!(SelectionFragments::parse("1..5, 7..10, 15..16").unwrap(), 
+        assert_eq!(SelectionExpression::parse("1").unwrap(), expl(&[Single(1)]));
+        assert_eq!(SelectionExpression::parse("1, 2, 3").unwrap(), expl(&[Single(1), Single(2), Single(3)]));
+        assert_eq!(SelectionExpression::parse("1,2,3").unwrap(), expl(&[Single(1), Single(2), Single(3)]));
+        assert_eq!(SelectionExpression::parse("1..5").unwrap(), expl(&[Range(1..5)]));
+        assert_eq!(SelectionExpression::parse("1..5, 7..10, 15..16").unwrap(), 
             expl(&[Range(1..5), Range(7..10), Range(15..16)]));
-        assert_eq!(SelectionFragments::parse("1..5, 7..10, 15..16, 18, 22, 27").unwrap(), 
+        assert_eq!(SelectionExpression::parse("1..5, 7..10, 15..16, 18, 22, 27").unwrap(), 
             expl(&[Range(1..5), Range(7..10), Range(15..16), Single(18), Single(22), Single(27)]));
     }
 
     #[test]
     #[rustfmt::skip]
     fn test_error() {
-        assert!(SelectionFragments::parse("1, *").is_err());
-        assert!(SelectionFragments::parse("1 2 3").is_err());
-        assert!(SelectionFragments::parse("*, 1").is_err());
-        assert!(SelectionFragments::parse("1,2,3,a").is_err());
-        assert!(SelectionFragments::parse("potato").is_err());
+        assert!(SelectionExpression::parse("1, *").is_err());
+        assert!(SelectionExpression::parse("1 2 3").is_err());
+        assert!(SelectionExpression::parse("*, 1").is_err());
+        assert!(SelectionExpression::parse("1,2,3,a").is_err());
+        assert!(SelectionExpression::parse("potato").is_err());
     }
 }

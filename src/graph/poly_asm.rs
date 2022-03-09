@@ -2,7 +2,7 @@ use std::marker::PhantomData;
 
 use crate::prelude::*;
 use anyhow::anyhow;
-use halfedge::compact_mesh::CompactMesh;
+use halfedge::{compact_mesh::CompactMesh, selection::SelectionExpression};
 
 type RawMemAddr = hecs::Entity;
 
@@ -78,19 +78,19 @@ pub enum PolyAsmInstruction {
         out_mesh: MemAddr<HalfEdgeMesh>,
     },
     ChamferVertices {
-        vertices: MemAddr<Vec<u32>>,
+        vertices: MemAddr<SelectionExpression>,
         amount: MemAddr<f32>,
         in_mesh: MemAddr<HalfEdgeMesh>,
         out_mesh: MemAddr<HalfEdgeMesh>,
     },
     BevelEdges {
-        edges: MemAddr<Vec<u32>>,
+        edges: MemAddr<SelectionExpression>,
         amount: MemAddr<f32>,
         in_mesh: MemAddr<HalfEdgeMesh>,
         out_mesh: MemAddr<HalfEdgeMesh>,
     },
     ExtrudeFaces {
-        faces: MemAddr<Vec<u32>>,
+        faces: MemAddr<SelectionExpression>,
         amount: MemAddr<f32>,
         in_mesh: MemAddr<HalfEdgeMesh>,
         out_mesh: MemAddr<HalfEdgeMesh>,
@@ -240,13 +240,8 @@ impl PolyAsmProgram {
                 let mut result = (*self.mem_fetch_ref(*in_mesh)?).clone();
 
                 result.clear_debug();
-                let vs = result.iter_vertices().map(|x| x.0).collect::<Vec<_>>();
-                for vertex in vertices {
-                    let v_id = vs
-                        .get(vertex as usize)
-                        .cloned()
-                        .ok_or_else(|| anyhow!("Invalid index: {}", vertex))?;
 
+                for v_id in result.resolve_vertex_selection_full(vertices) {
                     halfedge::edit_ops::chamfer_vertex(&mut result, v_id, amount)?;
                 }
                 self.mem_store(*out_mesh, result)?;
@@ -263,15 +258,7 @@ impl PolyAsmProgram {
                 let mut result = (*self.mem_fetch_ref(*in_mesh)?).clone();
 
                 result.clear_debug();
-                let hs = result.iter_halfedges().map(|x| x.0).collect::<Vec<_>>();
-                let edges_to_bevel = edges
-                    .iter()
-                    .map(|idx| {
-                        hs.get(*idx as usize)
-                            .cloned()
-                            .ok_or_else(|| anyhow!("Invalid index: {}", idx))
-                    })
-                    .collect::<Result<Vec<_>>>()?;
+                let edges_to_bevel = result.resolve_halfedge_selection_full(edges);
                 halfedge::edit_ops::bevel_edges(&mut result, &edges_to_bevel, amount)?;
 
                 self.mem_store(*out_mesh, result)?;
@@ -288,15 +275,7 @@ impl PolyAsmProgram {
                 let mut result = (*self.mem_fetch_ref(*in_mesh)?).clone();
 
                 result.clear_debug();
-                let fs = result.iter_faces().map(|x| x.0).collect::<Vec<_>>();
-                let faces_to_extrude = faces
-                    .iter()
-                    .map(|idx| {
-                        fs.get(*idx as usize)
-                            .cloned()
-                            .ok_or_else(|| anyhow!("Invalid index: {}", idx))
-                    })
-                    .collect::<Result<Vec<_>>>()?;
+                let faces_to_extrude = result.resolve_face_selection_full(faces);
                 halfedge::edit_ops::extrude_faces(&mut result, &faces_to_extrude, amount)?;
 
                 self.mem_store(*out_mesh, result)?;
