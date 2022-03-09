@@ -28,10 +28,12 @@ Here are the main goals and philosophy behind blackjack, but note that this show
 
 Here are the steps in order to try out the early development version of Blackjack. Binaries and easier installation methods will be provided in the future. The steps below require a complete Rust toolchain using `cargo`:
 
-1. Clone this repository, and make sure to clone its submodules:
+1. Clone this repository, and make sure to download LFS files. In some systems, this may require separately installing a `git-lfs` package:
 ```bash
 git clone https://github.com/setzer22/blackjack
-git submodule update --init --recursive
+git lfs install
+git lfs fetch --all
+git lfs pull
 ```
 2. From the same folder, run `cargo run` to launch Blackjack.
 
