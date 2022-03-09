@@ -8,7 +8,7 @@
 **Blackjack** is a procedural modelling application, following the steps of great tools like [Houdini](https://www.sidefx.com/) or [Blender's geometry nodes project](https://docs.blender.org/manual/en/latest/modeling/geometry_nodes/index.html). At its core, Blackjack is a simple node-driven interface where you can compose operations to create a 3d mesh in a non-destructive way.
 
 
-![Main interaface of Blackjack](./doc/resources/showcase.png)
+![Main interaface of Blackjack](./doc/resources/showcase2.png)
 
 ![Gif showcasing procedural modelling in Blackjack](./doc/resources/blackjack.gif)
 ![Another gif showcasing procedural modelling in Blackjack](./doc/resources/blackjack_gif2.gif)
@@ -24,7 +24,7 @@ Here are the main goals and philosophy behind blackjack, but note that this show
 - **Error resilience, crash resistance:** When things go wrong, Blackjack will make an effort to *respect your time* as a user and not lose your work. Errors will be clearly communicated and fixing any bugs leading to a crash will take the highest priority.
 
 ## Install and usage
-> **Note:** A crates.io version will be published shortly, but it's not possible yet due to unpublished dependencies.
+> **Note:** A crates.io version cannot be published due to unreleased dependencies. Blackjack depends on the bleeding edge version of some crates and requires custom forks for some others. This situation may change once development stabilizes.
 
 Here are the steps in order to try out the early development version of Blackjack. Binaries and easier installation methods will be provided in the future. The steps below require a complete Rust toolchain using `cargo`:
 
