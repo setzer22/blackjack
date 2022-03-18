@@ -142,6 +142,17 @@ pub fn blackjack_lua_stdlib(lua: &Lua) -> anyhow::Result<()> {
         Ok(result)
     });
 
+    lua_fn!(ops, "extrude", |faces: SelectionExpression,
+                             amount: f32,
+                             mesh: AnyUserData|
+     -> HalfEdgeMesh {
+        let mut result = mesh.borrow::<HalfEdgeMesh>()?.clone();
+        let faces = result.resolve_face_selection_full(faces);
+        crate::mesh::halfedge::edit_ops::extrude_faces(&mut result, &faces, amount)
+            .map_lua_err()?;
+        Ok(result)
+    });
+
     lua_fn!(
         blackjack,
         "selection",
@@ -172,5 +183,15 @@ mod test {
         let main: Function = lua.globals().get("Plugin_main").unwrap();
         let result: HalfEdgeMesh = main.call(()).unwrap();
         // result.to_wavefront_obj("/tmp/test.obj".into()).unwrap();
+    }
+
+    #[test]
+    pub fn test_vector_lib() {
+        let lua = Lua::new();
+        let vector_lib: mlua::Value = lua.load(include_str!("vector.lua")).call(()).unwrap();
+        lua.globals().set("vec3", vector_lib).unwrap();
+        lua.load(include_str!("vectest.lua")).exec().unwrap();
+        let main: Function = lua.globals().get("Plugin_main").unwrap();
+        let _: mlua::Value = main.call(()).unwrap();
     }
 }
