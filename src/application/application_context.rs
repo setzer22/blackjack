@@ -1,6 +1,7 @@
 use anyhow::Error;
+use mlua::Lua;
 
-use crate::prelude::*;
+use crate::{engine::lua_stdlib::init_lua, prelude::*};
 
 use super::{
     viewport_3d::{EdgeDrawMode, FaceDrawMode, Viewport3dSettings},
@@ -16,6 +17,7 @@ pub struct ApplicationContext {
     /// partition the state either horizontally or vertically. This separation
     /// is dynamic, very similar to Blender's UI model
     pub split_tree: SplitTree,
+    pub lua: Lua,
 }
 
 impl ApplicationContext {
@@ -23,6 +25,7 @@ impl ApplicationContext {
         ApplicationContext {
             mesh: None,
             split_tree: SplitTree::default_tree(),
+            lua: init_lua().expect("Init lua should not fail"),
         }
     }
 
@@ -145,8 +148,21 @@ impl ApplicationContext {
         editor_state: &graph::GraphEditorState,
     ) -> Result<()> {
         if let Some(active) = editor_state.user_state.active_node {
-            let program = crate::graph::graph_compiler::compile_graph(&editor_state.graph, active)?;
-            let mesh = program.execute()?;
+            //let program = crate::graph::graph_compiler::compile_graph(&editor_state.graph, active)?;
+
+            let program =
+                crate::graph::graph_compiler2::compile_graph(&editor_state.graph, active)?;
+
+            // --- TEST CODE ---
+            use std::io::prelude::*;
+            let mut file = std::fs::File::create("/tmp/test.lua")?;
+            file.write_all(program.lua_program.as_bytes())?;
+            // -----------------
+
+            let params =
+                crate::engine::execution::extract_params(&self.lua, &editor_state.graph, &program)?;
+            let mesh = crate::engine::execution::run_program(&self.lua, &program, params)?;
+
             self.mesh = Some(mesh);
         } else {
             self.mesh = None

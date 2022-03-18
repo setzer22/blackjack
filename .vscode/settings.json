@@ -1,0 +1,4 @@
+{
+    "lua.targetVersion": "5.3",
+    "lua.preferLuaCheckErrors": true
+}

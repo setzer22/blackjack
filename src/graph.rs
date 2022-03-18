@@ -6,3 +6,6 @@ pub mod poly_asm;
 
 /// Compiles node graphs into PolyAsm programs
 pub mod graph_compiler;
+
+/// Compiles node graphs into Lua
+pub mod graph_compiler2;
