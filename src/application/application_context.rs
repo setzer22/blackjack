@@ -1,7 +1,7 @@
 use anyhow::Error;
 use mlua::Lua;
 
-use crate::{engine::lua_stdlib::init_lua, prelude::*};
+use crate::{engine::lua_stdlib::{init_lua, LuaRuntime}, prelude::*};
 
 use super::{
     viewport_3d::{EdgeDrawMode, FaceDrawMode, Viewport3dSettings},
@@ -17,7 +17,6 @@ pub struct ApplicationContext {
     /// partition the state either horizontally or vertically. This separation
     /// is dynamic, very similar to Blender's UI model
     pub split_tree: SplitTree,
-    pub lua: Lua,
 }
 
 impl ApplicationContext {
@@ -25,7 +24,6 @@ impl ApplicationContext {
         ApplicationContext {
             mesh: None,
             split_tree: SplitTree::default_tree(),
-            lua: init_lua().expect("Init lua should not fail"),
         }
     }
 
@@ -45,12 +43,13 @@ impl ApplicationContext {
         editor_state: &mut graph::GraphEditorState,
         render_ctx: &mut RenderContext,
         viewport_settings: &Viewport3dSettings,
+        lua_runtime: &LuaRuntime,
     ) {
         // TODO: Instead of clearing all objects, make the app context own the
         // objects it's drawing and clear those instead.
         render_ctx.clear_objects();
 
-        if let Err(err) = self.compile_and_update_mesh(editor_state) {
+        if let Err(err) = self.compile_and_update_mesh(editor_state, lua_runtime) {
             self.paint_errors(egui_ctx, err);
         }
         if let Err(err) = self.run_side_effects(editor_state) {
@@ -146,6 +145,7 @@ impl ApplicationContext {
     pub fn compile_and_update_mesh(
         &mut self,
         editor_state: &graph::GraphEditorState,
+        lua_runtime: &LuaRuntime,
     ) -> Result<()> {
         if let Some(active) = editor_state.user_state.active_node {
             //let program = crate::graph::graph_compiler::compile_graph(&editor_state.graph, active)?;
@@ -160,8 +160,8 @@ impl ApplicationContext {
             // -----------------
 
             let params =
-                crate::engine::execution::extract_params(&self.lua, &editor_state.graph, &program)?;
-            let mesh = crate::engine::execution::run_program(&self.lua, &program, params)?;
+                crate::engine::execution::extract_params(&lua_runtime.lua, &editor_state.graph, &program)?;
+            let mesh = crate::engine::execution::run_program(&lua_runtime.lua, &program, params)?;
 
             self.mesh = Some(mesh);
         } else {

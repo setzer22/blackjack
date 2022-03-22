@@ -1,6 +1,6 @@
 use crate::prelude::*;
 use halfedge::selection::SelectionExpression;
-use mlua::{Lua, FromLua, Function, Table};
+use mlua::{Lua, Function, Table};
 
 use super::lua_stdlib::{self, EngineValue};
 use crate::{graph::graph_compiler2::CompiledProgram, prelude::graph::Graph};
@@ -14,7 +14,7 @@ pub fn extract_params<'lua>(
     for const_param in &compiled.const_parameters {
         let id = const_param.id;
         let input = graph.get_input(id);
-        let ident = const_param.ident_str(graph)?;
+        let ident = const_param.const_value_ref(graph)?;
         let value = match input.value() {
             crate::prelude::graph::ValueType::None => {
                 Err(anyhow!("Cannot use constant value for non-existing type"))

@@ -5,7 +5,7 @@ use crate::{
     rendergraph::{
         face_routine::FaceRoutine, grid_routine::GridRoutine,
         point_cloud_routine::PointCloudRoutine, wireframe_routine::WireframeRoutine,
-    },
+    }, engine::lua_stdlib::{LuaRuntime, init_lua},
 };
 use egui::{FontDefinitions, Style};
 use egui_wgpu_backend::{RenderPass, ScreenDescriptor};
@@ -27,6 +27,7 @@ pub struct RootViewport {
     offscreen_viewports: HashMap<OffscreenViewport, AppViewport>,
     inspector_tabs: InspectorTabs,
     diagnostics_open: bool,
+    lua_runtime: LuaRuntime,
 }
 
 /// The application context is state that is global to an instance of blackjack.
@@ -104,6 +105,7 @@ impl RootViewport {
             offscreen_viewports,
             inspector_tabs: InspectorTabs::new(),
             diagnostics_open: false,
+            lua_runtime: init_lua().expect("Init lua should not fail"),
         }
     }
 
@@ -167,6 +169,7 @@ impl RootViewport {
         self.graph_editor.update(
             self.screen_descriptor.scale_factor,
             self.offscreen_viewports[&OffscreenViewport::GraphEditor].rect,
+            &self.lua_runtime,
         );
         self.viewport_3d.update(
             self.screen_descriptor.scale_factor,
@@ -195,6 +198,7 @@ impl RootViewport {
             &mut self.graph_editor.state,
             render_ctx,
             &self.viewport_3d.settings,
+            &self.lua_runtime,
         );
 
         for action in actions {

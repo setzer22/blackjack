@@ -1,14 +1,16 @@
-use crate::prelude::*;
+use crate::{prelude::*, engine::lua_stdlib::LuaRuntime};
 use egui::RichText;
 use egui_node_graph::{
-    DataTypeTrait, NodeDataTrait, NodeId, NodeResponse, UserResponseTrait, WidgetValueTrait,
+    DataTypeTrait, NodeDataTrait, NodeId, NodeResponse, UserResponseTrait, WidgetValueTrait, NodeTemplateIter,
 };
 use halfedge::selection::SelectionExpression;
 use serde::{Deserialize, Serialize};
 
-use self::node_templates::GraphNodeType;
+//use self::node_templates::GraphNodeType;
+use self::node_templates2::NodeDefinition;
 
 pub mod node_templates;
+pub mod node_templates2;
 pub mod value_widget;
 
 /// A generic egui_node_graph graph, with blackjack-specific parameters
@@ -18,7 +20,7 @@ pub type GraphEditorState = egui_node_graph::GraphEditorState<
     NodeData,
     DataType,
     ValueType,
-    GraphNodeType,
+    NodeDefinition,
     CustomGraphState,
 >;
 
@@ -30,7 +32,7 @@ pub struct NodeData {
 }
 
 /// Blackjack-specific graph data types.
-#[derive(Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Copy, Clone, PartialEq, Eq, Serialize, Deserialize, Debug)]
 pub enum DataType {
     Vector,
     Scalar,
@@ -166,11 +168,21 @@ impl NodeDataTrait for NodeData {
     }
 }
 
+impl NodeTemplateIter for &LuaRuntime {
+    type Item = NodeDefinition;
+
+    fn all_kinds(&self) -> Vec<Self::Item> {
+        self.node_definitions.values().cloned().collect()
+    }
+}
+
 /// Blackjack's custom draw node graph function. It defers to egui_node_graph to
 /// draw the graph itself, then interprets any responses it got and applies the
 /// required side effects.
-pub fn draw_node_graph(ctx: &egui::CtxRef, state: &mut GraphEditorState) {
-    let responses = state.draw_graph_editor(ctx, graph::AllNodeTemplates);
+pub fn draw_node_graph(ctx: &egui::CtxRef, state: &mut GraphEditorState, runtime: &LuaRuntime) {
+    // WIP: I loaded the node templates from lua. Now I need to wrap them in a
+    // "node library" and store them somewhere.
+    let responses = state.draw_graph_editor(ctx, runtime);
     for response in responses.node_responses {
         match response {
             NodeResponse::DeleteNode(node_id) => {
