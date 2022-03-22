@@ -23,4 +23,8 @@ function NodeLibrary:listNodes()
     return nodes
 end
 
+function NodeLibrary:callNode(node_name, args)
+    return self.nodes[node_name].op(args)
+end
+
 return NodeLibrary

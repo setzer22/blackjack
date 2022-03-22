@@ -72,11 +72,10 @@ pub struct CompiledProgram {
     pub const_parameters: Vec<ConstParamAddr>,
 }
 
-
 /// Returns a string uniquely idenfifying a slotmap id. This will be an
 /// identifier like `1v1` for index 1, generation 1, but the value is really an
 /// implementation detail.
-/// 
+///
 /// NOTE: There is a potential for updates in the `slotmap` crate breaking our
 /// code generator if their debug representation starts following a different
 /// pattern that's no longer compatible with Lua identifier syntax.
@@ -155,7 +154,7 @@ fn codegen_input(
     param_name: &str,
 ) -> Result<InputArgAddr> {
     let param = graph[node_id].get_input(param_name)?;
-    if let Some(output) = dbg!(graph.connection(param)) {
+    if let Some(output) = graph.connection(param) {
         if let Some(ident) = ctx.outputs_cache.get(&output) {
             Ok(InputArgAddr::OtherOut {
                 out_addr: *ident,
@@ -196,11 +195,11 @@ fn codegen_output(
     graph: &Graph,
     ctx: &mut CodegenContext,
     node_id: NodeId,
-    param_name: &str,
 ) -> Result<NodeOutputAddr> {
-    let out_id = graph[node_id].get_output(param_name)?;
     let addr = NodeOutputAddr { id: node_id };
-    ctx.outputs_cache.insert(out_id, addr);
+    for (_, out_id) in graph[node_id].outputs.iter() {
+        ctx.outputs_cache.insert(*out_id, addr);
+    }
     Ok(addr)
 }
 
@@ -231,20 +230,26 @@ fn codegen_node(
             }
         };
     }
-
-    let mut args = String::from("{\n");
-    for input_name in graph[node_id].inputs.iter().map(|x| &x.0) {
-        let input_addr = codegen_input(graph, ctx, node_id, input_name)?;
-        args += &format!(
-            "{indent}{indent}{input_name} = {},\n",
-            input_addr.generate_code(graph, ctx)?
-        );
-    }
-    args = args + indent.as_str() + "}";
-    let output_addr = codegen_output(graph, ctx, node_id, "out_mesh")?.variable_name(graph)?;
+    let args = if graph[node_id].inputs.is_empty() {
+        String::from("{}")
+    } else {
+        let mut args = String::from("{\n");
+        for input_name in graph[node_id].inputs.iter().map(|x| &x.0) {
+            let input_addr = codegen_input(graph, ctx, node_id, input_name)?;
+            args += &format!(
+                "{indent}{indent}{input_name} = {},\n",
+                input_addr.generate_code(graph, ctx)?
+            );
+        }
+        args + indent.as_str() + "}"
+    };
+    let output_addr = codegen_output(graph, ctx, node_id)?.variable_name(graph)?;
     let node_name = graph[node_id].user_data.op_name.as_str();
 
-    emit_line!("local {output_addr} = NodeLibrary.nodes['{node_name}'].op({args})");
+    emit_line!("local {output_addr} = NodeLibrary:callNode('{node_name}', {args})");
+
+    // TODO: The return value is not always out_mesh. This should be stored
+    // somehow in the node definition.
     emit_return!(format!("{output_addr}.out_mesh"));
 
     Ok(())
