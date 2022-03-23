@@ -74,6 +74,7 @@ impl NodeTemplateTrait for GraphNodeType {
             op_name: self.op_name().into(),
             // TODO: Change this when more nodes are executable
             is_executable: matches!(self, GraphNodeType::ExportObj),
+            returns: todo!(),
         }
     }
 

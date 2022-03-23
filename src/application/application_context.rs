@@ -1,7 +1,5 @@
 use anyhow::Error;
-use mlua::Lua;
-
-use crate::{engine::lua_stdlib::{init_lua, LuaRuntime}, prelude::*};
+use crate::{engine::lua_stdlib::{LuaRuntime}, prelude::*};
 
 use super::{
     viewport_3d::{EdgeDrawMode, FaceDrawMode, Viewport3dSettings},

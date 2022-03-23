@@ -20,7 +20,8 @@ local core_nodes = {
             return {out_mesh = Primitives.cube(inputs.origin, inputs.size)}
         end,
         inputs = {v3("origin", Vec3(0, 0, 0)), v3("size", Vec3(1, 1, 1))},
-        outputs = {mesh("out_mesh")}
+        outputs = {mesh("out_mesh")},
+        returns = "out_mesh",
     },
     MakeQuad = {
         label = "Quad",
@@ -34,7 +35,8 @@ local core_nodes = {
             v3("center", Vec3(0, 0, 0)), v3("normal", Vec3(0, 1, 0)),
             v3("right", Vec3(1, 0, 0)), v3("size", Vec3(1, 1, 1))
         },
-        outputs = {mesh("out_mesh")}
+        outputs = {mesh("out_mesh")},
+        returns = "out_mesh",
     },
     BevelEdges = {
         label = "Bevel edges",
@@ -42,9 +44,10 @@ local core_nodes = {
             mesh("in_mesh"), selection("edges"), scalar("amount", 0.0, 0.0, 1.0)
         },
         outputs = {mesh("out_mesh")},
+        returns = "out_mesh",
         op = function(inputs)
             return {
-                out_mesh = Ops.bevel(inputs.edges, inputs.amount, inputs.mesh)
+                out_mesh = Ops.bevel(inputs.edges, inputs.amount, inputs.in_mesh)
             }
         end
     },
@@ -59,18 +62,17 @@ local core_nodes = {
             return {v = Vec3(inputs.x, inputs.y, inputs.z)}
         end
     },
-    Foo = {
-        label = "Foo",
-        inputs = {},
-        outputs = {v3("v")},
-        op = function(inputs) return {v = Vec3(2, 2, 2)} end
-    },
-    Bar = {
-        label = "Bar",
-        inputs = {v3("v", Vec3(1, 1, 1))},
-        outputs = {mesh("out_mesh")},
+    VectorMath = {
+        label = "Vector math",
+        inputs = {
+            v3("vec_a", Vec3(0,0,0)),
+            v3("vec_b", Vec3(0,0,0)),
+        },
+        outputs = {
+            v3("out"),
+        },
         op = function(inputs)
-            return {out_mesh = Primitives.cube(inputs.v, Vec3(1, 1, 1))}
+            return { out = inputs.vec_a + inputs.vec_b }
         end
     }
 }

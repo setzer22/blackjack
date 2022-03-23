@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use anyhow::*;
-use egui_node_graph::NodeTemplateTrait;
+use egui_node_graph::{InputParamKind, NodeTemplateTrait};
 use mlua::Table;
 
 use crate::engine::lua_stdlib::Vec3;
@@ -23,10 +23,19 @@ pub struct OutputDefinition {
 
 #[derive(Clone, Debug)]
 pub struct NodeDefinition {
+    /// The name of the node
     name: String,
+    /// The name of the node that will be displayed to users
     label: String,
+    /// The definitions for this node's input parameters
     inputs: Vec<InputDefinition>,
+    /// The definitions for this node's output parameters
     outputs: Vec<OutputDefinition>,
+    /// If present, the output parameter that corresponds to the 'return' value
+    /// of this node. The return value of a node can only be a mesh. Nodes that
+    /// return something can be "activated", and the returned mesh will be
+    /// displayed on the blackjack viewport.
+    returns: Option<String>,
 }
 
 fn data_type_from_str(s: &str) -> Result<DataType> {
@@ -89,11 +98,14 @@ impl NodeDefinition {
             .map(|x| OutputDefinition::from_lua(x?))
             .collect::<Result<Vec<_>>>()?;
 
+        let returns = table.get::<_, String>("returns").ok();
+
         Ok(NodeDefinition {
             name,
             label: table.get("label")?,
             inputs,
             outputs,
+            returns,
         })
     }
 
@@ -124,6 +136,7 @@ impl NodeTemplateTrait for NodeDefinition {
     fn user_data(&self) -> Self::NodeData {
         Self::NodeData {
             op_name: self.name.clone(),
+            returns: self.returns.clone(),
             is_executable: false, // TODO!
         }
     }
@@ -134,13 +147,22 @@ impl NodeTemplateTrait for NodeDefinition {
         node_id: egui_node_graph::NodeId,
     ) {
         for input in &self.inputs {
+            let input_param_kind = match input.data_type {
+                DataType::Vector => InputParamKind::ConnectionOrConstant,
+                DataType::Scalar => InputParamKind::ConnectionOrConstant,
+                DataType::Selection => InputParamKind::ConnectionOrConstant,
+                DataType::Mesh => InputParamKind::ConnectionOnly,
+                DataType::Enum => InputParamKind::ConstantOnly,
+                DataType::NewFile => InputParamKind::ConstantOnly,
+            };
+
             graph.add_input_param(
                 node_id,
                 input.name.clone(),
                 input.data_type,
-                input.value.as_ref().unwrap().clone(), // TODO!!
-                egui_node_graph::InputParamKind::ConnectionOrConstant, // TODO!!
-                true,                                  // TODO!!
+                input.value.as_ref().unwrap_or(&ValueType::None).clone(),
+                input_param_kind,
+                true,
             );
         }
         for output in &self.outputs {

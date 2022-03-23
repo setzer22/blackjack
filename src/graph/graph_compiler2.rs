@@ -2,6 +2,8 @@ use crate::{prelude::graph::*, prelude::*};
 
 use std::fmt::Write;
 
+use super::node_graph_custom::node_templates2::NodeDefinition;
+
 /// Represents the place where the output of a node will be stored. Gets
 /// translated to local identifiers in the Lua code.
 ///

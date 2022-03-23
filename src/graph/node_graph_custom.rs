@@ -28,6 +28,7 @@ pub type GraphEditorState = egui_node_graph::GraphEditorState<
 #[derive(Clone, Serialize, Deserialize)]
 pub struct NodeData {
     pub op_name: String,
+    pub returns: Option<String>,
     pub is_executable: bool,
 }
 

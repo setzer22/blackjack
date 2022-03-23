@@ -1,6 +1,13 @@
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    fs::FileType,
+    path::PathBuf,
+    sync::mpsc::{self, Receiver},
+    time::Duration,
+};
 
-use mlua::{AnyUserData, FromLua, Lua, Table, ToLua, UserData};
+use mlua::{AnyUserData, AsChunk, FromLua, Lua, Table, ToLua, UserData};
+use notify::{DebouncedEvent, INotifyWatcher, RecommendedWatcher, Watcher};
 
 use crate::{
     engine::ToLuaError,
@@ -12,6 +19,8 @@ use crate::{
 pub struct LuaRuntime {
     pub lua: Lua,
     pub node_definitions: HashMap<String, NodeDefinition>,
+    pub watcher: RecommendedWatcher,
+    pub watcher_channel: Receiver<DebouncedEvent>,
 }
 
 /// Vector types in Lua must be very lightweight. I have benchmarked the
@@ -21,12 +30,13 @@ pub struct LuaRuntime {
 /// userdata with a metatable.
 macro_rules! def_vec_type {
     ($t:ident, $glam_t:ty, $($fields:ident),*) => {
+        #[derive(Debug)]
         pub struct $t(pub $glam_t);
         impl<'lua> ToLua<'lua> for $t {
             fn to_lua(self, lua: &'lua Lua) -> mlua::Result<mlua::Value<'lua>> {
-                let table =
-                    lua.create_table_from([$((stringify!($fields), self.0.$fields)),*])?;
-                Ok(mlua::Value::Table(table))
+                let constructor = lua.globals()
+                    .get::<_, Table>(stringify!($t))?.get::<_, mlua::Function>("new")?;
+                constructor.call(($(self.0.$fields),*))
             }
         }
         impl<'lua> FromLua<'lua> for $t {
@@ -52,7 +62,7 @@ def_vec_type!(Vec4, glam::Vec4, x, y, z, w);
 
 impl UserData for SelectionExpression {}
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Path(pub std::path::PathBuf);
 impl UserData for Path {}
 
@@ -60,6 +70,7 @@ impl UserData for HalfEdgeMesh {}
 
 macro_rules! def_wrapper_enum {
     ($tname:ident, $($a:ident => $b:ident),*) => {
+        #[derive(Debug)]
         #[allow(dead_code)]
         pub enum $tname {
             $($a($b)),*
@@ -108,12 +119,54 @@ pub fn load_lua_libraries(lua: &Lua) -> anyhow::Result<()> {
 
     // Execute init code
     execute!("blackjack_init.lua");
-    execute!("core_nodes.lua");
 
     Ok(())
 }
 
+pub struct LuaSourceFile {
+    contents: String,
+    name: String,
+}
+impl<'lua> AsChunk<'lua> for LuaSourceFile {
+    fn source(&self) -> &[u8] {
+        self.contents.as_bytes()
+    }
+
+    fn name(&self) -> Option<std::ffi::CString> {
+        std::ffi::CString::new(self.name.as_bytes()).ok()
+    }
+}
+
 pub fn load_node_libraries(lua: &Lua) -> anyhow::Result<HashMap<String, NodeDefinition>> {
+    for entry in walkdir::WalkDir::new("node_libraries")
+        .into_iter()
+        .filter_map(|e| e.ok())
+    {
+        dbg!(&entry);
+        let is_lua_file = entry.file_type().is_file()
+            && entry
+                .file_name()
+                .to_str()
+                .map(|s| s.ends_with(".lua"))
+                .unwrap_or(false);
+
+        if is_lua_file {
+            let path = entry.path();
+
+            let path_display = format!("{}", path.display());
+
+            println!("Loading Lua file {}", path_display);
+
+            lua.load(&LuaSourceFile {
+                contents: std::fs::read_to_string(path).unwrap_or_else(|err| {
+                    format!("error('Error reading file \"{:?}\". {}')", path, err)
+                }),
+                name: path_display,
+            })
+            .exec()?;
+        }
+    }
+
     let table = lua
         .globals()
         .get::<_, Table>("NodeLibrary")?
@@ -168,9 +221,9 @@ pub fn load_host_libraries(lua: &Lua) -> anyhow::Result<()> {
         ))
     });
 
-    lua_fn!(export, "chamfer", |vertices: SelectionExpression,
-                                amount: f32,
-                                mesh: AnyUserData|
+    lua_fn!(ops, "chamfer", |vertices: SelectionExpression,
+                             amount: f32,
+                             mesh: AnyUserData|
      -> HalfEdgeMesh {
         let mut result = mesh.borrow::<HalfEdgeMesh>()?.clone();
         result.clear_debug();
@@ -181,9 +234,9 @@ pub fn load_host_libraries(lua: &Lua) -> anyhow::Result<()> {
         Ok(result)
     });
 
-    lua_fn!(export, "bevel", |edges: SelectionExpression,
-                              amount: f32,
-                              mesh: AnyUserData|
+    lua_fn!(ops, "bevel", |edges: SelectionExpression,
+                           amount: f32,
+                           mesh: AnyUserData|
      -> HalfEdgeMesh {
         let mut result = mesh.borrow::<HalfEdgeMesh>()?.clone();
         let edges = result.resolve_halfedge_selection_full(edges);
@@ -191,9 +244,9 @@ pub fn load_host_libraries(lua: &Lua) -> anyhow::Result<()> {
         Ok(result)
     });
 
-    lua_fn!(export, "extrude", |faces: SelectionExpression,
-                                amount: f32,
-                                mesh: AnyUserData|
+    lua_fn!(ops, "extrude", |faces: SelectionExpression,
+                             amount: f32,
+                             mesh: AnyUserData|
      -> HalfEdgeMesh {
         let mut result = mesh.borrow::<HalfEdgeMesh>()?.clone();
         let faces = result.resolve_face_selection_full(faces);
@@ -202,8 +255,8 @@ pub fn load_host_libraries(lua: &Lua) -> anyhow::Result<()> {
         Ok(result)
     });
 
-    lua_fn!(export, "merge", |a: AnyUserData,
-                              b: AnyUserData|
+    lua_fn!(ops, "merge", |a: AnyUserData,
+                           b: AnyUserData|
      -> HalfEdgeMesh {
         let mut result = a.borrow::<HalfEdgeMesh>()?.clone();
         let b = b.borrow::<HalfEdgeMesh>()?;
@@ -230,13 +283,47 @@ pub fn load_host_libraries(lua: &Lua) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub fn init_lua() -> anyhow::Result<LuaRuntime> {
-    let lua = Lua::new();
-    load_host_libraries(&lua)?;
-    load_lua_libraries(&lua)?;
-    let node_definitions = load_node_libraries(&lua)?;
-    Ok(LuaRuntime {
-        lua,
-        node_definitions,
-    })
+pub fn setup_file_watcher(
+    path: &str,
+) -> anyhow::Result<(RecommendedWatcher, mpsc::Receiver<DebouncedEvent>)> {
+    let (tx, rx) = mpsc::channel();
+
+    let mut watcher = notify::watcher(tx, Duration::from_secs(1)).unwrap();
+    watcher
+        .watch(path, notify::RecursiveMode::Recursive)
+        .unwrap();
+    Ok((watcher, rx))
+}
+
+impl LuaRuntime {
+    pub fn initialize() -> anyhow::Result<LuaRuntime> {
+        let lua = Lua::new();
+        load_host_libraries(&lua)?;
+        load_lua_libraries(&lua)?;
+        let node_definitions = load_node_libraries(&lua)?;
+        let (watcher, watcher_channel) = setup_file_watcher("node_libraries")?;
+
+        Ok(LuaRuntime {
+            lua,
+            node_definitions,
+            watcher,
+            watcher_channel,
+        })
+    }
+
+    pub fn watch_for_changes(&mut self) -> anyhow::Result<()> {
+        if let Ok(msg) = self.watcher_channel.try_recv() {
+            match msg {
+                DebouncedEvent::Create(_)
+                | DebouncedEvent::Write(_)
+                | DebouncedEvent::Remove(_)
+                | DebouncedEvent::Rename(_, _) => {
+                    println!("Reloading Lua scripts...");
+                    self.node_definitions = load_node_libraries(&self.lua)?;
+                }
+                _ => {}
+            }
+        }
+        Ok(())
+    }
 }

@@ -5,7 +5,7 @@ use crate::{
     rendergraph::{
         face_routine::FaceRoutine, grid_routine::GridRoutine,
         point_cloud_routine::PointCloudRoutine, wireframe_routine::WireframeRoutine,
-    }, engine::lua_stdlib::{LuaRuntime, init_lua},
+    }, engine::lua_stdlib::{LuaRuntime},
 };
 use egui::{FontDefinitions, Style};
 use egui_wgpu_backend::{RenderPass, ScreenDescriptor};
@@ -105,7 +105,7 @@ impl RootViewport {
             offscreen_viewports,
             inspector_tabs: InspectorTabs::new(),
             diagnostics_open: false,
-            lua_runtime: init_lua().expect("Init lua should not fail"),
+            lua_runtime: LuaRuntime::initialize().expect("Init lua should not fail"),
         }
     }
 
@@ -165,6 +165,10 @@ impl RootViewport {
 
     pub fn update(&mut self, render_ctx: &mut RenderContext) {
         let mut actions = vec![];
+
+        if let Err(err) = self.lua_runtime.watch_for_changes() {
+            println!("TODO: {}", err);
+        }
 
         self.graph_editor.update(
             self.screen_descriptor.scale_factor,
