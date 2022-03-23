@@ -28,7 +28,7 @@ pub fn extract_params<'lua>(
             crate::prelude::graph::ValueType::Selection { selection, .. } => Ok(
                 EngineValue::Selection(selection.clone().unwrap_or(SelectionExpression::None)),
             ),
-            crate::prelude::graph::ValueType::Enum { values, selection } => Ok(
+            crate::prelude::graph::ValueType::Enum { values, selected: selection } => Ok(
                 EngineValue::String(values[selection.unwrap_or(0) as usize].clone()),
             ),
             crate::prelude::graph::ValueType::NewFile { path } => {

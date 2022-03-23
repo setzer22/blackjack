@@ -62,7 +62,7 @@ pub enum ValueType {
     },
     Enum {
         values: Vec<String>,
-        selection: Option<u32>,
+        selected: Option<u32>,
     },
     NewFile {
         path: Option<std::path::PathBuf>,

@@ -31,7 +31,7 @@ function vec4.__mul(a, b)
     else
         assert(isvec4(a) and isvec4(b),
                "mul: wrong argument types: (expected <vec4> or <number>)")
-        return new(a.x * b.x, a.y * b.y)
+        return new(a.x * b.x, a.y * b.y, a.z * b.z, a.w + b.w)
     end
 end
 

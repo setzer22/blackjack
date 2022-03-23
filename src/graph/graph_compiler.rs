@@ -42,7 +42,7 @@ where
                 param_name,
                 node_id
             )),
-            ValueType::Enum { values, selection } => {
+            ValueType::Enum { values, selected: selection } => {
                 let selection = selection.ok_or_else(|| {
                     anyhow!("No selection has been made for parameter {}", param_name)
                 })?;

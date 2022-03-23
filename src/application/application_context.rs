@@ -1,5 +1,6 @@
+use crate::{engine::lua_stdlib::LuaRuntime, graph::graph_compiler2::CompiledProgram, prelude::*};
 use anyhow::Error;
-use crate::{engine::lua_stdlib::{LuaRuntime}, prelude::*};
+use egui_node_graph::NodeId;
 
 use super::{
     viewport_3d::{EdgeDrawMode, FaceDrawMode, Viewport3dSettings},
@@ -47,10 +48,10 @@ impl ApplicationContext {
         // objects it's drawing and clear those instead.
         render_ctx.clear_objects();
 
-        if let Err(err) = self.compile_and_update_mesh(editor_state, lua_runtime) {
+        if let Err(err) = self.run_active_node(editor_state, lua_runtime) {
             self.paint_errors(egui_ctx, err);
         }
-        if let Err(err) = self.run_side_effects(editor_state) {
+        if let Err(err) = self.run_side_effects(editor_state, lua_runtime) {
             eprintln!("There was an errror executing side effect: {}", err);
         }
         if let Err(err) = self.build_and_render_mesh(render_ctx, viewport_settings) {
@@ -140,27 +141,36 @@ impl ApplicationContext {
         );
     }
 
-    pub fn compile_and_update_mesh(
+    pub fn compile_program<'lua>(
+        &'lua self,
+        editor_state: &'lua graph::GraphEditorState,
+        lua_runtime: &'lua LuaRuntime,
+        node: NodeId,
+    ) -> Result<(CompiledProgram, mlua::Table<'_>)> {
+        let program = crate::graph::graph_compiler2::compile_graph(&editor_state.graph, node)?;
+        let params = crate::engine::execution::extract_params(
+            &lua_runtime.lua,
+            &editor_state.graph,
+            &program,
+        )?;
+
+        // --- TEST CODE ---
+        use std::io::prelude::*;
+        let mut file = std::fs::File::create("/tmp/test.lua")?;
+        file.write_all(program.lua_program.as_bytes())?;
+        // -----------------
+
+        Ok((program, params))
+    }
+
+    pub fn run_active_node(
         &mut self,
         editor_state: &graph::GraphEditorState,
         lua_runtime: &LuaRuntime,
     ) -> Result<()> {
         if let Some(active) = editor_state.user_state.active_node {
-            //let program = crate::graph::graph_compiler::compile_graph(&editor_state.graph, active)?;
-
-            let program =
-                crate::graph::graph_compiler2::compile_graph(&editor_state.graph, active)?;
-
-            // --- TEST CODE ---
-            use std::io::prelude::*;
-            let mut file = std::fs::File::create("/tmp/test.lua")?;
-            file.write_all(program.lua_program.as_bytes())?;
-            // -----------------
-
-            let params =
-                crate::engine::execution::extract_params(&lua_runtime.lua, &editor_state.graph, &program)?;
+            let (program, params) = self.compile_program(editor_state, lua_runtime, active)?;
             let mesh = crate::engine::execution::run_program(&lua_runtime.lua, &program, params)?;
-
             self.mesh = Some(mesh);
         } else {
             self.mesh = None
@@ -168,13 +178,16 @@ impl ApplicationContext {
         Ok(())
     }
 
-    pub fn run_side_effects(&mut self, editor_state: &mut graph::GraphEditorState) -> Result<()> {
+    pub fn run_side_effects(
+        &mut self,
+        editor_state: &mut graph::GraphEditorState,
+        lua_runtime: &LuaRuntime,
+    ) -> Result<()> {
         if let Some(side_effect) = editor_state.user_state.run_side_effect.take() {
-            let program =
-                crate::graph::graph_compiler::compile_graph(&editor_state.graph, side_effect)?;
+            let (program, params) = self.compile_program(editor_state, lua_runtime, side_effect)?;
             // We ignore the result. The program is only executed to produce a
             // side effect (e.g. exporting a mesh as OBJ)
-            let _ = program.execute();
+            let _ = crate::engine::execution::run_program(&lua_runtime.lua, &program, params)?;
         }
         Ok(())
     }

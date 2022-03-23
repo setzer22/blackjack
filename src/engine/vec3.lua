@@ -29,7 +29,7 @@ function vec3.__mul(a, b)
     else
         assert(isvec3(a) and isvec3(b),
                "mul: wrong argument types: (expected <vec3> or <number>)")
-        return new(a.x * b.x, a.y * b.y)
+        return new(a.x * b.x, a.y * b.y, a.z * b.z)
     end
 end
 

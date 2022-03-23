@@ -107,12 +107,12 @@ impl NodeTemplateTrait for GraphNodeType {
             };
             (Enum $name:expr, [$($values:expr),*]) => {
                 input!(~ $name, DataType::Enum,
-                       ValueType::Enum { values: vec![$($values.into()),*], selection: None },
+                       ValueType::Enum { values: vec![$($values.into()),*], selected: None },
                        InputParamKind::ConstantOnly)
             };
             (Enum $name:expr, default $default:expr, [$($values:expr),*]) => {
                 input!(~ $name, DataType::Enum,
-                       ValueType::Enum { values: vec![$($values.into()),*], selection: Some($default) },
+                       ValueType::Enum { values: vec![$($values.into()),*], selected: Some($default) },
                        InputParamKind::ConstantOnly)
             };
             (NewFile $name:expr) => {

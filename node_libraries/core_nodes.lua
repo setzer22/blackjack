@@ -12,6 +12,15 @@ local function v3(name, default)
 end
 local function mesh(name) return {name = name, type = "mesh"} end
 local function selection(name) return {name = name, type = "selection"} end
+local function enum(name, values, selected)
+    return {
+        name = name,
+        type = "enum",
+        values = values or {},
+        selected = selected
+    }
+end
+local function file(name) return {name = name, type = "file"} end
 
 local core_nodes = {
     MakeBox = {
@@ -21,7 +30,7 @@ local core_nodes = {
         end,
         inputs = {v3("origin", Vec3(0, 0, 0)), v3("size", Vec3(1, 1, 1))},
         outputs = {mesh("out_mesh")},
-        returns = "out_mesh",
+        returns = "out_mesh"
     },
     MakeQuad = {
         label = "Quad",
@@ -36,7 +45,7 @@ local core_nodes = {
             v3("right", Vec3(1, 0, 0)), v3("size", Vec3(1, 1, 1))
         },
         outputs = {mesh("out_mesh")},
-        returns = "out_mesh",
+        returns = "out_mesh"
     },
     BevelEdges = {
         label = "Bevel edges",
@@ -48,6 +57,35 @@ local core_nodes = {
         op = function(inputs)
             return {
                 out_mesh = Ops.bevel(inputs.edges, inputs.amount, inputs.in_mesh)
+            }
+        end
+    },
+    ChamferVertices = {
+        label = "Chamfer vertices",
+        inputs = {
+            mesh("in_mesh"), selection("vertices"),
+            scalar("amount", 0.0, 0.0, 1.0)
+        },
+        outputs = {mesh("out_mesh")},
+        returns = "out_mesh",
+        op = function(inputs)
+            return {
+                out_mesh = Ops.chamfer(inputs.vertices, inputs.amount,
+                                       inputs.in_mesh)
+            }
+        end
+    },
+    ExtrudeFaces = {
+        label = "Extrude faces",
+        inputs = {
+            mesh("in_mesh"), selection("faces"), scalar("amount", 0.0, 0.0, 1.0)
+        },
+        outputs = {mesh("out_mesh")},
+        returns = "out_mesh",
+        op = function(inputs)
+            return {
+                out_mesh = Ops.extrude(inputs.faces, inputs.amount,
+                                       inputs.in_mesh)
             }
         end
     },
@@ -65,16 +103,56 @@ local core_nodes = {
     VectorMath = {
         label = "Vector math",
         inputs = {
-            v3("vec_a", Vec3(0,0,0)),
-            v3("vec_b", Vec3(0,0,0)),
+            enum("op", {"Add", "Sub", "Mul"}, 0), v3("vec_a", Vec3(0, 0, 0)),
+            v3("vec_b", Vec3(0, 0, 0))
         },
-        outputs = {
-            v3("out"),
-        },
+        outputs = {v3("out")},
         op = function(inputs)
-            return { out = inputs.vec_a + inputs.vec_b }
+            local out
+            if inputs.op == "Add" then
+                out = inputs.vec_a + inputs.vec_b
+            elseif inputs.op == "Sub" then
+                out = inputs.vec_a - inputs.vec_b
+            elseif inputs.op == "Mul" then
+                out = inputs.vec_a * inputs.vec_b
+            end
+            return {out = out}
+        end
+    },
+    MergeMeshes = {
+        label = "Merge meshes",
+        inputs = {mesh("mesh_a"), mesh("mesh_b")},
+        outputs = {mesh("out_mesh")},
+        returns = "out_mesh",
+        op = function(inputs)
+            return {out_mesh = Ops.merge(inputs.mesh_a, inputs.mesh_b)}
+        end
+    },
+    ExportObj = {
+        label = "Export obj",
+        inputs = {mesh("mesh"), file("path")},
+        outputs = {},
+        executable = true,
+        op = function(inputs)
+            Export.wavefront_obj(inputs.mesh, inputs.path)
+        end
+    },
+    Subdivide = {
+        label = "Subdivide",
+        inputs = {
+            mesh("mesh"), enum("technique", {"linear", "catmull-clark"}, 0),
+            scalar("iterations", 1, 1, 7)
+        },
+        outputs = {mesh("out_mesh")},
+        returns = "out_mesh",
+        op = function(inputs)
+            return {
+                out_mesh = Ops.subdivide(inputs.mesh, inputs.iterations,
+                                         inputs.technique == "catmull-clark")
+            }
         end
     }
+
 }
 
 NodeLibrary:addNodes(core_nodes)

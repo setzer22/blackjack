@@ -12,7 +12,8 @@ use notify::{DebouncedEvent, INotifyWatcher, RecommendedWatcher, Watcher};
 use crate::{
     engine::ToLuaError,
     prelude::{
-        graph::node_templates2::NodeDefinition, selection::SelectionExpression, HalfEdgeMesh,
+        compact_mesh::CompactMesh, graph::node_templates2::NodeDefinition,
+        selection::SelectionExpression, HalfEdgeMesh,
     },
 };
 
@@ -142,7 +143,6 @@ pub fn load_node_libraries(lua: &Lua) -> anyhow::Result<HashMap<String, NodeDefi
         .into_iter()
         .filter_map(|e| e.ok())
     {
-        dbg!(&entry);
         let is_lua_file = entry.file_type().is_file()
             && entry
                 .file_name()
@@ -262,6 +262,17 @@ pub fn load_host_libraries(lua: &Lua) -> anyhow::Result<()> {
         let b = b.borrow::<HalfEdgeMesh>()?;
         result.merge_with(&b);
         Ok(result)
+    });
+
+    lua_fn!(ops, "subdivide", |mesh: AnyUserData,
+                               iterations: usize,
+                               catmull_clark: bool|
+     -> HalfEdgeMesh {
+        let mesh = &mesh.borrow::<HalfEdgeMesh>()?;
+        let new_mesh = CompactMesh::<false>::from_halfedge(mesh).map_lua_err()?;
+        Ok(new_mesh
+            .subdivide_multi(iterations, catmull_clark)
+            .to_halfedge())
     });
 
     lua_fn!(export, "wavefront_obj", |mesh: AnyUserData,

@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 
-use anyhow::*;
+use anyhow::{anyhow, Result};
 use egui_node_graph::{InputParamKind, NodeTemplateTrait};
+use itertools::Itertools;
 use mlua::Table;
 
 use crate::engine::lua_stdlib::Vec3;
@@ -36,6 +37,9 @@ pub struct NodeDefinition {
     /// return something can be "activated", and the returned mesh will be
     /// displayed on the blackjack viewport.
     returns: Option<String>,
+    /// Executable nodes can be executed once by pressing a button. This mode of
+    /// execution is used for things like file exporters.
+    executable: bool,
 }
 
 fn data_type_from_str(s: &str) -> Result<DataType> {
@@ -44,6 +48,8 @@ fn data_type_from_str(s: &str) -> Result<DataType> {
         "scalar" => Ok(DataType::Scalar),
         "selection" => Ok(DataType::Selection),
         "mesh" => Ok(DataType::Mesh),
+        "enum" => Ok(DataType::Enum),
+        "file" => Ok(DataType::NewFile),
         _ => Err(anyhow!("Invalid datatype in node definition {:?}", s)),
     }
 }
@@ -63,8 +69,14 @@ impl InputDefinition {
                 selection: None,
             }),
             DataType::Mesh => None,
-            DataType::Enum => todo!(),
-            DataType::NewFile => todo!(),
+            DataType::Enum => Some(ValueType::Enum {
+                values: table
+                    .get::<_, Table>("values")?
+                    .sequence_values::<String>()
+                    .collect::<Result<Vec<_>, _>>()?,
+                selected: table.get::<_, Option<u32>>("selected")?,
+            }),
+            DataType::NewFile => Some(ValueType::NewFile { path: None }),
         };
 
         Ok(InputDefinition {
@@ -98,14 +110,13 @@ impl NodeDefinition {
             .map(|x| OutputDefinition::from_lua(x?))
             .collect::<Result<Vec<_>>>()?;
 
-        let returns = table.get::<_, String>("returns").ok();
-
         Ok(NodeDefinition {
             name,
-            label: table.get("label")?,
             inputs,
             outputs,
-            returns,
+            label: table.get("label")?,
+            returns: table.get::<_, Option<String>>("returns")?,
+            executable: table.get::<_, Option<bool>>("executable")?.unwrap_or(false),
         })
     }
 
@@ -137,7 +148,7 @@ impl NodeTemplateTrait for NodeDefinition {
         Self::NodeData {
             op_name: self.name.clone(),
             returns: self.returns.clone(),
-            is_executable: false, // TODO!
+            is_executable: self.executable,
         }
     }
 
