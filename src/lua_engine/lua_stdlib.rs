@@ -1,18 +1,16 @@
 use std::{
     collections::HashMap,
-    fs::FileType,
-    path::PathBuf,
     sync::mpsc::{self, Receiver},
     time::Duration,
 };
 
 use mlua::{AnyUserData, AsChunk, FromLua, Lua, Table, ToLua, UserData};
-use notify::{DebouncedEvent, INotifyWatcher, RecommendedWatcher, Watcher};
+use notify::{DebouncedEvent, RecommendedWatcher, Watcher};
 
 use crate::{
-    engine::ToLuaError,
+    lua_engine::ToLuaError,
     prelude::{
-        compact_mesh::CompactMesh, graph::node_templates2::NodeDefinition,
+        compact_mesh::CompactMesh, graph::node_templates::NodeDefinition,
         selection::SelectionExpression, HalfEdgeMesh,
     },
 };
@@ -98,12 +96,6 @@ def_wrapper_enum!(EngineValue,
 );
 
 pub fn load_lua_libraries(lua: &Lua) -> anyhow::Result<()> {
-    macro_rules! execute {
-        ($file:expr) => {
-            lua.load(include_str!($file)).exec()?
-        };
-    }
-
     macro_rules! def_library {
         ($name:expr, $file:expr) => {
             let lib: mlua::Value = lua.load(include_str!($file)).call(())?;
@@ -112,14 +104,10 @@ pub fn load_lua_libraries(lua: &Lua) -> anyhow::Result<()> {
     }
 
     // Libraries
-    def_library!("Fennel", "fennel-1.0.0.lua");
     def_library!("Vec2", "vec2.lua");
     def_library!("Vec3", "vec3.lua");
     def_library!("Vec4", "vec4.lua");
     def_library!("NodeLibrary", "node_library.lua");
-
-    // Execute init code
-    execute!("blackjack_init.lua");
 
     Ok(())
 }

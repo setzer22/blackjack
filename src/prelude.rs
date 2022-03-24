@@ -39,7 +39,7 @@ pub use crate::math::*;
 pub use crate::utils::*;
 
 pub mod graph {
-    pub use crate::graph::node_graph_custom::{node_templates::*, *};
+    pub use crate::graph::node_graph::*;
     pub use egui_node_graph::{InputId, Node, NodeId, OutputId};
 }
 

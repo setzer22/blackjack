@@ -29,7 +29,7 @@ pub mod math;
 pub mod utils;
 
 /// The blackjack engine core types
-pub mod engine;
+pub mod lua_engine;
 
 fn main() {
     // Setup logging

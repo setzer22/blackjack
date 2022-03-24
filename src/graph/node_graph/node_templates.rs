@@ -2,10 +2,9 @@ use std::collections::HashMap;
 
 use anyhow::{anyhow, Result};
 use egui_node_graph::{InputParamKind, NodeTemplateTrait};
-use itertools::Itertools;
 use mlua::Table;
 
-use crate::engine::lua_stdlib::Vec3;
+use crate::lua_engine::lua_stdlib::Vec3;
 
 use super::{DataType, ValueType};
 

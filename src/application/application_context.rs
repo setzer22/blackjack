@@ -1,4 +1,6 @@
-use crate::{engine::lua_stdlib::LuaRuntime, graph::graph_compiler2::CompiledProgram, prelude::*};
+use crate::{
+    lua_engine::lua_stdlib::LuaRuntime, graph::graph_compiler::CompiledProgram, prelude::*,
+};
 use anyhow::Error;
 use egui_node_graph::NodeId;
 
@@ -147,8 +149,8 @@ impl ApplicationContext {
         lua_runtime: &'lua LuaRuntime,
         node: NodeId,
     ) -> Result<(CompiledProgram, mlua::Table<'_>)> {
-        let program = crate::graph::graph_compiler2::compile_graph(&editor_state.graph, node)?;
-        let params = crate::engine::execution::extract_params(
+        let program = crate::graph::graph_compiler::compile_graph(&editor_state.graph, node)?;
+        let params = crate::graph::graph_compiler::extract_params(
             &lua_runtime.lua,
             &editor_state.graph,
             &program,
@@ -170,7 +172,11 @@ impl ApplicationContext {
     ) -> Result<()> {
         if let Some(active) = editor_state.user_state.active_node {
             let (program, params) = self.compile_program(editor_state, lua_runtime, active)?;
-            let mesh = crate::engine::execution::run_program(&lua_runtime.lua, &program, params)?;
+            let mesh = crate::lua_engine::run_program(
+                &lua_runtime.lua,
+                &program.lua_program,
+                params,
+            )?;
             self.mesh = Some(mesh);
         } else {
             self.mesh = None
@@ -187,7 +193,11 @@ impl ApplicationContext {
             let (program, params) = self.compile_program(editor_state, lua_runtime, side_effect)?;
             // We ignore the result. The program is only executed to produce a
             // side effect (e.g. exporting a mesh as OBJ)
-            let _ = crate::engine::execution::run_program(&lua_runtime.lua, &program, params)?;
+            let _ = crate::lua_engine::run_program(
+                &lua_runtime.lua,
+                &program.lua_program,
+                params,
+            )?;
         }
         Ok(())
     }

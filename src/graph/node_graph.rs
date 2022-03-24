@@ -1,4 +1,4 @@
-use crate::{prelude::*, engine::lua_stdlib::LuaRuntime};
+use crate::{prelude::*, lua_engine::lua_stdlib::LuaRuntime};
 use egui::RichText;
 use egui_node_graph::{
     DataTypeTrait, NodeDataTrait, NodeId, NodeResponse, UserResponseTrait, WidgetValueTrait, NodeTemplateIter,
@@ -7,10 +7,9 @@ use halfedge::selection::SelectionExpression;
 use serde::{Deserialize, Serialize};
 
 //use self::node_templates::GraphNodeType;
-use self::node_templates2::NodeDefinition;
+use self::node_templates::NodeDefinition;
 
 pub mod node_templates;
-pub mod node_templates2;
 pub mod value_widget;
 
 /// A generic egui_node_graph graph, with blackjack-specific parameters
