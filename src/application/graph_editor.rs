@@ -1,5 +1,6 @@
 use crate::{
-    app_window::input::viewport_relative_position, lua_engine::lua_stdlib::LuaRuntime, prelude::*,
+    app_window::input::viewport_relative_position,
+    prelude::{graph::node_templates::NodeDefinitions, *},
 };
 use egui_wgpu_backend::{RenderPass, ScreenDescriptor};
 use egui_winit_platform::{Platform, PlatformDescriptor};
@@ -143,14 +144,14 @@ impl GraphEditor {
         &mut self,
         parent_scale: f32,
         viewport_rect: egui::Rect,
-        lua_runtime: &LuaRuntime,
+        node_definitions: &NodeDefinitions,
     ) {
         self.resize_platform(parent_scale, viewport_rect);
         self.platform.raw_input_mut().pixels_per_point = Some(1.0 / self.zoom_level());
         self.platform.begin_frame();
 
         let ctx = self.platform.context();
-        graph::draw_node_graph(&ctx, &mut self.state, &lua_runtime.node_definitions);
+        graph::draw_node_graph(&ctx, &mut self.state, node_definitions);
 
         // Debug mouse pointer position
         // -- This is useful when mouse events are not being interpreted correctly.

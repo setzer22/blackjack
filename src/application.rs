@@ -182,7 +182,7 @@ impl RootViewport {
         self.graph_editor.update(
             self.screen_descriptor.scale_factor,
             self.offscreen_viewports[&OffscreenViewport::GraphEditor].rect,
-            &self.lua_runtime,
+            &self.lua_runtime.node_definitions,
         );
         self.viewport_3d.update(
             self.screen_descriptor.scale_factor,
