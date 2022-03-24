@@ -181,8 +181,6 @@ impl NodeTemplateIter for &NodeDefinitions {
 /// draw the graph itself, then interprets any responses it got and applies the
 /// required side effects.
 pub fn draw_node_graph(ctx: &egui::CtxRef, state: &mut GraphEditorState, defs: &NodeDefinitions) {
-    // WIP: I loaded the node templates from lua. Now I need to wrap them in a
-    // "node library" and store them somewhere.
     let responses = state.draw_graph_editor(ctx, defs);
     for response in responses.node_responses {
         match response {
