@@ -46,7 +46,7 @@ impl ViewportBuffers<NUM_BUFFERS, NUM_TEXTURES> for WireframeBuffer {
 }
 
 pub struct WireframeRoutine {
-    inner: Viewport3dRoutine<NUM_BUFFERS, NUM_TEXTURES, WireframeBuffer>,
+    inner: Viewport3dRoutine<WireframeBuffer, NUM_BUFFERS, NUM_TEXTURES>,
 }
 
 impl WireframeRoutine {

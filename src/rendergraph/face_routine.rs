@@ -97,9 +97,9 @@ impl ViewportBuffers<OVERLAY_NUM_BUFFERS, OVERLAY_NUM_TEXTURES> for FaceOverlayB
 
 pub struct FaceRoutine {
     matcaps: Arc<Vec<TextureHandle>>,
-    base_mesh_routine: Viewport3dRoutine<BASE_MESH_NUM_BUFFERS, BASE_MESH_NUM_TEXTURES, MeshBuffer>,
+    base_mesh_routine: Viewport3dRoutine<MeshBuffer, BASE_MESH_NUM_BUFFERS, BASE_MESH_NUM_TEXTURES>,
     face_overlay_routine:
-        Viewport3dRoutine<OVERLAY_NUM_BUFFERS, OVERLAY_NUM_TEXTURES, FaceOverlayBuffer>,
+        Viewport3dRoutine<FaceOverlayBuffer, OVERLAY_NUM_BUFFERS, OVERLAY_NUM_TEXTURES>,
 }
 
 impl FaceRoutine {
