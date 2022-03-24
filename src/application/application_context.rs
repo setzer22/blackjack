@@ -5,6 +5,7 @@ use anyhow::Error;
 use egui_node_graph::NodeId;
 
 use super::{
+    root_ui::AppRootAction,
     viewport_3d::{EdgeDrawMode, FaceDrawMode, Viewport3dSettings},
     viewport_split::SplitTree,
 };
@@ -45,20 +46,29 @@ impl ApplicationContext {
         render_ctx: &mut RenderContext,
         viewport_settings: &Viewport3dSettings,
         lua_runtime: &LuaRuntime,
-    ) {
+    ) -> Vec<AppRootAction> {
         // TODO: Instead of clearing all objects, make the app context own the
         // objects it's drawing and clear those instead.
         render_ctx.clear_objects();
 
-        if let Err(err) = self.run_active_node(editor_state, lua_runtime) {
-            self.paint_errors(egui_ctx, err);
-        }
+        let mut actions = vec![];
+
+        match self.run_active_node(editor_state, lua_runtime) {
+            Ok(code) => {
+                actions.push(AppRootAction::SetCodeViewerCode(code));
+            }
+            Err(err) => {
+                self.paint_errors(egui_ctx, err);
+            }
+        };
         if let Err(err) = self.run_side_effects(editor_state, lua_runtime) {
             eprintln!("There was an errror executing side effect: {}", err);
         }
         if let Err(err) = self.build_and_render_mesh(render_ctx, viewport_settings) {
             self.paint_errors(egui_ctx, err);
         }
+
+        actions
     }
 
     pub fn build_and_render_mesh(
@@ -156,29 +166,25 @@ impl ApplicationContext {
             &program,
         )?;
 
-        // --- TEST CODE ---
-        use std::io::prelude::*;
-        let mut file = std::fs::File::create("/tmp/test.lua")?;
-        file.write_all(program.lua_program.as_bytes())?;
-        // -----------------
-
         Ok((program, params))
     }
 
+    // Returns the compiled lua code
     pub fn run_active_node(
         &mut self,
         editor_state: &graph::GraphEditorState,
         lua_runtime: &LuaRuntime,
-    ) -> Result<()> {
+    ) -> Result<String> {
         if let Some(active) = editor_state.user_state.active_node {
             let (program, params) = self.compile_program(editor_state, lua_runtime, active)?;
             let mesh =
                 crate::lua_engine::run_program(&lua_runtime.lua, &program.lua_program, params)?;
             self.mesh = Some(mesh);
+            Ok(program.lua_program)
         } else {
-            self.mesh = None
+            self.mesh = None;
+            Ok("".into())
         }
-        Ok(())
     }
 
     pub fn run_side_effects(

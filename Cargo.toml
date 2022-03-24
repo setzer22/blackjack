@@ -53,6 +53,8 @@ nom = "7.1"
 mlua = { version = "0.7.4", features = ["vendored", "lua54"]}
 notify = "4.0"
 walkdir = "2"
+syntect = "4.6"
+enum-map = "2.0"
 
 # Image loading is too slow in debug mode. This compiles all dependencies with optimizations.
 [profile.dev.package."*"]

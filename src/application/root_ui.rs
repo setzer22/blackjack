@@ -4,6 +4,7 @@ use std::path::PathBuf;
 pub enum AppRootAction {
     Save(PathBuf),
     Load(PathBuf),
+    SetCodeViewerCode(String),
 }
 
 impl RootViewport {
@@ -34,6 +35,8 @@ impl RootViewport {
             ui.menu_button("Help", |ui| {
                 if ui.button("Diagnosics").clicked() {
                     self.diagnostics_open = true;
+                } else if ui.button("View graph source").clicked() {
+                    self.code_viewer_open = true;
                 }
             });
         });
@@ -46,6 +49,19 @@ impl RootViewport {
             .open(&mut self.diagnostics_open)
             .show(ctx, |ui| {
                 ui.label(format!("HiDPI scale: {}", ui.ctx().pixels_per_point()));
+            });
+    }
+
+    pub fn code_viewer_ui(&mut self, ctx: &egui::CtxRef) {
+        egui::Window::new("Code viewer")
+            .open(&mut self.code_viewer_open)
+            .show(ctx, |ui| {
+                egui::ScrollArea::vertical().show(ui, |ui| {
+                    code_viewer::code_view_ui(
+                        ui,
+                        self.code_viewer_code.as_deref().unwrap_or(""),
+                    );
+                });
             });
     }
 
