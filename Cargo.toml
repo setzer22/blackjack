@@ -35,13 +35,9 @@ anyhow = { version = "1.0", features = ["backtrace"] }
 bytemuck = { version = "1.7", features = ["derive"] }
 serde = { version = "1.0", features =  ["derive"] }
 ron = "0.7"
-strum = "0.23.0"
-strum_macros = "0.23.0"
-hecs = "0.7"
 rfd = "0.6"
 float-ord  = "0.3.2"
 spin_sleep = "1.0.0"
-type-map = "0.5"
 rayon = "1.5.1"
 nonmax = "0.5"
 slotmap = { version = "1.0", features = ["serde"] }
