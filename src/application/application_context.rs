@@ -1,5 +1,5 @@
 use crate::{
-    lua_engine::lua_stdlib::LuaRuntime, graph::graph_compiler::CompiledProgram, prelude::*,
+    graph::graph_compiler::CompiledProgram, lua_engine::lua_stdlib::LuaRuntime, prelude::*,
 };
 use anyhow::Error;
 use egui_node_graph::NodeId;
@@ -172,11 +172,8 @@ impl ApplicationContext {
     ) -> Result<()> {
         if let Some(active) = editor_state.user_state.active_node {
             let (program, params) = self.compile_program(editor_state, lua_runtime, active)?;
-            let mesh = crate::lua_engine::run_program(
-                &lua_runtime.lua,
-                &program.lua_program,
-                params,
-            )?;
+            let mesh =
+                crate::lua_engine::run_program(&lua_runtime.lua, &program.lua_program, params)?;
             self.mesh = Some(mesh);
         } else {
             self.mesh = None
@@ -193,11 +190,7 @@ impl ApplicationContext {
             let (program, params) = self.compile_program(editor_state, lua_runtime, side_effect)?;
             // We ignore the result. The program is only executed to produce a
             // side effect (e.g. exporting a mesh as OBJ)
-            let _ = crate::lua_engine::run_program(
-                &lua_runtime.lua,
-                &program.lua_program,
-                params,
-            )?;
+            let _ = crate::lua_engine::run_program(&lua_runtime.lua, &program.lua_program, params)?;
         }
         Ok(())
     }

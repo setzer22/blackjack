@@ -1,7 +1,11 @@
 use halfedge::selection::SelectionExpression;
 use mlua::Lua;
 
-use crate::{prelude::graph::*, prelude::*, lua_engine::lua_stdlib::{EngineValue, self}};
+use crate::{
+    lua_engine::lua_stdlib::{self, EngineValue},
+    prelude::graph::*,
+    prelude::*,
+};
 
 use std::fmt::Write;
 
@@ -303,9 +307,12 @@ pub fn extract_params<'lua>(
             crate::prelude::graph::ValueType::Selection { selection, .. } => Ok(
                 EngineValue::Selection(selection.clone().unwrap_or(SelectionExpression::None)),
             ),
-            crate::prelude::graph::ValueType::Enum { values, selected: selection } => Ok(
-                EngineValue::String(values[selection.unwrap_or(0) as usize].clone()),
-            ),
+            crate::prelude::graph::ValueType::Enum {
+                values,
+                selected: selection,
+            } => Ok(EngineValue::String(
+                values[selection.unwrap_or(0) as usize].clone(),
+            )),
             crate::prelude::graph::ValueType::NewFile { path } => {
                 Ok(EngineValue::Path(lua_stdlib::Path(
                     path.as_ref()

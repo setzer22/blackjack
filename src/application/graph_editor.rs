@@ -1,4 +1,6 @@
-use crate::{app_window::input::viewport_relative_position, prelude::*, lua_engine::lua_stdlib::LuaRuntime};
+use crate::{
+    app_window::input::viewport_relative_position, lua_engine::lua_stdlib::LuaRuntime, prelude::*,
+};
 use egui_wgpu_backend::{RenderPass, ScreenDescriptor};
 use egui_winit_platform::{Platform, PlatformDescriptor};
 
@@ -137,7 +139,12 @@ impl GraphEditor {
         self.platform.handle_event(&fake_resize_event);
     }
 
-    pub fn update(&mut self, parent_scale: f32, viewport_rect: egui::Rect, lua_runtime: &LuaRuntime) {
+    pub fn update(
+        &mut self,
+        parent_scale: f32,
+        viewport_rect: egui::Rect,
+        lua_runtime: &LuaRuntime,
+    ) {
         self.resize_platform(parent_scale, viewport_rect);
         self.platform.raw_input_mut().pixels_per_point = Some(1.0 / self.zoom_level());
         self.platform.begin_frame();

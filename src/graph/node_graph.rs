@@ -1,7 +1,8 @@
-use crate::{prelude::*, lua_engine::lua_stdlib::LuaRuntime};
+use crate::{lua_engine::lua_stdlib::LuaRuntime, prelude::*};
 use egui::RichText;
 use egui_node_graph::{
-    DataTypeTrait, NodeDataTrait, NodeId, NodeResponse, UserResponseTrait, WidgetValueTrait, NodeTemplateIter,
+    DataTypeTrait, NodeDataTrait, NodeId, NodeResponse, NodeTemplateIter, UserResponseTrait,
+    WidgetValueTrait,
 };
 use halfedge::selection::SelectionExpression;
 use serde::{Deserialize, Serialize};

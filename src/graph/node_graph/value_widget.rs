@@ -30,7 +30,10 @@ impl WidgetValueTrait for ValueType {
             ValueType::None => {
                 ui.label(param_name);
             }
-            ValueType::Enum { values, selected: selection } => {
+            ValueType::Enum {
+                values,
+                selected: selection,
+            } => {
                 let selected = if let Some(selection) = selection {
                     values[*selection as usize].clone()
                 } else {
