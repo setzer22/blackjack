@@ -150,7 +150,7 @@ impl GraphEditor {
         self.platform.begin_frame();
 
         let ctx = self.platform.context();
-        graph::draw_node_graph(&ctx, &mut self.state, lua_runtime);
+        graph::draw_node_graph(&ctx, &mut self.state, &lua_runtime.node_definitions);
 
         // Debug mouse pointer position
         // -- This is useful when mouse events are not being interpreted correctly.

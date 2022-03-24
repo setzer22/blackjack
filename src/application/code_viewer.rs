@@ -1,5 +1,5 @@
 // Copyright (c) 2018-2021 Emil Ernerfeldt <emil.ernerfeldt@gmail.com>
-// 
+//
 // Permission is hereby granted, free of charge, to any
 // person obtaining a copy of this software and associated
 // documentation files (the "Software"), to deal in the
@@ -9,11 +9,11 @@
 // the Software, and to permit persons to whom the Software
 // is furnished to do so, subject to the following
 // conditions:
-// 
+//
 // The above copyright notice and this permission notice
 // shall be included in all copies or substantial portions
 // of the Software.
-// 
+//
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
 // ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
 // TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
@@ -167,13 +167,9 @@ impl CodeTheme {
 
     pub fn store_in_memory(&self, ctx: &egui::Context) {
         if self.dark_mode {
-            ctx.memory()
-                .data
-                .insert_temp(egui::Id::new("dark"), *self);
+            ctx.memory().data.insert_temp(egui::Id::new("dark"), *self);
         } else {
-            ctx.memory()
-                .data
-                .insert_temp(egui::Id::new("light"), *self);
+            ctx.memory().data.insert_temp(egui::Id::new("light"), *self);
         }
     }
 }

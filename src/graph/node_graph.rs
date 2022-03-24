@@ -1,4 +1,4 @@
-use crate::{lua_engine::lua_stdlib::LuaRuntime, prelude::*};
+use crate::prelude::*;
 use egui::RichText;
 use egui_node_graph::{
     DataTypeTrait, NodeDataTrait, NodeId, NodeResponse, NodeTemplateIter, UserResponseTrait,
@@ -8,7 +8,7 @@ use halfedge::selection::SelectionExpression;
 use serde::{Deserialize, Serialize};
 
 //use self::node_templates::GraphNodeType;
-use self::node_templates::NodeDefinition;
+use self::node_templates::{NodeDefinition, NodeDefinitions};
 
 pub mod node_templates;
 pub mod value_widget;
@@ -169,21 +169,21 @@ impl NodeDataTrait for NodeData {
     }
 }
 
-impl NodeTemplateIter for &LuaRuntime {
+impl NodeTemplateIter for &NodeDefinitions {
     type Item = NodeDefinition;
 
     fn all_kinds(&self) -> Vec<Self::Item> {
-        self.node_definitions.values().cloned().collect()
+        self.0.values().cloned().collect()
     }
 }
 
 /// Blackjack's custom draw node graph function. It defers to egui_node_graph to
 /// draw the graph itself, then interprets any responses it got and applies the
 /// required side effects.
-pub fn draw_node_graph(ctx: &egui::CtxRef, state: &mut GraphEditorState, runtime: &LuaRuntime) {
+pub fn draw_node_graph(ctx: &egui::CtxRef, state: &mut GraphEditorState, defs: &NodeDefinitions) {
     // WIP: I loaded the node templates from lua. Now I need to wrap them in a
     // "node library" and store them somewhere.
-    let responses = state.draw_graph_editor(ctx, runtime);
+    let responses = state.draw_graph_editor(ctx, defs);
     for response in responses.node_responses {
         match response {
             NodeResponse::DeleteNode(node_id) => {

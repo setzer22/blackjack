@@ -1,5 +1,4 @@
 use std::{
-    collections::HashMap,
     sync::mpsc::{self, Receiver},
     time::Duration,
 };
@@ -10,14 +9,16 @@ use notify::{DebouncedEvent, RecommendedWatcher, Watcher};
 use crate::{
     lua_engine::ToLuaError,
     prelude::{
-        compact_mesh::CompactMesh, graph::node_templates::NodeDefinition,
-        selection::SelectionExpression, HalfEdgeMesh,
+        compact_mesh::CompactMesh,
+        graph::node_templates::{NodeDefinition, NodeDefinitions},
+        selection::SelectionExpression,
+        HalfEdgeMesh,
     },
 };
 
 pub struct LuaRuntime {
     pub lua: Lua,
-    pub node_definitions: HashMap<String, NodeDefinition>,
+    pub node_definitions: NodeDefinitions,
     pub watcher: RecommendedWatcher,
     pub watcher_channel: Receiver<DebouncedEvent>,
 }
@@ -126,7 +127,7 @@ impl<'lua> AsChunk<'lua> for LuaSourceFile {
     }
 }
 
-pub fn load_node_libraries(lua: &Lua) -> anyhow::Result<HashMap<String, NodeDefinition>> {
+pub fn load_node_libraries(lua: &Lua) -> anyhow::Result<NodeDefinitions> {
     for entry in walkdir::WalkDir::new("node_libraries")
         .into_iter()
         .filter_map(|e| e.ok())

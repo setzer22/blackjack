@@ -57,10 +57,7 @@ impl RootViewport {
             .open(&mut self.code_viewer_open)
             .show(ctx, |ui| {
                 egui::ScrollArea::vertical().show(ui, |ui| {
-                    code_viewer::code_view_ui(
-                        ui,
-                        self.code_viewer_code.as_deref().unwrap_or(""),
-                    );
+                    code_viewer::code_view_ui(ui, self.code_viewer_code.as_deref().unwrap_or(""));
                 });
             });
     }

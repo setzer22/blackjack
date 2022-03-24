@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use anyhow::{anyhow, Result};
 use egui_node_graph::{InputParamKind, NodeTemplateTrait};
@@ -40,6 +40,8 @@ pub struct NodeDefinition {
     /// execution is used for things like file exporters.
     executable: bool,
 }
+
+pub struct NodeDefinitions(pub BTreeMap<String, NodeDefinition>);
 
 fn data_type_from_str(s: &str) -> Result<DataType> {
     match s {
@@ -119,14 +121,15 @@ impl NodeDefinition {
         })
     }
 
-    pub fn load_nodes_from_table(table: Table) -> Result<HashMap<String, NodeDefinition>> {
+    pub fn load_nodes_from_table(table: Table) -> Result<NodeDefinitions> {
         table
             .pairs::<String, Table>()
             .map(|pair| {
                 let (k, v) = pair?;
                 Ok((k.clone(), NodeDefinition::from_lua(k, v)?))
             })
-            .collect()
+            .collect::<Result<_>>()
+            .map(NodeDefinitions)
     }
 }
 
