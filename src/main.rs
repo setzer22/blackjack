@@ -28,6 +28,9 @@ pub mod math;
 /// General utility methods and helper traits
 pub mod utils;
 
+/// The blackjack engine core types
+pub mod lua_engine;
+
 fn main() {
     // Setup logging
     env_logger::init();

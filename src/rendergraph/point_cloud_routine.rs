@@ -44,7 +44,7 @@ impl ViewportBuffers<NUM_BUFFERS, NUM_TEXTURES> for PointCloudBuffer {
 }
 
 pub struct PointCloudRoutine {
-    inner: Viewport3dRoutine<NUM_BUFFERS, NUM_TEXTURES, PointCloudBuffer>,
+    inner: Viewport3dRoutine<PointCloudBuffer, NUM_BUFFERS, NUM_TEXTURES>,
 }
 
 impl PointCloudRoutine {

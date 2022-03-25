@@ -1,8 +1,5 @@
 /// Provides implementations to the traits in `egui_node_graph` specific to blackjack
-pub mod node_graph_custom;
+pub mod node_graph;
 
-/// A list of instructions to procedurally generate a mesh
-pub mod poly_asm;
-
-/// Compiles node graphs into PolyAsm programs
+/// Compiles node graphs into Lua
 pub mod graph_compiler;

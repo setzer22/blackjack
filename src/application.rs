@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use crate::{
+    lua_engine::lua_stdlib::LuaRuntime,
     prelude::*,
     rendergraph::{
         face_routine::FaceRoutine, grid_routine::GridRoutine,
@@ -27,6 +28,9 @@ pub struct RootViewport {
     offscreen_viewports: HashMap<OffscreenViewport, AppViewport>,
     inspector_tabs: InspectorTabs,
     diagnostics_open: bool,
+    code_viewer_open: bool,
+    code_viewer_code: Option<String>,
+    lua_runtime: LuaRuntime,
 }
 
 /// The application context is state that is global to an instance of blackjack.
@@ -57,6 +61,10 @@ pub mod viewport_split;
 
 /// The properties and spreadsheet inspector code
 pub mod inspector;
+
+/// An egui widget to display a text editor with source code and syntax
+/// highlighting support
+pub mod code_viewer;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 enum OffscreenViewport {
@@ -104,6 +112,9 @@ impl RootViewport {
             offscreen_viewports,
             inspector_tabs: InspectorTabs::new(),
             diagnostics_open: false,
+            code_viewer_open: false,
+            code_viewer_code: None,
+            lua_runtime: LuaRuntime::initialize().expect("Init lua should not fail"),
         }
     }
 
@@ -164,9 +175,14 @@ impl RootViewport {
     pub fn update(&mut self, render_ctx: &mut RenderContext) {
         let mut actions = vec![];
 
+        if let Err(err) = self.lua_runtime.watch_for_changes() {
+            println!("TODO: {}", err);
+        }
+
         self.graph_editor.update(
             self.screen_descriptor.scale_factor,
             self.offscreen_viewports[&OffscreenViewport::GraphEditor].rect,
+            &self.lua_runtime.node_definitions,
         );
         self.viewport_3d.update(
             self.screen_descriptor.scale_factor,
@@ -189,13 +205,15 @@ impl RootViewport {
         });
 
         self.diagnostics_ui(&self.platform.context());
+        self.code_viewer_ui(&self.platform.context());
 
-        self.app_context.update(
+        actions.extend(self.app_context.update(
             &self.platform.context(),
             &mut self.graph_editor.state,
             render_ctx,
             &self.viewport_3d.settings,
-        );
+            &self.lua_runtime,
+        ));
 
         for action in actions {
             // TODO: Don't panic, report error to user in modal dialog
@@ -212,6 +230,10 @@ impl RootViewport {
             }
             AppRootAction::Load(path) => {
                 self.graph_editor.state = serialization::load(path)?;
+                Ok(())
+            }
+            AppRootAction::SetCodeViewerCode(code) => {
+                self.code_viewer_code = Some(code);
                 Ok(())
             }
         }

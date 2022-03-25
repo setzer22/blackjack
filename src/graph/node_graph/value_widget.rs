@@ -24,20 +24,16 @@ impl WidgetValueTrait for ValueType {
             }
             ValueType::Selection { text, selection } => {
                 if ui.text_edit_singleline(text).changed() {
-                    *selection = text
-                        .split(',')
-                        .map(|x| {
-                            x.parse::<u32>()
-                                .map_err(|_| anyhow::anyhow!("Cannot parse number"))
-                        })
-                        .collect::<Result<Vec<_>>>()
-                        .ok();
+                    *selection = SelectionExpression::parse(text).ok();
                 }
             }
             ValueType::None => {
                 ui.label(param_name);
             }
-            ValueType::Enum { values, selection } => {
+            ValueType::Enum {
+                values,
+                selected: selection,
+            } => {
                 let selected = if let Some(selection) = selection {
                     values[*selection as usize].clone()
                 } else {

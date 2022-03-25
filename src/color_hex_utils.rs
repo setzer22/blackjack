@@ -87,7 +87,7 @@ mod tests {
         );
         assert_eq!(
             color_to_hex(Color32::from_rgba_premultiplied(226, 226, 226, 119)),
-            "e2e2e277".to_string()
+            "#e2e2e277".to_string()
         );
     }
 }

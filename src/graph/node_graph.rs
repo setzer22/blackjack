@@ -1,11 +1,14 @@
 use crate::prelude::*;
 use egui::RichText;
 use egui_node_graph::{
-    DataTypeTrait, NodeDataTrait, NodeId, NodeResponse, UserResponseTrait, WidgetValueTrait,
+    DataTypeTrait, NodeDataTrait, NodeId, NodeResponse, NodeTemplateIter, UserResponseTrait,
+    WidgetValueTrait,
 };
+use halfedge::selection::SelectionExpression;
 use serde::{Deserialize, Serialize};
 
-use self::node_templates::GraphNodeType;
+//use self::node_templates::GraphNodeType;
+use self::node_templates::{NodeDefinition, NodeDefinitions};
 
 pub mod node_templates;
 pub mod value_widget;
@@ -17,7 +20,7 @@ pub type GraphEditorState = egui_node_graph::GraphEditorState<
     NodeData,
     DataType,
     ValueType,
-    GraphNodeType,
+    NodeDefinition,
     CustomGraphState,
 >;
 
@@ -25,11 +28,12 @@ pub type GraphEditorState = egui_node_graph::GraphEditorState<
 #[derive(Clone, Serialize, Deserialize)]
 pub struct NodeData {
     pub op_name: String,
+    pub returns: Option<String>,
     pub is_executable: bool,
 }
 
 /// Blackjack-specific graph data types.
-#[derive(Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Copy, Clone, PartialEq, Eq, Serialize, Deserialize, Debug)]
 pub enum DataType {
     Vector,
     Scalar,
@@ -54,11 +58,11 @@ pub enum ValueType {
     },
     Selection {
         text: String,
-        selection: Option<Vec<u32>>,
+        selection: Option<SelectionExpression>,
     },
     Enum {
         values: Vec<String>,
-        selection: Option<u32>,
+        selected: Option<u32>,
     },
     NewFile {
         path: Option<std::path::PathBuf>,
@@ -165,11 +169,19 @@ impl NodeDataTrait for NodeData {
     }
 }
 
+impl NodeTemplateIter for &NodeDefinitions {
+    type Item = NodeDefinition;
+
+    fn all_kinds(&self) -> Vec<Self::Item> {
+        self.0.values().cloned().collect()
+    }
+}
+
 /// Blackjack's custom draw node graph function. It defers to egui_node_graph to
 /// draw the graph itself, then interprets any responses it got and applies the
 /// required side effects.
-pub fn draw_node_graph(ctx: &egui::CtxRef, state: &mut GraphEditorState) {
-    let responses = state.draw_graph_editor(ctx, graph::AllNodeTemplates);
+pub fn draw_node_graph(ctx: &egui::CtxRef, state: &mut GraphEditorState, defs: &NodeDefinitions) {
+    let responses = state.draw_graph_editor(ctx, defs);
     for response in responses.node_responses {
         match response {
             NodeResponse::DeleteNode(node_id) => {

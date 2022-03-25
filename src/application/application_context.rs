@@ -1,8 +1,11 @@
+use crate::{
+    graph::graph_compiler::CompiledProgram, lua_engine::lua_stdlib::LuaRuntime, prelude::*,
+};
 use anyhow::Error;
-
-use crate::prelude::*;
+use egui_node_graph::NodeId;
 
 use super::{
+    root_ui::AppRootAction,
     viewport_3d::{EdgeDrawMode, FaceDrawMode, Viewport3dSettings},
     viewport_split::SplitTree,
 };
@@ -42,20 +45,30 @@ impl ApplicationContext {
         editor_state: &mut graph::GraphEditorState,
         render_ctx: &mut RenderContext,
         viewport_settings: &Viewport3dSettings,
-    ) {
+        lua_runtime: &LuaRuntime,
+    ) -> Vec<AppRootAction> {
         // TODO: Instead of clearing all objects, make the app context own the
         // objects it's drawing and clear those instead.
         render_ctx.clear_objects();
 
-        if let Err(err) = self.compile_and_update_mesh(editor_state) {
-            self.paint_errors(egui_ctx, err);
-        }
-        if let Err(err) = self.run_side_effects(editor_state) {
+        let mut actions = vec![];
+
+        match self.run_active_node(editor_state, lua_runtime) {
+            Ok(code) => {
+                actions.push(AppRootAction::SetCodeViewerCode(code));
+            }
+            Err(err) => {
+                self.paint_errors(egui_ctx, err);
+            }
+        };
+        if let Err(err) = self.run_side_effects(editor_state, lua_runtime) {
             eprintln!("There was an errror executing side effect: {}", err);
         }
         if let Err(err) = self.build_and_render_mesh(render_ctx, viewport_settings) {
             self.paint_errors(egui_ctx, err);
         }
+
+        actions
     }
 
     pub fn build_and_render_mesh(
@@ -140,27 +153,50 @@ impl ApplicationContext {
         );
     }
 
-    pub fn compile_and_update_mesh(
-        &mut self,
-        editor_state: &graph::GraphEditorState,
-    ) -> Result<()> {
-        if let Some(active) = editor_state.user_state.active_node {
-            let program = crate::graph::graph_compiler::compile_graph(&editor_state.graph, active)?;
-            let mesh = program.execute()?;
-            self.mesh = Some(mesh);
-        } else {
-            self.mesh = None
-        }
-        Ok(())
+    pub fn compile_program<'lua>(
+        &'lua self,
+        editor_state: &'lua graph::GraphEditorState,
+        lua_runtime: &'lua LuaRuntime,
+        node: NodeId,
+    ) -> Result<(CompiledProgram, mlua::Table<'_>)> {
+        let program = crate::graph::graph_compiler::compile_graph(&editor_state.graph, node)?;
+        let params = crate::graph::graph_compiler::extract_params(
+            &lua_runtime.lua,
+            &editor_state.graph,
+            &program,
+        )?;
+
+        Ok((program, params))
     }
 
-    pub fn run_side_effects(&mut self, editor_state: &mut graph::GraphEditorState) -> Result<()> {
+    // Returns the compiled lua code
+    pub fn run_active_node(
+        &mut self,
+        editor_state: &graph::GraphEditorState,
+        lua_runtime: &LuaRuntime,
+    ) -> Result<String> {
+        if let Some(active) = editor_state.user_state.active_node {
+            let (program, params) = self.compile_program(editor_state, lua_runtime, active)?;
+            let mesh =
+                crate::lua_engine::run_program(&lua_runtime.lua, &program.lua_program, params)?;
+            self.mesh = Some(mesh);
+            Ok(program.lua_program)
+        } else {
+            self.mesh = None;
+            Ok("".into())
+        }
+    }
+
+    pub fn run_side_effects(
+        &mut self,
+        editor_state: &mut graph::GraphEditorState,
+        lua_runtime: &LuaRuntime,
+    ) -> Result<()> {
         if let Some(side_effect) = editor_state.user_state.run_side_effect.take() {
-            let program =
-                crate::graph::graph_compiler::compile_graph(&editor_state.graph, side_effect)?;
+            let (program, params) = self.compile_program(editor_state, lua_runtime, side_effect)?;
             // We ignore the result. The program is only executed to produce a
             // side effect (e.g. exporting a mesh as OBJ)
-            let _ = program.execute();
+            let _ = crate::lua_engine::run_program(&lua_runtime.lua, &program.lua_program, params)?;
         }
         Ok(())
     }

@@ -42,9 +42,9 @@ pub trait ViewportBuffers<const NUM_BUFFERS: usize, const NUM_TEXTURES: usize> {
 }
 
 pub struct Viewport3dRoutine<
+    Buffers: ViewportBuffers<NUM_BUFFERS, NUM_TEXTURES>,
     const NUM_BUFFERS: usize,
     const NUM_TEXTURES: usize,
-    Buffers: ViewportBuffers<NUM_BUFFERS, NUM_TEXTURES>,
 > {
     name: String,
     bgl: BindGroupLayout,
@@ -53,10 +53,10 @@ pub struct Viewport3dRoutine<
 }
 
 impl<
+        Buffers: ViewportBuffers<NUM_BUFFERS, NUM_TEXTURES> + 'static,
         const NUM_BUFFERS: usize,
         const NUM_TEXTURES: usize,
-        Buffers: ViewportBuffers<NUM_BUFFERS, NUM_TEXTURES> + 'static,
-    > Viewport3dRoutine<NUM_BUFFERS, NUM_TEXTURES, Buffers>
+    > Viewport3dRoutine<Buffers, NUM_BUFFERS, NUM_TEXTURES>
 {
     pub fn new(
         name: &str,
