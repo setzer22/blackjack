@@ -36,6 +36,9 @@ pub mod selection;
 pub mod gpu_buffer_generation;
 pub use gpu_buffer_generation::*;
 
+pub mod channels;
+pub use channels::*;
+
 /// HalfEdge meshes are a type of linked list. This means it is sometimes
 /// impossible to ensure some algorithms will terminate when the mesh is
 /// malformed. To ensure the code never goes into an infinite loop, this max

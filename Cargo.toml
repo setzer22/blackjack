@@ -17,7 +17,9 @@ wavefront_rs = { git = "https://github.com/setzer22/wavefront_rs", rev = "e303f3
 
 # Git dependencies
 egui_winit_platform = { git = "https://github.com/hasenbanck/egui_winit_platform", rev = "eea97f778a17c7f97f3cf1758f3ebb5ff6251e11" }
-egui_node_graph = { git = "https://github.com/setzer22/egui_node_graph", rev = "d8c31a5", features = ["persistence"] }
+egui_node_graph = { git = "https://github.com/setzer22/egui_node_graph", rev = "d8c31a5", features = [
+    "persistence",
+] }
 rend3 = { git = "https://github.com/BVE-Reborn/rend3", rev = "763a721842ad02b08d3812791027ede451b4ec18" }
 rend3-routine = { git = "https://github.com/BVE-Reborn/rend3", rev = "763a721842ad02b08d3812791027ede451b4ec18" }
 glsl-include = { git = "https://github.com/setzer22/glsl-include", rev = "d9b1ade" }
@@ -25,7 +27,10 @@ glsl-include = { git = "https://github.com/setzer22/glsl-include", rev = "d9b1ad
 # Crates.io crates
 egui = { version = "0.16", features = ["persistence"] }
 glam = { version = "0.20", features = ["serde", "bytemuck"] }
-env_logger = { version = "0.9", default-features = false, features = ["termcolor", "atty"] }
+env_logger = { version = "0.9", default-features = false, features = [
+    "termcolor",
+    "atty",
+] }
 winit = { version = "0.26" }
 wgpu = "0.12"
 pollster = "0.2"
@@ -33,10 +38,10 @@ smallvec = { version = "1.7.0", features = ["serde"] }
 itertools = "0.10"
 anyhow = { version = "1.0", features = ["backtrace"] }
 bytemuck = { version = "1.7", features = ["derive"] }
-serde = { version = "1.0", features =  ["derive"] }
+serde = { version = "1.0", features = ["derive"] }
 ron = "0.7"
 rfd = "0.6"
-float-ord  = "0.3.2"
+float-ord = "0.3.2"
 spin_sleep = "1.0.0"
 rayon = "1.5.1"
 nonmax = "0.5"
@@ -46,11 +51,13 @@ atomic_float = "0.1"
 profiling = { version = "1.0", features = ["profile-with-tracy"] }
 image = { version = "0.24", default-features = false, features = ["png"] }
 nom = "7.1"
-mlua = { version = "0.7.4", features = ["vendored", "lua54"]}
+mlua = { version = "0.7.4", features = ["vendored", "lua54"] }
 notify = "4.0"
 walkdir = "2"
 syntect = "4.6"
 enum-map = "2.0"
+typemap = "0.3"
+bimap = "0.6.2"
 
 # Image loading is too slow in debug mode. This compiles all dependencies with optimizations.
 [profile.dev.package."*"]
@@ -64,4 +71,3 @@ opt-level = 3
 # egui_node_graph = { path = "../egui_node_graph/egui_node_graph", features = ["persistence"] }
 # rend3 = { path = "../rend3/rend3" }
 # rend3-routine = { path = "../rend3/rend3-routine" }
-
