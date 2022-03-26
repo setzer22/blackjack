@@ -27,14 +27,17 @@ impl HalfEdgeMesh {
         );
         writer.write_all("\n".as_ref())?;
 
-        for (idx, (v_id, v)) in self.iter_vertices().enumerate() {
+        for (idx, (v_id, _, pos)) in self
+            .iter_vertices_with_channel(&self.read_positions())
+            .enumerate()
+        {
             imap.insert(v_id, (idx + 1) as i32);
             obj::format_writer::FormatWriter::write(
                 &mut writer,
                 &Entity::Vertex {
-                    x: v.position.x as f64,
-                    y: v.position.y as f64,
-                    z: v.position.z as f64,
+                    x: pos.x as f64,
+                    y: pos.y as f64,
+                    z: pos.z as f64,
                     w: None,
                 },
             );

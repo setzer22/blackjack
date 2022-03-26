@@ -1,3 +1,5 @@
+use std::cell::{Ref, RefMut};
+
 use crate::prelude::*;
 
 use glam::*;
@@ -57,7 +59,6 @@ pub struct HalfEdge {
 
 #[derive(Debug, Clone)]
 pub struct Vertex {
-    pub position: Vec3,
     halfedge: Option<HalfEdgeId>,
 }
 
@@ -108,6 +109,7 @@ pub struct HalfEdgeMesh {
 
 pub type SVec<T> = SmallVec<[T; 4]>;
 pub type SVecN<T, const N: usize> = SmallVec<[T; N]>;
+pub type Positions = Channel<VertexId, Vec3>;
 
 impl HalfEdgeMesh {
     pub fn new() -> Self {
@@ -127,11 +129,18 @@ impl HalfEdgeMesh {
 
     // Adds a disconnected quad into the mesh. Returns the id to the first
     // halfedge of the quad
-    pub fn add_quad(&mut self, a: Vec3, b: Vec3, c: Vec3, d: Vec3) -> HalfEdgeId {
-        let v_a = self.alloc_vertex(a, None);
-        let v_b = self.alloc_vertex(b, None);
-        let v_c = self.alloc_vertex(c, None);
-        let v_d = self.alloc_vertex(d, None);
+    pub fn add_quad(
+        &mut self,
+        positions: &mut Positions,
+        a: Vec3,
+        b: Vec3,
+        c: Vec3,
+        d: Vec3,
+    ) -> HalfEdgeId {
+        let v_a = self.alloc_vertex(positions, a, None);
+        let v_b = self.alloc_vertex(positions, b, None);
+        let v_c = self.alloc_vertex(positions, c, None);
+        let v_d = self.alloc_vertex(positions, d, None);
 
         let f = self.alloc_face(None);
 
@@ -224,14 +233,20 @@ impl HalfEdgeMesh {
         (a, b)
     }
 
-    pub fn extrude_edge(&mut self, edge: HalfEdgeId, a_to: Vec3, b_to: Vec3) -> Result<HalfEdgeId> {
+    pub fn extrude_edge(
+        &mut self,
+        positions: &mut Positions,
+        edge: HalfEdgeId,
+        a_to: Vec3,
+        b_to: Vec3,
+    ) -> Result<HalfEdgeId> {
         if self[edge].twin.is_some() {
             bail!("Attempt to extrude an edge that already has a twin. Would result in a non-manifold mesh.")
         }
         let (a, b) = self.edge_endpoints(edge);
         let f = self.alloc_face(None);
-        let a2 = self.alloc_vertex(a_to, None);
-        let b2 = self.alloc_vertex(b_to, None);
+        let a2 = self.alloc_vertex(positions, a_to, None);
+        let b2 = self.alloc_vertex(positions, b_to, None);
 
         let h1 = self.alloc_halfedge(HalfEdge {
             twin: None,
@@ -289,6 +304,7 @@ impl HalfEdgeMesh {
         Polygon: AsRef<[Index]>,
     {
         let mut mesh = Self::new();
+        let mut positions_ch = mesh.write_positions();
 
         // Maps indices from the `polygons` array to the allocated vertices in
         // the newly created halfedge mesh.
@@ -316,7 +332,7 @@ impl HalfEdgeMesh {
                 })?;
                 let v_id = index_to_vertex
                     .entry(*index)
-                    .or_insert_with(|| mesh.alloc_vertex(*position, None));
+                    .or_insert_with(|| mesh.alloc_vertex(&mut positions_ch, *position, None));
 
                 // Increment the vertex degree counter for that vertex.
                 *vertex_degree.entry(*v_id).or_insert(0) += 1;
@@ -528,33 +544,54 @@ impl HalfEdgeMesh {
         self.vertices.iter()
     }
 
+    pub fn iter_vertices_with_channel<'a, T: ChannelValue>(
+        &'a self,
+        channel: &'a Channel<VertexId, T>,
+    ) -> impl Iterator<Item = (VertexId, &Vertex, T)> + 'a {
+        self.vertices
+            .iter()
+            .zip(channel.iter())
+            .map(|((id, v), (_id, val))| (id, v, *val))
+    }
+
     pub fn iter_faces(&self) -> impl Iterator<Item = (FaceId, &Face)> {
         self.faces.iter()
+    }
+
+    pub fn iter_faces_with_channel<'a, T: ChannelValue>(
+        &'a self,
+        channel: &'a Channel<FaceId, T>,
+    ) -> impl Iterator<Item = (FaceId, &Face, T)> + 'a {
+        self.faces
+            .iter()
+            .zip(channel.iter())
+            .map(|((id, f), (_id, val))| (id, f, *val))
     }
 
     pub fn iter_halfedges(&self) -> impl Iterator<Item = (HalfEdgeId, &HalfEdge)> {
         self.halfedges.iter()
     }
 
-    /// Sets the position for a given vertex
-    pub fn set_vertex_position(&mut self, vertex: VertexId, position: Vec3) {
-        self.vertex_mut(vertex).unwrap().position = position;
-    }
-
-    /// Sets the position for a given vertex
-    pub fn vertex_position(&self, vertex: VertexId) -> Vec3 {
-        self.vertex(vertex).unwrap().position
-    }
-
-    /// Sets the position for a given vertex using updater function. Function takes old value.
-    pub fn update_vertex_position(&mut self, vertex: VertexId, updater: impl FnOnce(Vec3) -> Vec3) {
-        let v = self.vertex_mut(vertex).unwrap();
-        v.position = updater(v.position);
+    pub fn iter_halfedges_with_channel<'a, T: ChannelValue>(
+        &'a self,
+        channel: &'a Channel<HalfEdgeId, T>,
+    ) -> impl Iterator<Item = (HalfEdgeId, &HalfEdge, T)> + 'a {
+        self.halfedges
+            .iter()
+            .zip(channel.iter())
+            .map(|((id, f), (_id, val))| (id, f, *val))
     }
 
     /// Adds a new vertex to the mesh, disconnected from everything else. Returns its handle.
-    fn alloc_vertex(&mut self, position: Vec3, halfedge: Option<HalfEdgeId>) -> VertexId {
-        self.vertices.insert(Vertex { position, halfedge })
+    fn alloc_vertex(
+        &mut self,
+        positions: &mut Positions,
+        position: Vec3,
+        halfedge: Option<HalfEdgeId>,
+    ) -> VertexId {
+        let v = self.vertices.insert(Vertex { halfedge });
+        positions[v] = position;
+        v
     }
 
     /// Adds a new face to the mesh, disconnected from everything else. Returns its handle.
@@ -620,11 +657,11 @@ impl HalfEdgeMesh {
     /// from the centroid. See:
     /// https://en.wikipedia.org/wiki/Centroid#Of_a_polygon
     /// https://stackoverflow.com/questions/2355931/compute-the-centroid-of-a-3d-planar-polygon
-    pub fn face_vertex_average(&self, face_id: FaceId) -> Vec3 {
+    pub fn face_vertex_average(&self, positions: &Positions, face_id: FaceId) -> Vec3 {
         let face_vertices = self
             .face_vertices(face_id)
             .iter()
-            .map(|v| self.vertex_position(*v))
+            .map(|v| positions[*v])
             .collect::<SVec<_>>();
         face_vertices.iter().fold(Vec3::ZERO, |v1, v2| v1 + *v2) / face_vertices.len() as f32
     }
@@ -640,10 +677,16 @@ impl HalfEdgeMesh {
         let mut hmap = HashMap::<HalfEdgeId, HalfEdgeId>::new();
         let mut fmap = HashMap::<FaceId, FaceId>::new();
 
+        let a_positions = self.write_positions();
+        let b_positions = mesh_b.read_positions();
+
         // On a first pass, we reserve new vertices, faces and halfedges without
         // setting any of their pointers and store their ids in a mapping.
         for (vertex_id, vertex) in mesh_b.iter_vertices() {
-            vmap.insert(vertex_id, self.alloc_vertex(vertex.position, None));
+            vmap.insert(
+                vertex_id,
+                self.alloc_vertex(&mut a_positions, b_positions[vertex_id], None),
+            );
         }
         for (face_id, _) in mesh_b.iter_faces() {
             fmap.insert(face_id, self.alloc_face(None));
@@ -691,11 +734,11 @@ impl HalfEdgeMesh {
     // Returns the normal of the face. The first three vertices are used to
     // compute the normal. If the vertices of the face are not coplanar,
     // the result will not be correct.
-    fn face_normal(&self, face: FaceId) -> Option<Vec3> {
+    fn face_normal(&self, positions: &Positions, face: FaceId) -> Option<Vec3> {
         let verts = self.face_vertices(face);
         if verts.len() >= 3 {
-            let v01 = self.vertex_position(verts[0]) - self.vertex_position(verts[1]);
-            let v12 = self.vertex_position(verts[1]) - self.vertex_position(verts[2]);
+            let v01 = positions[verts[0]] - positions[verts[1]];
+            let v12 = positions[verts[1]] - positions[verts[2]];
             Some(v01.cross(v12).normalize())
         } else {
             None
@@ -712,6 +755,18 @@ impl HalfEdgeMesh {
 
     pub fn num_faces(&self) -> usize {
         self.faces.len()
+    }
+
+    pub fn read_positions(&self) -> Ref<'_, Positions> {
+        self.channels
+            .read_channel(self.default_channels.position)
+            .expect("Meshes should always have a position channel.")
+    }
+
+    pub fn write_positions(&self) -> RefMut<'_, Positions> {
+        self.channels
+            .write_channel(self.default_channels.position)
+            .expect("Meshes should always have a position channel.")
     }
 }
 
@@ -737,19 +792,20 @@ pub mod test {
     #[test]
     pub fn test_add_quad() {
         let mut hem = HalfEdgeMesh::new();
+        let mut positions = hem.write_positions();
         let (a, b, c, d) = quad_abcd();
-        let q = hem.add_quad(a, b, c, d);
+        let q = hem.add_quad(&mut positions, a, b, c, d);
 
         assert_eq!(hem.at_halfedge(q).next().next().next().next().end(), q);
 
-        assert_eq!(hem[hem.at_halfedge(q).vertex().end()].position, a);
-        assert_eq!(hem[hem.at_halfedge(q).next().vertex().end()].position, b,);
+        assert_eq!(positions[hem.at_halfedge(q).vertex().end()], a);
+        assert_eq!(positions[hem.at_halfedge(q).next().vertex().end()], b);
         assert_eq!(
-            hem[hem.at_halfedge(q).next().next().vertex().end()].position,
+            positions[hem.at_halfedge(q).next().next().vertex().end()],
             c,
         );
         assert_eq!(
-            hem[hem.at_halfedge(q).next().next().next().vertex().end()].position,
+            positions[hem.at_halfedge(q).next().next().next().vertex().end()],
             d,
         );
 
@@ -762,8 +818,9 @@ pub mod test {
     #[test]
     pub fn test_face_size() {
         let mut hem = HalfEdgeMesh::new();
+        let mut positions = hem.write_positions();
         let (a, b, c, d) = quad_abcd();
-        let q = hem.add_quad(a, b, c, d);
+        let q = hem.add_quad(&mut positions, a, b, c, d);
 
         let f = hem.at_halfedge(q).face().end();
         assert_eq!(hem.num_face_edges(f), 4);
@@ -772,8 +829,9 @@ pub mod test {
     #[test]
     pub fn generate_quad_buffers() {
         let mut hem = HalfEdgeMesh::new();
+        let mut positions = hem.write_positions();
         let (a, b, c, d) = quad_abcd();
-        let _q = hem.add_quad(a, b, c, d);
+        let _q = hem.add_quad(&mut positions, a, b, c, d);
 
         dbg!(hem.generate_triangle_buffers_flat());
     }

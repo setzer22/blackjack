@@ -120,6 +120,7 @@ impl SpreadsheetTab {
         });
 
         if let Some(mesh) = mesh {
+            let positions = mesh.read_positions();
             let scroll_area = ScrollArea::both().auto_shrink([false, false]);
             scroll_area.show(ui, |ui| match self.current_view {
                 SpreadsheetViews::Vertices => {
@@ -134,11 +135,12 @@ impl SpreadsheetTab {
                             ui.label("z");
                             ui.end_row();
 
-                            for (idx, (_, v)) in mesh.iter_vertices().enumerate() {
+                            for (idx, (v_id, _)) in mesh.iter_vertices().enumerate() {
                                 ui.label(idx.to_string());
-                                ui.monospace(format!("{: >6.3}", v.position.x));
-                                ui.monospace(format!("{: >6.3}", v.position.y));
-                                ui.monospace(format!("{: >6.3}", v.position.z));
+                                let pos = positions[v_id];
+                                ui.monospace(format!("{: >6.3}", pos.x));
+                                ui.monospace(format!("{: >6.3}", pos.y));
+                                ui.monospace(format!("{: >6.3}", pos.z));
                                 ui.end_row();
                             }
                         })

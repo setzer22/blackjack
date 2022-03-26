@@ -187,9 +187,10 @@ pub fn load_host_libraries(lua: &Lua) -> anyhow::Result<()> {
                              mesh: AnyUserData|
      -> HalfEdgeMesh {
         let mut result = mesh.borrow::<HalfEdgeMesh>()?.clone();
+        let mut positions = result.write_positions();
         result.clear_debug();
         for v in result.resolve_vertex_selection_full(vertices) {
-            crate::mesh::halfedge::edit_ops::chamfer_vertex(&mut result, v, amount)
+            crate::mesh::halfedge::edit_ops::chamfer_vertex(&mut result, &mut positions, v, amount)
                 .map_lua_err()?;
         }
         Ok(result)
@@ -201,7 +202,9 @@ pub fn load_host_libraries(lua: &Lua) -> anyhow::Result<()> {
      -> HalfEdgeMesh {
         let mut result = mesh.borrow::<HalfEdgeMesh>()?.clone();
         let edges = result.resolve_halfedge_selection_full(edges);
-        crate::mesh::halfedge::edit_ops::bevel_edges(&mut result, &edges, amount).map_lua_err()?;
+        let positions = result.write_positions();
+        crate::mesh::halfedge::edit_ops::bevel_edges(&mut result, &mut positions, &edges, amount)
+            .map_lua_err()?;
         Ok(result)
     });
 
@@ -211,7 +214,8 @@ pub fn load_host_libraries(lua: &Lua) -> anyhow::Result<()> {
      -> HalfEdgeMesh {
         let mut result = mesh.borrow::<HalfEdgeMesh>()?.clone();
         let faces = result.resolve_face_selection_full(faces);
-        crate::mesh::halfedge::edit_ops::extrude_faces(&mut result, &faces, amount)
+        let positions = result.write_positions();
+        crate::mesh::halfedge::edit_ops::extrude_faces(&mut result, &mut positions, &faces, amount)
             .map_lua_err()?;
         Ok(result)
     });

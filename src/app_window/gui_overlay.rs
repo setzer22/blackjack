@@ -21,8 +21,10 @@ pub fn draw_gui_overlays(
 ) {
     let painter = egui_ctx.debug_painter();
 
+    let positions = mesh.read_positions();
+
     for (&v, mark) in mesh.iter_debug_vertices() {
-        let point = mesh.vertex_position(v);
+        let point = positions[v];
         let mut point = project_point(render_ctx, window_size, egui_ctx, point);
         point.y *= 0.5;
 
@@ -37,8 +39,8 @@ pub fn draw_gui_overlays(
 
     for (&h, mark) in mesh.iter_debug_halfedges() {
         let (src, dst) = mesh.at_halfedge(h).src_dst_pair().unwrap();
-        let src_point = mesh.vertex_position(src);
-        let dst_point = mesh.vertex_position(dst);
+        let src_point = positions[src];
+        let dst_point = positions[dst];
         let point = src_point * 0.333 + dst_point * 0.666;
         let mut point = project_point(render_ctx, window_size, egui_ctx, point);
         point.y *= 0.5;

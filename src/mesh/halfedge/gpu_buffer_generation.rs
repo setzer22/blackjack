@@ -45,26 +45,26 @@ impl HalfEdgeMesh {
     /// to the GPU.
     #[profiling::function]
     pub fn generate_triangle_buffers_flat(&self) -> VertexIndexBuffers {
+        let positions_ch = self.read_positions();
+
         let mut positions = vec![];
         let mut normals = vec![];
 
         for (face_id, _face) in self.faces.iter() {
             // We try to be a bit forgiving here. We don't want to stop
             // rendering even if we have slightly malformed meshes.
-            let normal = self.face_normal(face_id).unwrap_or(Vec3::ZERO);
+            let normal = self
+                .face_normal(&positions_ch, face_id)
+                .unwrap_or(Vec3::ZERO);
 
             let vertices = self.face_vertices(face_id);
 
             let v1 = vertices[0];
 
             for (&v2, &v3) in vertices[1..].iter().tuple_windows() {
-                let v1_pos = self[v1].position;
-                let v2_pos = self[v2].position;
-                let v3_pos = self[v3].position;
-
-                positions.push(v1_pos);
-                positions.push(v2_pos);
-                positions.push(v3_pos);
+                positions.push(positions_ch[v1]);
+                positions.push(positions_ch[v2]);
+                positions.push(positions_ch[v3]);
                 normals.push(normal);
                 normals.push(normal);
                 normals.push(normal);
@@ -83,17 +83,18 @@ impl HalfEdgeMesh {
             slotmap::SecondaryMap::<VertexId, u32>::with_capacity(self.vertices.capacity());
         let mut positions = vec![];
         let mut normals = vec![];
+        let positions_ch = self.read_positions();
 
-        self.iter_vertices()
+        self.iter_vertices_with_channel(&positions_ch)
             .enumerate()
-            .try_for_each::<_, Result<()>>(|(idx, (id, v))| {
+            .try_for_each::<_, Result<()>>(|(idx, (id, v, pos))| {
                 v_id_to_idx.insert(id, idx as u32);
-                positions.push(v.position);
+                positions.push(pos);
 
                 let adjacent_faces = self.at_vertex(id).adjacent_faces()?;
                 let mut normal = Vec3::ZERO;
                 for face in adjacent_faces.iter_cpy() {
-                    normal += self.face_normal(face).unwrap_or(Vec3::ZERO);
+                    normal += self.face_normal(&positions_ch, face).unwrap_or(Vec3::ZERO);
                 }
                 normals.push(normal / adjacent_faces.len() as f32);
                 Ok(())
@@ -121,15 +122,17 @@ impl HalfEdgeMesh {
         let mut positions = vec![];
         let mut colors = vec![];
 
+        let mut positions_ch = self.read_positions();
+
         for (_, (face_id, _face)) in self.faces.iter().enumerate() {
             // TODO: Add criteria to select highlighted faces
             if false {
                 let vertices = self.face_vertices(face_id);
                 let v1 = vertices[0];
                 for (&v2, &v3) in vertices[1..].iter().tuple_windows() {
-                    let v1_pos = self[v1].position;
-                    let v2_pos = self[v2].position;
-                    let v3_pos = self[v3].position;
+                    let v1_pos = positions_ch[v1];
+                    let v2_pos = positions_ch[v2];
+                    let v3_pos = positions_ch[v3];
 
                     positions.push(v1_pos);
                     positions.push(v2_pos);
@@ -146,8 +149,8 @@ impl HalfEdgeMesh {
     /// the GPU.
     pub fn generate_point_buffers(&self) -> PointBuffers {
         let mut positions = Vec::new();
-        for (_, vertex) in self.iter_vertices() {
-            positions.push(vertex.position)
+        for (_, pos) in self.read_positions().iter() {
+            positions.push(*pos)
         }
         PointBuffers { positions }
     }
@@ -163,6 +166,9 @@ impl HalfEdgeMesh {
         let mut visited = HashSet::new();
         let mut positions = Vec::new();
         let mut colors = Vec::new();
+
+        let positions_ch = self.read_positions();
+
         for (h, halfedge) in self.iter_halfedges() {
             let tw = halfedge
                 .twin
@@ -177,8 +183,8 @@ impl HalfEdgeMesh {
                 anyhow!("All halfedges should have src and dst vertices: {}", err)
             })?;
 
-            positions.push(self.vertex_position(src));
-            positions.push(self.vertex_position(dst));
+            positions.push(positions_ch[src]);
+            positions.push(positions_ch[dst]);
 
             if let Some(dbg_edge) = self.debug_edges.get(&h) {
                 let color = glam::Vec3::new(
@@ -202,11 +208,13 @@ impl HalfEdgeMesh {
         let mut colors = vec![];
         let mut positions = vec![];
 
+        let positions_ch = self.read_positions();
+
         for (h, _) in self.iter_halfedges() {
             let (src, dst) = self.at_halfedge(h).src_dst_pair()?;
 
-            let src_pos = self.vertex_position(src);
-            let dst_pos = self.vertex_position(dst);
+            let src_pos = positions_ch[src];
+            let dst_pos = positions_ch[dst];
             let edge_length = (dst_pos - src_pos).length();
 
             let separation = edge_length * 0.1;
@@ -217,7 +225,7 @@ impl HalfEdgeMesh {
                 .at_halfedge(h)
                 .face()
                 .try_end()
-                .map(|face| self.face_vertex_average(face));
+                .map(|face| self.face_vertex_average(&positions_ch, face));
             let towards_face = if let Ok(centroid) = face_centroid {
                 (centroid - midpoint).normalize() * separation
             } else {
@@ -230,9 +238,9 @@ impl HalfEdgeMesh {
             let dst_pos = dst_pos + towards_face - bitangent * shrink;
 
             let normal = if let Some(face) = self.at_halfedge(h).face_or_boundary()? {
-                self.face_normal(face).unwrap_or(Vec3::ZERO)
+                self.face_normal(&positions_ch, face).unwrap_or(Vec3::ZERO)
             } else if let Some(twin_face) = self.at_halfedge(h).twin().face_or_boundary()? {
-                self.face_normal(twin_face).unwrap_or(Vec3::ZERO)
+                self.face_normal(&positions_ch, twin_face).unwrap_or(Vec3::ZERO)
             } else {
                 Vec3::ZERO
             };

@@ -163,9 +163,10 @@ impl<const Subdivided: bool> CompactMesh<Subdivided> {
             edge.push(h_id_to_edge[h_id])
         }
 
+        let positions = mesh.read_positions();
         let vertex_positions = v_id_to_idx
             .iter()
-            .map(|(v_id, _)| mesh.vertex_position(v_id))
+            .map(|(v_id, _)| positions[v_id])
             .collect();
 
         Ok(CompactMesh {
@@ -190,6 +191,7 @@ impl<const Subdivided: bool> CompactMesh<Subdivided> {
     #[profiling::function]
     pub fn to_halfedge(&self) -> HalfEdgeMesh {
         let mut mesh = HalfEdgeMesh::new();
+        let mut positions = mesh.write_positions();
 
         let mut h_idx_to_id = Vec::with_capacity(self.counts.num_halfedges);
         for _ in 0..self.counts.num_halfedges {
@@ -198,7 +200,7 @@ impl<const Subdivided: bool> CompactMesh<Subdivided> {
 
         let mut v_idx_to_id = Vec::with_capacity(self.counts.num_vertices);
         for v in 0..self.counts.num_vertices {
-            v_idx_to_id.push(mesh.alloc_vertex(self.vertex_positions[v], None));
+            v_idx_to_id.push(mesh.alloc_vertex(&mut positions, self.vertex_positions[v], None));
         }
 
         let mut f_idx_to_id = Vec::with_capacity(self.counts.num_faces);

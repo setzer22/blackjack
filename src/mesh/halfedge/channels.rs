@@ -163,6 +163,14 @@ impl<K: ChannelKey, V: ChannelValue> ChannelGroup<K, V> {
             .map_err(|err| anyhow!("Channel {ch_id:?} could not be borrowed: {err}"))
     }
 
+    pub unsafe fn read_channel_unguarded(&self, ch_id: ChannelId<K, V>) -> Result<&Channel<K, V>> {
+        self.channels
+            .get(ch_id)
+            .ok_or_else(|| anyhow!("Channel {ch_id:?} does not exist for this mesh"))?
+            .try_borrow_unguarded()
+            .map_err(|err| anyhow!("Channel {ch_id:?} could not be borrowed: {err}"))
+    }
+
     pub fn write_channel(&self, ch_id: ChannelId<K, V>) -> Result<RefMut<Channel<K, V>>> {
         self.channels
             .get(ch_id)
@@ -245,6 +253,13 @@ impl MeshChannels {
         ch_id: ChannelId<K, V>,
     ) -> Result<Ref<Channel<K, V>>> {
         self.group()?.read_channel(ch_id)
+    }
+
+    pub unsafe fn read_channel_unguarded<K: ChannelKey, V: ChannelValue>(
+        &self,
+        ch_id: ChannelId<K, V>,
+    ) -> Result<&Channel<K, V>> {
+        self.group()?.read_channel_unguarded(ch_id)
     }
 
     pub fn read_channel_by_name<K: ChannelKey, V: ChannelValue>(
