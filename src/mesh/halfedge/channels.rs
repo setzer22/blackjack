@@ -51,22 +51,16 @@ pub struct Channel<K: ChannelKey, V: ChannelValue> {
     default: V,
 }
 
+slotmap::new_key_type! { pub struct RawChannelId; }
+
 pub struct ChannelId<K: ChannelKey, V: ChannelValue> {
-    data: slotmap::KeyData,
+    raw: RawChannelId,
     _phantom: PhantomData<(K, V)>,
 }
-// SAFETY: Slotmap just needs that custom key types act as a wrapper over its
-// KeyData. This is exactly what we're doing to it's safe. We can't use the
-// macro because our key type is generic.
-unsafe impl<K: ChannelKey, V: ChannelValue> slotmap::Key for ChannelId<K, V> {
-    fn data(&self) -> slotmap::KeyData {
-        self.data
-    }
-}
-impl<K: ChannelKey, V: ChannelValue> From<slotmap::KeyData> for ChannelId<K, V> {
-    fn from(data: slotmap::KeyData) -> Self {
-        ChannelId {
-            data,
+impl<K: ChannelKey, V: ChannelValue> ChannelId<K, V> {
+    pub fn new(raw: RawChannelId) -> Self {
+        Self {
+            raw,
             _phantom: Default::default(),
         }
     }
@@ -75,7 +69,7 @@ impl<K: ChannelKey, V: ChannelValue> From<slotmap::KeyData> for ChannelId<K, V> 
 #[derive(Clone, Debug)]
 pub struct ChannelGroup<K: ChannelKey, V: ChannelValue> {
     channel_names: bimap::BiMap<String, ChannelId<K, V>>,
-    channels: SlotMap<ChannelId<K, V>, RefCell<Channel<K, V>>>,
+    channels: SlotMap<RawChannelId, RefCell<Channel<K, V>>>,
 }
 
 #[derive(Default, Debug, Clone)]
@@ -124,7 +118,7 @@ impl<K: ChannelKey, V: ChannelValue> Channel<K, V> {
 
 impl<K: ChannelKey, V: ChannelValue> ChannelGroup<K, V> {
     pub fn ensure_channel(&mut self, name: String) -> ChannelId<K, V> {
-        let ch_id = self.channels.insert(Default::default());
+        let ch_id = ChannelId::new(self.channels.insert(Default::default()));
         self.channel_names.insert(name, ch_id);
         ch_id
     }
@@ -141,7 +135,7 @@ impl<K: ChannelKey, V: ChannelValue> ChannelGroup<K, V> {
         self.channel_names.remove_by_right(&id);
         Ok(self
             .channels
-            .remove(id)
+            .remove(id.raw)
             .ok_or_else(|| anyhow!("Non-existing channel cannot be removed"))?
             .into_inner())
     }
@@ -156,7 +150,7 @@ impl<K: ChannelKey, V: ChannelValue> ChannelGroup<K, V> {
 
     pub fn read_channel(&self, ch_id: ChannelId<K, V>) -> Result<Ref<Channel<K, V>>> {
         self.channels
-            .get(ch_id)
+            .get(ch_id.raw)
             .ok_or_else(|| anyhow!("Channel {ch_id:?} does not exist for this mesh"))?
             .try_borrow()
             .map_err(|err| anyhow!("Channel {ch_id:?} could not be borrowed: {err}"))
@@ -164,7 +158,7 @@ impl<K: ChannelKey, V: ChannelValue> ChannelGroup<K, V> {
 
     pub fn write_channel(&self, ch_id: ChannelId<K, V>) -> Result<RefMut<Channel<K, V>>> {
         self.channels
-            .get(ch_id)
+            .get(ch_id.raw)
             .ok_or_else(|| anyhow!("Channel {ch_id:?} does not exist for this mesh"))?
             .try_borrow_mut()
             .map_err(|err| anyhow!("Channel {ch_id:?} could not be borrowed: {err}"))
@@ -448,7 +442,7 @@ mod test {
 impl<K: ChannelKey, V: ChannelValue> Clone for ChannelId<K, V> {
     fn clone(&self) -> Self {
         Self {
-            data: self.data,
+            raw: self.raw,
             _phantom: self._phantom,
         }
     }
@@ -457,36 +451,36 @@ impl<K: ChannelKey, V: ChannelValue> Copy for ChannelId<K, V> {}
 impl<K: ChannelKey, V: ChannelValue> Default for ChannelId<K, V> {
     fn default() -> Self {
         Self {
-            data: Default::default(),
+            raw: Default::default(),
             _phantom: Default::default(),
         }
     }
 }
 impl<K: ChannelKey, V: ChannelValue> PartialEq for ChannelId<K, V> {
     fn eq(&self, other: &Self) -> bool {
-        self.data == other.data && self._phantom == other._phantom
+        self.raw == other.raw && self._phantom == other._phantom
     }
 }
 impl<K: ChannelKey, V: ChannelValue> Eq for ChannelId<K, V> {}
 impl<K: ChannelKey, V: ChannelValue> Ord for ChannelId<K, V> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.data.cmp(&other.data)
+        self.raw.cmp(&other.raw)
     }
 }
 impl<K: ChannelKey, V: ChannelValue> PartialOrd for ChannelId<K, V> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.data.partial_cmp(&other.data)
+        self.raw.partial_cmp(&other.raw)
     }
 }
 impl<K: ChannelKey, V: ChannelValue> std::hash::Hash for ChannelId<K, V> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.data.hash(state);
+        self.raw.hash(state);
     }
 }
 impl<K: ChannelKey, V: ChannelValue> Debug for ChannelId<K, V> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ChannelId")
-            .field("data", &self.data)
+            .field("data", &self.raw)
             .finish()
     }
 }

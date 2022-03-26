@@ -724,6 +724,14 @@ impl HalfEdgeMesh {
     /// Merges this halfedge mesh with another one. No additional connectivity
     /// data is generated between the two.
     pub fn merge_with(&mut self, mesh_b: &HalfEdgeMesh) {
+
+        // WIP: This function is not correct right now. When merging two meshes
+        // we need to take into account their channels.
+        //
+        // - Any channels not present in B can be kept as is (new values take default)
+        // - Any channels present in B, but not present in A will need to be copied.
+
+
         let mut vmap = HashMap::<VertexId, VertexId>::new();
         let mut hmap = HashMap::<HalfEdgeId, HalfEdgeId>::new();
         let mut fmap = HashMap::<FaceId, FaceId>::new();
