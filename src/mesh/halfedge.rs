@@ -1,4 +1,4 @@
-use std::cell::{Ref, RefMut};
+use std::cell::{Ref, RefCell, RefMut};
 
 use crate::prelude::*;
 
@@ -94,15 +94,19 @@ impl DebugMark {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct HalfEdgeMesh {
+#[derive(Debug, Clone, Default)]
+pub struct MeshConnectivity {
     vertices: SlotMap<VertexId, Vertex>,
     faces: SlotMap<FaceId, Face>,
     halfedges: SlotMap<HalfEdgeId, HalfEdge>,
 
     debug_edges: HashMap<HalfEdgeId, DebugMark>,
     debug_vertices: HashMap<VertexId, DebugMark>,
+}
 
+#[derive(Debug, Clone)]
+pub struct HalfEdgeMesh {
+    connectivity: RefCell<MeshConnectivity>,
     channels: MeshChannels,
     default_channels: DefaultChannels,
 }
@@ -111,20 +115,9 @@ pub type SVec<T> = SmallVec<[T; 4]>;
 pub type SVecN<T, const N: usize> = SmallVec<[T; N]>;
 pub type Positions = Channel<VertexId, Vec3>;
 
-impl HalfEdgeMesh {
+impl MeshConnectivity {
     pub fn new() -> Self {
-        let mut channels = MeshChannels::default();
-        let default_channels = DefaultChannels::with_position(&mut channels);
-
-        Self {
-            vertices: Default::default(),
-            faces: Default::default(),
-            halfedges: Default::default(),
-            debug_edges: Default::default(),
-            debug_vertices: Default::default(),
-            channels,
-            default_channels,
-        }
+        Self::default()
     }
 
     // Adds a disconnected quad into the mesh. Returns the id to the first
@@ -287,150 +280,6 @@ impl HalfEdgeMesh {
         Ok(h2)
     }
 
-    /// Builds this mesh from a list of vertices, and a list of polygons,
-    /// containing indices that reference those vertices.
-    ///
-    /// - Generic over Index: Use as much precision as you need / want.
-    /// - Generic over Polygon: Use whatever input layout you want.
-    ///
-    /// If unsure, you can pass `Vec<Vec<u32>>` as `polygons`. You can also use
-    /// `[[u32;3]]` or `&[&[u32]]`. Same for `u8`, `u16` or `usize` indices.
-    pub fn build_from_polygons<Index, Polygon>(
-        positions: &[Vec3],
-        polygons: &[Polygon],
-    ) -> Result<Self>
-    where
-        Index: num_traits::AsPrimitive<usize> + 'static + Eq + PartialEq + core::hash::Hash + Copy,
-        Polygon: AsRef<[Index]>,
-    {
-        let mut mesh = Self::new();
-        let mut positions_ch = mesh.write_positions();
-
-        // Maps indices from the `polygons` array to the allocated vertices in
-        // the newly created halfedge mesh.
-        let mut index_to_vertex = HashMap::<Index, VertexId>::new();
-
-        // Used to compute the degree of a vertex. Useful to do some sanity
-        // checks.
-        let mut vertex_degree = HashMap::<VertexId, u32>::new();
-
-        // First pass over polygon data to determine some initial properties
-        for polygon in polygons.iter().map(|p| p.as_ref()) {
-            // Some sanity checks
-            if polygon.len() < 3 {
-                bail!("Cannot build meshes where polygons have less than three vertices.")
-            }
-            if polygon.iter().duplicates().next().is_some() {
-                bail!("Cannot not build meshes where a polygon has duplicate vertices")
-            }
-
-            // Compute correspondence between vertices and indices. Also fill in vertex degree data.
-            for index in polygon {
-                // Create the vertex if it doesn't exist
-                let position = positions.get(index.as_()).ok_or_else(|| {
-                    anyhow!("Out-of-bounds index in the polygon array {}", index.as_())
-                })?;
-                let v_id = index_to_vertex
-                    .entry(*index)
-                    .or_insert_with(|| mesh.alloc_vertex(&mut positions_ch, *position, None));
-
-                // Increment the vertex degree counter for that vertex.
-                *vertex_degree.entry(*v_id).or_insert(0) += 1;
-            }
-        }
-
-        // After the sanity checks, we know the amount of vertices and faces.
-        let _num_vertices = index_to_vertex.len();
-        let _num_faces = polygons.len();
-
-        // Maps pairs of indices to mesh halfedges
-        let mut pair_to_halfedge = HashMap::<(Index, Index), HalfEdgeId>::new();
-
-        // We can now start building connectivity information by doing a second
-        // pass over the polygon list
-        for polygon in polygons.iter().map(|p| p.as_ref()) {
-            // Cyclically ordered list of the half edge ids of this face.
-            let mut half_edges_in_face = SVec::new();
-
-            let face = mesh.alloc_face(None);
-
-            for (&a, &b) in polygon.iter().circular_tuple_windows() {
-                if pair_to_halfedge.get(&(a, b)).is_some() {
-                    bail!(
-                        "Found multiple oriented edges with the same indices.\
-                         This means either (i) surface is non-manifold or (ii) faces \
-                         are not oriented in the same direction"
-                    )
-                }
-
-                let h = mesh.alloc_halfedge(HalfEdge::default());
-                // Link halfedge to face
-                mesh[h].face = Some(face);
-                mesh[face].halfedge = Some(h);
-
-                // Link halfedge to source vertex
-                let v_a = index_to_vertex[&a];
-                mesh[h].vertex = Some(v_a);
-                mesh[v_a].halfedge = Some(h);
-
-                half_edges_in_face.push(h);
-
-                pair_to_halfedge.insert((a, b), h);
-
-                if let Some(&other) = pair_to_halfedge.get(&(b, a)) {
-                    mesh[h].twin = Some(other);
-                    mesh[other].twin = Some(h);
-                }
-            }
-
-            for (&h1, &h2) in half_edges_in_face.iter().circular_tuple_windows() {
-                mesh[h1].next = Some(h2);
-            }
-        }
-
-        // Construct the boundary halfedges. Right now, the boundary consists of
-        // incomplete edges, i.e. half edges that do not have a twin. Leaving it
-        // like this would complicate some kinds of traversal because we can't
-        // rely on halfedges always having a twin. We will instead create
-        // boundary half edges: That is, twin halfedges that do not point to any
-        // face. The boundary halfedges are linked following a circle around the
-        // closed boundary. It's easier to imagine this by thinking of a hole in
-        // the mesh, but it works just as well if you think about the "outside"
-        // of a quad grid as a hole, as the loop would go all around the quad
-        mesh.add_boundary_halfedges();
-
-        // Do some final manifoldness checks
-        for (v, vertex) in mesh.iter_vertices() {
-            if vertex.halfedge.is_none() {
-                bail!("There is at least a single vertex that's disconnected from any polygon");
-            }
-
-            // Check that the number of halfedges emanating from this vertex
-            // equal the number of polygons containing this vertex. If this
-            // doesn't check out, it means our vertex is not a polygon "fan",
-            // but some other (thus, non-manifold) structure
-            let h0 = mesh.at_vertex(v).halfedge().end();
-            let mut h = h0;
-            let mut count = 0;
-            loop {
-                if !mesh.at_halfedge(h).is_boundary().unwrap() {
-                    count += 1;
-                }
-                h = mesh.at_halfedge(h).twin().next().end();
-
-                if h == h0 {
-                    break;
-                }
-            }
-
-            if count != vertex_degree[&v] {
-                bail!("At least one of the vertices is not a polygon fan, but some other nonmanifold structure instead.")
-            }
-        }
-
-        Ok(mesh)
-    }
-
     /// Given a `self` in an inconsistent state, where some halfedges have no
     /// `twin` (because it's in the boundary), this method adds twin halfedges
     /// forming a loop across the boundaries of the mesh. The new halfedges will
@@ -550,8 +399,7 @@ impl HalfEdgeMesh {
     ) -> impl Iterator<Item = (VertexId, &Vertex, T)> + 'a {
         self.vertices
             .iter()
-            .zip(channel.iter())
-            .map(|((id, v), (_id, val))| (id, v, *val))
+            .map(|(id, v)| (id, v, channel[id]))
     }
 
     pub fn iter_faces(&self) -> impl Iterator<Item = (FaceId, &Face)> {
@@ -564,8 +412,7 @@ impl HalfEdgeMesh {
     ) -> impl Iterator<Item = (FaceId, &Face, T)> + 'a {
         self.faces
             .iter()
-            .zip(channel.iter())
-            .map(|((id, f), (_id, val))| (id, f, *val))
+            .map(|(id, v)| (id, v, channel[id]))
     }
 
     pub fn iter_halfedges(&self) -> impl Iterator<Item = (HalfEdgeId, &HalfEdge)> {
@@ -578,8 +425,7 @@ impl HalfEdgeMesh {
     ) -> impl Iterator<Item = (HalfEdgeId, &HalfEdge, T)> + 'a {
         self.halfedges
             .iter()
-            .zip(channel.iter())
-            .map(|((id, f), (_id, val))| (id, f, *val))
+            .map(|(id, v)| (id, v, channel[id]))
     }
 
     /// Adds a new vertex to the mesh, disconnected from everything else. Returns its handle.
@@ -670,67 +516,6 @@ impl HalfEdgeMesh {
         self.vertex(vertex).is_some()
     }
 
-    /// Merges this halfedge mesh with another one. No additional connectivity
-    /// data is generated between the two.
-    pub fn merge_with(&mut self, mesh_b: &HalfEdgeMesh) {
-        let mut vmap = HashMap::<VertexId, VertexId>::new();
-        let mut hmap = HashMap::<HalfEdgeId, HalfEdgeId>::new();
-        let mut fmap = HashMap::<FaceId, FaceId>::new();
-
-        let a_positions = self.write_positions();
-        let b_positions = mesh_b.read_positions();
-
-        // On a first pass, we reserve new vertices, faces and halfedges without
-        // setting any of their pointers and store their ids in a mapping.
-        for (vertex_id, vertex) in mesh_b.iter_vertices() {
-            vmap.insert(
-                vertex_id,
-                self.alloc_vertex(&mut a_positions, b_positions[vertex_id], None),
-            );
-        }
-        for (face_id, _) in mesh_b.iter_faces() {
-            fmap.insert(face_id, self.alloc_face(None));
-        }
-        for (halfedge_id, _) in mesh_b.iter_halfedges() {
-            hmap.insert(
-                halfedge_id,
-                self.alloc_halfedge(HalfEdge {
-                    twin: None,
-                    next: None,
-                    vertex: None,
-                    face: None,
-                }),
-            );
-        }
-
-        // The second pass uses the mapping and the original data to set all the
-        // inner pointers.
-        for (vertex_id, vertex) in mesh_b.iter_vertices() {
-            if let Some(h) = vertex.halfedge {
-                self[vmap[&vertex_id]].halfedge = Some(hmap[&h])
-            }
-        }
-        for (face_id, face) in mesh_b.iter_faces() {
-            if let Some(h) = face.halfedge {
-                self[fmap[&face_id]].halfedge = Some(hmap[&h])
-            }
-        }
-        for (halfedge_id, halfedge) in mesh_b.iter_halfedges() {
-            if let Some(twin) = halfedge.twin {
-                self[hmap[&halfedge_id]].twin = Some(hmap[&twin]);
-            }
-            if let Some(next) = halfedge.next {
-                self[hmap[&halfedge_id]].next = Some(hmap[&next]);
-            }
-            if let Some(vertex) = halfedge.vertex {
-                self[hmap[&halfedge_id]].vertex = Some(vmap[&vertex]);
-            }
-            if let Some(face) = halfedge.face {
-                self[hmap[&halfedge_id]].face = Some(fmap[&face]);
-            }
-        }
-    }
-
     // Returns the normal of the face. The first three vertices are used to
     // compute the normal. If the vertices of the face are not coplanar,
     // the result will not be correct.
@@ -756,6 +541,26 @@ impl HalfEdgeMesh {
     pub fn num_faces(&self) -> usize {
         self.faces.len()
     }
+}
+
+impl HalfEdgeMesh {
+    pub fn new() -> Self {
+        let mut channels = MeshChannels::default();
+        let default_channels = DefaultChannels::with_position(&mut channels);
+        Self {
+            channels,
+            default_channels,
+            connectivity: RefCell::new(MeshConnectivity::new()),
+        }
+    }
+
+    pub fn read_connectivity(&self) -> Ref<'_, MeshConnectivity> {
+        self.connectivity.borrow()
+    }
+
+    pub fn write_connectivity(&self) -> RefMut<'_, MeshConnectivity> {
+        self.connectivity.borrow_mut()
+    }
 
     pub fn read_positions(&self) -> Ref<'_, Positions> {
         self.channels
@@ -767,6 +572,217 @@ impl HalfEdgeMesh {
         self.channels
             .write_channel(self.default_channels.position)
             .expect("Meshes should always have a position channel.")
+    }
+
+    /// Builds this mesh from a list of vertices, and a list of polygons,
+    /// containing indices that reference those vertices.
+    ///
+    /// - Generic over Index: Use as much precision as you need / want.
+    /// - Generic over Polygon: Use whatever input layout you want.
+    ///
+    /// If unsure, you can pass `Vec<Vec<u32>>` as `polygons`. You can also use
+    /// `[[u32;3]]` or `&[&[u32]]`. Same for `u8`, `u16` or `usize` indices.
+    pub fn build_from_polygons<Index, Polygon>(
+        positions: &[Vec3],
+        polygons: &[Polygon],
+    ) -> Result<Self>
+    where
+        Index: num_traits::AsPrimitive<usize> + 'static + Eq + PartialEq + core::hash::Hash + Copy,
+        Polygon: AsRef<[Index]>,
+    {
+        let mesh = Self::new();
+        let mut conn = mesh.write_connectivity();
+        let mut positions_ch = mesh.write_positions();
+
+        // Maps indices from the `polygons` array to the allocated vertices in
+        // the newly created halfedge mesh.
+        let mut index_to_vertex = HashMap::<Index, VertexId>::new();
+
+        // Used to compute the degree of a vertex. Useful to do some sanity
+        // checks.
+        let mut vertex_degree = HashMap::<VertexId, u32>::new();
+
+        // First pass over polygon data to determine some initial properties
+        for polygon in polygons.iter().map(|p| p.as_ref()) {
+            // Some sanity checks
+            if polygon.len() < 3 {
+                bail!("Cannot build meshes where polygons have less than three vertices.")
+            }
+            if polygon.iter().duplicates().next().is_some() {
+                bail!("Cannot not build meshes where a polygon has duplicate vertices")
+            }
+
+            // Compute correspondence between vertices and indices. Also fill in vertex degree data.
+            for index in polygon {
+                // Create the vertex if it doesn't exist
+                let position = positions.get(index.as_()).ok_or_else(|| {
+                    anyhow!("Out-of-bounds index in the polygon array {}", index.as_())
+                })?;
+                let v_id = index_to_vertex
+                    .entry(*index)
+                    .or_insert_with(|| conn.alloc_vertex(&mut positions_ch, *position, None));
+
+                // Increment the vertex degree counter for that vertex.
+                *vertex_degree.entry(*v_id).or_insert(0) += 1;
+            }
+        }
+
+        // After the sanity checks, we know the amount of vertices and faces.
+        let _num_vertices = index_to_vertex.len();
+        let _num_faces = polygons.len();
+
+        // Maps pairs of indices to mesh halfedges
+        let mut pair_to_halfedge = HashMap::<(Index, Index), HalfEdgeId>::new();
+
+        // We can now start building connectivity information by doing a second
+        // pass over the polygon list
+        for polygon in polygons.iter().map(|p| p.as_ref()) {
+            // Cyclically ordered list of the half edge ids of this face.
+            let mut half_edges_in_face = SVec::new();
+
+            let face = conn.alloc_face(None);
+
+            for (&a, &b) in polygon.iter().circular_tuple_windows() {
+                if pair_to_halfedge.get(&(a, b)).is_some() {
+                    bail!(
+                        "Found multiple oriented edges with the same indices.\
+                         This means either (i) surface is non-manifold or (ii) faces \
+                         are not oriented in the same direction"
+                    )
+                }
+
+                let h = conn.alloc_halfedge(HalfEdge::default());
+                // Link halfedge to face
+                conn[h].face = Some(face);
+                conn[face].halfedge = Some(h);
+
+                // Link halfedge to source vertex
+                let v_a = index_to_vertex[&a];
+                conn[h].vertex = Some(v_a);
+                conn[v_a].halfedge = Some(h);
+
+                half_edges_in_face.push(h);
+
+                pair_to_halfedge.insert((a, b), h);
+
+                if let Some(&other) = pair_to_halfedge.get(&(b, a)) {
+                    conn[h].twin = Some(other);
+                    conn[other].twin = Some(h);
+                }
+            }
+
+            for (&h1, &h2) in half_edges_in_face.iter().circular_tuple_windows() {
+                conn[h1].next = Some(h2);
+            }
+        }
+
+        // Construct the boundary halfedges. Right now, the boundary consists of
+        // incomplete edges, i.e. half edges that do not have a twin. Leaving it
+        // like this would complicate some kinds of traversal because we can't
+        // rely on halfedges always having a twin. We will instead create
+        // boundary half edges: That is, twin halfedges that do not point to any
+        // face. The boundary halfedges are linked following a circle around the
+        // closed boundary. It's easier to imagine this by thinking of a hole in
+        // the mesh, but it works just as well if you think about the "outside"
+        // of a quad grid as a hole, as the loop would go all around the quad
+        conn.add_boundary_halfedges();
+
+        // Do some final manifoldness checks
+        for (v, vertex) in conn.iter_vertices() {
+            if vertex.halfedge.is_none() {
+                bail!("There is at least a single vertex that's disconnected from any polygon");
+            }
+
+            // Check that the number of halfedges emanating from this vertex
+            // equal the number of polygons containing this vertex. If this
+            // doesn't check out, it means our vertex is not a polygon "fan",
+            // but some other (thus, non-manifold) structure
+            let h0 = conn.at_vertex(v).halfedge().end();
+            let mut h = h0;
+            let mut count = 0;
+            loop {
+                if !conn.at_halfedge(h).is_boundary().unwrap() {
+                    count += 1;
+                }
+                h = conn.at_halfedge(h).twin().next().end();
+
+                if h == h0 {
+                    break;
+                }
+            }
+
+            if count != vertex_degree[&v] {
+                bail!("At least one of the vertices is not a polygon fan, but some other nonmanifold structure instead.")
+            }
+        }
+
+        drop(conn);
+        drop(positions_ch);
+        Ok(mesh)
+    }
+
+    /// Merges this halfedge mesh with another one. No additional connectivity
+    /// data is generated between the two.
+    pub fn merge_with(&mut self, mesh_b: &HalfEdgeMesh) {
+        let mut vmap = HashMap::<VertexId, VertexId>::new();
+        let mut hmap = HashMap::<HalfEdgeId, HalfEdgeId>::new();
+        let mut fmap = HashMap::<FaceId, FaceId>::new();
+
+        let mut a_positions = self.write_positions();
+        let b_positions = mesh_b.read_positions();
+
+        let mut a_conn = self.write_connectivity();
+        let b_conn = mesh_b.read_connectivity();
+
+        // On a first pass, we reserve new vertices, faces and halfedges without
+        // setting any of their pointers and store their ids in a mapping.
+        for (vertex_id, _vertex) in b_conn.iter_vertices() {
+            vmap.insert(
+                vertex_id,
+                a_conn.alloc_vertex(&mut a_positions, b_positions[vertex_id], None),
+            );
+        }
+        for (face_id, _) in b_conn.iter_faces() {
+            fmap.insert(face_id, a_conn.alloc_face(None));
+        }
+        for (halfedge_id, _) in b_conn.iter_halfedges() {
+            hmap.insert(
+                halfedge_id,
+                a_conn.alloc_halfedge(HalfEdge {
+                    twin: None,
+                    next: None,
+                    vertex: None,
+                    face: None,
+                }),
+            );
+        }
+
+        // The second pass uses the mapping and the original data to set all the
+        // inner pointers.
+        for (vertex_id, vertex) in b_conn.iter_vertices() {
+            if let Some(h) = vertex.halfedge {
+                a_conn[vmap[&vertex_id]].halfedge = Some(hmap[&h])
+            }
+        }
+        for (face_id, face) in b_conn.iter_faces() {
+            if let Some(h) = face.halfedge {
+                a_conn[fmap[&face_id]].halfedge = Some(hmap[&h])
+            }
+        }
+        for (halfedge_id, halfedge) in b_conn.iter_halfedges() {
+            if let Some(twin) = halfedge.twin {
+                a_conn[hmap[&halfedge_id]].twin = Some(hmap[&twin]);
+            }
+            if let Some(next) = halfedge.next {
+                a_conn[hmap[&halfedge_id]].next = Some(hmap[&next]);
+            }
+            if let Some(vertex) = halfedge.vertex {
+                a_conn[hmap[&halfedge_id]].vertex = Some(vmap[&vertex]);
+            }
+            if let Some(face) = halfedge.face {
+                a_conn[hmap[&halfedge_id]].face = Some(fmap[&face]);
+            }
+        }
     }
 }
 
@@ -791,47 +807,50 @@ pub mod test {
 
     #[test]
     pub fn test_add_quad() {
-        let mut hem = HalfEdgeMesh::new();
+        let hem = HalfEdgeMesh::new();
         let mut positions = hem.write_positions();
+        let mut conn = hem.write_connectivity();
         let (a, b, c, d) = quad_abcd();
-        let q = hem.add_quad(&mut positions, a, b, c, d);
+        let q = conn.add_quad(&mut positions, a, b, c, d);
 
-        assert_eq!(hem.at_halfedge(q).next().next().next().next().end(), q);
+        assert_eq!(conn.at_halfedge(q).next().next().next().next().end(), q);
 
-        assert_eq!(positions[hem.at_halfedge(q).vertex().end()], a);
-        assert_eq!(positions[hem.at_halfedge(q).next().vertex().end()], b);
+        assert_eq!(positions[conn.at_halfedge(q).vertex().end()], a);
+        assert_eq!(positions[conn.at_halfedge(q).next().vertex().end()], b);
         assert_eq!(
-            positions[hem.at_halfedge(q).next().next().vertex().end()],
+            positions[conn.at_halfedge(q).next().next().vertex().end()],
             c,
         );
         assert_eq!(
-            positions[hem.at_halfedge(q).next().next().next().vertex().end()],
+            positions[conn.at_halfedge(q).next().next().next().vertex().end()],
             d,
         );
 
         assert_eq!(
-            hem.at_halfedge(q).face().end(),
-            hem.at_halfedge(q).next().face().end()
+            conn.at_halfedge(q).face().end(),
+            conn.at_halfedge(q).next().face().end()
         );
     }
 
     #[test]
     pub fn test_face_size() {
-        let mut hem = HalfEdgeMesh::new();
+        let hem = HalfEdgeMesh::new();
         let mut positions = hem.write_positions();
+        let mut conn = hem.write_connectivity();
         let (a, b, c, d) = quad_abcd();
-        let q = hem.add_quad(&mut positions, a, b, c, d);
+        let q = conn.add_quad(&mut positions, a, b, c, d);
 
-        let f = hem.at_halfedge(q).face().end();
-        assert_eq!(hem.num_face_edges(f), 4);
+        let f = conn.at_halfedge(q).face().end();
+        assert_eq!(conn.num_face_edges(f), 4);
     }
 
     #[test]
     pub fn generate_quad_buffers() {
-        let mut hem = HalfEdgeMesh::new();
+        let hem = HalfEdgeMesh::new();
+        let mut conn = hem.write_connectivity();
         let mut positions = hem.write_positions();
         let (a, b, c, d) = quad_abcd();
-        let _q = hem.add_quad(&mut positions, a, b, c, d);
+        let _q = conn.add_quad(&mut positions, a, b, c, d);
 
         dbg!(hem.generate_triangle_buffers_flat());
     }

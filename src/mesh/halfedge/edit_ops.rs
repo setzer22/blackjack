@@ -12,7 +12,7 @@ pub mod deprecated;
 /// The face on the L side will be kept, and the R side removed. Both sides of
 /// the edge that will be dissolved need to be on a face. Boundary halfedges are
 /// not allowed
-pub fn dissolve_edge(mesh: &mut HalfEdgeMesh, h_l: HalfEdgeId) -> Result<()> {
+pub fn dissolve_edge(mesh: &mut MeshConnectivity, h_l: HalfEdgeId) -> Result<()> {
     // --- Collect handles ---
     let h_r = mesh.at_halfedge(h_l).twin().try_end()?;
     // If the face cannot be retrieved, a HalfedgeHasNoFace is returned
@@ -63,7 +63,7 @@ pub fn dissolve_edge(mesh: &mut HalfEdgeMesh, h_l: HalfEdgeId) -> Result<()> {
 /// Note that this is done in combination with the chamfer operation, whose
 /// stability depends on this behavior.
 pub fn divide_edge(
-    mesh: &mut HalfEdgeMesh,
+    mesh: &mut MeshConnectivity,
     positions: &mut Positions,
     h: HalfEdgeId,
     interpolation_factor: f32,
@@ -119,7 +119,7 @@ pub fn divide_edge(
 
 /// Cuts a face by creating a new edge between vertices `v` and `w`. The
 /// vertices must share a face, but not an edge.
-pub fn cut_face(mesh: &mut halfedge::HalfEdgeMesh, v: VertexId, w: VertexId) -> Result<HalfEdgeId> {
+pub fn cut_face(mesh: &mut halfedge::MeshConnectivity, v: VertexId, w: VertexId) -> Result<HalfEdgeId> {
     let face = mesh
         .at_vertex(v)
         .outgoing_halfedges()?
@@ -207,7 +207,7 @@ pub fn cut_face(mesh: &mut halfedge::HalfEdgeMesh, v: VertexId, w: VertexId) -> 
     Ok(h_v_w)
 }
 
-pub fn dissolve_vertex(mesh: &mut halfedge::HalfEdgeMesh, v: VertexId) -> Result<FaceId> {
+pub fn dissolve_vertex(mesh: &mut halfedge::MeshConnectivity, v: VertexId) -> Result<FaceId> {
     let outgoing = mesh.at_vertex(v).outgoing_halfedges()?;
 
     if outgoing.is_empty() {
@@ -260,7 +260,7 @@ pub fn dissolve_vertex(mesh: &mut halfedge::HalfEdgeMesh, v: VertexId) -> Result
 /// Additionally, the returned vertex id vector has the newly created vertex ids
 /// provided in the same order as `v`'s outgoing_halfedges
 pub fn chamfer_vertex(
-    mesh: &mut halfedge::HalfEdgeMesh,
+    mesh: &mut halfedge::MeshConnectivity,
     positions: &mut Positions,
     v: VertexId,
     interpolation_factor: f32,
@@ -280,7 +280,7 @@ pub fn chamfer_vertex(
 
 /// Creates a 2-sided face on the inside of this edge. This has no effect on the
 /// resulting mesh, but it's useful as one of the building blocks of the bevel operation
-pub fn duplicate_edge(mesh: &mut HalfEdgeMesh, h: HalfEdgeId) -> Result<HalfEdgeId> {
+pub fn duplicate_edge(mesh: &mut MeshConnectivity, h: HalfEdgeId) -> Result<HalfEdgeId> {
     let (v, w) = mesh.at_halfedge(h).src_dst_pair()?;
 
     let h_v_w = h;
@@ -312,7 +312,7 @@ pub fn duplicate_edge(mesh: &mut HalfEdgeMesh, h: HalfEdgeId) -> Result<HalfEdge
 /// Merges the src and dst vertices of `h` so that only the first one remains
 /// TODO: This does not handle the case where a collapse edge operation would
 /// remove a face
-pub fn collapse_edge(mesh: &mut HalfEdgeMesh, h: HalfEdgeId) -> Result<VertexId> {
+pub fn collapse_edge(mesh: &mut MeshConnectivity, h: HalfEdgeId) -> Result<VertexId> {
     let (v, w) = mesh.at_halfedge(h).src_dst_pair()?;
     let t = mesh.at_halfedge(h).twin().try_end()?;
     let h_next = mesh.at_halfedge(h).next().try_end()?;
@@ -364,7 +364,7 @@ pub fn collapse_edge(mesh: &mut HalfEdgeMesh, h: HalfEdgeId) -> Result<VertexId>
 /// that touched any of the original faces of the mesh. Thus, it is guaranteed
 /// that any of their twins is touching a newly created face.
 fn bevel_edges_connectivity(
-    mesh: &mut HalfEdgeMesh,
+    mesh: &mut MeshConnectivity,
     positions: &mut Positions,
     halfedges: &[HalfEdgeId],
 ) -> Result<BTreeSet<HalfEdgeId>> {
@@ -457,7 +457,7 @@ fn bevel_edges_connectivity(
 }
 
 /// Bevels the given vertices by a given distance amount
-pub fn bevel_edges(mesh: &mut HalfEdgeMesh, positions: &mut Positions, halfedges: &[HalfEdgeId], amount: f32) -> Result<()> {
+pub fn bevel_edges(mesh: &mut MeshConnectivity, positions: &mut Positions, halfedges: &[HalfEdgeId], amount: f32) -> Result<()> {
     let beveled_edges = bevel_edges_connectivity(mesh, positions, halfedges)?;
 
     // --- Adjust vertex positions ---
@@ -489,7 +489,7 @@ pub fn bevel_edges(mesh: &mut HalfEdgeMesh, positions: &mut Positions, halfedges
         for v_pull in v_pulls {
             let pull_to = v_pull.to_vec();
             let dir = (pull_to - v_pos).normalize();
-            positions[v] = positions[v] + dir * amount;
+            positions[v] += dir * amount;
         }
     }
 
@@ -498,7 +498,7 @@ pub fn bevel_edges(mesh: &mut HalfEdgeMesh, positions: &mut Positions, halfedges
 
 /// Extrudes the given set of faces. Faces that are connected by at least one
 /// edge will be connected after the extrude.
-pub fn extrude_faces(mesh: &mut HalfEdgeMesh, positions: &mut Positions, faces: &[FaceId], amount: f32) -> Result<()> {
+pub fn extrude_faces(mesh: &mut MeshConnectivity, positions: &mut Positions, faces: &[FaceId], amount: f32) -> Result<()> {
     let face_set: HashSet<FaceId> = faces.iter().cloned().collect();
 
     // Find the set of all halfedges not adjacent to another extruded face.

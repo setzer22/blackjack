@@ -11,8 +11,8 @@ use crate::{
     prelude::{
         compact_mesh::CompactMesh,
         graph::node_templates::{NodeDefinition, NodeDefinitions},
+        halfedge::HalfEdgeMesh,
         selection::SelectionExpression,
-        HalfEdgeMesh,
     },
 };
 
@@ -186,12 +186,19 @@ pub fn load_host_libraries(lua: &Lua) -> anyhow::Result<()> {
                              amount: f32,
                              mesh: AnyUserData|
      -> HalfEdgeMesh {
-        let mut result = mesh.borrow::<HalfEdgeMesh>()?.clone();
-        let mut positions = result.write_positions();
-        result.clear_debug();
-        for v in result.resolve_vertex_selection_full(vertices) {
-            crate::mesh::halfedge::edit_ops::chamfer_vertex(&mut result, &mut positions, v, amount)
-                .map_lua_err()?;
+        let result = mesh.borrow::<HalfEdgeMesh>()?.clone();
+        result.write_connectivity().clear_debug();
+        for v in result
+            .read_connectivity()
+            .resolve_vertex_selection_full(vertices)
+        {
+            crate::mesh::halfedge::edit_ops::chamfer_vertex(
+                &mut result.write_connectivity(),
+                &mut result.write_positions(),
+                v,
+                amount,
+            )
+            .map_lua_err()?;
         }
         Ok(result)
     });
@@ -200,11 +207,19 @@ pub fn load_host_libraries(lua: &Lua) -> anyhow::Result<()> {
                            amount: f32,
                            mesh: AnyUserData|
      -> HalfEdgeMesh {
-        let mut result = mesh.borrow::<HalfEdgeMesh>()?.clone();
-        let edges = result.resolve_halfedge_selection_full(edges);
-        let positions = result.write_positions();
-        crate::mesh::halfedge::edit_ops::bevel_edges(&mut result, &mut positions, &edges, amount)
+        let result = mesh.borrow::<HalfEdgeMesh>()?.clone();
+        {
+            let edges = result
+                .read_connectivity()
+                .resolve_halfedge_selection_full(edges);
+            crate::mesh::halfedge::edit_ops::bevel_edges(
+                &mut result.write_connectivity(),
+                &mut result.write_positions(),
+                &edges,
+                amount,
+            )
             .map_lua_err()?;
+        }
         Ok(result)
     });
 
@@ -212,11 +227,19 @@ pub fn load_host_libraries(lua: &Lua) -> anyhow::Result<()> {
                              amount: f32,
                              mesh: AnyUserData|
      -> HalfEdgeMesh {
-        let mut result = mesh.borrow::<HalfEdgeMesh>()?.clone();
-        let faces = result.resolve_face_selection_full(faces);
-        let positions = result.write_positions();
-        crate::mesh::halfedge::edit_ops::extrude_faces(&mut result, &mut positions, &faces, amount)
+        let result = mesh.borrow::<HalfEdgeMesh>()?.clone();
+        {
+            let faces = result
+                .read_connectivity()
+                .resolve_face_selection_full(faces);
+            crate::mesh::halfedge::edit_ops::extrude_faces(
+                &mut result.write_connectivity(),
+                &mut result.write_positions(),
+                &faces,
+                amount,
+            )
             .map_lua_err()?;
+        }
         Ok(result)
     });
 

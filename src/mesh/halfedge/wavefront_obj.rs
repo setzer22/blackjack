@@ -27,7 +27,9 @@ impl HalfEdgeMesh {
         );
         writer.write_all("\n".as_ref())?;
 
-        for (idx, (v_id, _, pos)) in self
+        let conn = self.read_connectivity();
+
+        for (idx, (v_id, _, pos)) in conn
             .iter_vertices_with_channel(&self.read_positions())
             .enumerate()
         {
@@ -43,8 +45,8 @@ impl HalfEdgeMesh {
             );
             writer.write_all("\n".as_ref())?;
         }
-        for (face_id, _) in self.iter_faces() {
-            let vertices = self
+        for (face_id, _) in conn.iter_faces() {
+            let vertices = conn
                 .face_vertices(face_id)
                 .iter()
                 .map(|v_id| FaceVertex {

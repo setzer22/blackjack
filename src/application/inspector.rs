@@ -120,6 +120,7 @@ impl SpreadsheetTab {
         });
 
         if let Some(mesh) = mesh {
+            let conn = mesh.read_connectivity();
             let positions = mesh.read_positions();
             let scroll_area = ScrollArea::both().auto_shrink([false, false]);
             scroll_area.show(ui, |ui| match self.current_view {
@@ -135,7 +136,7 @@ impl SpreadsheetTab {
                             ui.label("z");
                             ui.end_row();
 
-                            for (idx, (v_id, _)) in mesh.iter_vertices().enumerate() {
+                            for (idx, (v_id, _)) in conn.iter_vertices().enumerate() {
                                 ui.label(idx.to_string());
                                 let pos = positions[v_id];
                                 ui.monospace(format!("{: >6.3}", pos.x));
@@ -154,7 +155,7 @@ impl SpreadsheetTab {
                             ui.label("");
                             ui.end_row();
 
-                            for (idx, _) in mesh.iter_halfedges().enumerate() {
+                            for (idx, _) in conn.iter_halfedges().enumerate() {
                                 ui.label(idx.to_string());
                                 ui.end_row();
                             }
@@ -169,7 +170,7 @@ impl SpreadsheetTab {
                             ui.label("");
                             ui.end_row();
 
-                            for (idx, _) in mesh.iter_faces().enumerate() {
+                            for (idx, _) in conn.iter_faces().enumerate() {
                                 ui.label(idx.to_string());
                                 ui.end_row();
                             }

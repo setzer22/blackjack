@@ -48,6 +48,7 @@ pub enum ChannelValueType { Vec2, Vec3, Vec4, f32, bool }
 #[derive(Clone, Debug)]
 pub struct Channel<K: ChannelKey, V: ChannelValue> {
     inner: slotmap::SecondaryMap<K, V>,
+    default: V,
 }
 
 pub struct ChannelId<K: ChannelKey, V: ChannelValue> {
@@ -91,9 +92,7 @@ impl<K: ChannelKey, V: ChannelValue> std::ops::Index<K> for Channel<K, V> {
     type Output = V;
 
     fn index(&self, index: K) -> &Self::Output {
-        self.inner
-            .get(index)
-            .expect("Error indexing channel. Key not found")
+        self.inner.get(index).unwrap_or(&self.default)
     }
 }
 impl<K: ChannelKey, V: ChannelValue> std::ops::IndexMut<K> for Channel<K, V> {
@@ -160,14 +159,6 @@ impl<K: ChannelKey, V: ChannelValue> ChannelGroup<K, V> {
             .get(ch_id)
             .ok_or_else(|| anyhow!("Channel {ch_id:?} does not exist for this mesh"))?
             .try_borrow()
-            .map_err(|err| anyhow!("Channel {ch_id:?} could not be borrowed: {err}"))
-    }
-
-    pub unsafe fn read_channel_unguarded(&self, ch_id: ChannelId<K, V>) -> Result<&Channel<K, V>> {
-        self.channels
-            .get(ch_id)
-            .ok_or_else(|| anyhow!("Channel {ch_id:?} does not exist for this mesh"))?
-            .try_borrow_unguarded()
             .map_err(|err| anyhow!("Channel {ch_id:?} could not be borrowed: {err}"))
     }
 
@@ -253,13 +244,6 @@ impl MeshChannels {
         ch_id: ChannelId<K, V>,
     ) -> Result<Ref<Channel<K, V>>> {
         self.group()?.read_channel(ch_id)
-    }
-
-    pub unsafe fn read_channel_unguarded<K: ChannelKey, V: ChannelValue>(
-        &self,
-        ch_id: ChannelId<K, V>,
-    ) -> Result<&Channel<K, V>> {
-        self.group()?.read_channel_unguarded(ch_id)
     }
 
     pub fn read_channel_by_name<K: ChannelKey, V: ChannelValue>(
@@ -511,6 +495,7 @@ impl<K: ChannelKey, V: ChannelValue> Default for Channel<K, V> {
     fn default() -> Self {
         Self {
             inner: Default::default(),
+            default: Default::default(),
         }
     }
 }
