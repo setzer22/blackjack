@@ -1,25 +1,49 @@
 use std::{
-    any::{type_name, TypeId},
+    any::Any,
     cell::{Ref, RefCell, RefMut},
     fmt::Debug,
     marker::PhantomData,
 };
 
-use typemap::TypeMap;
-
 use super::*;
 
-pub trait ChannelKey: slotmap::Key + Default + Debug + Copy + Sized + 'static {}
-impl ChannelKey for VertexId {}
-impl ChannelKey for FaceId {}
-impl ChannelKey for HalfEdgeId {}
+macro_rules! impl_type {
+    () => {};
+    ([$trait:ty, $key_type:ident, $fn:ident] ~ $t:ident) => {
+        impl $trait for $t {
+            fn $fn () -> $key_type { $key_type::$t }
+            fn name() -> &'static str { stringify!($t) }
+        }
+    };
+    ([$trait:ty, $key_type:ident, $fn:ident] $t:ident) => {
+        impl_type!([$trait, $key_type, $fn] ~ $t);
+    };
+    ([$trait:ty, $key_type:ident, $fn:ident] $t:ident, $($ts:ident),*) => {
+        impl_type!([$trait, $key_type, $fn] ~ $t);
+        impl_type!([$trait, $key_type, $fn] $($ts),*);
+    };
+}
 
-pub trait ChannelValue: Default + Debug + Copy + Sized + 'static {}
-impl ChannelValue for glam::Vec2 {}
-impl ChannelValue for glam::Vec3 {}
-impl ChannelValue for glam::Vec4 {}
-impl ChannelValue for f32 {}
-impl ChannelValue for bool {}
+pub trait ChannelKey: slotmap::Key + Default + Debug + Copy + Sized + 'static {
+    fn key_type() -> ChannelKeyType;
+    fn name() -> &'static str;
+}
+impl_type!([ChannelKey, ChannelKeyType, key_type] VertexId, FaceId, HalfEdgeId);
+
+pub trait ChannelValue: Default + Debug + Copy + Sized + 'static {
+    fn value_type() -> ChannelValueType;
+    fn name() -> &'static str;
+}
+impl_type!([ChannelValue, ChannelValueType, value_type] Vec2, Vec3, Vec4, f32, bool);
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+#[rustfmt::skip]
+pub enum ChannelKeyType { VertexId, FaceId, HalfEdgeId }
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+#[rustfmt::skip]
+#[allow(non_camel_case_types)]
+pub enum ChannelValueType { Vec2, Vec3, Vec4, f32, bool }
 
 #[derive(Clone, Debug)]
 pub struct Channel<K: ChannelKey, V: ChannelValue> {
@@ -52,8 +76,9 @@ pub struct ChannelGroup<K: ChannelKey, V: ChannelValue> {
     channels: SlotMap<ChannelId<K, V>, RefCell<Channel<K, V>>>,
 }
 
+#[derive(Default)]
 pub struct MeshChannels {
-    channels: TypeMap,
+    channels: HashMap<(ChannelKeyType, ChannelValueType), Box<dyn DynChannelGroup>>,
 }
 
 impl<K: ChannelKey, V: ChannelValue> std::ops::Index<K> for Channel<K, V> {
@@ -84,10 +109,10 @@ impl<K: ChannelKey, V: ChannelValue> Channel<K, V> {
         *self.inner.get_mut(id)? = val;
         Some(())
     }
-    pub fn iter(&self) -> impl Iterator<Item=(K, &V)> {
+    pub fn iter(&self) -> impl Iterator<Item = (K, &V)> {
         self.inner.iter()
     }
-    pub fn iter_mut(&mut self) -> impl Iterator<Item=(K, &mut V)> {
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = (K, &mut V)> {
         self.inner.iter_mut()
     }
 }
@@ -141,37 +166,51 @@ impl<K: ChannelKey, V: ChannelValue> ChannelGroup<K, V> {
     }
 }
 
-impl<K: ChannelKey, V: ChannelValue> typemap::Key for ChannelGroup<K, V> {
-    type Value = ChannelGroup<K, V>;
-}
-
 impl MeshChannels {
+    fn key_of<K: ChannelKey, V: ChannelValue>() -> (ChannelKeyType, ChannelValueType) {
+        (K::key_type(), V::value_type())
+    }
+
+    fn downcast<K: ChannelKey, V: ChannelValue>(group: &dyn Any) -> &ChannelGroup<K, V> {
+        match group.downcast_ref::<ChannelGroup<K, V>>() {
+            Some(typed_group) => typed_group,
+            None => unreachable!("The invariants of MeshChannels should prevent this."),
+        }
+    }
+    fn downcast_mut<K: ChannelKey, V: ChannelValue>(
+        group: &mut dyn Any,
+    ) -> &mut ChannelGroup<K, V> {
+        match group.downcast_mut::<ChannelGroup<K, V>>() {
+            Some(typed_group) => typed_group,
+            None => unreachable!("The invariants of MeshChannels should prevent this."),
+        }
+    }
+
     fn group<K: ChannelKey, V: ChannelValue>(&self) -> Result<&ChannelGroup<K, V>> {
-        self.channels.get::<ChannelGroup<K, V>>().ok_or_else(|| {
-            anyhow!(
-                "There is no channel for {} -> {}",
-                type_name::<K>(),
-                type_name::<V>()
-            )
-        })
+        Ok(Self::downcast(
+            self.channels
+                .get(&Self::key_of::<K, V>())
+                .ok_or_else(|| anyhow!("There is no channel for {} -> {}", K::name(), V::name()))?
+                .as_any(),
+        ))
     }
 
     fn group_mut<K: ChannelKey, V: ChannelValue>(&mut self) -> Result<&mut ChannelGroup<K, V>> {
-        self.channels
-            .get_mut::<ChannelGroup<K, V>>()
-            .ok_or_else(|| {
-                anyhow!(
-                    "There is no channel for {} -> {}",
-                    type_name::<K>(),
-                    type_name::<V>()
-                )
-            })
+        Ok(Self::downcast_mut(
+            self.channels
+                .get_mut(&Self::key_of::<K, V>())
+                .ok_or_else(|| anyhow!("There is no channel for {} -> {}", K::name(), V::name()))?
+                .as_any_mut(),
+        ))
     }
 
     fn group_or_default<K: ChannelKey, V: ChannelValue>(&mut self) -> &mut ChannelGroup<K, V> {
-        self.channels
-            .entry::<ChannelGroup<K, V>>()
-            .or_insert_with(Default::default)
+        Self::downcast_mut(
+            self.channels
+                .entry(Self::key_of::<K, V>())
+                .or_insert_with(|| Box::new(ChannelGroup::<K, V>::default()))
+                .as_any_mut(),
+        )
     }
 
     pub fn ensure_channel<K: ChannelKey, V: ChannelValue>(
@@ -247,71 +286,20 @@ impl MeshChannels {
         self.group().ok()?.channel_name(ch_id)
     }
 
-    fn get_dyn_group(&self, id: TypeId) -> (&'static str, &'static str, &dyn DynChannelGroup) {
-        // Please don't make me do this... *sigh*... ok, here we go:
-        fn short_type_name<T>() -> &'static str {
-            let name = type_name::<T>();
-            &name[name.rfind(':').map(|x| x + 1).unwrap_or(0)..]
-        }
-
-        // I'm only gonna do this once, don't blink
-        macro_rules! check_type {
-            ($K:ty, $V:ty) => {
-                if TypeId::of::<ChannelGroup<$K, $V>>() == id {
-                    let dgroup = self.group::<$K, $V>().unwrap() as &dyn DynChannelGroup;
-                    return (short_type_name::<$K>(), short_type_name::<$V>(), dgroup);
-                }
-            };
-        }
-
-        // https://ibb.co/MD8YX2J
-        macro_rules! all_pairs {
-            ([$($ks:ty),+], [$($vs:ty),+]) => {
-                all_pairs!(@[$($ks),+], [$($ks),+], [$($vs),+])
-            };
-            (@[$($original_ks:ty),*], [$k:ty], [$v:ty]) => {
-                check_type!($k, $v);
-            };
-            (@[$($original_ks:ty),*], [$k:ty], [$v:ty, $($vs:ty),*]) => {
-                check_type!($k, $v);
-                all_pairs!(@[$($original_ks),*], [$($original_ks),*], [$($vs),*])
-            };
-            (@[$($original_ks:ty),*], [$k:ty, $($ks:ty),*], [$v:ty]) => {
-                check_type!($k, $v);
-                all_pairs!(@[$($original_ks),*], [$($ks),*], [$v])
-            };
-            (@[$($original_ks:ty),*], [$k:ty, $($ks:ty),*], [$v:ty, $($vs:ty),*]) => {
-                check_type!($k, $v);
-                all_pairs!(@[$($original_ks),*], [$($ks),*], [$v, $($vs),*])
-            };
-        }
-
-        all_pairs!(
-            [VertexId, FaceId, HalfEdgeId],
-            [glam::Vec2, glam::Vec3, glam::Vec4, f32, bool]
-        );
-
-        panic!(
-            "Fatal error during channel introspection: The combination for type id {id:?}\
-         is not registered. Please fix the `kv_name` function in `channel.rs`."
-        );
-    }
-
-    pub fn introspect(&self) {
-        // SAFETY: We're not doing anything stupid with the data. I don't even
-        // know why this method is marked as unsafe, but the author didn't
-        // clarify in the docstring. ¯\_(ツ)_/¯
-        let data = unsafe { self.channels.data() };
-        data.iter().for_each(|(k, _)| {
-            let (ks, vs, dyn_ch) = self.get_dyn_group(*k);
-            println!("Channels for {ks} -> {vs}");
-            dbg!(dyn_ch.introspect());
-        });
+    pub fn introspect(
+        &self,
+    ) -> HashMap<(ChannelKeyType, ChannelValueType), HashMap<String, Vec<String>>> {
+        self.channels
+            .iter()
+            .map(|((k, v), group)| ((*k, *v), group.introspect()))
+            .collect()
     }
 }
 
-pub trait DynChannelGroup {
+pub trait DynChannelGroup: Any {
     fn introspect(&self) -> HashMap<String, Vec<String>>;
+    fn as_any(&self) -> &dyn Any;
+    fn as_any_mut(&mut self) -> &mut dyn Any;
 }
 
 impl<K: ChannelKey, V: ChannelValue> DynChannelGroup for ChannelGroup<K, V> {
@@ -323,11 +311,18 @@ impl<K: ChannelKey, V: ChannelValue> DynChannelGroup for ChannelGroup<K, V> {
                 self.read_channel(*id)
                     .unwrap()
                     .iter()
-                    .map(|x| format!("{:?}", x))
+                    .map(|(_k, v)| format!("{:?}", v))
                     .collect(),
             );
         }
         result
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }
 
@@ -404,7 +399,31 @@ mod test {
         // Once the refs are dropped, we can write again
         assert!(mesh_channels.write_channel(position).is_ok());
 
-        mesh_channels.introspect();
+        
+        // The introspection API can be used to inspect the existing channels
+        // without necessarily knowing which channels are registered or their
+        // types.
+        let introspected = mesh_channels.introspect();
+        assert_eq!(
+            &introspected[&(ChannelKeyType::VertexId, ChannelValueType::Vec4)]["color"],
+            &[
+                "Vec4(0.0, 0.0, 0.0, 0.0)",
+                "Vec4(0.5, 0.5, 0.5, 0.5)",
+                "Vec4(1.0, 1.0, 1.0, 1.0)",
+            ]
+        );
+        assert_eq!(
+            &introspected[&(ChannelKeyType::VertexId, ChannelValueType::f32)]["size"],
+            &["0.25", "0.5", "1.0",]
+        );
+        assert_eq!(
+            &introspected[&(ChannelKeyType::VertexId, ChannelValueType::Vec3)]["position"],
+            &[
+                "Vec3(1.0, 0.0, 0.0)",
+                "Vec3(0.0, 1.0, 0.0)",
+                "Vec3(0.0, 0.0, 1.0)",
+            ]
+        );
     }
 }
 
@@ -474,14 +493,6 @@ impl<K: ChannelKey, V: ChannelValue> Default for ChannelGroup<K, V> {
         Self {
             channel_names: Default::default(),
             channels: Default::default(),
-        }
-    }
-}
-
-impl Default for MeshChannels {
-    fn default() -> Self {
-        Self {
-            channels: TypeMap::new(),
         }
     }
 }
