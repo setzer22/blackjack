@@ -189,7 +189,7 @@ impl<const Subdivided: bool> CompactMesh<Subdivided> {
 
     #[profiling::function]
     pub fn to_halfedge(&self) -> HalfEdgeMesh {
-        let mut mesh = HalfEdgeMesh::default();
+        let mut mesh = HalfEdgeMesh::new();
 
         let mut h_idx_to_id = Vec::with_capacity(self.counts.num_halfedges);
         for _ in 0..self.counts.num_halfedges {

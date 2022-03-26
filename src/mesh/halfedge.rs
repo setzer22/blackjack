@@ -93,7 +93,7 @@ impl DebugMark {
     }
 }
 
-#[derive(Default, Debug, Clone)]
+#[derive(Debug, Clone)]
 pub struct HalfEdgeMesh {
     vertices: SlotMap<VertexId, Vertex>,
     faces: SlotMap<FaceId, Face>,
@@ -101,12 +101,30 @@ pub struct HalfEdgeMesh {
 
     debug_edges: HashMap<HalfEdgeId, DebugMark>,
     debug_vertices: HashMap<VertexId, DebugMark>,
+
+    channels: MeshChannels,
+    default_channels: DefaultChannels,
 }
 
 pub type SVec<T> = SmallVec<[T; 4]>;
 pub type SVecN<T, const N: usize> = SmallVec<[T; N]>;
 
 impl HalfEdgeMesh {
+    pub fn new() -> Self {
+        let mut channels = MeshChannels::default();
+        let default_channels = DefaultChannels::with_position(&mut channels);
+
+        Self {
+            vertices: Default::default(),
+            faces: Default::default(),
+            halfedges: Default::default(),
+            debug_edges: Default::default(),
+            debug_vertices: Default::default(),
+            channels,
+            default_channels,
+        }
+    }
+
     // Adds a disconnected quad into the mesh. Returns the id to the first
     // halfedge of the quad
     pub fn add_quad(&mut self, a: Vec3, b: Vec3, c: Vec3, d: Vec3) -> HalfEdgeId {
@@ -270,7 +288,7 @@ impl HalfEdgeMesh {
         Index: num_traits::AsPrimitive<usize> + 'static + Eq + PartialEq + core::hash::Hash + Copy,
         Polygon: AsRef<[Index]>,
     {
-        let mut mesh = Self::default();
+        let mut mesh = Self::new();
 
         // Maps indices from the `polygons` array to the allocated vertices in
         // the newly created halfedge mesh.
@@ -697,6 +715,12 @@ impl HalfEdgeMesh {
     }
 }
 
+impl Default for HalfEdgeMesh {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[cfg(test)]
 pub mod test {
     use super::*;
@@ -712,7 +736,7 @@ pub mod test {
 
     #[test]
     pub fn test_add_quad() {
-        let mut hem = HalfEdgeMesh::default();
+        let mut hem = HalfEdgeMesh::new();
         let (a, b, c, d) = quad_abcd();
         let q = hem.add_quad(a, b, c, d);
 
@@ -737,7 +761,7 @@ pub mod test {
 
     #[test]
     pub fn test_face_size() {
-        let mut hem = HalfEdgeMesh::default();
+        let mut hem = HalfEdgeMesh::new();
         let (a, b, c, d) = quad_abcd();
         let q = hem.add_quad(a, b, c, d);
 
@@ -747,7 +771,7 @@ pub mod test {
 
     #[test]
     pub fn generate_quad_buffers() {
-        let mut hem = HalfEdgeMesh::default();
+        let mut hem = HalfEdgeMesh::new();
         let (a, b, c, d) = quad_abcd();
         let _q = hem.add_quad(a, b, c, d);
 

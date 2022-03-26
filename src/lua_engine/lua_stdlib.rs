@@ -68,34 +68,6 @@ impl UserData for Path {}
 
 impl UserData for HalfEdgeMesh {}
 
-macro_rules! def_wrapper_enum {
-    ($tname:ident, $($a:ident => $b:ident),*) => {
-        #[derive(Debug)]
-        #[allow(dead_code)]
-        pub enum $tname {
-            $($a($b)),*
-        }
-        impl<'lua> ToLua<'lua> for $tname {
-            fn to_lua(self, lua: &'lua Lua) -> mlua::Result<mlua::Value<'lua>> {
-                match self {
-                    $(EngineValue::$a(x) => x.to_lua(lua)),*
-                }
-            }
-        }
-    };
-}
-
-def_wrapper_enum!(EngineValue,
-    Scalar => f32,
-    Vec2 => Vec2,
-    Vec3 => Vec3,
-    Vec4 => Vec4,
-    Selection => SelectionExpression,
-    String => String,
-    Path => Path,
-    Mesh => HalfEdgeMesh
-);
-
 pub fn load_lua_libraries(lua: &Lua) -> anyhow::Result<()> {
     macro_rules! def_library {
         ($name:expr, $file:expr) => {

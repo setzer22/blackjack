@@ -24,13 +24,13 @@ macro_rules! impl_type {
     };
 }
 
-pub trait ChannelKey: slotmap::Key + Default + Debug + Copy + Sized + 'static {
+pub trait ChannelKey: slotmap::Key + Default + Debug + Clone + Copy + Sized + 'static {
     fn key_type() -> ChannelKeyType;
     fn name() -> &'static str;
 }
 impl_type!([ChannelKey, ChannelKeyType, key_type] VertexId, FaceId, HalfEdgeId);
 
-pub trait ChannelValue: Default + Debug + Copy + Sized + 'static {
+pub trait ChannelValue: Default + Debug + Clone + Copy + Sized + 'static {
     fn value_type() -> ChannelValueType;
     fn name() -> &'static str;
 }
@@ -71,14 +71,20 @@ impl<K: ChannelKey, V: ChannelValue> From<slotmap::KeyData> for ChannelId<K, V> 
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct ChannelGroup<K: ChannelKey, V: ChannelValue> {
     channel_names: bimap::BiMap<String, ChannelId<K, V>>,
     channels: SlotMap<ChannelId<K, V>, RefCell<Channel<K, V>>>,
 }
 
-#[derive(Default)]
+#[derive(Default, Debug, Clone)]
 pub struct MeshChannels {
     channels: HashMap<(ChannelKeyType, ChannelValueType), Box<dyn DynChannelGroup>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct DefaultChannels {
+    pub position: ChannelId<VertexId, Vec3>,
 }
 
 impl<K: ChannelKey, V: ChannelValue> std::ops::Index<K> for Channel<K, V> {
@@ -296,7 +302,7 @@ impl MeshChannels {
     }
 }
 
-pub trait DynChannelGroup: Any {
+pub trait DynChannelGroup: Any + Debug + dyn_clone::DynClone {
     fn introspect(&self) -> HashMap<String, Vec<String>>;
     fn as_any(&self) -> &dyn Any;
     fn as_any_mut(&mut self) -> &mut dyn Any;
@@ -323,6 +329,13 @@ impl<K: ChannelKey, V: ChannelValue> DynChannelGroup for ChannelGroup<K, V> {
     }
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
+    }
+}
+
+impl DefaultChannels {
+    pub fn with_position(channels: &mut MeshChannels) -> Self {
+        let position = channels.ensure_channel::<VertexId, Vec3>("position".into());
+        Self { position }
     }
 }
 
@@ -399,7 +412,6 @@ mod test {
         // Once the refs are dropped, we can write again
         assert!(mesh_channels.write_channel(position).is_ok());
 
-        
         // The introspection API can be used to inspect the existing channels
         // without necessarily knowing which channels are registered or their
         // types.
@@ -496,3 +508,5 @@ impl<K: ChannelKey, V: ChannelValue> Default for ChannelGroup<K, V> {
         }
     }
 }
+
+dyn_clone::clone_trait_object!(DynChannelGroup);

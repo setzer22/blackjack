@@ -57,6 +57,7 @@ walkdir = "2"
 syntect = "4.6"
 enum-map = "2.0"
 bimap = "0.6.2"
+dyn-clone = "1.0"
 
 # Image loading is too slow in debug mode. This compiles all dependencies with optimizations.
 [profile.dev.package."*"]
