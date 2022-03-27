@@ -5,36 +5,86 @@ use std::{
     marker::PhantomData,
 };
 
+use crate::lua_engine::lua_stdlib;
+use mlua::{FromLua, Lua, ToLua};
+
 use super::*;
 
 macro_rules! impl_type {
     () => {};
     ([$trait:ty, $key_type:ident, $fn:ident] ~ $t:ident) => {
         impl $trait for $t {
-            fn $fn () -> $key_type { $key_type::$t }
-            fn name() -> &'static str { stringify!($t) }
+            fn $fn() -> $key_type {
+                $key_type::$t
+            }
+            fn name() -> &'static str {
+                stringify!($t)
+            }
         }
-    };
-    ([$trait:ty, $key_type:ident, $fn:ident] $t:ident) => {
-        impl_type!([$trait, $key_type, $fn] ~ $t);
-    };
-    ([$trait:ty, $key_type:ident, $fn:ident] $t:ident, $($ts:ident),*) => {
-        impl_type!([$trait, $key_type, $fn] ~ $t);
-        impl_type!([$trait, $key_type, $fn] $($ts),*);
     };
 }
 
-pub trait ChannelKey: slotmap::Key + Default + Debug + Clone + Copy + Sized + 'static {
+pub trait ChannelKey:
+    slotmap::Key + Default + Debug + Clone + Copy + Sized + FromToLua + 'static
+{
     fn key_type() -> ChannelKeyType;
     fn name() -> &'static str;
 }
-impl_type!([ChannelKey, ChannelKeyType, key_type] VertexId, FaceId, HalfEdgeId);
+impl_type!([ChannelKey, ChannelKeyType, key_type] ~ VertexId);
+impl_type!([ChannelKey, ChannelKeyType, key_type] ~ FaceId);
+impl_type!([ChannelKey, ChannelKeyType, key_type] ~ HalfEdgeId);
 
-pub trait ChannelValue: Default + Debug + Clone + Copy + Sized + 'static {
+pub trait ChannelValue: Default + Debug + Clone + Copy + Sized + FromToLua + 'static {
     fn value_type() -> ChannelValueType;
     fn name() -> &'static str;
 }
-impl_type!([ChannelValue, ChannelValueType, value_type] Vec2, Vec3, Vec4, f32, bool);
+impl_type!([ChannelValue, ChannelValueType, value_type] ~ Vec2);
+impl_type!([ChannelValue, ChannelValueType, value_type] ~ Vec3);
+impl_type!([ChannelValue, ChannelValueType, value_type] ~ Vec4);
+impl_type!([ChannelValue, ChannelValueType, value_type] ~ f32);
+impl_type!([ChannelValue, ChannelValueType, value_type] ~ bool);
+
+pub trait FromToLua {
+    fn cast_to_lua(self, lua: &Lua) -> mlua::Value;
+    fn cast_from_lua(value: mlua::Value, lua: &Lua) -> Result<Self>
+    where
+        Self: Sized;
+}
+
+macro_rules! impl_from_to_lua {
+    (wrapped $t:ident) => {
+        impl FromToLua for $t {
+            fn cast_to_lua<'lua>(self, lua: &'lua Lua) -> mlua::Value {
+                lua_stdlib::$t(self).to_lua(lua).unwrap()
+            }
+
+            fn cast_from_lua(value: mlua::Value, lua: &Lua) -> Result<Self> {
+                let value: lua_stdlib::$t = FromLua::from_lua(value, lua)?;
+                Ok(value.0)
+            }
+        }
+    };
+    (flat $t:ident) => {
+        impl FromToLua for $t {
+            fn cast_to_lua<'lua>(self, lua: &'lua Lua) -> mlua::Value {
+                self.to_lua(lua).unwrap()
+            }
+
+            fn cast_from_lua(value: mlua::Value, lua: &Lua) -> Result<Self> {
+                let value: $t = FromLua::from_lua(value, lua)?;
+                Ok(value)
+            }
+        }
+    };
+}
+impl_from_to_lua!(wrapped Vec2);
+impl_from_to_lua!(wrapped Vec3);
+impl_from_to_lua!(wrapped Vec4);
+impl_from_to_lua!(flat f32);
+impl_from_to_lua!(flat bool);
+impl_from_to_lua!(flat VertexId);
+impl_from_to_lua!(flat FaceId);
+impl_from_to_lua!(flat HalfEdgeId);
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 #[rustfmt::skip]
@@ -117,14 +167,19 @@ impl<K: ChannelKey, V: ChannelValue> Channel<K, V> {
 }
 
 impl<K: ChannelKey, V: ChannelValue> ChannelGroup<K, V> {
-    pub fn ensure_channel(&mut self, name: String) -> ChannelId<K, V> {
-        let ch_id = ChannelId::new(self.channels.insert(Default::default()));
-        self.channel_names.insert(name, ch_id);
-        ch_id
+    pub fn ensure_channel(&mut self, name: &str) -> ChannelId<K, V> {
+        match self.channel_names.get_by_left(name) {
+            Some(id) => *id,
+            None => {
+                let ch_id = ChannelId::new(self.channels.insert(Default::default()));
+                self.channel_names.insert(name.into(), ch_id);
+                ch_id
+            }
+        }
     }
 
-    pub fn create_channel(&mut self, name: String) -> Result<ChannelId<K, V>> {
-        if self.channel_names.contains_left(&name) {
+    pub fn create_channel(&mut self, name: &str) -> Result<ChannelId<K, V>> {
+        if self.channel_names.contains_left(name) {
             bail!("The channel named {name} already exists in mesh");
         } else {
             Ok(self.ensure_channel(name))
@@ -214,14 +269,14 @@ impl MeshChannels {
 
     pub fn ensure_channel<K: ChannelKey, V: ChannelValue>(
         &mut self,
-        name: String,
+        name: &str,
     ) -> ChannelId<K, V> {
         self.group_or_default().ensure_channel(name)
     }
 
     pub fn create_channel<K: ChannelKey, V: ChannelValue>(
         &mut self,
-        name: String,
+        name: &str,
     ) -> Result<ChannelId<K, V>> {
         self.group_or_default().create_channel(name)
     }
@@ -250,6 +305,89 @@ impl MeshChannels {
                 .channel_id(name)
                 .ok_or_else(|| anyhow!("Channel named {name} does not exist"))?,
         )
+    }
+
+    pub fn ensure_group_dyn(
+        &mut self,
+        kty: ChannelKeyType,
+        vty: ChannelValueType,
+    ) -> &mut dyn DynChannelGroup {
+        type K = ChannelKeyType;
+        type V = ChannelValueType;
+
+        macro_rules! ret {
+            ($kt:ident, $vt:ident) => {
+                self.group_or_default::<$kt, $vt>() as &mut dyn DynChannelGroup
+            };
+        }
+
+        macro_rules! do_match {
+            ($($kt:ident, $vt:ident);*) => {
+                match (kty, vty) { $(
+                    (K::$kt, V::$vt) => { ret!($kt, $vt) }
+                )* }
+            }
+        }
+
+        do_match! {
+            VertexId, Vec2;
+            VertexId, Vec3;
+            VertexId, Vec4;
+            VertexId, f32;
+            VertexId, bool;
+            FaceId, Vec2;
+            FaceId, Vec3;
+            FaceId, Vec4;
+            FaceId, f32;
+            FaceId, bool;
+            HalfEdgeId, Vec2;
+            HalfEdgeId, Vec3;
+            HalfEdgeId, Vec4;
+            HalfEdgeId, f32;
+            HalfEdgeId, bool
+        }
+    }
+
+    pub fn ensure_channel_dyn(
+        &mut self,
+        kty: ChannelKeyType,
+        vty: ChannelValueType,
+        name: &str,
+    ) -> RawChannelId {
+        let group = self.ensure_group_dyn(kty, vty);
+        group.ensure_channel_dyn(name)
+    }
+
+    pub fn dyn_read_channel_by_name(
+        &self,
+        kty: ChannelKeyType,
+        vty: ChannelValueType,
+        name: &str,
+    ) -> Result<Ref<dyn DynChannel>> {
+        let group = self
+            .channels
+            .get(&(kty, vty))
+            .ok_or_else(|| anyhow!("Channel type does not exist"))?;
+        let raw_id = group
+            .channel_id_dyn(name)
+            .ok_or_else(|| anyhow!("Channel value does not exist"))?;
+        Ok(group.read_channel_dyn(raw_id))
+    }
+
+    pub fn dyn_write_channel_by_name(
+        &self,
+        kty: ChannelKeyType,
+        vty: ChannelValueType,
+        name: &str,
+    ) -> Result<RefMut<dyn DynChannel>> {
+        let group = self
+            .channels
+            .get(&(kty, vty))
+            .ok_or_else(|| anyhow!("Channel type does not exist"))?;
+        let raw_id = group
+            .channel_id_dyn(name)
+            .ok_or_else(|| anyhow!("Channel value does not exist"))?;
+        Ok(group.write_channel_dyn(raw_id))
     }
 
     pub fn write_channel<K: ChannelKey, V: ChannelValue>(
@@ -295,10 +433,51 @@ impl MeshChannels {
     }
 }
 
+pub trait DynChannel: Any + Debug {
+    fn get_lua<'a, 'lua>(&'a self, lua: &'lua mlua::Lua, key: mlua::Value) -> Result<mlua::Value>
+    where
+        'lua: 'a;
+    fn set_lua<'a, 'lua>(
+        &'a mut self,
+        lua: &'lua mlua::Lua,
+        key: mlua::Value,
+        value: mlua::Value,
+    ) -> Result<()>
+    where
+        'lua: 'a;
+}
+impl<K: ChannelKey, V: ChannelValue> DynChannel for Channel<K, V> {
+    fn get_lua<'a, 'lua>(&'a self, lua: &'lua mlua::Lua, key: mlua::Value) -> Result<mlua::Value>
+    where
+        'lua: 'a,
+    {
+        let key: K = K::cast_from_lua(key, lua)?;
+        Ok(self[key].cast_to_lua(lua))
+    }
+
+    fn set_lua<'a, 'lua>(
+        &'a mut self,
+        lua: &'lua mlua::Lua,
+        key: mlua::Value,
+        value: mlua::Value,
+    ) -> Result<()>
+    where
+        'lua: 'a,
+    {
+        let key: K = K::cast_from_lua(key, lua)?;
+        self[key] = FromToLua::cast_from_lua(value, lua)?;
+        Ok(())
+    }
+}
+
 pub trait DynChannelGroup: Any + Debug + dyn_clone::DynClone {
     fn introspect(&self) -> HashMap<String, Vec<String>>;
     fn as_any(&self) -> &dyn Any;
     fn as_any_mut(&mut self) -> &mut dyn Any;
+    fn ensure_channel_dyn(&mut self, name: &str) -> RawChannelId;
+    fn read_channel_dyn(&self, raw_id: RawChannelId) -> Ref<dyn DynChannel>;
+    fn write_channel_dyn(&self, raw_id: RawChannelId) -> RefMut<dyn DynChannel>;
+    fn channel_id_dyn(&self, name: &str) -> Option<RawChannelId>;
 }
 
 impl<K: ChannelKey, V: ChannelValue> DynChannelGroup for ChannelGroup<K, V> {
@@ -322,6 +501,18 @@ impl<K: ChannelKey, V: ChannelValue> DynChannelGroup for ChannelGroup<K, V> {
     }
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
+    }
+    fn ensure_channel_dyn(&mut self, name: &str) -> RawChannelId {
+        self.ensure_channel(name).raw
+    }
+    fn read_channel_dyn(&self, raw_id: RawChannelId) -> Ref<dyn DynChannel> {
+        self.channels[raw_id].borrow()
+    }
+    fn write_channel_dyn(&self, raw_id: RawChannelId) -> RefMut<dyn DynChannel> {
+        self.channels[raw_id].borrow_mut()
+    }
+    fn channel_id_dyn(&self, name: &str) -> Option<RawChannelId> {
+        self.channel_names.get_by_left(name).map(|x| x.raw)
     }
 }
 
@@ -428,6 +619,32 @@ mod test {
                 "Vec3(0.0, 1.0, 0.0)",
                 "Vec3(0.0, 0.0, 1.0)",
             ]
+        );
+
+        // Channels can also be read and written using a type-erased API. This
+        // is mainly used for interfacing with Lua and looks very clunky here.
+        // When programming in Rust, using the type-safe API is preferred
+        let lua = Lua::new();
+        let dyn_pos = mesh_channels
+            .dyn_read_channel_by_name(ChannelKeyType::VertexId, ChannelValueType::f32, "size")
+            .unwrap();
+        match dyn_pos.get_lua(&lua, v1.cast_to_lua(&lua)).unwrap() {
+            mlua::Value::Number(x) if x == 0.25 => {}
+            _ => panic!("Expected the number 0.25"),
+        }
+        drop(dyn_pos);
+    }
+
+    #[test]
+    pub fn test_ensure_channel() {
+        let mut mesh_channels = MeshChannels::default();
+
+        let position = mesh_channels
+            .create_channel::<VertexId, Vec3>("position")
+            .unwrap();
+        assert_eq!(
+            position,
+            mesh_channels.ensure_channel::<VertexId, Vec3>("position")
         );
     }
 }

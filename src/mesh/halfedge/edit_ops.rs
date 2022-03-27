@@ -119,7 +119,11 @@ pub fn divide_edge(
 
 /// Cuts a face by creating a new edge between vertices `v` and `w`. The
 /// vertices must share a face, but not an edge.
-pub fn cut_face(mesh: &mut halfedge::MeshConnectivity, v: VertexId, w: VertexId) -> Result<HalfEdgeId> {
+pub fn cut_face(
+    mesh: &mut halfedge::MeshConnectivity,
+    v: VertexId,
+    w: VertexId,
+) -> Result<HalfEdgeId> {
     let face = mesh
         .at_vertex(v)
         .outgoing_halfedges()?
@@ -457,7 +461,12 @@ fn bevel_edges_connectivity(
 }
 
 /// Bevels the given vertices by a given distance amount
-pub fn bevel_edges(mesh: &mut MeshConnectivity, positions: &mut Positions, halfedges: &[HalfEdgeId], amount: f32) -> Result<()> {
+pub fn bevel_edges(
+    mesh: &mut MeshConnectivity,
+    positions: &mut Positions,
+    halfedges: &[HalfEdgeId],
+    amount: f32,
+) -> Result<()> {
     let beveled_edges = bevel_edges_connectivity(mesh, positions, halfedges)?;
 
     // --- Adjust vertex positions ---
@@ -498,7 +507,12 @@ pub fn bevel_edges(mesh: &mut MeshConnectivity, positions: &mut Positions, halfe
 
 /// Extrudes the given set of faces. Faces that are connected by at least one
 /// edge will be connected after the extrude.
-pub fn extrude_faces(mesh: &mut MeshConnectivity, positions: &mut Positions, faces: &[FaceId], amount: f32) -> Result<()> {
+pub fn extrude_faces(
+    mesh: &mut MeshConnectivity,
+    positions: &mut Positions,
+    faces: &[FaceId],
+    amount: f32,
+) -> Result<()> {
     let face_set: HashSet<FaceId> = faces.iter().cloned().collect();
 
     // Find the set of all halfedges not adjacent to another extruded face.
@@ -553,6 +567,41 @@ pub fn extrude_faces(mesh: &mut MeshConnectivity, positions: &mut Positions, fac
 
     for (v_id, ops) in move_ops {
         positions[v_id] += ops.iter().fold(Vec3::ZERO, |x, y| x + y.to_vec());
+    }
+
+    Ok(())
+}
+
+pub fn combine_channels<'lua>(
+    mesh: &mut HalfEdgeMesh,
+    lua: &'lua mlua::Lua,
+    key_type: ChannelKeyType,
+    in_ch_loc: (ChannelValueType, &str),
+    out_ch_loc: (ChannelValueType, &str),
+    fun: mlua::Function<'lua>,
+) -> Result<()> {
+    {
+        mesh.channels
+            .ensure_channel_dyn(key_type, out_ch_loc.0, out_ch_loc.1);
+        let input_channel =
+            mesh.channels
+                .dyn_read_channel_by_name(key_type, in_ch_loc.0, in_ch_loc.1)?;
+        let mut output_channel =
+            mesh.channels
+                .dyn_write_channel_by_name(key_type, out_ch_loc.0, out_ch_loc.1)?;
+
+        let conn = mesh.read_connectivity();
+        match key_type {
+            ChannelKeyType::VertexId => {
+                for (v_id, _) in conn.iter_vertices() {
+                    let k = v_id.cast_to_lua(lua);
+                    let input_val = input_channel.get_lua(lua, k.clone())?;
+                    output_channel.set_lua(lua, k, fun.call(input_val)?)?;
+                }
+            }
+            ChannelKeyType::FaceId => {}
+            ChannelKeyType::HalfEdgeId => {}
+        }
     }
 
     Ok(())
