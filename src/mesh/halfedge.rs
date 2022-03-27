@@ -107,7 +107,7 @@ pub struct MeshConnectivity {
 #[derive(Debug, Clone)]
 pub struct HalfEdgeMesh {
     connectivity: RefCell<MeshConnectivity>,
-    channels: MeshChannels,
+    pub channels: MeshChannels,
     default_channels: DefaultChannels,
 }
 

@@ -1,6 +1,8 @@
+use std::{cell::RefCell, rc::Rc};
+
 use noise::NoiseFn;
 
-use crate::prelude::halfedge::ChannelKey;
+use crate::prelude::halfedge::{ChannelKey, ChannelValue, DynChannel};
 
 use super::*;
 /// Vector types in Lua must be very lightweight. I have benchmarked the
@@ -46,7 +48,126 @@ impl UserData for SelectionExpression {}
 pub struct Path(pub std::path::PathBuf);
 impl UserData for Path {}
 
-impl UserData for HalfEdgeMesh {}
+pub struct SharedChannel(pub Rc<RefCell<dyn DynChannel>>);
+impl Clone for SharedChannel {
+    fn clone(&self) -> Self {
+        Self(Rc::clone(&self.0))
+    }
+}
+
+impl UserData for HalfEdgeMesh {
+    fn add_methods<'lua, M: mlua::UserDataMethods<'lua, Self>>(methods: &mut M) {
+        methods.add_method(
+            "get_channel",
+            |_lua, this, (kty, vty, name): (ChannelKeyType, ChannelValueType, String)| {
+                Ok(SharedChannel(
+                    this.channels
+                        .channel_rc_dyn(kty, vty, &name)
+                        .map_lua_err()?,
+                ))
+            },
+        );
+        methods.add_method(
+            "get_channel_2",
+            |lua, this, (kty, vty, name): (ChannelKeyType, ChannelValueType, String)| {
+                profiling::scope!("get_channel2");
+                use slotmap::Key;
+                let conn = this.read_connectivity();
+                let keys: Box<dyn Iterator<Item = u64>> = match kty {
+                    ChannelKeyType::VertexId => {
+                        Box::new(conn.iter_vertices().map(|(v_id, _)| v_id.data().as_ffi()))
+                    }
+                    ChannelKeyType::FaceId => {
+                        Box::new(conn.iter_faces().map(|(f_id, _)| f_id.data().as_ffi()))
+                    }
+                    ChannelKeyType::HalfEdgeId => {
+                        Box::new(conn.iter_halfedges().map(|(h_id, _)| h_id.data().as_ffi()))
+                    }
+                };
+                Ok(this
+                    .channels
+                    .dyn_read_channel_by_name(kty, vty, &name)
+                    .map_lua_err()?
+                    .to_table(keys, lua))
+            },
+        );
+        methods.add_method("set_channel", |lua, this, (kty, vty, name, table)| {
+            profiling::scope!("set_channel");
+            use slotmap::Key;
+            let name: String = name;
+            let conn = this.read_connectivity();
+            let keys: Box<dyn Iterator<Item = u64>> = match kty {
+                ChannelKeyType::VertexId => {
+                    Box::new(conn.iter_vertices().map(|(v_id, _)| v_id.data().as_ffi()))
+                }
+                ChannelKeyType::FaceId => {
+                    Box::new(conn.iter_faces().map(|(f_id, _)| f_id.data().as_ffi()))
+                }
+                ChannelKeyType::HalfEdgeId => {
+                    Box::new(conn.iter_halfedges().map(|(h_id, _)| h_id.data().as_ffi()))
+                }
+            };
+            this.channels
+                .dyn_write_channel_by_name(kty, vty, &name)
+                .map_lua_err()?
+                .set_from_table(keys, lua, table)
+                .map_lua_err()
+        });
+        methods.add_method_mut(
+            "ensure_channel",
+            |_lua, this, (kty, vty, name): (ChannelKeyType, ChannelValueType, String)| {
+                let _ = this.channels.ensure_channel_dyn(kty, vty, &name);
+                Ok(SharedChannel(
+                    // TODO: This needlesly recomputes the name->ch_id correspondence
+                    this.channels
+                        .channel_rc_dyn(kty, vty, &name)
+                        .map_lua_err()?,
+                ))
+            },
+        );
+        methods.add_method_mut("iter_vertices", |lua, this, ()| {
+            let vertices: Vec<VertexId> = this
+                .read_connectivity()
+                .iter_vertices()
+                .map(|(id, _)| id)
+                .collect();
+            let mut i = 0;
+            lua.create_function_mut(move |lua, ()| {
+                let val = if i < vertices.len() {
+                    vertices[i].to_lua(lua)?
+                } else {
+                    mlua::Value::Nil
+                };
+                i += 1;
+                Ok(val)
+            })
+        });
+        methods.add_method("clone", |_lua, this, ()| Ok(this.clone()));
+    }
+}
+
+impl UserData for SharedChannel {
+    fn add_methods<'lua, M: mlua::UserDataMethods<'lua, Self>>(methods: &mut M) {
+        methods.add_meta_method(
+            mlua::MetaMethod::NewIndex,
+            |lua, this, (key, val): (mlua::Value, mlua::Value)| {
+                this.0.borrow_mut().set_lua(lua, key, val).map_lua_err()?;
+                Ok(())
+            },
+        );
+        methods.add_meta_method(mlua::MetaMethod::Index, |lua, this, key: mlua::Value| {
+            let value = this.0.borrow().get_lua(lua, key).map_lua_err()?;
+            Ok(value.clone())
+        });
+        methods.add_meta_method(
+            mlua::MetaMethod::NewIndex,
+            |lua, this, (key, val): (mlua::Value, mlua::Value)| {
+                this.0.borrow_mut().set_lua(lua, key, val).map_lua_err()?;
+                Ok(())
+            },
+        );
+    }
+}
 
 /// Vertex ids cross the Rust<->Lua boundary a lot, so we can't pay the price of
 /// boxing that a `UserData` requires. Instead we treat them as integers using

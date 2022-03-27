@@ -3,6 +3,7 @@ use std::{
     cell::{Ref, RefCell, RefMut},
     fmt::Debug,
     marker::PhantomData,
+    rc::Rc,
 };
 
 use crate::lua_engine::lua_stdlib;
@@ -10,12 +11,43 @@ use mlua::{FromLua, Lua, ToLua};
 
 use super::*;
 
-macro_rules! impl_type {
+pub trait ChannelKey:
+    slotmap::Key + Default + Debug + Clone + Copy + Sized + FromToLua + 'static
+{
+    fn key_type() -> ChannelKeyType;
+    fn name() -> &'static str;
+    fn cast_from_ffi(x: u64) -> Self;
+}
+macro_rules! impl_channel_key {
     () => {};
-    ([$trait:ty, $key_type:ident, $fn:ident] ~ $t:ident) => {
-        impl $trait for $t {
-            fn $fn() -> $key_type {
-                $key_type::$t
+    ($t:ident) => {
+        impl ChannelKey for $t {
+            fn key_type() -> ChannelKeyType {
+                ChannelKeyType::$t
+            }
+            fn name() -> &'static str {
+                stringify!($t)
+            }
+            fn cast_from_ffi(x: u64) -> Self {
+                Self::from(slotmap::KeyData::from_ffi(x))
+            }
+        }
+    };
+}
+impl_channel_key!(VertexId);
+impl_channel_key!(FaceId);
+impl_channel_key!(HalfEdgeId);
+
+pub trait ChannelValue: Default + Debug + Clone + Copy + Sized + FromToLua + 'static {
+    fn value_type() -> ChannelValueType;
+    fn name() -> &'static str;
+}
+macro_rules! impl_channel_value {
+    () => {};
+    ($t:ident) => {
+        impl ChannelValue for $t {
+            fn value_type() -> ChannelValueType {
+                ChannelValueType::$t
             }
             fn name() -> &'static str {
                 stringify!($t)
@@ -23,26 +55,11 @@ macro_rules! impl_type {
         }
     };
 }
-
-pub trait ChannelKey:
-    slotmap::Key + Default + Debug + Clone + Copy + Sized + FromToLua + 'static
-{
-    fn key_type() -> ChannelKeyType;
-    fn name() -> &'static str;
-}
-impl_type!([ChannelKey, ChannelKeyType, key_type] ~ VertexId);
-impl_type!([ChannelKey, ChannelKeyType, key_type] ~ FaceId);
-impl_type!([ChannelKey, ChannelKeyType, key_type] ~ HalfEdgeId);
-
-pub trait ChannelValue: Default + Debug + Clone + Copy + Sized + FromToLua + 'static {
-    fn value_type() -> ChannelValueType;
-    fn name() -> &'static str;
-}
-impl_type!([ChannelValue, ChannelValueType, value_type] ~ Vec2);
-impl_type!([ChannelValue, ChannelValueType, value_type] ~ Vec3);
-impl_type!([ChannelValue, ChannelValueType, value_type] ~ Vec4);
-impl_type!([ChannelValue, ChannelValueType, value_type] ~ f32);
-impl_type!([ChannelValue, ChannelValueType, value_type] ~ bool);
+impl_channel_value!(Vec2);
+impl_channel_value!(Vec3);
+impl_channel_value!(Vec4);
+impl_channel_value!(f32);
+impl_channel_value!(bool);
 
 pub trait FromToLua {
     fn cast_to_lua(self, lua: &Lua) -> mlua::Value;
@@ -119,7 +136,7 @@ impl<K: ChannelKey, V: ChannelValue> ChannelId<K, V> {
 #[derive(Clone, Debug)]
 pub struct ChannelGroup<K: ChannelKey, V: ChannelValue> {
     channel_names: bimap::BiMap<String, ChannelId<K, V>>,
-    channels: SlotMap<RawChannelId, RefCell<Channel<K, V>>>,
+    channels: SlotMap<RawChannelId, Rc<RefCell<Channel<K, V>>>>,
 }
 
 #[derive(Default, Debug, Clone)]
@@ -188,11 +205,15 @@ impl<K: ChannelKey, V: ChannelValue> ChannelGroup<K, V> {
 
     pub fn remove_channel(&mut self, id: ChannelId<K, V>) -> Result<Channel<K, V>> {
         self.channel_names.remove_by_right(&id);
-        Ok(self
-            .channels
-            .remove(id.raw)
-            .ok_or_else(|| anyhow!("Non-existing channel cannot be removed"))?
-            .into_inner())
+        Ok(Rc::try_unwrap(
+            self.channels
+                .remove(id.raw)
+                .ok_or_else(|| anyhow!("Non-existing channel cannot be removed"))?,
+        )
+        .map_err(|_| {
+            anyhow!("This channel can't be deleted because it's still referenced somewhere else.")
+        })?
+        .into_inner())
     }
 
     pub fn channel_id(&self, name: &str) -> Option<ChannelId<K, V>> {
@@ -390,6 +411,22 @@ impl MeshChannels {
         Ok(group.write_channel_dyn(raw_id))
     }
 
+    pub fn channel_rc_dyn(
+        &self,
+        kty: ChannelKeyType,
+        vty: ChannelValueType,
+        name: &str,
+    ) -> Result<Rc<RefCell<dyn DynChannel>>> {
+        let group = self
+            .channels
+            .get(&(kty, vty))
+            .ok_or_else(|| anyhow!("Channel type does not exist"))?;
+        let raw_id = group
+            .channel_id_dyn(name)
+            .ok_or_else(|| anyhow!("Channel value does not exist"))?;
+        Ok(group.channel_rc_dyn(raw_id))
+    }
+
     pub fn write_channel<K: ChannelKey, V: ChannelValue>(
         &self,
         ch_id: ChannelId<K, V>,
@@ -434,7 +471,11 @@ impl MeshChannels {
 }
 
 pub trait DynChannel: Any + Debug {
-    fn get_lua<'a, 'lua>(&'a self, lua: &'lua mlua::Lua, key: mlua::Value) -> Result<mlua::Value>
+    fn get_lua<'a, 'lua>(
+        &'a self,
+        lua: &'lua mlua::Lua,
+        key: mlua::Value<'lua>,
+    ) -> Result<mlua::Value<'lua>>
     where
         'lua: 'a;
     fn set_lua<'a, 'lua>(
@@ -445,9 +486,26 @@ pub trait DynChannel: Any + Debug {
     ) -> Result<()>
     where
         'lua: 'a;
+
+    fn to_table<'lua>(
+        &self,
+        keys: Box<dyn Iterator<Item = u64> + '_>,
+        lua: &'lua mlua::Lua,
+    ) -> mlua::Table<'lua>;
+
+    fn set_from_table<'lua>(
+        &mut self,
+        keys: Box<dyn Iterator<Item = u64> + '_>,
+        lua: &'lua mlua::Lua,
+        table: mlua::Table<'lua>,
+    ) -> Result<()>;
 }
 impl<K: ChannelKey, V: ChannelValue> DynChannel for Channel<K, V> {
-    fn get_lua<'a, 'lua>(&'a self, lua: &'lua mlua::Lua, key: mlua::Value) -> Result<mlua::Value>
+    fn get_lua<'a, 'lua>(
+        &'a self,
+        lua: &'lua mlua::Lua,
+        key: mlua::Value<'lua>,
+    ) -> Result<mlua::Value<'lua>>
     where
         'lua: 'a,
     {
@@ -468,6 +526,32 @@ impl<K: ChannelKey, V: ChannelValue> DynChannel for Channel<K, V> {
         self[key] = FromToLua::cast_from_lua(value, lua)?;
         Ok(())
     }
+
+    #[profiling::function]
+    fn to_table<'lua>(
+        &self,
+        keys: Box<dyn Iterator<Item = u64> + '_>,
+        lua: &'lua mlua::Lua,
+    ) -> mlua::Table<'lua> {
+        lua.create_sequence_from(keys.map(K::cast_from_ffi).map(|k| self[k].cast_to_lua(lua)))
+            .unwrap()
+    }
+
+    #[profiling::function]
+    fn set_from_table<'lua>(
+        &mut self,
+        keys: Box<dyn Iterator<Item = u64> + '_>,
+        lua: &'lua mlua::Lua,
+        table: mlua::Table<'lua>,
+    ) -> Result<()> {
+        keys.map(K::cast_from_ffi)
+            .zip(table.sequence_values::<mlua::Value>())
+            .try_for_each::<_, Result<_>>(|(k, lua_val)| {
+                self[k] = FromToLua::cast_from_lua(lua_val.unwrap(), lua)?;
+                Ok(())
+            })?;
+        Ok(())
+    }
 }
 
 pub trait DynChannelGroup: Any + Debug + dyn_clone::DynClone {
@@ -477,6 +561,7 @@ pub trait DynChannelGroup: Any + Debug + dyn_clone::DynClone {
     fn ensure_channel_dyn(&mut self, name: &str) -> RawChannelId;
     fn read_channel_dyn(&self, raw_id: RawChannelId) -> Ref<dyn DynChannel>;
     fn write_channel_dyn(&self, raw_id: RawChannelId) -> RefMut<dyn DynChannel>;
+    fn channel_rc_dyn(&self, raw_id: RawChannelId) -> Rc<RefCell<dyn DynChannel>>;
     fn channel_id_dyn(&self, name: &str) -> Option<RawChannelId>;
 }
 
@@ -511,6 +596,16 @@ impl<K: ChannelKey, V: ChannelValue> DynChannelGroup for ChannelGroup<K, V> {
     fn write_channel_dyn(&self, raw_id: RawChannelId) -> RefMut<dyn DynChannel> {
         self.channels[raw_id].borrow_mut()
     }
+    fn channel_rc_dyn(&self, raw_id: RawChannelId) -> Rc<RefCell<dyn DynChannel>> {
+        // This standalone function is needed to help the compiler convert
+        // between a typed Rc and the dynamic one.
+        pub fn convert_channel<K: ChannelKey, V: ChannelValue>(
+            it: Rc<RefCell<Channel<K, V>>>,
+        ) -> Rc<RefCell<dyn DynChannel>> {
+            it
+        }
+        convert_channel(Rc::clone(&self.channels[raw_id]))
+    }
     fn channel_id_dyn(&self, name: &str) -> Option<RawChannelId> {
         self.channel_names.get_by_left(name).map(|x| x.raw)
     }
@@ -536,13 +631,13 @@ mod test {
 
         let mut mesh_channels = MeshChannels::default();
         let position = mesh_channels
-            .create_channel::<VertexId, Vec3>("position".into())
+            .create_channel::<VertexId, Vec3>("position")
             .unwrap();
         let color = mesh_channels
-            .create_channel::<VertexId, Vec4>("color".into())
+            .create_channel::<VertexId, Vec4>("color")
             .unwrap();
         let size = mesh_channels
-            .create_channel::<VertexId, f32>("size".into())
+            .create_channel::<VertexId, f32>("size")
             .unwrap();
 
         assert!(mesh_channels.channel_id("position").unwrap() == position);

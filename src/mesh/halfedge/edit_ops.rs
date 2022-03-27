@@ -572,6 +572,7 @@ pub fn extrude_faces(
     Ok(())
 }
 
+#[profiling::function]
 pub fn combine_channels<'lua>(
     mesh: &mut HalfEdgeMesh,
     lua: &'lua mlua::Lua,
