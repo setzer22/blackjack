@@ -39,7 +39,14 @@ pub fn load_lua_libraries(lua: &Lua) -> anyhow::Result<()> {
 
     // Libraries
     def_library!("Vec2", "vec2.lua");
-    def_library!("Vec3", "vec3.lua");
+    //def_library!("Vec3", "vec3.lua");
+
+    let globals = lua.globals();
+    globals.set(
+        "Vec3",
+        lua.create_function(|_, (x, y, z)| Ok(mlua::Value::Vector(x, y, z)))?,
+    )?;
+
     def_library!("Vec4", "vec4.lua");
     def_library!("NodeLibrary", "node_library.lua");
 
@@ -327,5 +334,19 @@ impl LuaRuntime {
             }
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    pub fn test() {
+        let lua = Lua::new();
+        let x: mlua::Function = lua
+            .load("return function(v) print(v) end")
+            .call(())
+            .unwrap();
+        x.call::<_, ()>(mlua::Value::Vector(1.0, 2.0, 3.0));
     }
 }

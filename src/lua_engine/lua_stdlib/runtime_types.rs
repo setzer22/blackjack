@@ -39,8 +39,27 @@ macro_rules! def_vec_type {
     };
 }
 def_vec_type!(Vec2, glam::Vec2, x, y);
-def_vec_type!(Vec3, glam::Vec3, x, y, z);
+//def_vec_type!(Vec3, glam::Vec3, x, y, z);
 def_vec_type!(Vec4, glam::Vec4, x, y, z, w);
+
+pub struct Vec3(pub glam::Vec3);
+impl<'lua> ToLua<'lua> for Vec3 {
+    fn to_lua(self, lua: &'lua Lua) -> mlua::Result<mlua::Value<'lua>> {
+        Ok(mlua::Value::Vector(self.0.x, self.0.y, self.0.z))
+    }
+}
+impl<'lua> FromLua<'lua> for Vec3 {
+    fn from_lua(lua_value: mlua::Value<'lua>, lua: &'lua Lua) -> mlua::Result<Self> {
+        match lua_value {
+            mlua::Value::Vector(x, y, z) => Ok(Vec3(glam::Vec3::new(x, y, z))),
+            _ => Err(mlua::Error::FromLuaConversionError {
+                from: lua_value.type_name(),
+                to: "Vec3",
+                message: None,
+            }),
+        }
+    }
+}
 
 impl UserData for SelectionExpression {}
 
@@ -146,6 +165,33 @@ impl UserData for HalfEdgeMesh {
     }
 }
 
+#[test]
+pub fn minibench() {
+    let lua = Lua::new();
+
+    let v = vec![42; 3000];
+    let mut i = 0;
+    let f = lua
+        .create_function_mut(move |lua, ()| {
+            println!("Iteration {i}");
+            let val = if i < v.len() {
+                mlua::Value::Number(v[i] as f64)
+            } else {
+                mlua::Value::Nil
+            };
+            i += 1;
+            Ok(val)
+        })
+        .unwrap();
+
+    let main = lua
+        .load("return function(f) for i in f do print(i) end end")
+        .call::<_, mlua::Function>(())
+        .unwrap();
+
+    main.call::<_, ()>(f);
+}
+
 impl UserData for SharedChannel {
     fn add_methods<'lua, M: mlua::UserDataMethods<'lua, Self>>(methods: &mut M) {
         methods.add_meta_method(
@@ -177,7 +223,7 @@ macro_rules! ids_from_to_lua {
         impl<'lua> ToLua<'lua> for $id_ty {
             fn to_lua(self, lua: &'lua Lua) -> mlua::Result<mlua::Value<'lua>> {
                 use slotmap::Key;
-                self.data().as_ffi().to_lua(lua)
+                Ok(mlua::Value::Number(keydata_to_float(self.data())))
             }
         }
         impl<'lua> FromLua<'lua> for $id_ty {
@@ -186,6 +232,7 @@ macro_rules! ids_from_to_lua {
                     mlua::Value::Integer(id) => {
                         Ok(<$id_ty>::from(slotmap::KeyData::from_ffi(id as u64)))
                     }
+                    mlua::Value::Number(id) => Ok(<$id_ty>::from(float_to_keydata(id))),
                     _ => Err(mlua::Error::FromLuaConversionError {
                         from: lua_value.type_name(),
                         to: stringify!($id_ty),
@@ -199,6 +246,14 @@ macro_rules! ids_from_to_lua {
 ids_from_to_lua!(VertexId);
 ids_from_to_lua!(FaceId);
 ids_from_to_lua!(HalfEdgeId);
+
+fn keydata_to_float(k: slotmap::KeyData) -> f64 {
+    f64::from_le_bytes(k.as_ffi().to_le_bytes())
+}
+
+fn float_to_keydata(f: f64) -> slotmap::KeyData {
+    slotmap::KeyData::from_ffi(u64::from_le_bytes(f.to_le_bytes()))
+}
 
 impl UserData for ChannelKeyType {}
 impl UserData for ChannelValueType {}
@@ -222,8 +277,9 @@ pub fn load_channel_types(lua: &Lua) -> anyhow::Result<()> {
 pub struct PerlinNoise(pub noise::Perlin);
 impl UserData for PerlinNoise {
     fn add_methods<'lua, M: mlua::UserDataMethods<'lua, Self>>(methods: &mut M) {
-        methods.add_method("get_3d", |_lua, this, v: Vec3| {
-            Ok(this.0.get([v.0.x as f64, v.0.y as f64, v.0.z as f64]))
+        methods.add_method("get_3d", |_lua, this, (x, y, z): (f64, f64, f64)| {
+            //Ok(this.0.get([v.0.x as f64, v.0.y as f64, v.0.z as f64]))
+            Ok(this.0.get([x, y, z]))
         })
     }
 }

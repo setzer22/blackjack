@@ -41,7 +41,8 @@ local test_channel_nodes = {
                                               "position")
             for v in m:iter_vertices() do
                 local pos = position_ch[v]
-                local noise = perlin:get_3d(pos * (1.0 / 0.323198))
+                local noise_pos = pos * (1.0 / 0.323198)
+                local noise = perlin:get_3d(noise_pos.x, noise_pos.y, noise_pos.z)
                 noise_ch[v] = Vec3(noise, noise, noise) * 0.025
             end
             return {out_mesh = m}
