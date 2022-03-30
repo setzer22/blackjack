@@ -264,11 +264,8 @@ pub fn load_channel_types(lua: &Lua) -> anyhow::Result<()> {
     types.set("VertexId", ChannelKeyType::VertexId)?;
     types.set("FaceId", ChannelKeyType::FaceId)?;
     types.set("HalfEdgeId", ChannelKeyType::HalfEdgeId)?;
-    types.set("Vec2", ChannelValueType::Vec2)?;
     types.set("Vec3", ChannelValueType::Vec3)?;
-    types.set("Vec4", ChannelValueType::Vec4)?;
     types.set("f32", ChannelValueType::f32)?;
-    types.set("bool", ChannelValueType::bool)?;
     globals.set("Types", types)?;
 
     Ok(())
