@@ -51,9 +51,7 @@ atomic_float = "0.1"
 profiling = { version = "1.0", features = ["profile-with-tracy"] }
 image = { version = "0.24", default-features = false, features = ["png"] }
 nom = "7.1"
-# mlua = { version = "0.7.4", features = ["vendored", "luajit"] }
 mlua = { version = "0.8.0-beta.2", features = ["luau"] }
-# mlua = { version = "0.8.0-beta.2", features = ["lua54", "vendored"] }
 notify = "4.0"
 walkdir = "2"
 syntect = "4.6"

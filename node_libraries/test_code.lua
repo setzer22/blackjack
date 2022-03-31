@@ -3,7 +3,7 @@ local function mesh(name) return {name = name, type = "mesh"} end
 local perlin = Blackjack.perlin()
 
 local test_channel_nodes = {
-    SuperPullApi = {
+    AddNoiseTest = {
         label = "Add noise (Test)",
         op = function(inputs)
             local m = inputs.mesh:clone()
