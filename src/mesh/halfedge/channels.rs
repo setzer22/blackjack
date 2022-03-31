@@ -637,6 +637,36 @@ impl MeshChannels {
 
     /// Calls `read_channel` for a group with dynamic key and value
     /// types given at runtime.
+    pub fn dyn_read_channel(
+        &self,
+        kty: ChannelKeyType,
+        vty: ChannelValueType,
+        id: RawChannelId,
+    ) -> Result<Ref<dyn DynChannel>> {
+        let group = self
+            .channels
+            .get(&(kty, vty))
+            .ok_or_else(|| anyhow!("Channel type does not exist"))?;
+        Ok(group.read_channel_dyn(id))
+    }
+
+    /// Calls `write_channel` for a group with dynamic key and value
+    /// types given at runtime.
+    pub fn dyn_write_channel(
+        &self,
+        kty: ChannelKeyType,
+        vty: ChannelValueType,
+        id: RawChannelId,
+    ) -> Result<RefMut<dyn DynChannel>> {
+        let group = self
+            .channels
+            .get(&(kty, vty))
+            .ok_or_else(|| anyhow!("Channel type does not exist"))?;
+        Ok(group.write_channel_dyn(id))
+    }
+
+    /// Calls `read_channel` for a group with dynamic key and value
+    /// types given at runtime.
     pub fn dyn_read_channel_by_name(
         &self,
         kty: ChannelKeyType,
@@ -697,6 +727,16 @@ impl MeshChannels {
         self.group().ok()?.channel_id(name)
     }
 
+    /// Calls `channel_id` for the channel group with key and value type
+    pub fn channel_id_dyn(
+        &self,
+        kty: ChannelKeyType,
+        vty: ChannelValueType,
+        name: &str,
+    ) -> Option<RawChannelId> {
+        self.channels.get(&(kty, vty))?.channel_id_dyn(name)
+    }
+
     /// Calls `channel_name` for the channel group with key and value type
     pub fn channel_name<K: ChannelKey, V: ChannelValue>(
         &self,
@@ -718,7 +758,7 @@ impl MeshChannels {
 
 impl DefaultChannels {
     pub fn with_position(channels: &mut MeshChannels) -> Self {
-        let position = channels.ensure_channel::<VertexId, Vec3>("position".into());
+        let position = channels.ensure_channel::<VertexId, Vec3>("position");
         Self { position }
     }
 }

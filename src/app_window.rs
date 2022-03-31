@@ -59,9 +59,9 @@ impl AppWindow {
 
         // Sleep for the remaining time to cap at 60Hz
         let elapsed = Instant::now().duration_since(frame_start_time);
-        println!("elapsed {:?}", elapsed);
+        //println!("elapsed {:?}", elapsed);
         let remaining = Duration::from_secs_f32(1.0 / 60.0).saturating_sub(elapsed);
-        println!("remaining {:?}", remaining);
+        //println!("remaining {:?}", remaining);
         spin_sleep::sleep(remaining);
     }
 

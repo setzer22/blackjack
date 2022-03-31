@@ -571,39 +571,3 @@ pub fn extrude_faces(
 
     Ok(())
 }
-
-#[profiling::function]
-pub fn combine_channels<'lua>(
-    mesh: &mut HalfEdgeMesh,
-    lua: &'lua mlua::Lua,
-    key_type: ChannelKeyType,
-    in_ch_loc: (ChannelValueType, &str),
-    out_ch_loc: (ChannelValueType, &str),
-    fun: mlua::Function<'lua>,
-) -> Result<()> {
-    {
-        mesh.channels
-            .ensure_channel_dyn(key_type, out_ch_loc.0, out_ch_loc.1);
-        let input_channel =
-            mesh.channels
-                .dyn_read_channel_by_name(key_type, in_ch_loc.0, in_ch_loc.1)?;
-        let mut output_channel =
-            mesh.channels
-                .dyn_write_channel_by_name(key_type, out_ch_loc.0, out_ch_loc.1)?;
-
-        let conn = mesh.read_connectivity();
-        match key_type {
-            ChannelKeyType::VertexId => {
-                for (v_id, _) in conn.iter_vertices() {
-                    let k = v_id.cast_to_lua(lua);
-                    let input_val = input_channel.get_lua(lua, k.clone())?;
-                    output_channel.set_lua(lua, k, fun.call(input_val)?)?;
-                }
-            }
-            ChannelKeyType::FaceId => {}
-            ChannelKeyType::HalfEdgeId => {}
-        }
-    }
-
-    Ok(())
-}

@@ -22,6 +22,8 @@ use crate::{
 mod runtime_types;
 pub use runtime_types::*;
 
+mod mesh_api;
+
 pub struct LuaRuntime {
     pub lua: Lua,
     pub node_definitions: NodeDefinitions,
@@ -37,17 +39,12 @@ pub fn load_lua_libraries(lua: &Lua) -> anyhow::Result<()> {
         };
     }
 
-    // Libraries
-    def_library!("Vec2", "vec2.lua");
-    //def_library!("Vec3", "vec3.lua");
 
     let globals = lua.globals();
     globals.set(
         "Vec3",
         lua.create_function(|_, (x, y, z)| Ok(mlua::Value::Vector(x, y, z)))?,
     )?;
-
-    def_library!("Vec4", "vec4.lua");
     def_library!("NodeLibrary", "node_library.lua");
 
     Ok(())
@@ -247,33 +244,6 @@ pub fn load_host_libraries(lua: &Lua) -> anyhow::Result<()> {
         mesh.to_wavefront_obj(path.0).map_lua_err()?;
         Ok(())
     });
-
-    lua_fn!(
-        lua,
-        ops,
-        "combine_channels",
-        |mesh: AnyUserData,
-         key_type: ChannelKeyType,
-         in_ch_type: ChannelValueType,
-         in_ch_name: String,
-         out_ch_type: ChannelValueType,
-         out_ch_name: String,
-         fun: mlua::Function|
-         -> HalfEdgeMesh {
-            let mut mesh = mesh.borrow::<HalfEdgeMesh>()?.clone();
-            crate::mesh::halfedge::edit_ops::combine_channels(
-                &mut mesh,
-                lua,
-                key_type,
-                (in_ch_type, &in_ch_name),
-                (out_ch_type, &out_ch_name),
-                fun,
-            )
-            .map_lua_err()?;
-
-            Ok(mesh)
-        }
-    );
 
     lua_fn!(
         lua,
