@@ -22,7 +22,8 @@ local function enum(name, values, selected)
 end
 local function file(name) return {name = name, type = "file"} end
 
-local core_nodes = {
+-- Primitives: Construct new meshes based on common patterns
+local primitives = {
     MakeBox = {
         label = "Box",
         op = function(inputs)
@@ -46,7 +47,11 @@ local core_nodes = {
         },
         outputs = {mesh("out_mesh")},
         returns = "out_mesh"
-    },
+    }
+}
+
+-- Edit ops: Nodes to edit existing meshes
+local edit_ops = {
     BevelEdges = {
         label = "Bevel edges",
         inputs = {
@@ -55,8 +60,10 @@ local core_nodes = {
         outputs = {mesh("out_mesh")},
         returns = "out_mesh",
         op = function(inputs)
+            local out_mesh = inputs.in_mesh:clone()
+            Ops.bevel(inputs.edges, inputs.amount, out_mesh)
             return {
-                out_mesh = Ops.bevel(inputs.edges, inputs.amount, inputs.in_mesh)
+                out_mesh = out_mesh
             }
         end
     },
@@ -69,9 +76,10 @@ local core_nodes = {
         outputs = {mesh("out_mesh")},
         returns = "out_mesh",
         op = function(inputs)
+            local out_mesh = inputs.in_mesh:clone()
+            Ops.chamfer(inputs.vertices, inputs.amount, out_mesh)
             return {
-                out_mesh = Ops.chamfer(inputs.vertices, inputs.amount,
-                                       inputs.in_mesh)
+                out_mesh = out_mesh
             }
         end
     },
@@ -83,12 +91,43 @@ local core_nodes = {
         outputs = {mesh("out_mesh")},
         returns = "out_mesh",
         op = function(inputs)
+            local out_mesh = inputs.in_mesh:clone()
+            Ops.extrude(inputs.faces, inputs.amount, out_mesh)
             return {
-                out_mesh = Ops.extrude(inputs.faces, inputs.amount,
-                                       inputs.in_mesh)
+                out_mesh = out_mesh
             }
         end
     },
+    MergeMeshes = {
+        label = "Merge meshes",
+        inputs = {mesh("mesh_a"), mesh("mesh_b")},
+        outputs = {mesh("out_mesh")},
+        returns = "out_mesh",
+        op = function(inputs)
+            local out_mesh = inputs.mesh_a:clone()
+            Ops.merge(out_mesh, inputs.mesh_b)
+            return {out_mesh = out_mesh }
+        end
+    },
+    Subdivide = {
+        label = "Subdivide",
+        inputs = {
+            mesh("mesh"), enum("technique", {"linear", "catmull-clark"}, 0),
+            scalar("iterations", 1, 1, 7)
+        },
+        outputs = {mesh("out_mesh")},
+        returns = "out_mesh",
+        op = function(inputs)
+            return {
+                out_mesh = Ops.subdivide(inputs.mesh, inputs.iterations,
+                                         inputs.technique == "catmull-clark")
+            }
+        end
+    }
+}
+
+-- Math: Nodes to perform vector or scalar math operations
+local math = {
     MakeVector = {
         label = "MakeVector",
         inputs = {
@@ -118,16 +157,11 @@ local core_nodes = {
             end
             return {out = out}
         end
-    },
-    MergeMeshes = {
-        label = "Merge meshes",
-        inputs = {mesh("mesh_a"), mesh("mesh_b")},
-        outputs = {mesh("out_mesh")},
-        returns = "out_mesh",
-        op = function(inputs)
-            return {out_mesh = Ops.merge(inputs.mesh_a, inputs.mesh_b)}
-        end
-    },
+    }
+}
+
+-- Export: Nodes to export the generated meshes outside of blacjack
+local export = {
     ExportObj = {
         label = "Export obj",
         inputs = {mesh("mesh"), file("path")},
@@ -137,22 +171,9 @@ local core_nodes = {
             Export.wavefront_obj(inputs.mesh, inputs.path)
         end
     },
-    Subdivide = {
-        label = "Subdivide",
-        inputs = {
-            mesh("mesh"), enum("technique", {"linear", "catmull-clark"}, 0),
-            scalar("iterations", 1, 1, 7)
-        },
-        outputs = {mesh("out_mesh")},
-        returns = "out_mesh",
-        op = function(inputs)
-            return {
-                out_mesh = Ops.subdivide(inputs.mesh, inputs.iterations,
-                                         inputs.technique == "catmull-clark")
-            }
-        end
-    }
-
 }
 
-NodeLibrary:addNodes(core_nodes)
+NodeLibrary:addNodes(primitives)
+NodeLibrary:addNodes(edit_ops)
+NodeLibrary:addNodes(math)
+NodeLibrary:addNodes(export)
