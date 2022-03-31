@@ -43,8 +43,6 @@ mod lua_mesh_library;
 mod lua_node_libraries;
 mod lua_primitives_library;
 
-mod mesh_api;
-
 /// Loads pure Lua libraries that are part of the blackjack core APIs
 pub fn load_lua_libraries(lua: &Lua) -> anyhow::Result<()> {
     macro_rules! def_library {
