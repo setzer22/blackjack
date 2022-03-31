@@ -4,12 +4,12 @@ use super::*;
 
 pub struct Vec3(pub glam::Vec3);
 impl<'lua> ToLua<'lua> for Vec3 {
-    fn to_lua(self, lua: &'lua Lua) -> mlua::Result<mlua::Value<'lua>> {
+    fn to_lua(self, _lua: &'lua Lua) -> mlua::Result<mlua::Value<'lua>> {
         Ok(mlua::Value::Vector(self.0.x, self.0.y, self.0.z))
     }
 }
 impl<'lua> FromLua<'lua> for Vec3 {
-    fn from_lua(lua_value: mlua::Value<'lua>, lua: &'lua Lua) -> mlua::Result<Self> {
+    fn from_lua(lua_value: mlua::Value<'lua>, _lua: &'lua Lua) -> mlua::Result<Self> {
         match lua_value {
             mlua::Value::Vector(x, y, z) => Ok(Vec3(glam::Vec3::new(x, y, z))),
             _ => Err(mlua::Error::FromLuaConversionError {
@@ -33,7 +33,7 @@ impl UserData for Path {}
 macro_rules! ids_from_to_lua {
     ($id_ty:ty) => {
         impl<'lua> ToLua<'lua> for $id_ty {
-            fn to_lua(self, lua: &'lua Lua) -> mlua::Result<mlua::Value<'lua>> {
+            fn to_lua(self, _lua: &'lua Lua) -> mlua::Result<mlua::Value<'lua>> {
                 use slotmap::Key;
                 Ok(mlua::Value::Number(keydata_to_float(self.data())))
             }

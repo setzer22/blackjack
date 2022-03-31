@@ -397,9 +397,7 @@ impl MeshConnectivity {
         &'a self,
         channel: &'a Channel<VertexId, T>,
     ) -> impl Iterator<Item = (VertexId, &Vertex, T)> + 'a {
-        self.vertices
-            .iter()
-            .map(|(id, v)| (id, v, channel[id]))
+        self.vertices.iter().map(|(id, v)| (id, v, channel[id]))
     }
 
     pub fn iter_faces(&self) -> impl Iterator<Item = (FaceId, &Face)> {
@@ -410,9 +408,7 @@ impl MeshConnectivity {
         &'a self,
         channel: &'a Channel<FaceId, T>,
     ) -> impl Iterator<Item = (FaceId, &Face, T)> + 'a {
-        self.faces
-            .iter()
-            .map(|(id, v)| (id, v, channel[id]))
+        self.faces.iter().map(|(id, v)| (id, v, channel[id]))
     }
 
     pub fn iter_halfedges(&self) -> impl Iterator<Item = (HalfEdgeId, &HalfEdge)> {
@@ -423,9 +419,7 @@ impl MeshConnectivity {
         &'a self,
         channel: &'a Channel<HalfEdgeId, T>,
     ) -> impl Iterator<Item = (HalfEdgeId, &HalfEdge, T)> + 'a {
-        self.halfedges
-            .iter()
-            .map(|(id, v)| (id, v, channel[id]))
+        self.halfedges.iter().map(|(id, v)| (id, v, channel[id]))
     }
 
     /// Adds a new vertex to the mesh, disconnected from everything else. Returns its handle.
@@ -724,13 +718,11 @@ impl HalfEdgeMesh {
     /// Merges this halfedge mesh with another one. No additional connectivity
     /// data is generated between the two.
     pub fn merge_with(&mut self, mesh_b: &HalfEdgeMesh) {
-
         // WIP: This function is not correct right now. When merging two meshes
         // we need to take into account their channels.
         //
         // - Any channels not present in B can be kept as is (new values take default)
         // - Any channels present in B, but not present in A will need to be copied.
-
 
         let mut vmap = HashMap::<VertexId, VertexId>::new();
         let mut hmap = HashMap::<HalfEdgeId, HalfEdgeId>::new();

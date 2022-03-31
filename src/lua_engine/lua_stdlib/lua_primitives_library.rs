@@ -26,6 +26,5 @@ pub fn load(lua: &Lua) -> anyhow::Result<()> {
         ))
     });
 
-
     Ok(())
 }

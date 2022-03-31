@@ -37,11 +37,11 @@ macro_rules! lua_fn {
 
 mod runtime_types;
 pub use runtime_types::*;
-mod lua_node_libraries;
-mod lua_mesh_library;
-mod lua_primitives_library;
-mod lua_export_library;
 mod lua_constructors_library;
+mod lua_export_library;
+mod lua_mesh_library;
+mod lua_node_libraries;
+mod lua_primitives_library;
 
 mod mesh_api;
 
