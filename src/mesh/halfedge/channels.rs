@@ -177,7 +177,7 @@ impl<K: ChannelKey, V: ChannelValue> ChannelId<K, V> {
 /// mutability, that is, `Rc<RefCell<Channel>>`. This creates a more flexible
 /// borrowing scheme for channels and allows for things like temporarily lending
 /// ownership of a channel to the Lua runtime.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct ChannelGroup<K: ChannelKey, V: ChannelValue> {
     channel_names: bimap::BiMap<String, ChannelId<K, V>>,
     channels: SlotMap<RawChannelId, Rc<RefCell<Channel<K, V>>>>,
@@ -423,6 +423,26 @@ pub trait DynChannelGroup: Any + Debug + dyn_clone::DynClone {
     /// counting and allows storing the channel as a long-lived value. This can
     /// be used to hand channels over to the Lua runtime.
     fn channel_rc_dyn(&self, raw_id: RawChannelId) -> Rc<RefCell<dyn DynChannel>>;
+}
+
+impl<K: ChannelKey, V: ChannelValue> Clone for ChannelGroup<K, V> {
+    fn clone(&self) -> Self {
+        let mut new_channels = self.channels.clone();
+        for (_, ch) in new_channels.iter_mut() {
+            // NOTE: We need to duplicate the contents. If we use the
+            // blindly-derived clone implementation we will clone the Rcs
+            // instead, and that's not what we want.
+
+            // Also note that this implies cloning a mesh will panic if someone
+            // is *writing* to that mesh.
+            let ch_inner: Channel<K,V> = ch.borrow().clone();
+            *ch = Rc::new(RefCell::new(ch_inner.clone()))
+        }
+        Self {
+            channel_names: self.channel_names.clone(),
+            channels: new_channels,
+        }
+    }
 }
 
 // DynChannelGroup implements the DynClone trait so we can clone it too. The

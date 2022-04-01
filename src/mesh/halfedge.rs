@@ -559,13 +559,13 @@ impl HalfEdgeMesh {
     pub fn read_positions(&self) -> Ref<'_, Positions> {
         self.channels
             .read_channel(self.default_channels.position)
-            .expect("Meshes should always have a position channel.")
+            .expect("Could not read positions")
     }
 
     pub fn write_positions(&self) -> RefMut<'_, Positions> {
         self.channels
             .write_channel(self.default_channels.position)
-            .expect("Meshes should always have a position channel.")
+            .expect("Could not write positions")
     }
 
     /// Builds this mesh from a list of vertices, and a list of polygons,
