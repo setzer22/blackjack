@@ -1,10 +1,13 @@
-use std::cell::{Ref, RefCell, RefMut};
+use std::{
+    cell::{Ref, RefCell, RefMut},
+    rc::Rc,
+};
 
 use crate::prelude::*;
 
 use glam::*;
 use itertools::Itertools;
-use slotmap::SlotMap;
+use slotmap::{SecondaryMap, SlotMap};
 use smallvec::SmallVec;
 
 /// Implements indexing traits so the mesh data structure can be used to access
@@ -438,8 +441,7 @@ impl MeshConnectivity {
     /// Returns its handle. Unlike `alloc_vertex`, this function does not set
     /// the vertex position, implicitly leaving it at zero.
     fn alloc_vertex_raw(&mut self, halfedge: Option<HalfEdgeId>) -> VertexId {
-        let v = self.vertices.insert(Vertex { halfedge });
-        v
+        self.vertices.insert(Vertex { halfedge })
     }
 
     /// Adds a new face to the mesh, disconnected from everything else. Returns its handle.
@@ -726,9 +728,9 @@ impl HalfEdgeMesh {
     /// Merges this halfedge mesh with another one. No additional connectivity
     /// data is generated between the two.
     pub fn merge_with(&mut self, mesh_b: &HalfEdgeMesh) {
-        let mut vmap = HashMap::<VertexId, VertexId>::new();
-        let mut hmap = HashMap::<HalfEdgeId, HalfEdgeId>::new();
-        let mut fmap = HashMap::<FaceId, FaceId>::new();
+        let mut vmap = SecondaryMap::<VertexId, VertexId>::new();
+        let mut hmap = SecondaryMap::<HalfEdgeId, HalfEdgeId>::new();
+        let mut fmap = SecondaryMap::<FaceId, FaceId>::new();
 
         let mut a_conn = self.write_connectivity();
         let b_conn = mesh_b.read_connectivity();
@@ -757,35 +759,67 @@ impl HalfEdgeMesh {
         // inner pointers.
         for (vertex_id, vertex) in b_conn.iter_vertices() {
             if let Some(h) = vertex.halfedge {
-                a_conn[vmap[&vertex_id]].halfedge = Some(hmap[&h])
+                a_conn[vmap[vertex_id]].halfedge = Some(hmap[h])
             }
         }
         for (face_id, face) in b_conn.iter_faces() {
             if let Some(h) = face.halfedge {
-                a_conn[fmap[&face_id]].halfedge = Some(hmap[&h])
+                a_conn[fmap[face_id]].halfedge = Some(hmap[h])
             }
         }
         for (halfedge_id, halfedge) in b_conn.iter_halfedges() {
             if let Some(twin) = halfedge.twin {
-                a_conn[hmap[&halfedge_id]].twin = Some(hmap[&twin]);
+                a_conn[hmap[halfedge_id]].twin = Some(hmap[twin]);
             }
             if let Some(next) = halfedge.next {
-                a_conn[hmap[&halfedge_id]].next = Some(hmap[&next]);
+                a_conn[hmap[halfedge_id]].next = Some(hmap[next]);
             }
             if let Some(vertex) = halfedge.vertex {
-                a_conn[hmap[&halfedge_id]].vertex = Some(vmap[&vertex]);
+                a_conn[hmap[halfedge_id]].vertex = Some(vmap[vertex]);
             }
             if let Some(face) = halfedge.face {
-                a_conn[hmap[&halfedge_id]].face = Some(fmap[&face]);
+                a_conn[hmap[halfedge_id]].face = Some(fmap[face]);
             }
         }
+        drop(a_conn);
+
+        // Finally, once the connectivity data is correct, we merge the channels
+        // for both meshes.
+
+        /// We need to create two closures in order for the dynamic code inside
+        /// the channels to fetch the relevant data:
+        ///
+        /// - The list of vertex, face or halfedge ids
+        /// - Given a vertex, face or halfedge id of the b mesh, its
+        ///   corresponding id in the a mesh
+        ///
+        /// Doing this in a way that we can still invoke the object-safe methods
+        /// of a DynChannelGroup requires a copy of the id vectors and wrapping
+        /// them in an Rc. The cost of the Rc is negligible, but the copy may
+        /// become an issue for very large meshes. On the other handm, the copy
+        /// can also help speed iteration up when there are many channels:
+        /// since collected vectors are contiguous, unlike the slotmaps,
+        /// there will not be holes and thus no required branching.
+        use slotmap::Key;
+        let raw_vertices: Rc<Vec<_>> =
+            Rc::new(b_conn.iter_vertices().map(|(k, _)| k.data()).collect());
+        let raw_faces: Rc<Vec<_>> = Rc::new(b_conn.iter_faces().map(|(k, _)| k.data()).collect());
+        let raw_halfedges: Rc<Vec<_>> =
+            Rc::new(b_conn.iter_halfedges().map(|(k, _)| k.data()).collect());
+        let get_ids = move |kty| match kty {
+            ChannelKeyType::VertexId => Rc::clone(&raw_vertices),
+            ChannelKeyType::FaceId => Rc::clone(&raw_faces),
+            ChannelKeyType::HalfEdgeId => Rc::clone(&raw_halfedges),
+        };
+
+        let id_map = |kty, k| match kty {
+            ChannelKeyType::VertexId => vmap[VertexId::from(k)].data(),
+            ChannelKeyType::FaceId => fmap[FaceId::from(k)].data(),
+            ChannelKeyType::HalfEdgeId => hmap[HalfEdgeId::from(k)].data(),
+        };
+
+        self.channels.merge_with(&mesh_b.channels, get_ids, id_map)
     }
-
-    // Finally, once the connectivity data is correct, we merge the channels:
-    // - Any channels not present in B can be kept as is (new values take default)
-    // - Any channels present in B, but not present in A will need to be copied.
-
-    // TODO: WIP: Do this
 }
 
 impl Default for HalfEdgeMesh {

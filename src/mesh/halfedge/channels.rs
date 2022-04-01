@@ -3,6 +3,7 @@ use std::{
     cell::{Ref, RefCell, RefMut},
     fmt::Debug,
     marker::PhantomData,
+    ops::Deref,
     rc::Rc,
 };
 
@@ -237,6 +238,11 @@ impl<K: ChannelKey, V: ChannelValue> Channel<K, V> {
 /// storage, but the dynamic interface converts those values to mlua::Value at
 /// runtime
 pub trait DynChannel: Any + Debug {
+    /// Casts this channel into a `dyn Any`. This hack is required to get
+    /// around limitations in the dynamic dispatch system.
+    fn as_any(&self) -> &dyn Any;
+    /// Same as `as_any`, but for a mutable reference instead.
+    fn as_any_mut(&mut self) -> &mut dyn Any;
     /// Accesses element at `key`, similar to using the `Index` trait on the
     /// equivalent typed channel.
     fn get_lua<'a, 'lua>(
@@ -276,6 +282,19 @@ pub trait DynChannel: Any + Debug {
         lua: &'lua mlua::Lua,
         table: mlua::Table<'lua>,
     ) -> Result<()>;
+
+    /// Merges this channel with another channel. This method will panic if both
+    /// channels are not of the same type.
+    /// 
+    /// The `get_ids` function returns all the ids of a certain channel key type
+    /// in channel b. The `id_map` function maps keys from the `other` channel
+    /// to keys in this channel.
+    fn merge_with_dyn(
+        &mut self,
+        other: &dyn DynChannel,
+        get_ids: &dyn Fn(ChannelKeyType) -> Rc<Vec<slotmap::KeyData>>,
+        id_map: &dyn Fn(ChannelKeyType, slotmap::KeyData) -> slotmap::KeyData,
+    );
 }
 impl<K: ChannelKey, V: ChannelValue> DynChannel for Channel<K, V> {
     fn get_lua<'a, 'lua>(
@@ -326,6 +345,34 @@ impl<K: ChannelKey, V: ChannelValue> DynChannel for Channel<K, V> {
                 Ok(())
             })?;
         Ok(())
+    }
+
+    fn merge_with_dyn(
+        &mut self,
+        other: &dyn DynChannel,
+        get_ids: &dyn Fn(ChannelKeyType) -> Rc<Vec<slotmap::KeyData>>,
+        id_map: &dyn Fn(ChannelKeyType, slotmap::KeyData) -> slotmap::KeyData,
+    ) {
+        let other_any = other.as_any();
+        if let Some(other) = other_any.downcast_ref::<Self>() {
+            for id in get_ids(K::key_type()).iter_cpy() {
+                let k_self = K::cast_from_ffi(id_map(K::key_type(), id).as_ffi());
+                let k_other = K::cast_from_ffi(id.as_ffi());
+                self[k_self] = other[k_other];
+            }
+        } else {
+            panic!(
+                "Tried to merge dynamic channels with different types. This should never happen."
+            )
+        }
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }
 
@@ -406,8 +453,8 @@ impl<K: ChannelKey, V: ChannelValue> ChannelGroup<K, V> {
 pub trait DynChannelGroup: Any + Debug + dyn_clone::DynClone {
     /// Used to inspect the contents of this `ChannelGroup`, for UI display
     fn introspect(&self) -> HashMap<String, Vec<String>>;
-    /// Casts this channel into a `dyn Any`. This hack is required to get around
-    /// limitations in the type system.
+    /// Casts this channel group into a `dyn Any`. This hack is required to get
+    /// around limitations in the dynamic dispatch system.
     fn as_any(&self) -> &dyn Any;
     /// Same as `as_any`, but for a mutable reference instead.
     fn as_any_mut(&mut self) -> &mut dyn Any;
@@ -423,6 +470,8 @@ pub trait DynChannelGroup: Any + Debug + dyn_clone::DynClone {
     /// counting and allows storing the channel as a long-lived value. This can
     /// be used to hand channels over to the Lua runtime.
     fn channel_rc_dyn(&self, raw_id: RawChannelId) -> Rc<RefCell<dyn DynChannel>>;
+    /// Returns the names of the channels present in this group
+    fn channel_names(&self) -> Box<dyn Iterator<Item = &str> + '_>;
 }
 
 impl<K: ChannelKey, V: ChannelValue> Clone for ChannelGroup<K, V> {
@@ -493,6 +542,10 @@ impl<K: ChannelKey, V: ChannelValue> DynChannelGroup for ChannelGroup<K, V> {
     }
     fn channel_id_dyn(&self, name: &str) -> Option<RawChannelId> {
         self.channel_names.get_by_left(name).map(|x| x.raw)
+    }
+
+    fn channel_names(&self) -> Box<dyn Iterator<Item = &str> + '_> {
+        Box::new(self.channel_names.iter().map(|(l, _)| l.as_str()))
     }
 }
 
@@ -773,6 +826,30 @@ impl MeshChannels {
             .iter()
             .map(|((k, v), group)| ((*k, *v), group.introspect()))
             .collect()
+    }
+
+    pub fn merge_with(
+        &mut self,
+        other: &Self,
+        get_ids: impl Fn(ChannelKeyType) -> Rc<Vec<slotmap::KeyData>>,
+        id_map: impl Fn(ChannelKeyType, slotmap::KeyData) -> slotmap::KeyData,
+    ) {
+        // - Any channels not present in B can be kept as is (new values take default)
+        // - Any channels present in B, but not present in A will need to be copied.
+        for ((kty, vty), other_group) in other.channels.iter() {
+            let self_group = self.ensure_group_dyn(*kty, *vty);
+            for ch_name in other_group.channel_names() {
+                let other_id = other_group
+                    .channel_id_dyn(ch_name)
+                    .expect("We know it exists because we're iterating the channel names");
+                let self_id = self_group.ensure_channel_dyn(ch_name);
+
+                let other_ch = other_group.read_channel_dyn(other_id);
+                let mut self_ch = self_group.write_channel_dyn(self_id);
+
+                self_ch.merge_with_dyn(other_ch.deref(), &get_ids, &id_map);
+            }
+        }
     }
 }
 
