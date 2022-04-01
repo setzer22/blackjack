@@ -15,10 +15,10 @@ pub fn load(lua: &Lua) -> anyhow::Result<()> {
      -> () {
         let mesh = mesh.borrow_mut::<HalfEdgeMesh>()?;
         mesh.write_connectivity().clear_debug();
-        for v in mesh
+        let verts = mesh
             .read_connectivity()
-            .resolve_vertex_selection_full(vertices)
-        {
+            .resolve_vertex_selection_full(vertices);
+        for v in verts {
             crate::mesh::halfedge::edit_ops::chamfer_vertex(
                 &mut mesh.write_connectivity(),
                 &mut mesh.write_positions(),
@@ -165,7 +165,7 @@ impl UserData for HalfEdgeMesh {
                 mesh_channel_to_lua_table(lua, this, kty, vty, id)
             },
         );
-        methods.add_method_mut("iter_vertices", |lua, this, ()| {
+        methods.add_method("iter_vertices", |lua, this, ()| {
             let vertices: Vec<VertexId> = this
                 .read_connectivity()
                 .iter_vertices()

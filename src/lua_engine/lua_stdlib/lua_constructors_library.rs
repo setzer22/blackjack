@@ -30,6 +30,10 @@ pub fn load(lua: &Lua) -> anyhow::Result<()> {
     lua_fn!(lua, blackjack, "perlin", || -> PerlinNoise {
         Ok(PerlinNoise(noise::Perlin::new()))
     });
+    lua_fn!(lua, blackjack, "print_vertex", |id: VertexId| -> () {
+        println!("{:?}", id);
+        Ok(())
+    });
 
     Ok(())
 }

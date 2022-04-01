@@ -62,9 +62,7 @@ local edit_ops = {
         op = function(inputs)
             local out_mesh = inputs.in_mesh:clone()
             Ops.bevel(inputs.edges, inputs.amount, out_mesh)
-            return {
-                out_mesh = out_mesh
-            }
+            return {out_mesh = out_mesh}
         end
     },
     ChamferVertices = {
@@ -78,9 +76,7 @@ local edit_ops = {
         op = function(inputs)
             local out_mesh = inputs.in_mesh:clone()
             Ops.chamfer(inputs.vertices, inputs.amount, out_mesh)
-            return {
-                out_mesh = out_mesh
-            }
+            return {out_mesh = out_mesh}
         end
     },
     ExtrudeFaces = {
@@ -93,9 +89,7 @@ local edit_ops = {
         op = function(inputs)
             local out_mesh = inputs.in_mesh:clone()
             Ops.extrude(inputs.faces, inputs.amount, out_mesh)
-            return {
-                out_mesh = out_mesh
-            }
+            return {out_mesh = out_mesh}
         end
     },
     MergeMeshes = {
@@ -106,7 +100,7 @@ local edit_ops = {
         op = function(inputs)
             local out_mesh = inputs.mesh_a:clone()
             Ops.merge(out_mesh, inputs.mesh_b)
-            return {out_mesh = out_mesh }
+            return {out_mesh = out_mesh}
         end
     },
     Subdivide = {
@@ -170,7 +164,7 @@ local export = {
         op = function(inputs)
             Export.wavefront_obj(inputs.mesh, inputs.path)
         end
-    },
+    }
 }
 
 NodeLibrary:addNodes(primitives)
