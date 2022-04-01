@@ -434,6 +434,14 @@ impl MeshConnectivity {
         v
     }
 
+    /// Adds a new vertex to the mesh, disconnected from everything else.
+    /// Returns its handle. Unlike `alloc_vertex`, this function does not set
+    /// the vertex position, implicitly leaving it at zero.
+    fn alloc_vertex_raw(&mut self, halfedge: Option<HalfEdgeId>) -> VertexId {
+        let v = self.vertices.insert(Vertex { halfedge });
+        v
+    }
+
     /// Adds a new face to the mesh, disconnected from everything else. Returns its handle.
     fn alloc_face(&mut self, halfedge: Option<HalfEdgeId>) -> FaceId {
         self.faces.insert(Face { halfedge })
@@ -718,18 +726,9 @@ impl HalfEdgeMesh {
     /// Merges this halfedge mesh with another one. No additional connectivity
     /// data is generated between the two.
     pub fn merge_with(&mut self, mesh_b: &HalfEdgeMesh) {
-        // WIP: This function is not correct right now. When merging two meshes
-        // we need to take into account their channels.
-        //
-        // - Any channels not present in B can be kept as is (new values take default)
-        // - Any channels present in B, but not present in A will need to be copied.
-
         let mut vmap = HashMap::<VertexId, VertexId>::new();
         let mut hmap = HashMap::<HalfEdgeId, HalfEdgeId>::new();
         let mut fmap = HashMap::<FaceId, FaceId>::new();
-
-        let mut a_positions = self.write_positions();
-        let b_positions = mesh_b.read_positions();
 
         let mut a_conn = self.write_connectivity();
         let b_conn = mesh_b.read_connectivity();
@@ -737,10 +736,7 @@ impl HalfEdgeMesh {
         // On a first pass, we reserve new vertices, faces and halfedges without
         // setting any of their pointers and store their ids in a mapping.
         for (vertex_id, _vertex) in b_conn.iter_vertices() {
-            vmap.insert(
-                vertex_id,
-                a_conn.alloc_vertex(&mut a_positions, b_positions[vertex_id], None),
-            );
+            vmap.insert(vertex_id, a_conn.alloc_vertex_raw(None));
         }
         for (face_id, _) in b_conn.iter_faces() {
             fmap.insert(face_id, a_conn.alloc_face(None));
@@ -784,6 +780,12 @@ impl HalfEdgeMesh {
             }
         }
     }
+
+    // Finally, once the connectivity data is correct, we merge the channels:
+    // - Any channels not present in B can be kept as is (new values take default)
+    // - Any channels present in B, but not present in A will need to be copied.
+
+    // TODO: WIP: Do this
 }
 
 impl Default for HalfEdgeMesh {
