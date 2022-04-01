@@ -1,5 +1,3 @@
-use std::ffi::c_void;
-
 use noise::NoiseFn;
 
 use super::*;
@@ -32,7 +30,7 @@ impl UserData for Path {}
 /// Vertex ids cross the Rust<->Lua boundary a lot, so we can't pay the price of
 /// boxing that a `UserData` requires. Instead we use LightUserData by casting
 /// the slotmap key to u64, and then to a pointer.
-/// 
+///
 /// SAFETY: Note that the cast to pointer is completely safe, since we're never
 /// really dereferencing that pointer. It's just the mechanism Lua gives us to
 /// store an opaque u64 value which *could* be a pointer but in our case just

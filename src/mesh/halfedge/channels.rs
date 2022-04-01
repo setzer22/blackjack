@@ -435,7 +435,7 @@ impl<K: ChannelKey, V: ChannelValue> Clone for ChannelGroup<K, V> {
 
             // Also note that this implies cloning a mesh will panic if someone
             // is *writing* to that mesh.
-            let ch_inner: Channel<K,V> = ch.borrow().clone();
+            let ch_inner: Channel<K, V> = ch.borrow().clone();
             *ch = Rc::new(RefCell::new(ch_inner.clone()))
         }
         Self {
