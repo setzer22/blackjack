@@ -121,10 +121,40 @@ impl SpreadsheetTab {
 
         if let Some(mesh) = mesh {
             let conn = mesh.read_connectivity();
-            let positions = mesh.read_positions();
+            let channel_introspect = mesh.channels.introspect();
+
             let scroll_area = ScrollArea::both().auto_shrink([false, false]);
             scroll_area.show(ui, |ui| match self.current_view {
                 SpreadsheetViews::Vertices => {
+                    let mut columns = vec![];
+                    for vt in [ChannelValueType::Vec3, ChannelValueType::f32] {
+                        if let Some(ch) = channel_introspect.get(&(ChannelKeyType::VertexId, vt)) {
+                            for (ch_name, ch_contents) in ch.iter() {
+                                columns.push((ch_name, ch_contents));
+                            }
+                        }
+                    }
+
+                    // TODO: WIP: Introspection needs access to the list of ids.
+                    Grid::new("vertex-spreadsheet")
+                        .striped(true)
+                        .num_columns(columns.len())
+                        .show(ui, |ui| {
+                            ui.label(" ");
+                            for c in &columns {
+                                ui.label(c.0);
+                            }
+                            ui.end_row();
+                            for i in 0..columns[0].1.len() {
+                                ui.label(i.to_string());
+                                for c in &columns {
+                                    ui.monospace(c.1[i].clone());
+                                }
+                                ui.end_row();
+                            }
+                        })
+
+                    /*
                     // Vertex spreadsheet
                     Grid::new("vertex-spreadsheet")
                         .striped(true)
@@ -144,7 +174,7 @@ impl SpreadsheetTab {
                                 ui.monospace(format!("{: >6.3}", pos.z));
                                 ui.end_row();
                             }
-                        })
+                        })*/
                 }
                 SpreadsheetViews::Halfedges => {
                     // Halfedge spreadsheet
