@@ -110,7 +110,7 @@ pub enum ResolvedSelection<Id: slotmap::Key> {
     Explicit(Vec<Id>),
 }
 
-impl HalfEdgeMesh {
+impl MeshConnectivity {
     fn resolve_explicit_selection<T: slotmap::Key, U>(
         data: &SlotMap<T, U>,
         fragments: SelectionExpression,

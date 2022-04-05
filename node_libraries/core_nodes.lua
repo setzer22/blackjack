@@ -22,13 +22,14 @@ local function enum(name, values, selected)
 end
 local function file(name) return {name = name, type = "file"} end
 
-local core_nodes = {
+-- Primitives: Construct new meshes based on common patterns
+local primitives = {
     MakeBox = {
         label = "Box",
         op = function(inputs)
             return {out_mesh = Primitives.cube(inputs.origin, inputs.size)}
         end,
-        inputs = {v3("origin", Vec3(0, 0, 0)), v3("size", Vec3(1, 1, 1))},
+        inputs = {v3("origin", vector(0, 0, 0)), v3("size", vector(1, 1, 1))},
         outputs = {mesh("out_mesh")},
         returns = "out_mesh"
     },
@@ -41,12 +42,16 @@ local core_nodes = {
             }
         end,
         inputs = {
-            v3("center", Vec3(0, 0, 0)), v3("normal", Vec3(0, 1, 0)),
-            v3("right", Vec3(1, 0, 0)), v3("size", Vec3(1, 1, 1))
+            v3("center", vector(0, 0, 0)), v3("normal", vector(0, 1, 0)),
+            v3("right", vector(1, 0, 0)), v3("size", vector(1, 1, 1))
         },
         outputs = {mesh("out_mesh")},
         returns = "out_mesh"
-    },
+    }
+}
+
+-- Edit ops: Nodes to edit existing meshes
+local edit_ops = {
     BevelEdges = {
         label = "Bevel edges",
         inputs = {
@@ -55,9 +60,9 @@ local core_nodes = {
         outputs = {mesh("out_mesh")},
         returns = "out_mesh",
         op = function(inputs)
-            return {
-                out_mesh = Ops.bevel(inputs.edges, inputs.amount, inputs.in_mesh)
-            }
+            local out_mesh = inputs.in_mesh:clone()
+            Ops.bevel(inputs.edges, inputs.amount, out_mesh)
+            return {out_mesh = out_mesh}
         end
     },
     ChamferVertices = {
@@ -69,10 +74,9 @@ local core_nodes = {
         outputs = {mesh("out_mesh")},
         returns = "out_mesh",
         op = function(inputs)
-            return {
-                out_mesh = Ops.chamfer(inputs.vertices, inputs.amount,
-                                       inputs.in_mesh)
-            }
+            local out_mesh = inputs.in_mesh:clone()
+            Ops.chamfer(inputs.vertices, inputs.amount, out_mesh)
+            return {out_mesh = out_mesh}
         end
     },
     ExtrudeFaces = {
@@ -83,40 +87,9 @@ local core_nodes = {
         outputs = {mesh("out_mesh")},
         returns = "out_mesh",
         op = function(inputs)
-            return {
-                out_mesh = Ops.extrude(inputs.faces, inputs.amount,
-                                       inputs.in_mesh)
-            }
-        end
-    },
-    MakeVector = {
-        label = "MakeVector",
-        inputs = {
-            scalar("x", 0.0, -100.0, 100.0), scalar("y", 0.0, -100.0, 100.0),
-            scalar("z", 0.0, -100.0, 100.0)
-        },
-        outputs = {v3("v")},
-        op = function(inputs)
-            return {v = Vec3(inputs.x, inputs.y, inputs.z)}
-        end
-    },
-    VectorMath = {
-        label = "Vector math",
-        inputs = {
-            enum("op", {"Add", "Sub", "Mul"}, 0), v3("vec_a", Vec3(0, 0, 0)),
-            v3("vec_b", Vec3(0, 0, 0))
-        },
-        outputs = {v3("out")},
-        op = function(inputs)
-            local out
-            if inputs.op == "Add" then
-                out = inputs.vec_a + inputs.vec_b
-            elseif inputs.op == "Sub" then
-                out = inputs.vec_a - inputs.vec_b
-            elseif inputs.op == "Mul" then
-                out = inputs.vec_a * inputs.vec_b
-            end
-            return {out = out}
+            local out_mesh = inputs.in_mesh:clone()
+            Ops.extrude(inputs.faces, inputs.amount, out_mesh)
+            return {out_mesh = out_mesh}
         end
     },
     MergeMeshes = {
@@ -125,16 +98,9 @@ local core_nodes = {
         outputs = {mesh("out_mesh")},
         returns = "out_mesh",
         op = function(inputs)
-            return {out_mesh = Ops.merge(inputs.mesh_a, inputs.mesh_b)}
-        end
-    },
-    ExportObj = {
-        label = "Export obj",
-        inputs = {mesh("mesh"), file("path")},
-        outputs = {},
-        executable = true,
-        op = function(inputs)
-            Export.wavefront_obj(inputs.mesh, inputs.path)
+            local out_mesh = inputs.mesh_a:clone()
+            Ops.merge(out_mesh, inputs.mesh_b)
+            return {out_mesh = out_mesh}
         end
     },
     Subdivide = {
@@ -152,7 +118,56 @@ local core_nodes = {
             }
         end
     }
-
 }
 
-NodeLibrary:addNodes(core_nodes)
+-- Math: Nodes to perform vector or scalar math operations
+local math = {
+    MakeVector = {
+        label = "MakeVector",
+        inputs = {
+            scalar("x", 0.0, -100.0, 100.0), scalar("y", 0.0, -100.0, 100.0),
+            scalar("z", 0.0, -100.0, 100.0)
+        },
+        outputs = {v3("v")},
+        op = function(inputs)
+            return {v = vector(inputs.x, inputs.y, inputs.z)}
+        end
+    },
+    VectorMath = {
+        label = "Vector math",
+        inputs = {
+            enum("op", {"Add", "Sub", "Mul"}, 0), v3("vec_a", vector(0, 0, 0)),
+            v3("vec_b", vector(0, 0, 0))
+        },
+        outputs = {v3("out")},
+        op = function(inputs)
+            local out
+            if inputs.op == "Add" then
+                out = inputs.vec_a + inputs.vec_b
+            elseif inputs.op == "Sub" then
+                out = inputs.vec_a - inputs.vec_b
+            elseif inputs.op == "Mul" then
+                out = inputs.vec_a * inputs.vec_b
+            end
+            return {out = out}
+        end
+    }
+}
+
+-- Export: Nodes to export the generated meshes outside of blacjack
+local export = {
+    ExportObj = {
+        label = "Export obj",
+        inputs = {mesh("mesh"), file("path")},
+        outputs = {},
+        executable = true,
+        op = function(inputs)
+            Export.wavefront_obj(inputs.mesh, inputs.path)
+        end
+    }
+}
+
+NodeLibrary:addNodes(primitives)
+NodeLibrary:addNodes(edit_ops)
+NodeLibrary:addNodes(math)
+NodeLibrary:addNodes(export)

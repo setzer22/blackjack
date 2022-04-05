@@ -2,7 +2,7 @@ use super::*;
 
 macro_rules! impl_index_traits {
     ($id_type:ty, $output_type:ty, $arena:ident) => {
-        impl std::ops::Index<$id_type> for HalfEdgeMesh {
+        impl std::ops::Index<$id_type> for MeshConnectivity {
             type Output = $output_type;
 
             fn index(&self, index: $id_type) -> &Self::Output {
@@ -16,7 +16,7 @@ macro_rules! impl_index_traits {
             }
         }
 
-        impl std::ops::IndexMut<$id_type> for HalfEdgeMesh {
+        impl std::ops::IndexMut<$id_type> for MeshConnectivity {
             fn index_mut(&mut self, index: $id_type) -> &mut Self::Output {
                 self.$arena.get_mut(index).unwrap_or_else(|| {
                     panic!(
@@ -48,7 +48,7 @@ macro_rules! impl_index_ops {
     };
 }
 
-impl HalfEdgeMesh {
+impl MeshConnectivity {
     impl_index_ops!(vertex, vertex_mut, VertexId, Vertex, vertices);
     impl_index_ops!(face, face_mut, FaceId, Face, faces);
     impl_index_ops!(halfedge, halfedge_mut, HalfEdgeId, HalfEdge, halfedges);

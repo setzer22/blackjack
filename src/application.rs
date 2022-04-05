@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::{
-    lua_engine::lua_stdlib::LuaRuntime,
+    lua_engine::LuaRuntime,
     prelude::*,
     rendergraph::{
         face_routine::FaceRoutine, grid_routine::GridRoutine,

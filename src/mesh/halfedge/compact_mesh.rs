@@ -74,6 +74,8 @@ impl MeshCounts {
 impl<const Subdivided: bool> CompactMesh<Subdivided> {
     #[profiling::function]
     pub fn from_halfedge(mesh: &HalfEdgeMesh) -> Result<CompactMesh<false>> {
+        let conn = mesh.read_connectivity();
+
         // Create mappings between ids and indices in the compact arrays. This
         // is necessary because slotmap makes no guarantees about the structure
         // of the indices, and in practice there could be arbitrarily large gaps
@@ -85,24 +87,24 @@ impl<const Subdivided: bool> CompactMesh<Subdivided> {
         // We need to generate 'virtual' edge ids because the Catmull Clark
         // computation requires them.
         let mut h_id_to_edge =
-            slotmap::SecondaryMap::<HalfEdgeId, u32>::with_capacity(mesh.halfedges.capacity());
+            slotmap::SecondaryMap::<HalfEdgeId, u32>::with_capacity(conn.halfedges.capacity());
         let mut edge_id_counter = 0;
 
         let mut h_id_to_idx =
-            slotmap::SecondaryMap::<HalfEdgeId, u32>::with_capacity(mesh.halfedges.capacity());
+            slotmap::SecondaryMap::<HalfEdgeId, u32>::with_capacity(conn.halfedges.capacity());
 
         // NOTE: We skip halfedges in the boundary because the compact halfedge
         // mesh represents boundaries as a halfedge with no twin, whereas our
         // HalfEdgeMesh uses a representation where the twin exists, but its
         // face is set to None.
-        mesh.iter_halfedges()
+        conn.iter_halfedges()
             .filter(|(_, h)| h.face.is_some())
             .enumerate()
             .for_each(|(idx, (id, _))| {
                 h_id_to_idx.insert(id, idx as u32);
 
                 // Generate the 'virtual' edge ids
-                let twin = mesh.at_halfedge(id).twin().end();
+                let twin = conn.at_halfedge(id).twin().end();
                 if let Some(twin_edge) = h_id_to_edge.get(twin).cloned() {
                     // When the twin of this halfedge already has an edge, use that
                     h_id_to_edge.insert(id, twin_edge);
@@ -117,16 +119,16 @@ impl<const Subdivided: bool> CompactMesh<Subdivided> {
         // --- Vertex mapping ---
 
         let mut v_id_to_idx =
-            slotmap::SecondaryMap::<VertexId, u32>::with_capacity(mesh.vertices.capacity());
-        mesh.iter_vertices().enumerate().for_each(|(idx, (id, _))| {
+            slotmap::SecondaryMap::<VertexId, u32>::with_capacity(conn.vertices.capacity());
+        conn.iter_vertices().enumerate().for_each(|(idx, (id, _))| {
             v_id_to_idx.insert(id, idx as u32);
         });
 
         // --- Face mapping ---
 
         let mut f_id_to_idx =
-            slotmap::SecondaryMap::<FaceId, u32>::with_capacity(mesh.faces.capacity());
-        mesh.iter_faces().enumerate().for_each(|(idx, (id, _))| {
+            slotmap::SecondaryMap::<FaceId, u32>::with_capacity(conn.faces.capacity());
+        conn.iter_faces().enumerate().for_each(|(idx, (id, _))| {
             f_id_to_idx.insert(id, idx as u32);
         });
 
@@ -144,9 +146,9 @@ impl<const Subdivided: bool> CompactMesh<Subdivided> {
         let mut face = Vec::with_capacity(num_halfedges);
 
         for (h_id, _) in h_id_to_idx.iter() {
-            let h = &mesh[h_id];
+            let h = &conn[h_id];
 
-            match mesh.at_halfedge(h_id).twin().face_or_boundary()? {
+            match conn.at_halfedge(h_id).twin().face_or_boundary()? {
                 Some(_) => {
                     twin.push(NonMaxU32::new(
                         h_id_to_idx[h.twin.ok_or_else(|| anyhow!("No twin"))?],
@@ -157,15 +159,16 @@ impl<const Subdivided: bool> CompactMesh<Subdivided> {
                 }
             }
             next.push(h_id_to_idx[h.next.ok_or_else(|| anyhow!("No next"))?]);
-            prev.push(h_id_to_idx[mesh.at_halfedge(h_id).previous().try_end()?]);
+            prev.push(h_id_to_idx[conn.at_halfedge(h_id).previous().try_end()?]);
             vert.push(v_id_to_idx[h.vertex.ok_or_else(|| anyhow!("No vertex"))?]);
             face.push(f_id_to_idx[h.face.ok_or_else(|| anyhow!("No face"))?]);
             edge.push(h_id_to_edge[h_id])
         }
 
+        let positions = mesh.read_positions();
         let vertex_positions = v_id_to_idx
             .iter()
-            .map(|(v_id, _)| mesh.vertex_position(v_id))
+            .map(|(v_id, _)| positions[v_id])
             .collect();
 
         Ok(CompactMesh {
@@ -189,21 +192,23 @@ impl<const Subdivided: bool> CompactMesh<Subdivided> {
 
     #[profiling::function]
     pub fn to_halfedge(&self) -> HalfEdgeMesh {
-        let mut mesh = HalfEdgeMesh::default();
+        let mesh = HalfEdgeMesh::new();
+        let mut conn = mesh.write_connectivity();
+        let mut positions = mesh.write_positions();
 
         let mut h_idx_to_id = Vec::with_capacity(self.counts.num_halfedges);
         for _ in 0..self.counts.num_halfedges {
-            h_idx_to_id.push(mesh.alloc_halfedge(HalfEdge::default()));
+            h_idx_to_id.push(conn.alloc_halfedge(HalfEdge::default()));
         }
 
         let mut v_idx_to_id = Vec::with_capacity(self.counts.num_vertices);
         for v in 0..self.counts.num_vertices {
-            v_idx_to_id.push(mesh.alloc_vertex(self.vertex_positions[v], None));
+            v_idx_to_id.push(conn.alloc_vertex(&mut positions, self.vertex_positions[v], None));
         }
 
         let mut f_idx_to_id = Vec::with_capacity(self.counts.num_faces);
         for _ in 0..self.counts.num_faces {
-            f_idx_to_id.push(mesh.alloc_face(None));
+            f_idx_to_id.push(conn.alloc_face(None));
         }
 
         // Compute analytical expressions.
@@ -220,7 +225,7 @@ impl<const Subdivided: bool> CompactMesh<Subdivided> {
             let vert_id = v_idx_to_id[*vert as usize];
             let face_id = f_idx_to_id[face as usize];
 
-            mesh[h_id] = HalfEdge {
+            conn[h_id] = HalfEdge {
                 // If twin id is none, a twin boundary halfedge will be created later
                 // in the `add_boundary_halfedges` call.
                 twin: twin_id,
@@ -228,13 +233,15 @@ impl<const Subdivided: bool> CompactMesh<Subdivided> {
                 vertex: Some(vert_id),
                 face: Some(face_id),
             };
-            mesh[vert_id].halfedge = Some(h_id);
-            mesh[face_id].halfedge = Some(h_id);
+            conn[vert_id].halfedge = Some(h_id);
+            conn[face_id].halfedge = Some(h_id);
         }
 
         // The CompactMesh has no boundary halfedges, so we create them here
-        mesh.add_boundary_halfedges();
+        conn.add_boundary_halfedges();
 
+        drop(conn);
+        drop(positions);
         mesh
     }
 

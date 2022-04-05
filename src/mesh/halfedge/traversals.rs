@@ -30,7 +30,7 @@ pub struct ValidTraversal<'a, L>
 where
     L: Location,
 {
-    inner: &'a HalfEdgeMesh,
+    inner: &'a MeshConnectivity,
     location: L,
 }
 
@@ -165,7 +165,7 @@ where
 /*  Initiators  */
 /* ============ */
 
-impl HalfEdgeMesh {
+impl MeshConnectivity {
     pub fn at_halfedge(&self, halfedge_id: HalfEdgeId) -> Traversal<'_, HalfEdgeId> {
         Ok(ValidTraversal {
             inner: self,

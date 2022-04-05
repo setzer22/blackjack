@@ -1,11 +1,7 @@
 use halfedge::selection::SelectionExpression;
-use mlua::Lua;
+use mlua::{ExternalResult, Lua, ToLua};
 
-use crate::{
-    lua_engine::lua_stdlib::{self, EngineValue},
-    prelude::graph::*,
-    prelude::*,
-};
+use crate::{lua_engine::lua_stdlib, prelude::graph::*, prelude::*};
 
 use std::fmt::Write;
 
@@ -296,30 +292,24 @@ pub fn extract_params<'lua>(
         let ident = const_param.const_value_ref(graph)?;
         let value = match input.value() {
             crate::prelude::graph::ValueType::None => {
-                Err(anyhow!("Cannot use constant value for non-existing type"))
+                Err(anyhow!("Cannot use constant value for non-existing type")).to_lua_err()
             }
-            crate::prelude::graph::ValueType::Vector(v) => {
-                Ok(EngineValue::Vec3(lua_stdlib::Vec3(*v)))
-            }
-            crate::prelude::graph::ValueType::Scalar { value, .. } => {
-                Ok(EngineValue::Scalar(*value))
-            }
-            crate::prelude::graph::ValueType::Selection { selection, .. } => Ok(
-                EngineValue::Selection(selection.clone().unwrap_or(SelectionExpression::None)),
-            ),
+            crate::prelude::graph::ValueType::Vector(v) => lua_stdlib::Vec3(*v).to_lua(lua),
+            crate::prelude::graph::ValueType::Scalar { value, .. } => value.to_lua(lua),
+            crate::prelude::graph::ValueType::Selection { selection, .. } => selection
+                .clone()
+                .unwrap_or(SelectionExpression::None)
+                .to_lua(lua),
             crate::prelude::graph::ValueType::Enum {
                 values,
                 selected: selection,
-            } => Ok(EngineValue::String(
-                values[selection.unwrap_or(0) as usize].clone(),
-            )),
-            crate::prelude::graph::ValueType::NewFile { path } => {
-                Ok(EngineValue::Path(lua_stdlib::Path(
-                    path.as_ref()
-                        .ok_or_else(|| anyhow!("Path not set"))?
-                        .clone(),
-                )))
-            }
+            } => values[selection.unwrap_or(0) as usize].clone().to_lua(lua),
+            crate::prelude::graph::ValueType::NewFile { path } => lua_stdlib::Path(
+                path.as_ref()
+                    .ok_or_else(|| anyhow!("Path not set"))?
+                    .clone(),
+            )
+            .to_lua(lua),
         }?;
         table.set(ident, value)?;
     }

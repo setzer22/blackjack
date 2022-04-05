@@ -120,59 +120,58 @@ impl SpreadsheetTab {
         });
 
         if let Some(mesh) = mesh {
+            let channel_introspect = mesh.channels.introspect(mesh.gen_introspect_fn());
+
             let scroll_area = ScrollArea::both().auto_shrink([false, false]);
-            scroll_area.show(ui, |ui| match self.current_view {
-                SpreadsheetViews::Vertices => {
-                    // Vertex spreadsheet
-                    Grid::new("vertex-spreadsheet")
-                        .striped(true)
-                        .num_columns(4)
-                        .show(ui, |ui| {
-                            ui.label("");
-                            ui.label("x");
-                            ui.label("y");
-                            ui.label("z");
-                            ui.end_row();
+            scroll_area.show(ui, |ui| {
+                let mut columns = vec![];
+                let kt = match self.current_view {
+                    SpreadsheetViews::Vertices => ChannelKeyType::VertexId,
+                    SpreadsheetViews::Halfedges => ChannelKeyType::HalfEdgeId,
+                    SpreadsheetViews::Faces => ChannelKeyType::FaceId,
+                };
+                for vt in [ChannelValueType::Vec3, ChannelValueType::f32] {
+                    if let Some(ch) = channel_introspect.get(&(kt, vt)) {
+                        for (ch_name, ch_contents) in ch.iter() {
+                            columns.push((ch_name, ch_contents));
+                        }
+                    }
+                }
 
-                            for (idx, (_, v)) in mesh.iter_vertices().enumerate() {
-                                ui.label(idx.to_string());
-                                ui.monospace(format!("{: >6.3}", v.position.x));
-                                ui.monospace(format!("{: >6.3}", v.position.y));
-                                ui.monospace(format!("{: >6.3}", v.position.z));
+                Grid::new("vertex-spreadsheet")
+                    .striped(true)
+                    .num_columns(columns.len())
+                    .show(ui, |ui| {
+                        ui.label(" ");
+                        for c in &columns {
+                            ui.label(c.0);
+                        }
+                        ui.end_row();
+
+                        if !columns.is_empty() {
+                            for i in 0..columns[0].1.len() {
+                                ui.label(i.to_string());
+                                for c in &columns {
+                                    ui.monospace(c.1[i].clone() + " |");
+                                }
                                 ui.end_row();
                             }
-                        })
-                }
-                SpreadsheetViews::Halfedges => {
-                    // Halfedge spreadsheet
-                    Grid::new("halfedge-spreadsheet")
-                        .striped(true)
-                        .num_columns(1)
-                        .show(ui, |ui| {
-                            ui.label("");
-                            ui.end_row();
-
-                            for (idx, _) in mesh.iter_halfedges().enumerate() {
-                                ui.label(idx.to_string());
+                        } else {
+                            let count = match self.current_view {
+                                SpreadsheetViews::Vertices => {
+                                    mesh.read_connectivity().num_vertices()
+                                }
+                                SpreadsheetViews::Halfedges => {
+                                    mesh.read_connectivity().num_halfedges()
+                                }
+                                SpreadsheetViews::Faces => mesh.read_connectivity().num_faces(),
+                            };
+                            for i in 0..count {
+                                ui.label(i.to_string());
                                 ui.end_row();
                             }
-                        })
-                }
-                SpreadsheetViews::Faces => {
-                    // Face spreadsheet
-                    Grid::new("halfedge-spreadsheet")
-                        .striped(true)
-                        .num_columns(1)
-                        .show(ui, |ui| {
-                            ui.label("");
-                            ui.end_row();
-
-                            for (idx, _) in mesh.iter_faces().enumerate() {
-                                ui.label(idx.to_string());
-                                ui.end_row();
-                            }
-                        })
-                }
+                        }
+                    })
             });
         }
     }
