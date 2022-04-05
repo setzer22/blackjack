@@ -562,6 +562,21 @@ impl HalfEdgeMesh {
         self.connectivity.borrow()
     }
 
+    /// Generates a lambda suitable for calling the `introspect` method on this
+    /// mesh's channels.
+    pub fn gen_introspect_fn(&self) -> impl Fn(ChannelKeyType) -> Rc<Vec<slotmap::KeyData>> {
+        use slotmap::Key;
+        let conn = self.read_connectivity();
+        let vs: Rc<Vec<_>> = Rc::new(conn.iter_vertices().map(|(id, _)| id.data()).collect());
+        let fs: Rc<Vec<_>> = Rc::new(conn.iter_faces().map(|(id, _)| id.data()).collect());
+        let hs: Rc<Vec<_>> = Rc::new(conn.iter_halfedges().map(|(id, _)| id.data()).collect());
+        move |k: ChannelKeyType| match k {
+            ChannelKeyType::VertexId => vs.clone(),
+            ChannelKeyType::FaceId => fs.clone(),
+            ChannelKeyType::HalfEdgeId => hs.clone(),
+        }
+    }
+
     pub fn write_connectivity(&self) -> RefMut<'_, MeshConnectivity> {
         self.connectivity.borrow_mut()
     }

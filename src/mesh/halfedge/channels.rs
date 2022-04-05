@@ -1,6 +1,7 @@
 use std::{
     any::Any,
     cell::{Ref, RefCell, RefMut},
+    collections::BTreeMap,
     fmt::Debug,
     marker::PhantomData,
     ops::Deref,
@@ -42,9 +43,28 @@ impl_channel_key!(VertexId);
 impl_channel_key!(FaceId);
 impl_channel_key!(HalfEdgeId);
 
+/// The geometry spreadsheet relies on this trait to display channel values.
+pub trait Introspect {
+    fn introspect(&self) -> String;
+}
+
+impl Introspect for Vec3 {
+    fn introspect(&self) -> String {
+        format!("{: >6.3} {: >6.3} {: >6.3}", self.x, self.y, self.z)
+    }
+}
+
+impl Introspect for f32 {
+    fn introspect(&self) -> String {
+        format!("{: >6.3}", self)
+    }
+}
+
 /// The value of a channel is the data that is associated to a specific key.
 /// Values can be scalars (f32) or vectors (Vec3).
-pub trait ChannelValue: Default + Debug + Clone + Copy + Sized + FromToLua + 'static {
+pub trait ChannelValue:
+    Default + Debug + Clone + Copy + Sized + FromToLua + Introspect + 'static
+{
     fn value_type() -> ChannelValueType;
     fn name() -> &'static str;
 }
@@ -109,12 +129,12 @@ impl_from_to_lua!(flat HalfEdgeId);
 /// An enum representing all the types that implement the [`ChannelKey`] type as
 /// variants. The values from this enum are used when dynamic behaviour is
 /// required. This can be seen as an ad-hoc replacement for `TypeId`.
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
 #[rustfmt::skip]
 pub enum ChannelKeyType { VertexId, FaceId, HalfEdgeId }
 
 /// Same as [`ChannelKeyType`], but for the [`ChannelValue`] trait instead.
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
 #[rustfmt::skip]
 #[allow(non_camel_case_types)]
 pub enum ChannelValueType { Vec3, f32, }
@@ -285,7 +305,7 @@ pub trait DynChannel: Any + Debug {
 
     /// Merges this channel with another channel. This method will panic if both
     /// channels are not of the same type.
-    /// 
+    ///
     /// The `get_ids` function returns all the ids of a certain channel key type
     /// in channel b. The `id_map` function maps keys from the `other` channel
     /// to keys in this channel.
@@ -452,7 +472,7 @@ impl<K: ChannelKey, V: ChannelValue> ChannelGroup<K, V> {
 /// This trait is the dynamic API of a [`ChannelGroup`]
 pub trait DynChannelGroup: Any + Debug + dyn_clone::DynClone {
     /// Used to inspect the contents of this `ChannelGroup`, for UI display
-    fn introspect(&self) -> HashMap<String, Vec<String>>;
+    fn introspect(&self, keys: &[slotmap::KeyData]) -> BTreeMap<String, Vec<String>>;
     /// Casts this channel group into a `dyn Any`. This hack is required to get
     /// around limitations in the dynamic dispatch system.
     fn as_any(&self) -> &dyn Any;
@@ -500,15 +520,15 @@ impl<K: ChannelKey, V: ChannelValue> Clone for ChannelGroup<K, V> {
 dyn_clone::clone_trait_object!(DynChannelGroup);
 
 impl<K: ChannelKey, V: ChannelValue> DynChannelGroup for ChannelGroup<K, V> {
-    fn introspect(&self) -> HashMap<String, Vec<String>> {
-        let mut result = HashMap::new();
+    fn introspect(&self, keys: &[slotmap::KeyData]) -> BTreeMap<String, Vec<String>> {
+        let mut result = BTreeMap::new();
         for (name, id) in self.channel_names.iter() {
+            let ch = self.read_channel(*id).unwrap();
             result.insert(
                 name.into(),
-                self.read_channel(*id)
-                    .unwrap()
-                    .iter()
-                    .map(|(_k, v)| format!("{:?}", v))
+                keys.iter()
+                    .map(|k| ch[K::from(*k)])
+                    .map(|x| x.introspect())
                     .collect(),
             );
         }
@@ -821,10 +841,11 @@ impl MeshChannels {
     /// Used to inspect the contents of this `MeshChannels`, for UI display
     pub fn introspect(
         &self,
-    ) -> HashMap<(ChannelKeyType, ChannelValueType), HashMap<String, Vec<String>>> {
+        get_ids: impl Fn(ChannelKeyType) -> Rc<Vec<slotmap::KeyData>>,
+    ) -> BTreeMap<(ChannelKeyType, ChannelValueType), BTreeMap<String, Vec<String>>> {
         self.channels
             .iter()
-            .map(|((k, v), group)| ((*k, *v), group.introspect()))
+            .map(|((k, v), group)| ((*k, *v), group.introspect(&get_ids(*k))))
             .collect()
     }
 
@@ -936,7 +957,13 @@ mod test {
         // The introspection API can be used to inspect the existing channels
         // without necessarily knowing which channels are registered or their
         // types.
-        let introspected = mesh_channels.introspect();
+        use slotmap::Key;
+        let vs = Rc::new(vec![v1.data(), v2.data(), v3.data()]);
+        let introspected = mesh_channels.introspect(move |k| match k {
+            ChannelKeyType::VertexId => vs.clone(),
+            ChannelKeyType::FaceId => unreachable!(),
+            ChannelKeyType::HalfEdgeId => unreachable!(),
+        });
         assert_eq!(
             &introspected[&(ChannelKeyType::VertexId, ChannelValueType::Vec3)]["color"],
             &[
