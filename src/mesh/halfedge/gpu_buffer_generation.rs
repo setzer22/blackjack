@@ -45,6 +45,17 @@ impl HalfEdgeMesh {
     /// to the GPU.
     #[profiling::function]
     pub fn generate_triangle_buffers_flat(&self) -> VertexIndexBuffers {
+        let normal_ch_id = self
+            .channels
+            .channel_id::<FaceId, Vec3>("face_normal")
+            .expect(
+            "Calling `generate_triangle_buffers_flat` requires a face normal channel in the mesh.",
+        );
+
+        let normal_ch = self
+            .channels
+            .read_channel::<FaceId, Vec3>(normal_ch_id)
+            .unwrap();
         let positions_ch = self.read_positions();
         let conn = self.read_connectivity();
 
@@ -54,9 +65,7 @@ impl HalfEdgeMesh {
         for (face_id, _face) in conn.faces.iter() {
             // We try to be a bit forgiving here. We don't want to stop
             // rendering even if we have slightly malformed meshes.
-            let normal = conn
-                .face_normal(&positions_ch, face_id)
-                .unwrap_or(Vec3::ZERO);
+            let normal = normal_ch[face_id];
 
             let vertices = conn.face_vertices(face_id);
 
@@ -79,7 +88,10 @@ impl HalfEdgeMesh {
         }
     }
 
-    pub fn generate_triangle_buffers_smooth(&self) -> Result<VertexIndexBuffers> {
+    pub fn generate_triangle_buffers_smooth(
+        &self,
+        normal_ch: &Channel<VertexId, Vec3>,
+    ) -> Result<VertexIndexBuffers> {
         let positions_ch = self.read_positions();
         let conn = self.read_connectivity();
 
@@ -90,16 +102,10 @@ impl HalfEdgeMesh {
 
         conn.iter_vertices_with_channel(&positions_ch)
             .enumerate()
-            .try_for_each::<_, Result<()>>(|(idx, (id, _v, pos))| {
-                v_id_to_idx.insert(id, idx as u32);
+            .try_for_each::<_, Result<()>>(|(idx, (v_id, _v, pos))| {
+                v_id_to_idx.insert(v_id, idx as u32);
                 positions.push(pos);
-
-                let adjacent_faces = conn.at_vertex(id).adjacent_faces()?;
-                let mut normal = Vec3::ZERO;
-                for face in adjacent_faces.iter_cpy() {
-                    normal += conn.face_normal(&positions_ch, face).unwrap_or(Vec3::ZERO);
-                }
-                normals.push(normal / adjacent_faces.len() as f32);
+                normals.push(normal_ch[v_id]);
                 Ok(())
             })?;
 

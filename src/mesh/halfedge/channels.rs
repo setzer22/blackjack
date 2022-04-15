@@ -221,6 +221,8 @@ pub struct MeshChannels {
 #[derive(Debug, Clone)]
 pub struct DefaultChannels {
     pub position: ChannelId<VertexId, Vec3>,
+    pub vertex_normals: Option<ChannelId<VertexId, Vec3>>,
+    pub face_normals: Option<ChannelId<FaceId, Vec3>>,
 }
 
 impl<K: ChannelKey, V: ChannelValue> std::ops::Index<K> for Channel<K, V> {
@@ -877,7 +879,11 @@ impl MeshChannels {
 impl DefaultChannels {
     pub fn with_position(channels: &mut MeshChannels) -> Self {
         let position = channels.ensure_channel::<VertexId, Vec3>("position");
-        Self { position }
+        Self {
+            position,
+            vertex_normals: None,
+            face_normals: None,
+        }
     }
 }
 

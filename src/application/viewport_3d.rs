@@ -14,6 +14,7 @@ pub enum EdgeDrawMode {
 
 #[derive(PartialEq, Eq)]
 pub enum FaceDrawMode {
+    Default,
     Flat,
     Smooth,
     None,

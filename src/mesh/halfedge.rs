@@ -107,11 +107,21 @@ pub struct MeshConnectivity {
     debug_vertices: HashMap<VertexId, DebugMark>,
 }
 
+/// This struct contains some parameters that allow configuring the way in which
+/// a mesh is generated.
+#[derive(Default, Debug, Clone)]
+pub struct MeshGenerationConfig {
+    /// Should this mesh be generated using smooth (i.e. per-vertex) normals? Or
+    /// flat (i.e. per-face) normals?
+    pub smooth_normals: bool,
+}
+
 #[derive(Debug, Clone)]
 pub struct HalfEdgeMesh {
     connectivity: RefCell<MeshConnectivity>,
     pub channels: MeshChannels,
     default_channels: DefaultChannels,
+    pub gen_config: MeshGenerationConfig,
 }
 
 pub type SVec<T> = SmallVec<[T; 4]>;
@@ -555,6 +565,7 @@ impl HalfEdgeMesh {
             channels,
             default_channels,
             connectivity: RefCell::new(MeshConnectivity::new()),
+            gen_config: MeshGenerationConfig::default(),
         }
     }
 
@@ -585,6 +596,30 @@ impl HalfEdgeMesh {
         self.channels
             .read_channel(self.default_channels.position)
             .expect("Could not read positions")
+    }
+
+    pub fn read_face_normals(&self) -> Option<Ref<'_, Channel<FaceId, Vec3>>> {
+        if let Some(ch_id) = self.default_channels.face_normals {
+            Some(
+                self.channels
+                    .read_channel(ch_id)
+                    .expect("Could not read face normals"),
+            )
+        } else {
+            None
+        }
+    }
+
+    pub fn read_vertex_normals(&self) -> Option<Ref<'_, Channel<VertexId, Vec3>>> {
+        if let Some(ch_id) = self.default_channels.vertex_normals {
+            Some(
+                self.channels
+                    .read_channel(ch_id)
+                    .expect("Could not read vertex normals"),
+            )
+        } else {
+            None
+        }
     }
 
     pub fn write_positions(&self) -> RefMut<'_, Positions> {
@@ -897,12 +932,14 @@ pub mod test {
 
     #[test]
     pub fn generate_quad_buffers() {
-        let hem = HalfEdgeMesh::new();
-        let mut conn = hem.write_connectivity();
-        let mut positions = hem.write_positions();
-        let (a, b, c, d) = quad_abcd();
-        let _q = conn.add_quad(&mut positions, a, b, c, d);
-
+        let mut hem = HalfEdgeMesh::new();
+        {
+            let mut conn = hem.write_connectivity();
+            let mut positions = hem.write_positions();
+            let (a, b, c, d) = quad_abcd();
+            let _q = conn.add_quad(&mut positions, a, b, c, d);
+        }
+        edit_ops::compute_normals_flat(&mut hem).unwrap();
         dbg!(hem.generate_triangle_buffers_flat());
     }
 }

@@ -571,3 +571,45 @@ pub fn extrude_faces(
 
     Ok(())
 }
+
+/// Computes the flat normal channel for this mesh and configures the mesh to
+/// generate flat normals. Flat normals are attached to faces.
+pub fn compute_normals_flat(mesh: &mut HalfEdgeMesh) -> Result<()> {
+    let normals_ch_id = mesh.channels.ensure_channel::<FaceId, Vec3>("face_normal");
+    mesh.gen_config.smooth_normals = true;
+
+    let positions = mesh.read_positions();
+    let conn = mesh.read_connectivity();
+    let mut normals = mesh.channels.write_channel(normals_ch_id)?;
+
+    for (face, _) in conn.iter_faces() {
+        // NOTE: Faces with only 2 vertices get a zero normal.
+        normals[face] = conn.face_normal(&positions, face).unwrap_or(Vec3::ZERO);
+    }
+
+    Ok(())
+}
+
+/// Computes "flat" normals for this mesh. Flat normals are attached to faces.
+pub fn compute_normals_smooth(mesh: &mut HalfEdgeMesh) -> Result<()> {
+    let normals_ch_id = mesh
+        .channels
+        .ensure_channel::<VertexId, Vec3>("vertex_normal");
+    mesh.gen_config.smooth_normals = true;
+    mesh.default_channels.vertex_normals = Some(normals_ch_id);
+
+    let positions = mesh.read_positions();
+    let conn = mesh.read_connectivity();
+    let mut normals = mesh.channels.write_channel(normals_ch_id)?;
+
+    for (vertex, _) in conn.iter_vertices() {
+        let adjacent_faces = conn.at_vertex(vertex).adjacent_faces()?;
+        let mut normal = Vec3::ZERO;
+        for face in adjacent_faces.iter_cpy() {
+            normal += conn.face_normal(&positions, face).unwrap_or(Vec3::ZERO);
+        }
+        normals[vertex] = normal;
+    }
+
+    Ok(())
+}
