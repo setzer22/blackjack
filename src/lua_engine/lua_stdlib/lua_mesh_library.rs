@@ -90,6 +90,18 @@ pub fn load(lua: &Lua) -> anyhow::Result<()> {
             .to_halfedge())
     });
 
+    lua_fn!(lua, ops, "set_smooth_normals", |mesh: AnyUserData| -> () {
+        let mut mesh = mesh.borrow_mut::<HalfEdgeMesh>()?;
+        crate::mesh::halfedge::edit_ops::set_smooth_normals(&mut mesh).map_lua_err()?;
+        Ok(())
+    });
+
+    lua_fn!(lua, ops, "set_flat_normals", |mesh: AnyUserData| -> () {
+        let mut mesh = mesh.borrow_mut::<HalfEdgeMesh>()?;
+        crate::mesh::halfedge::edit_ops::set_flat_normals(&mut mesh).map_lua_err()?;
+        Ok(())
+    });
+
     let types = lua.create_table()?;
     types.set("VertexId", ChannelKeyType::VertexId)?;
     types.set("FaceId", ChannelKeyType::FaceId)?;

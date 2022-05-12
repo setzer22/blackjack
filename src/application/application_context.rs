@@ -69,23 +69,6 @@ impl ApplicationContext {
         actions
     }
 
-    pub fn gen_smooth_buffers(mesh: &mut HalfEdgeMesh) -> Result<VertexIndexBuffers> {
-        if let Some(vertex_normals) = mesh.read_vertex_normals() {
-            mesh.generate_triangle_buffers_smooth(&vertex_normals)
-        } else {
-            // WIP: This is all a bit of a mess. Maybe, instead of passing the
-            // channel:
-            // -  the "edit op" is split in two: Generate the channel and set
-            //    the channel + config (actual op)
-            // - Then, we no longer require passing the channel to
-            //   generate_triangle_buffers. Instead, we have the function
-            //   generate a channel if it doesn't exist and use that instead.
-            edit_ops::compute_normals_smooth(mesh)?;
-            let vertex_normals = mesh.read_vertex_normals().unwrap();
-            mesh.generate_triangle_buffers_smooth(&vertex_normals)
-        }
-    }
-
     pub fn build_and_render_mesh(
         &mut self,
         render_ctx: &mut RenderContext,
@@ -99,15 +82,15 @@ impl ApplicationContext {
                     normals,
                     indices,
                 }) = match viewport_settings.face_mode {
-                    FaceDrawMode::Default => {
+                    FaceDrawMode::Real => {
                         if mesh.gen_config.smooth_normals {
-                            Some(Self::gen_smooth_buffers(mesh)?)
+                            Some(mesh.generate_triangle_buffers_smooth(false)?)
                         } else {
-                            Some(mesh.generate_triangle_buffers_flat())
+                            Some(mesh.generate_triangle_buffers_flat(false)?)
                         }
                     }
-                    FaceDrawMode::Flat => Some(mesh.generate_triangle_buffers_flat()),
-                    FaceDrawMode::Smooth => Some(Self::gen_smooth_buffers(mesh)?),
+                    FaceDrawMode::Flat => Some(mesh.generate_triangle_buffers_flat(true)?),
+                    FaceDrawMode::Smooth => Some(mesh.generate_triangle_buffers_smooth(true)?),
                     FaceDrawMode::None => None,
                 } {
                     if !positions.is_empty() {

@@ -245,6 +245,23 @@ impl<K: ChannelKey, V: ChannelValue> std::ops::IndexMut<K> for Channel<K, V> {
     }
 }
 impl<K: ChannelKey, V: ChannelValue> Channel<K, V> {
+    /// Constructs a new channel without adding it to a mesh.
+    pub fn new() -> Self
+    where
+        V: Default,
+    {
+        Self::new_with_default(V::default())
+    }
+
+    /// Constructs a new channel without adding it to a mesh. This allows
+    /// setting the `default` value of this channel.
+    pub fn new_with_default(default: V) -> Self {
+        Self {
+            inner: SecondaryMap::new(),
+            default,
+        }
+    }
+
     /// Iterates the inner slotmap, returning an iterator of keys and values
     pub fn iter(&self) -> impl Iterator<Item = (K, &V)> {
         self.inner.iter()
@@ -873,6 +890,21 @@ impl MeshChannels {
                 self_ch.merge_with_dyn(other_ch.deref(), &get_ids, &id_map);
             }
         }
+    }
+
+    /// Sets a channel directly, by name. If the channel doesn't exist, it is
+    /// created, otherwise its contents are dropped and the new channel data is
+    /// used. Returns the id of the channel that was created.
+    pub fn replace_or_create_channel<K: ChannelKey, V: ChannelValue>(
+        &mut self,
+        name: &str,
+        ch: Channel<K, V>,
+    ) -> ChannelId<K, V> {
+        let ch_id = self.group_or_default().ensure_channel(name);
+        *self
+            .write_channel(ch_id)
+            .expect("We just ensured the channel exists") = ch;
+        ch_id
     }
 }
 

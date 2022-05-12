@@ -599,27 +599,19 @@ impl HalfEdgeMesh {
     }
 
     pub fn read_face_normals(&self) -> Option<Ref<'_, Channel<FaceId, Vec3>>> {
-        if let Some(ch_id) = self.default_channels.face_normals {
-            Some(
-                self.channels
-                    .read_channel(ch_id)
-                    .expect("Could not read face normals"),
-            )
-        } else {
-            None
-        }
+        self.default_channels.face_normals.map(|ch_id| {
+            self.channels
+                .read_channel(ch_id)
+                .expect("Could not read face normals")
+        })
     }
 
     pub fn read_vertex_normals(&self) -> Option<Ref<'_, Channel<VertexId, Vec3>>> {
-        if let Some(ch_id) = self.default_channels.vertex_normals {
-            Some(
-                self.channels
-                    .read_channel(ch_id)
-                    .expect("Could not read vertex normals"),
-            )
-        } else {
-            None
-        }
+        self.default_channels.vertex_normals.map(|ch_id| {
+            self.channels
+                .read_channel(ch_id)
+                .expect("Could not read vertex normals")
+        })
     }
 
     pub fn write_positions(&self) -> RefMut<'_, Positions> {
@@ -939,7 +931,7 @@ pub mod test {
             let (a, b, c, d) = quad_abcd();
             let _q = conn.add_quad(&mut positions, a, b, c, d);
         }
-        edit_ops::compute_normals_flat(&mut hem).unwrap();
-        dbg!(hem.generate_triangle_buffers_flat());
+        edit_ops::set_flat_normals(&mut hem).unwrap();
+        dbg!(hem.generate_triangle_buffers_flat(true).unwrap());
     }
 }
