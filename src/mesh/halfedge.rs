@@ -924,14 +924,13 @@ pub mod test {
 
     #[test]
     pub fn generate_quad_buffers() {
-        let mut hem = HalfEdgeMesh::new();
+        let hem = HalfEdgeMesh::new();
         {
             let mut conn = hem.write_connectivity();
             let mut positions = hem.write_positions();
             let (a, b, c, d) = quad_abcd();
             let _q = conn.add_quad(&mut positions, a, b, c, d);
         }
-        edit_ops::set_flat_normals(&mut hem).unwrap();
         dbg!(hem.generate_triangle_buffers_flat(true).unwrap());
     }
 }
