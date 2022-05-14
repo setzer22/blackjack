@@ -1,5 +1,7 @@
 use std::{cell::RefCell, rc::Rc};
 
+use mlua::{Function, Value};
+
 use crate::prelude::halfedge::{DynChannel, RawChannelId};
 
 use super::*;
@@ -88,6 +90,18 @@ pub fn load(lua: &Lua) -> anyhow::Result<()> {
             .to_halfedge())
     });
 
+    lua_fn!(lua, ops, "set_smooth_normals", |mesh: AnyUserData| -> () {
+        let mut mesh = mesh.borrow_mut::<HalfEdgeMesh>()?;
+        crate::mesh::halfedge::edit_ops::set_smooth_normals(&mut mesh).map_lua_err()?;
+        Ok(())
+    });
+
+    lua_fn!(lua, ops, "set_flat_normals", |mesh: AnyUserData| -> () {
+        let mut mesh = mesh.borrow_mut::<HalfEdgeMesh>()?;
+        crate::mesh::halfedge::edit_ops::set_flat_normals(&mut mesh).map_lua_err()?;
+        Ok(())
+    });
+
     let types = lua.create_table()?;
     types.set("VertexId", ChannelKeyType::VertexId)?;
     types.set("FaceId", ChannelKeyType::FaceId)?;
@@ -97,6 +111,34 @@ pub fn load(lua: &Lua) -> anyhow::Result<()> {
     globals.set("Types", types)?;
 
     Ok(())
+}
+
+fn mesh_reduce<'lua>(
+    mesh: &HalfEdgeMesh,
+    kty: ChannelKeyType,
+    init: Value<'lua>,
+    f: Function<'lua>,
+) -> mlua::Result<Value<'lua>> {
+    let mut acc = init;
+    let conn = mesh.read_connectivity();
+    match kty {
+        ChannelKeyType::VertexId => {
+            for (id, _) in conn.iter_vertices() {
+                acc = f.call((acc, id))?;
+            }
+        }
+        ChannelKeyType::FaceId => {
+            for (id, _) in conn.iter_faces() {
+                acc = f.call((acc, id))?;
+            }
+        }
+        ChannelKeyType::HalfEdgeId => {
+            for (id, _) in conn.iter_halfedges() {
+                acc = f.call((acc, id))?;
+            }
+        }
+    }
+    Ok(acc)
 }
 
 fn mesh_channel_to_lua_table<'lua>(
@@ -176,13 +218,44 @@ impl UserData for HalfEdgeMesh {
                 let val = if i < vertices.len() {
                     vertices[i].to_lua(lua)?
                 } else {
-                    mlua::Value::Nil
+                    Value::Nil
                 };
                 i += 1;
                 Ok(val)
             })
         });
         methods.add_method("clone", |_lua, this, ()| Ok(this.clone()));
+
+        methods.add_method(
+            "reduce",
+            |_lua, this, (kty, init, f): (ChannelKeyType, Value, Function)| {
+                mesh_reduce(this, kty, init, f)
+            },
+        );
+
+        methods.add_method(
+            "reduce_vertices",
+            |_lua, this, (init, f): (Value, Function)| {
+                mesh_reduce(this, ChannelKeyType::VertexId, init, f)
+            },
+        );
+        methods.add_method(
+            "reduce_faces",
+            |_lua, this, (init, f): (Value, Function)| {
+                mesh_reduce(this, ChannelKeyType::FaceId, init, f)
+            },
+        );
+        methods.add_method(
+            "reduce_halfedges",
+            |_lua, this, (init, f): (Value, Function)| {
+                mesh_reduce(this, ChannelKeyType::HalfEdgeId, init, f)
+            },
+        );
+
+        methods.add_method(
+            "vertex_position",
+            |_lua, this: &HalfEdgeMesh, v: VertexId| Ok(Vec3(this.read_positions()[v])),
+        );
     }
 }
 
@@ -197,18 +270,18 @@ impl UserData for SharedChannel {
     fn add_methods<'lua, M: mlua::UserDataMethods<'lua, Self>>(methods: &mut M) {
         methods.add_meta_method(
             mlua::MetaMethod::NewIndex,
-            |lua, this, (key, val): (mlua::Value, mlua::Value)| {
+            |lua, this, (key, val): (Value, Value)| {
                 this.0.borrow_mut().set_lua(lua, key, val).map_lua_err()?;
                 Ok(())
             },
         );
-        methods.add_meta_method(mlua::MetaMethod::Index, |lua, this, key: mlua::Value| {
+        methods.add_meta_method(mlua::MetaMethod::Index, |lua, this, key: Value| {
             let value = this.0.borrow().get_lua(lua, key).map_lua_err()?;
             Ok(value.clone())
         });
         methods.add_meta_method(
             mlua::MetaMethod::NewIndex,
-            |lua, this, (key, val): (mlua::Value, mlua::Value)| {
+            |lua, this, (key, val): (Value, Value)| {
                 this.0.borrow_mut().set_lua(lua, key, val).map_lua_err()?;
                 Ok(())
             },

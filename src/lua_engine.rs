@@ -24,7 +24,7 @@ pub fn run_program<'lua>(
     lua_program: &str,
     input: Table<'lua>,
 ) -> Result<HalfEdgeMesh> {
-    lua.load(&lua_program).exec()?;
+    lua.load(lua_program).exec()?;
     let entry_point: Function = lua.globals().get("main")?;
     let mesh = entry_point
         .call::<_, HalfEdgeMesh>(input)

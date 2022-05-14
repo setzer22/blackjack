@@ -221,6 +221,8 @@ pub struct MeshChannels {
 #[derive(Debug, Clone)]
 pub struct DefaultChannels {
     pub position: ChannelId<VertexId, Vec3>,
+    pub vertex_normals: Option<ChannelId<VertexId, Vec3>>,
+    pub face_normals: Option<ChannelId<FaceId, Vec3>>,
 }
 
 impl<K: ChannelKey, V: ChannelValue> std::ops::Index<K> for Channel<K, V> {
@@ -243,6 +245,23 @@ impl<K: ChannelKey, V: ChannelValue> std::ops::IndexMut<K> for Channel<K, V> {
     }
 }
 impl<K: ChannelKey, V: ChannelValue> Channel<K, V> {
+    /// Constructs a new channel without adding it to a mesh.
+    pub fn new() -> Self
+    where
+        V: Default,
+    {
+        Self::new_with_default(V::default())
+    }
+
+    /// Constructs a new channel without adding it to a mesh. This allows
+    /// setting the `default` value of this channel.
+    pub fn new_with_default(default: V) -> Self {
+        Self {
+            inner: SecondaryMap::new(),
+            default,
+        }
+    }
+
     /// Iterates the inner slotmap, returning an iterator of keys and values
     pub fn iter(&self) -> impl Iterator<Item = (K, &V)> {
         self.inner.iter()
@@ -872,12 +891,31 @@ impl MeshChannels {
             }
         }
     }
+
+    /// Sets a channel directly, by name. If the channel doesn't exist, it is
+    /// created, otherwise its contents are dropped and the new channel data is
+    /// used. Returns the id of the channel that was created.
+    pub fn replace_or_create_channel<K: ChannelKey, V: ChannelValue>(
+        &mut self,
+        name: &str,
+        ch: Channel<K, V>,
+    ) -> ChannelId<K, V> {
+        let ch_id = self.group_or_default().ensure_channel(name);
+        *self
+            .write_channel(ch_id)
+            .expect("We just ensured the channel exists") = ch;
+        ch_id
+    }
 }
 
 impl DefaultChannels {
     pub fn with_position(channels: &mut MeshChannels) -> Self {
         let position = channels.ensure_channel::<VertexId, Vec3>("position");
-        Self { position }
+        Self {
+            position,
+            vertex_normals: None,
+            face_normals: None,
+        }
     }
 }
 

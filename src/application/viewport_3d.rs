@@ -14,8 +14,14 @@ pub enum EdgeDrawMode {
 
 #[derive(PartialEq, Eq)]
 pub enum FaceDrawMode {
+    /// Will read the actual configured value for the mesh and use its channel,
+    /// if any. Defaults to flat shading otherwise.
+    Real,
+    /// Force flat shading, ignoring mesh data.
     Flat,
+    /// Force smooth shading, ignoring mesh data
     Smooth,
+    /// Don't draw faces.
     None,
 }
 
@@ -61,7 +67,7 @@ impl Viewport3d {
             parent_scale: 1.0,
             settings: Viewport3dSettings {
                 edge_mode: EdgeDrawMode::FullEdge,
-                face_mode: FaceDrawMode::Flat,
+                face_mode: FaceDrawMode::Real,
                 render_vertices: true,
                 matcap: 0,
             },
@@ -179,6 +185,11 @@ impl Viewport3d {
 
                     ui.horizontal(|ui| {
                         ui.label("Faces:");
+                        ui.selectable_value(
+                            &mut self.settings.face_mode,
+                            FaceDrawMode::Real,
+                            "Real",
+                        );
                         ui.selectable_value(
                             &mut self.settings.face_mode,
                             FaceDrawMode::Flat,

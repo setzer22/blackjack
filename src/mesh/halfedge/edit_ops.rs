@@ -571,3 +571,62 @@ pub fn extrude_faces(
 
     Ok(())
 }
+
+/// Generates the flat normals channel for this mesh
+pub fn generate_flat_normals_channel(mesh: &HalfEdgeMesh) -> Result<Channel<FaceId, Vec3>> {
+    let positions = mesh.read_positions();
+    let conn = mesh.read_connectivity();
+    let mut normals = Channel::<FaceId, Vec3>::new();
+
+    for (face, _) in conn.iter_faces() {
+        // NOTE: Faces with only 2 vertices get a zero normal.
+        normals[face] = conn.face_normal(&positions, face).unwrap_or(Vec3::ZERO);
+    }
+
+    Ok(normals)
+}
+
+/// Computes the flat normal channel for this mesh and configures the mesh to
+/// generate flat normals. Flat normals are attached to faces.
+pub fn set_flat_normals(mesh: &mut HalfEdgeMesh) -> Result<()> {
+    let normals = generate_flat_normals_channel(mesh)?;
+    let normals_ch_id = mesh
+        .channels
+        .replace_or_create_channel("face_normal", normals);
+
+    mesh.default_channels.face_normals = Some(normals_ch_id);
+    mesh.gen_config.smooth_normals = false;
+
+    Ok(())
+}
+
+/// Generates the smooth normals channel for this mesh.
+pub fn generate_smooth_normals_channel(mesh: &HalfEdgeMesh) -> Result<Channel<VertexId, Vec3>> {
+    let positions = mesh.read_positions();
+    let conn = mesh.read_connectivity();
+    let mut normals = Channel::<VertexId, Vec3>::new();
+
+    for (vertex, _) in conn.iter_vertices() {
+        let adjacent_faces = conn.at_vertex(vertex).adjacent_faces()?;
+        let mut normal = Vec3::ZERO;
+        for face in adjacent_faces.iter_cpy() {
+            normal += conn.face_normal(&positions, face).unwrap_or(Vec3::ZERO);
+        }
+        normals[vertex] = normal;
+    }
+
+    Ok(normals)
+}
+
+/// Computes "flat" normals for this mesh. Flat normals are attached to faces.
+pub fn set_smooth_normals(mesh: &mut HalfEdgeMesh) -> Result<()> {
+    let normals = generate_smooth_normals_channel(mesh)?;
+    let normals_ch_id = mesh
+        .channels
+        .replace_or_create_channel("vertex_normal", normals);
+
+    mesh.gen_config.smooth_normals = true;
+    mesh.default_channels.vertex_normals = Some(normals_ch_id);
+
+    Ok(())
+}

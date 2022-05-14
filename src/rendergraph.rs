@@ -60,7 +60,7 @@ pub fn blackjack_viewport_rendergraph<'node>(
         routines.point_cloud.add_to_graph(graph, &state);
     }
     use crate::application::viewport_3d::FaceDrawMode::*;
-    if matches!(settings.face_mode, Flat | Smooth) {
+    if matches!(settings.face_mode, Flat | Smooth | Real) {
         routines.face.add_to_graph(graph, &state, settings);
     }
 

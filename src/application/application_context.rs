@@ -74,7 +74,7 @@ impl ApplicationContext {
         render_ctx: &mut RenderContext,
         viewport_settings: &Viewport3dSettings,
     ) -> Result<()> {
-        if let Some(mesh) = self.mesh.as_ref() {
+        if let Some(mesh) = self.mesh.as_mut() {
             // Base mesh
             {
                 if let Some(VertexIndexBuffers {
@@ -82,8 +82,15 @@ impl ApplicationContext {
                     normals,
                     indices,
                 }) = match viewport_settings.face_mode {
-                    FaceDrawMode::Flat => Some(mesh.generate_triangle_buffers_flat()),
-                    FaceDrawMode::Smooth => Some(mesh.generate_triangle_buffers_smooth()?),
+                    FaceDrawMode::Real => {
+                        if mesh.gen_config.smooth_normals {
+                            Some(mesh.generate_triangle_buffers_smooth(false)?)
+                        } else {
+                            Some(mesh.generate_triangle_buffers_flat(false)?)
+                        }
+                    }
+                    FaceDrawMode::Flat => Some(mesh.generate_triangle_buffers_flat(true)?),
+                    FaceDrawMode::Smooth => Some(mesh.generate_triangle_buffers_smooth(true)?),
                     FaceDrawMode::None => None,
                 } {
                     if !positions.is_empty() {

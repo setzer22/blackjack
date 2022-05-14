@@ -44,9 +44,23 @@ impl HalfEdgeMesh {
     /// Generates the [`TriangleBuffers`] for this mesh. Suitable to be uploaded
     /// to the GPU.
     #[profiling::function]
-    pub fn generate_triangle_buffers_flat(&self) -> VertexIndexBuffers {
+    pub fn generate_triangle_buffers_flat(&self, force_gen: bool) -> Result<VertexIndexBuffers> {
         let positions_ch = self.read_positions();
         let conn = self.read_connectivity();
+
+        // This ugliness is needed because we need to either borrow the channel
+        // for the mesh or generate it here, but if we generate inside the if
+        // statement the ref owner gets dropped at the end of the scope.
+        let normal_ch: &Channel<_, _>;
+        #[allow(unused_assignments)] // Look ma, I'm smarter than clippy
+        let mut extend_lifetime = None;
+        let existing_normals_ch = self.read_face_normals();
+        if !force_gen && existing_normals_ch.is_some() {
+            normal_ch = existing_normals_ch.as_deref().unwrap();
+        } else {
+            extend_lifetime = Some(edit_ops::generate_flat_normals_channel(self)?);
+            normal_ch = extend_lifetime.as_ref().unwrap();
+        }
 
         let mut positions = vec![];
         let mut normals = vec![];
@@ -54,9 +68,7 @@ impl HalfEdgeMesh {
         for (face_id, _face) in conn.faces.iter() {
             // We try to be a bit forgiving here. We don't want to stop
             // rendering even if we have slightly malformed meshes.
-            let normal = conn
-                .face_normal(&positions_ch, face_id)
-                .unwrap_or(Vec3::ZERO);
+            let normal = normal_ch[face_id];
 
             let vertices = conn.face_vertices(face_id);
 
@@ -72,16 +84,34 @@ impl HalfEdgeMesh {
             }
         }
 
-        VertexIndexBuffers {
+        Ok(VertexIndexBuffers {
             indices: (0u32..positions.len() as u32).collect(),
             positions,
             normals,
-        }
+        })
     }
 
-    pub fn generate_triangle_buffers_smooth(&self) -> Result<VertexIndexBuffers> {
+    /// If `force_gen` is true, ignores any existing vertex normals channel in
+    /// the mesh and generates one from scratch instead. This is used in some
+    /// viewport modes.
+    pub fn generate_triangle_buffers_smooth(&self, force_gen: bool) -> Result<VertexIndexBuffers> {
         let positions_ch = self.read_positions();
         let conn = self.read_connectivity();
+
+        // @CopyPaste -- This couldn't get any worse... Are we Java now or what?
+        // This ugliness is needed because we need to either borrow the channel
+        // for the mesh or generate it here, but if we generate inside the if
+        // statement the ref owner gets dropped at the end of the scope.
+        let normal_ch: &Channel<_, _>;
+        #[allow(unused_assignments)] // Look ma, I'm smarter than clippy
+        let mut extend_lifetime = None;
+        let existing_normals_ch = self.read_vertex_normals();
+        if !force_gen && existing_normals_ch.is_some() {
+            normal_ch = existing_normals_ch.as_deref().unwrap();
+        } else {
+            extend_lifetime = Some(edit_ops::generate_smooth_normals_channel(self)?);
+            normal_ch = extend_lifetime.as_ref().unwrap();
+        }
 
         let mut v_id_to_idx =
             slotmap::SecondaryMap::<VertexId, u32>::with_capacity(conn.vertices.capacity());
@@ -90,16 +120,10 @@ impl HalfEdgeMesh {
 
         conn.iter_vertices_with_channel(&positions_ch)
             .enumerate()
-            .try_for_each::<_, Result<()>>(|(idx, (id, _v, pos))| {
-                v_id_to_idx.insert(id, idx as u32);
+            .try_for_each::<_, Result<()>>(|(idx, (v_id, _v, pos))| {
+                v_id_to_idx.insert(v_id, idx as u32);
                 positions.push(pos);
-
-                let adjacent_faces = conn.at_vertex(id).adjacent_faces()?;
-                let mut normal = Vec3::ZERO;
-                for face in adjacent_faces.iter_cpy() {
-                    normal += conn.face_normal(&positions_ch, face).unwrap_or(Vec3::ZERO);
-                }
-                normals.push(normal / adjacent_faces.len() as f32);
+                normals.push(normal_ch[v_id]);
                 Ok(())
             })?;
 

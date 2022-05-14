@@ -117,6 +117,22 @@ local edit_ops = {
                                          inputs.technique == "catmull-clark")
             }
         end
+    },
+    SetNormals = {
+        label = "Set Normals",
+        inputs = {mesh("mesh"), enum("normals", {"smooth", "flat"}, 0)},
+        outputs = {mesh("out_mesh")},
+        returns = "out_mesh",
+        op = function(inputs)
+            local out_mesh = inputs.mesh:clone()
+            print(inputs.normals)
+            if inputs.normals == "smooth" then
+                Ops.set_smooth_normals(out_mesh)
+            else
+                Ops.set_flat_normals(out_mesh)
+            end
+            return {out_mesh = out_mesh}
+        end
     }
 }
 

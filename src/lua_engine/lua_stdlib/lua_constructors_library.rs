@@ -35,5 +35,9 @@ pub fn load(lua: &Lua) -> anyhow::Result<()> {
         Ok(())
     });
 
+    lua_fn!(lua, blackjack, "mesh", || -> HalfEdgeMesh {
+        Ok(HalfEdgeMesh::new())
+    });
+
     Ok(())
 }
