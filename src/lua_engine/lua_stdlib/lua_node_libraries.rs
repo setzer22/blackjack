@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use super::*;
 
 pub struct LuaSourceFile {
@@ -5,12 +7,12 @@ pub struct LuaSourceFile {
     name: String,
 }
 impl<'lua> AsChunk<'lua> for LuaSourceFile {
-    fn source(&self) -> &[u8] {
-        self.contents.as_bytes()
+    fn source(&self) -> std::result::Result<Cow<'_, [u8]>, std::io::Error> {
+        Ok(Cow::Borrowed(self.contents.as_bytes()))
     }
 
-    fn name(&self) -> Option<std::ffi::CString> {
-        std::ffi::CString::new(self.name.as_bytes()).ok()
+    fn name(&self) -> std::option::Option<std::string::String> {
+        Some(self.name.clone())
     }
 }
 
