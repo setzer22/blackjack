@@ -1,3 +1,5 @@
+use std::f32::consts::PI;
+
 use super::*;
 
 pub struct Box;
@@ -61,5 +63,22 @@ impl Quad {
 
         HalfEdgeMesh::build_from_polygons(&[v1, v2, v3, v4], &[&[0, 1, 2, 3]])
             .expect("Quad construction should not fail")
+    }
+}
+
+pub struct Circle;
+impl Circle {
+    pub fn build(center: Vec3, radius: f32, num_vertices: usize) -> HalfEdgeMesh {
+        let angle_delta = (2.0 * PI) / num_vertices as f32;
+        let verts = (0..num_vertices)
+            .map(|i| {
+                let q = Quat::from_rotation_y(angle_delta * i as f32);
+                q * (Vec3::Z * radius) + center
+            })
+            .collect_vec();
+        let polygon = (0..num_vertices).collect_vec();
+
+        HalfEdgeMesh::build_from_polygons(&verts, &[&polygon])
+            .expect("Circle construction should not fail")
     }
 }

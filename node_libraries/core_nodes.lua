@@ -47,7 +47,16 @@ local primitives = {
         },
         outputs = {mesh("out_mesh")},
         returns = "out_mesh"
-    }
+    },
+    MakeCircle = {
+         label = "Circle",
+        op = function(inputs)
+            return {out_mesh = Primitives.circle(inputs.center, inputs.radius, inputs.num_vertices)}
+        end,
+        inputs = {v3("center", vector(0,0,0)), scalar("radius", 1.0, 0.0, 10.0), scalar("num_vertices", 8.0, 3.0, 32.0)},
+        outputs = {mesh("out_mesh")},
+        returns = "out_mesh"
+    },
 }
 
 -- Edit ops: Nodes to edit existing meshes

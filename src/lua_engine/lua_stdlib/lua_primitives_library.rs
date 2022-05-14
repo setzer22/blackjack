@@ -26,5 +26,16 @@ pub fn load(lua: &Lua) -> anyhow::Result<()> {
         ))
     });
 
+    lua_fn!(lua, primitives, "circle", |center: Vec3,
+                                        radius: f32,
+                                        num_vertices: f32|
+     -> HalfEdgeMesh {
+        Ok(crate::mesh::halfedge::primitives::Circle::build(
+            center.0,
+            radius,
+            num_vertices as usize,
+        ))
+    });
+
     Ok(())
 }
