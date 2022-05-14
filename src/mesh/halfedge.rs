@@ -89,6 +89,10 @@ impl DebugMark {
         Self::new(label, egui::Color32::GREEN)
     }
 
+    pub fn purple(label: &str) -> Self {
+        Self::new(label, egui::Color32::from_rgb(255, 0, 255))
+    }
+
     pub fn new(label: &str, color: egui::Color32) -> Self {
         Self {
             label: label.to_owned(),

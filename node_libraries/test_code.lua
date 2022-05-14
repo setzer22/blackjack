@@ -2,6 +2,15 @@ local function mesh(name) return {name = name, type = "mesh"} end
 local function v3(name, default)
     return {name = name, default = default, type = "vec3"}
 end
+local function scalar(name, default, min, max)
+    return {
+        name = name,
+        default = default,
+        min = min,
+        max = max,
+        type = "scalar"
+    }
+end
 
 local perlin = Blackjack.perlin()
 
@@ -10,6 +19,11 @@ local function translate_mesh(m, delta)
     for i, pos in ipairs(positions) do positions[i] = pos + delta end
     m:set_channel(Types.VertexId, Types.Vec3, "position", positions)
     return m
+end
+
+local function normalize(v)
+    local len = math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z)
+    return vector(v.x / len, v.y / len, v.z / len)
 end
 
 local test_channel_nodes = {
@@ -37,7 +51,6 @@ local test_channel_nodes = {
         inputs = {mesh("mesh")},
         outputs = {mesh("out_mesh")},
         returns = "out_mesh"
-
     },
     CopyToPoints = {
         label = "Copy to points",
@@ -55,6 +68,25 @@ local test_channel_nodes = {
         outputs = {mesh("out_mesh")},
         returns = "out_mesh"
     },
+    CircleNoise = {
+        label = "Circle Noise",
+        op = function(inputs)
+            local m = Primitives.circle(vector(0,0,0), 1.0, 12.0)
+            local position_ch = m:get_channel(Types.VertexId, Types.Vec3, "position")
+            for i, pos in ipairs(position_ch) do
+                local noise_pos = pos * inputs.noise_scale + vector(inputs.seed, inputs.seed, inputs.seed);
+                local noise = perlin:get_3d(noise_pos.x, noise_pos.y,
+                                            noise_pos.z)
+                local dir = normalize(pos)
+                position_ch[i] = position_ch[i] + dir * noise * inputs.strength
+            end
+            m:set_channel(Types.VertexId, Types.Vec3, "position", position_ch)
+            return {out_mesh = m}
+        end,
+        inputs = {scalar("strength", 0.1, 0.0, 1.0), scalar("noise_scale", 0.1, 0.01, 1.0), scalar("seed", 0.0, 0.0, 100.0)},
+        outputs = {mesh("out_mesh")},
+        returns = "out_mesh"
+    }
 }
 
 NodeLibrary:addNodes(test_channel_nodes)

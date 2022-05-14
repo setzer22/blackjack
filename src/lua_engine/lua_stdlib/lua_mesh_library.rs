@@ -102,6 +102,21 @@ pub fn load(lua: &Lua) -> anyhow::Result<()> {
         Ok(())
     });
 
+    lua_fn!(lua, ops, "bridge_loops", |mesh: AnyUserData,
+                                       loop_1: SelectionExpression,
+                                       loop_2: SelectionExpression|
+     -> () {
+        let mut mesh = mesh.borrow_mut::<HalfEdgeMesh>()?;
+        let loop_1 = mesh
+            .read_connectivity()
+            .resolve_halfedge_selection_full(dbg!(loop_1));
+        let loop_2 = mesh
+            .read_connectivity()
+            .resolve_halfedge_selection_full(dbg!(loop_2));
+        crate::mesh::halfedge::edit_ops::bridge_loops(&mut mesh, &loop_1, &loop_2).map_lua_err()?;
+        Ok(())
+    });
+
     let types = lua.create_table()?;
     types.set("VertexId", ChannelKeyType::VertexId)?;
     types.set("FaceId", ChannelKeyType::FaceId)?;

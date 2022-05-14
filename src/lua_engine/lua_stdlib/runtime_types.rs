@@ -79,6 +79,6 @@ impl UserData for PerlinNoise {
     fn add_methods<'lua, M: mlua::UserDataMethods<'lua, Self>>(methods: &mut M) {
         methods.add_method("get_3d", |_lua, this, (x, y, z): (f64, f64, f64)| {
             Ok(this.0.get([x, y, z]))
-        })
+        });
     }
 }

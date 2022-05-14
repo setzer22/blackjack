@@ -101,6 +101,19 @@ local edit_ops = {
             return {out_mesh = out_mesh}
         end
     },
+    BridgeLoops = {
+        label = "Bridge Loops",
+        inputs = {
+            mesh("in_mesh"), selection("loop_1"), selection("loop_2") 
+        },
+        outputs = {mesh("out_mesh")},
+        returns = "out_mesh",
+        op = function(inputs)
+            local out_mesh = inputs.in_mesh:clone()
+            Ops.bridge_loops(out_mesh, inputs.loop_1, inputs.loop_2)
+            return {out_mesh = out_mesh}
+        end
+    },
     MergeMeshes = {
         label = "Merge meshes",
         inputs = {mesh("mesh_a"), mesh("mesh_b")},

@@ -81,4 +81,21 @@ impl Circle {
         HalfEdgeMesh::build_from_polygons(&verts, &[&polygon])
             .expect("Circle construction should not fail")
     }
+
+    pub fn build_open(center: Vec3, radius: f32, num_vertices: usize) -> HalfEdgeMesh {
+        let circle = Self::build(center, radius, num_vertices);
+        {
+            let mut conn = circle.write_connectivity();
+            let (v, _) = conn.iter_vertices().next().unwrap();
+            let halfedge = conn.at_vertex(v).halfedge().end();
+            let face = conn.at_halfedge(halfedge).face().end();
+
+            // Clear the face
+            for h in conn.halfedge_loop(halfedge) {
+                conn[h].face = None;
+            }
+            conn.remove_face(face);
+        }
+        circle
+    }
 }

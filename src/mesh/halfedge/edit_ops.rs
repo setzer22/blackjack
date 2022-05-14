@@ -1,6 +1,7 @@
 use std::collections::BTreeSet;
 
 use anyhow::{anyhow, bail};
+use float_ord::FloatOrd;
 use smallvec::SmallVec;
 
 use crate::prelude::*;
@@ -627,6 +628,83 @@ pub fn set_smooth_normals(mesh: &mut HalfEdgeMesh) -> Result<()> {
 
     mesh.gen_config.smooth_normals = true;
     mesh.default_channels.vertex_normals = Some(normals_ch_id);
+
+    Ok(())
+}
+
+/// Connects two (not necessarily closed) halfedge loops with faces.
+pub fn bridge_loops(
+    mesh: &mut HalfEdgeMesh,
+    loop_1: &[HalfEdgeId],
+    loop_2: &[HalfEdgeId],
+) -> Result<()> {
+    let mut conn = mesh.write_connectivity();
+    let mut positions = mesh.read_positions();
+
+    if loop_1.len() != loop_2.len() {
+        bail!("Loops to bridge need to be of the same length.")
+    }
+
+    for h in loop_1.iter().chain(loop_2.iter()) {
+        if !conn.at_halfedge(*h).is_boundary()? {
+            bail!("Cannot bridge loops with edges that are not in a boundary. This would lead to a non-manifold mesh.")
+        }
+    }
+
+    for (i, h) in loop_1.iter().enumerate() {
+        conn.add_debug_halfedge(*h, DebugMark::red(&format!("s{i}")))
+    }
+
+    for (i, h) in loop_2.iter().enumerate() {
+        conn.add_debug_halfedge(*h, DebugMark::purple(&format!("L{i}")))
+    }
+
+    let verts_1 = loop_1
+        .iter_cpy()
+        .map(|h| conn.at_halfedge(h).vertex().end())
+        .collect_vec();
+    let verts_2 = loop_2
+        .iter_cpy()
+        .map(|h| conn.at_halfedge(h).vertex().end())
+        .collect_vec();
+
+    // Each vertex in the short array needs to be mapped to a vertex in the long
+    // array. We find the best possible mapping which minimizes the sum of
+    // distances between vertex pairs
+
+    let n = verts_1.len();
+    let v1_best_shift = (0..n)
+        .position_min_by_key(|i| {
+            // Compute sum of distances after shifting verts_1 by i positions
+            FloatOrd(
+                rotate_iter(verts_1.iter_cpy(), *i, n)
+                    .enumerate()
+                    .map(|(j, v_sh)| positions[v_sh].distance_squared(positions[verts_2[j]]))
+                    .sum::<f32>(),
+            )
+        })
+        .ok_or_else(|| anyhow!("Empty loop"))?;
+
+    let verts_1_shifted = rotate_iter(verts_1.iter_cpy(), v1_best_shift, n).collect_vec();
+
+    for ((v1, v2), (v3, v4)) in verts_1_shifted
+        .iter_cpy()
+        .circular_tuple_windows()
+        .zip(verts_2.iter_cpy().circular_tuple_windows())
+    {
+        // WIP: 
+        // - Need to find a good strategy to tie all the pointers together here. 
+        // - The edge loop we're building requires fixing all the next pointers
+        //   for all the halfedges in the loop. The new edges that bridge the
+        //   gap also need to be tied together to their twins. We can't do all
+        //   of this in a single loop.
+        // - Note that we're not necessarily creating a fool circular loop with
+        //   this op, so maybe it's not circular tuple windows, but just 2d
+        //   windows? Or maybe we need to choose between the two.
+        // - It would also be good if we can draw all of this on the screen to
+        //   see if the values we computed up to this point make sense. Time to
+        //   rescue the on-screen text visualization code?
+    }
 
     Ok(())
 }

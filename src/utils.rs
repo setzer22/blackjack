@@ -9,6 +9,21 @@ pub trait IteratorUtils: Iterator {
     }
 }
 
+/// Rotates the given iterator by shifting all elements `shift` positions
+/// forward. Any elements that would be out of bounds are instead put at the
+/// beginning. 
+/// 
+/// This method requires passing the `len` as a separate parameter. This is
+/// often known beforehand or can be found by calling .size_hint() for an
+/// ExactSizeIterator.
+pub fn rotate_iter<T>(
+    it: impl Iterator<Item = T> + Clone,
+    shift: usize,
+    len: usize,
+) -> impl Iterator<Item = T> {
+    it.cycle().dropping(shift).take(len)
+}
+
 impl<T: ?Sized> IteratorUtils for T where T: Iterator {}
 
 pub trait SliceUtils<T> {

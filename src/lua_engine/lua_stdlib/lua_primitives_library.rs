@@ -30,7 +30,7 @@ pub fn load(lua: &Lua) -> anyhow::Result<()> {
                                         radius: f32,
                                         num_vertices: f32|
      -> HalfEdgeMesh {
-        Ok(crate::mesh::halfedge::primitives::Circle::build(
+        Ok(crate::mesh::halfedge::primitives::Circle::build_open(
             center.0,
             radius,
             num_vertices as usize,
