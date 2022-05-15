@@ -641,8 +641,13 @@ pub fn bridge_loops(
     let mut conn = mesh.write_connectivity();
     let positions = mesh.read_positions();
 
+    /*
     if loop_1.len() != loop_2.len() {
         bail!("Loops to bridge need to be of the same length.")
+    } */
+
+    if loop_1.is_empty() || loop_2.is_empty() {
+        bail!("Loops to bridge cannot be empty.")
     }
 
     for h in loop_1.iter().chain(loop_2.iter()) {
@@ -651,6 +656,52 @@ pub fn bridge_loops(
         }
     }
 
+    /// The halfedges could come in any order, but we need them as ordered
+    /// sequences, starting at the sequence head when that can be determined.
+    /// There are two cases to distinguish here: closed loop and open loop
+    ///
+    /// This function finds what we call the 'sequence head', that is, the first
+    /// halfedge in the loop s.t. by following its `next` pointer you reach all
+    /// other halfedges in the loop. For closed loops this may be any edge.
+    ///
+    /// The second return value is a boolean, indicating whether the halfedges
+    /// form a closed loop or not.
+    fn find_sequence_head(
+        conn: &MeshConnectivity,
+        edges: &[HalfEdgeId],
+    ) -> Result<(HalfEdgeId, bool)> {
+        let mut remaining = Vec::from_iter(edges.iter_cpy());
+        let mut first_iter = true;
+        let mut closed_loop = false;
+        let mut last_seen = *remaining.first().expect("We asserted not empty");
+
+        while let Some(halfedge) = remaining.pop() {
+            dbg!(halfedge);
+            last_seen = halfedge;
+            for h in conn.halfedge_loop_iter(halfedge) {
+                if let Some(i) = remaining.iter().position(|hh| *hh == h) {
+                    remaining.swap_remove(i);
+                } else {
+                    if !first_iter && !edges.contains(&h) {
+                        bail!("The halfedges do not form a line or loop.")
+                    }
+                    break;
+                }
+            }
+            if remaining.is_empty() && first_iter {
+                closed_loop = true;
+            }
+            first_iter = false;
+        }
+
+        Ok((last_seen, closed_loop))
+    }
+
+    let (seq_head_1, closed_1) = find_sequence_head(&conn, loop_1).unwrap();
+    conn.add_debug_halfedge(seq_head_1, DebugMark::red(&format!("{}", closed_1)));
+    // WIP: This apparently works. Needs more test cases
+
+    /*
     for (i, h) in loop_1.iter().enumerate() {
         conn.add_debug_halfedge(*h, DebugMark::red(&format!("s{i}")))
     }
@@ -692,11 +743,11 @@ pub fn bridge_loops(
         .circular_tuple_windows()
         .zip(verts_2.iter_cpy().circular_tuple_windows())
     {
-        // WIP: 
+        // WIP:
         // - [x] It would also be good if we can draw all of this on the screen to
         //   see if the values we computed up to this point make sense. Time to
         //   rescue the on-screen text visualization code?
-        // - Need to find a good strategy to tie all the pointers together here. 
+        // - Need to find a good strategy to tie all the pointers together here.
         // - The edge loop we're building requires fixing all the next pointers
         //   for all the halfedges in the loop. The new edges that bridge the
         //   gap also need to be tied together to their twins. We can't do all
@@ -704,7 +755,7 @@ pub fn bridge_loops(
         // - Note that we're not necessarily creating a fool circular loop with
         //   this op, so maybe it's not circular tuple windows, but just 2d
         //   windows? Or maybe we need to choose between the two.
-    }
+    } */
 
     Ok(())
 }

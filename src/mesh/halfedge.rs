@@ -50,7 +50,7 @@ pub use channels::*;
 /// number of iterations will be performed before giving an error. This error
 /// should be large enough, as faces with a very large number of vertices may
 /// trigger it.
-pub const MAX_LOOP_ITERATIONS: usize = 32;
+pub const MAX_LOOP_ITERATIONS: usize = 512;
 
 #[derive(Debug, Default, Clone)]
 pub struct HalfEdge {
@@ -302,45 +302,6 @@ impl MeshConnectivity {
     /// forming a loop across the boundaries of the mesh. The new halfedges will
     /// be marked as boundary with a None face.
     fn add_boundary_halfedges(&mut self) {
-        /* TODO: Is it safe to remove this?
-        // Make vertices in the boundary point to a halfedge that is also on the
-        // boundary.
-        //
-        // NOTE: @setzer22 The original code did this, but it didn't explain why
-        // and it's not immediately obvious.
-
-        // NOTE: We need to use this vector to defer the actual mutation because
-        // we can't iterate the mesh and do queries at the same time. It could
-        // be optimized by separating the generational arenas as separate
-        // borrows and using those. But the loss in clarity is not worth it.
-        let mut defer_vertex_halfedge_replacement = vec![];
-
-        for (v_id, vertex) in self.iter_vertices() {
-            let h0 = vertex.halfedge.expect("Should have halfedge by now");
-            let mut h = h0;
-
-            let mut counter = 0;
-
-            loop {
-                if counter > MAX_LOOP_ITERATIONS {
-                    panic!("Max number of iterations reached. Is the self malformed?");
-                }
-                counter += 1;
-
-                if self[h].twin.is_none() {
-                    defer_vertex_halfedge_replacement.push((v_id, h));
-                    break;
-                }
-                h = self.at_halfedge(h).twin().next().end();
-                if h == h0 {
-                    break;
-                }
-            }
-        }
-        for (v, h) in defer_vertex_halfedge_replacement {
-            self[v].halfedge = Some(h);
-        } */
-
         // Clone to avoid double-borrow issues
         // TODO: Again, this could be optimized. Don't care for now.
         let halfedges: Vec<HalfEdgeId> = self.iter_halfedges().map(|(h, _)| h).collect();
@@ -374,14 +335,6 @@ impl MeshConnectivity {
                 self[b_h].next = Some(b_h_next);
             }
         }
-
-        /* TODO: Is it safe to remove this?
-        // Cycle the halfedge pointers for vertices again. Original code says it
-        // makes this to make "traversal easier" :shrug:
-        let vertices: Vec<VertexId> = self.iter_vertices().map(|(v, _)| v).collect(); // Yet another spurious copy.
-        for v in vertices {
-            self[v].halfedge = Some(self.at_vertex(v).halfedge().twin().next().end());
-        } */
     }
 
     fn halfedge_loop(&self, h0: HalfEdgeId) -> SVec<HalfEdgeId> {
@@ -404,6 +357,15 @@ impl MeshConnectivity {
             }
         }
         ret
+    }
+
+    fn halfedge_loop_iter(&self, h0: HalfEdgeId) -> HalfedgeLoopIterator<'_> {
+        HalfedgeLoopIterator {
+            conn: self,
+            start: h0,
+            next: h0,
+            count: 0,
+        }
     }
 
     pub fn iter_vertices(&self) -> impl Iterator<Item = (VertexId, &Vertex)> {
@@ -936,5 +898,29 @@ pub mod test {
             let _q = conn.add_quad(&mut positions, a, b, c, d);
         }
         dbg!(hem.generate_triangle_buffers_flat(true).unwrap());
+    }
+}
+
+pub struct HalfedgeLoopIterator<'a> {
+    conn: &'a MeshConnectivity,
+    start: HalfEdgeId,
+    next: HalfEdgeId,
+    count: usize,
+}
+
+impl<'a> Iterator for HalfedgeLoopIterator<'a> {
+    type Item = HalfEdgeId;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.count >= MAX_LOOP_ITERATIONS {
+            panic!("Max number of iterations reached. Is the mesh malformed?");
+        } else if self.count > 0 && self.next == self.start {
+            None
+        } else {
+            let res = self.next;
+            self.next = self.conn.at_halfedge(self.next).next().end();
+            self.count += 1;
+            Some(res)
+        }
     }
 }
