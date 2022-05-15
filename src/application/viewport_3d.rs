@@ -38,6 +38,7 @@ pub struct Viewport3d {
     viewport_rect: egui::Rect,
     parent_scale: f32,
     pub settings: Viewport3dSettings,
+    view_proj: Mat4,
 }
 
 struct OrbitCamera {
@@ -71,6 +72,7 @@ impl Viewport3d {
                 render_vertices: true,
                 matcap: 0,
             },
+            view_proj: Mat4::default(),
         }
     }
 
@@ -117,6 +119,9 @@ impl Viewport3d {
         self.update_camera(render_ctx);
         self.input.update();
 
+        let camera_manager = &render_ctx.renderer.data_core.lock().camera_manager;
+        self.view_proj = camera_manager.view_proj();
+
         // TODO: What if we ever have multiple 3d viewports? There's no way to
         // set the aspect ratio differently for different render passes in rend3
         // right now. The camera is global.
@@ -155,7 +160,12 @@ impl Viewport3d {
         )
     }
 
-    pub fn show_ui(&mut self, ui: &mut egui::Ui, offscreen_viewport: &mut AppViewport) {
+    pub fn show_ui(
+        &mut self,
+        ui: &mut egui::Ui,
+        offscreen_viewport: &mut AppViewport,
+        mesh: Option<&HalfEdgeMesh>,
+    ) {
         ui.vertical(|ui| {
             ui.horizontal(|ui| {
                 mesh_visuals_popup(ui, |ui| {
@@ -224,6 +234,14 @@ impl Viewport3d {
             });
             offscreen_viewport.show(ui, ui.available_size());
         });
+        if let Some(mesh) = mesh {
+            crate::app_window::gui_overlay::draw_gui_overlays(
+                &self.view_proj,
+                offscreen_viewport.rect,
+                ui.ctx(),
+                mesh,
+            );
+        }
     }
 }
 

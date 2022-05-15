@@ -109,10 +109,10 @@ pub fn load(lua: &Lua) -> anyhow::Result<()> {
         let mut mesh = mesh.borrow_mut::<HalfEdgeMesh>()?;
         let loop_1 = mesh
             .read_connectivity()
-            .resolve_halfedge_selection_full(dbg!(loop_1));
+            .resolve_halfedge_selection_full(loop_1);
         let loop_2 = mesh
             .read_connectivity()
-            .resolve_halfedge_selection_full(dbg!(loop_2));
+            .resolve_halfedge_selection_full(loop_2);
         crate::mesh::halfedge::edit_ops::bridge_loops(&mut mesh, &loop_1, &loop_2).map_lua_err()?;
         Ok(())
     });

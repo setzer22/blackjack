@@ -639,7 +639,7 @@ pub fn bridge_loops(
     loop_2: &[HalfEdgeId],
 ) -> Result<()> {
     let mut conn = mesh.write_connectivity();
-    let mut positions = mesh.read_positions();
+    let positions = mesh.read_positions();
 
     if loop_1.len() != loop_2.len() {
         bail!("Loops to bridge need to be of the same length.")
@@ -693,6 +693,9 @@ pub fn bridge_loops(
         .zip(verts_2.iter_cpy().circular_tuple_windows())
     {
         // WIP: 
+        // - [x] It would also be good if we can draw all of this on the screen to
+        //   see if the values we computed up to this point make sense. Time to
+        //   rescue the on-screen text visualization code?
         // - Need to find a good strategy to tie all the pointers together here. 
         // - The edge loop we're building requires fixing all the next pointers
         //   for all the halfedges in the loop. The new edges that bridge the
@@ -701,9 +704,6 @@ pub fn bridge_loops(
         // - Note that we're not necessarily creating a fool circular loop with
         //   this op, so maybe it's not circular tuple windows, but just 2d
         //   windows? Or maybe we need to choose between the two.
-        // - It would also be good if we can draw all of this on the screen to
-        //   see if the values we computed up to this point make sense. Time to
-        //   rescue the on-screen text visualization code?
     }
 
     Ok(())

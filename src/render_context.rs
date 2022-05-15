@@ -132,14 +132,11 @@ impl RenderContext {
         });
     }
 
-    #[allow(dead_code)]
-    pub fn project_point(&self, point: Vec3, screen_size: Vec2) -> Vec2 {
-        let camera_manager = &self.renderer.data_core.lock().camera_manager;
-
-        let clip = camera_manager.view_proj().project_point3(point);
+    pub fn project_point(view_proj: &Mat4, point: Vec3, viewport_size: Vec2, viewport_offset: Vec2) -> Vec2 {
+        let clip = view_proj.project_point3(point);
         let clip = Vec2::new(clip.x, -clip.y);
         let zero_to_one = (Vec2::new(clip.x, clip.y) + Vec2::ONE) * 0.5;
-        zero_to_one * screen_size
+        zero_to_one * viewport_size + viewport_offset
     }
 
     pub fn add_light(&mut self, light: r3::DirectionalLight) {
