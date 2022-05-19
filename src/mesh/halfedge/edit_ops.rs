@@ -2,6 +2,7 @@ use std::collections::BTreeSet;
 
 use anyhow::{anyhow, bail};
 use float_ord::FloatOrd;
+use slotmap::Key;
 use smallvec::SmallVec;
 
 use crate::prelude::*;
@@ -641,10 +642,12 @@ pub fn bridge_loops(
     let mut conn = mesh.write_connectivity();
     let positions = mesh.read_positions();
 
-    /*
     if loop_1.len() != loop_2.len() {
         bail!("Loops to bridge need to be of the same length.")
-    } */
+    }
+
+    // We know the two loops have the same length
+    let loop_len = loop_1.len();
 
     if loop_1.is_empty() || loop_2.is_empty() {
         bail!("Loops to bridge cannot be empty.")
@@ -675,78 +678,106 @@ pub fn bridge_loops(
         let mut closed_loop = false;
         let mut last_seen = *remaining.first().expect("We asserted not empty");
 
-        while let Some(halfedge) = remaining.pop() {
-            dbg!(halfedge);
+        while let Some(halfedge) = remaining.last().copied() {
             last_seen = halfedge;
+            let mut iterator_finished = true;
             for h in conn.halfedge_loop_iter(halfedge) {
-                if let Some(i) = remaining.iter().position(|hh| *hh == h) {
+                if let Some(i) = (&remaining).iter().position(|hh| *hh == h) {
                     remaining.swap_remove(i);
                 } else {
                     if !first_iter && !edges.contains(&h) {
                         bail!("The halfedges do not form a line or loop.")
                     }
+                    iterator_finished = false;
                     break;
                 }
             }
-            if remaining.is_empty() && first_iter {
+            if remaining.is_empty() && first_iter && iterator_finished {
                 closed_loop = true;
             }
             first_iter = false;
         }
-
         Ok((last_seen, closed_loop))
     }
 
-    let (seq_head_1, closed_1) = find_sequence_head(&conn, loop_1).unwrap();
-    conn.add_debug_halfedge(seq_head_1, DebugMark::red(&format!("{}", closed_1)));
-    // WIP: This apparently works. Needs more test cases
+    let (seq_head_1, closed_1) = find_sequence_head(&conn, loop_1)?;
+    let (seq_head_2, closed_2) = find_sequence_head(&conn, loop_2)?;
+
+    if closed_1 != closed_2 {
+        bail!("Can't bridge an open loop with a closed loop")
+    }
+
+    let closed = closed_1;
 
     /*
-    for (i, h) in loop_1.iter().enumerate() {
-        conn.add_debug_halfedge(*h, DebugMark::red(&format!("s{i}")))
-    }
-
-    for (i, h) in loop_2.iter().enumerate() {
-        conn.add_debug_halfedge(*h, DebugMark::purple(&format!("L{i}")))
-    }
-
-    let verts_1 = loop_1
+    for (i, h) in conn
+        .halfedge_loop(seq_head_1)
         .iter_cpy()
+        .enumerate()
+        .take(loop_1.len())
+    {
+        conn.add_debug_halfedge(h, DebugMark::red(&format!("{i}")));
+    }*/
+
+    // At this point, we can be sure that the edges form a loop starting at
+    // seq_head and loop_len elements.
+    let verts_1 = conn
+        .halfedge_loop_iter(seq_head_1)
+        .take(loop_len)
         .map(|h| conn.at_halfedge(h).vertex().end())
         .collect_vec();
-    let verts_2 = loop_2
-        .iter_cpy()
+    let verts_2 = conn
+        .halfedge_loop_iter(seq_head_2)
+        .take(loop_len)
         .map(|h| conn.at_halfedge(h).vertex().end())
         .collect_vec();
 
-    // Each vertex in the short array needs to be mapped to a vertex in the long
-    // array. We find the best possible mapping which minimizes the sum of
+    // Each vertex in the first loop needs to be mapped to a vertex in the other
+    // loop. We find the best possible mapping which minimizes the sum of
     // distances between vertex pairs
 
-    let n = verts_1.len();
-    let v1_best_shift = (0..n)
+    let v1_best_shift = (0..loop_len)
         .position_min_by_key(|i| {
             // Compute sum of distances after shifting verts_1 by i positions
             FloatOrd(
-                rotate_iter(verts_1.iter_cpy(), *i, n)
+                rotate_iter(verts_1.iter_cpy(), *i, loop_len)
                     .enumerate()
-                    .map(|(j, v_sh)| positions[v_sh].distance_squared(positions[verts_2[j]]))
+                    .map(|(j, v_sh)| {
+                        // NOTE: We index verts_2 backwards with respect to
+                        // verts_1. This is because the two loops are facing in
+                        // opposite directions, otherwise we wouldn't be able to
+                        // bridge them
+                        positions[v_sh].distance_squared(positions[verts_2[loop_len - 1 - j]])
+                    })
                     .sum::<f32>(),
             )
         })
-        .ok_or_else(|| anyhow!("Empty loop"))?;
+        .expect("Loop should not be empty.");
 
-    let verts_1_shifted = rotate_iter(verts_1.iter_cpy(), v1_best_shift, n).collect_vec();
+    let verts_1_shifted = rotate_iter(verts_1.iter_cpy(), v1_best_shift, loop_len).collect_vec();
+
+    for (i, v) in verts_1_shifted.iter().enumerate() {
+        conn.add_debug_vertex(*v, DebugMark::blue(&format!("{i}:{:?}", v.data().as_ffi() & 0x0000_0000_ffff_ffff)))
+    }
+    for (i, v) in verts_2.iter().enumerate() {
+        conn.add_debug_vertex(*v, DebugMark::blue(&format!("{i}:{:?}", v.data().as_ffi() & 0x0000_0000_ffff_ffff)))
+    }
 
     for ((v1, v2), (v3, v4)) in verts_1_shifted
         .iter_cpy()
         .circular_tuple_windows()
         .zip(verts_2.iter_cpy().circular_tuple_windows())
     {
+        // WIP: 5/19 I don't think finding the optimal rotation is necessary
+        // here. If we want to sew the two loops together, there's only one way
+        // of doing it that doesn't break in very obvious ways: Iterating the
+        // two loops in parallel, from start to finish.
+
         // WIP:
         // - [x] It would also be good if we can draw all of this on the screen to
         //   see if the values we computed up to this point make sense. Time to
         //   rescue the on-screen text visualization code?
+        // - [x] Fix the seq_head logic
         // - Need to find a good strategy to tie all the pointers together here.
         // - The edge loop we're building requires fixing all the next pointers
         //   for all the halfedges in the loop. The new edges that bridge the
@@ -755,7 +786,7 @@ pub fn bridge_loops(
         // - Note that we're not necessarily creating a fool circular loop with
         //   this op, so maybe it's not circular tuple windows, but just 2d
         //   windows? Or maybe we need to choose between the two.
-    } */
+    }
 
     Ok(())
 }
