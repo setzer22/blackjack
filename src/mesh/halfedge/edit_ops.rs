@@ -633,6 +633,13 @@ pub fn set_smooth_normals(mesh: &mut HalfEdgeMesh) -> Result<()> {
     Ok(())
 }
 
+pub fn make_quad(conn: &mut MeshConnectivity, verts: [VertexId; 4]) {
+    for (v1, v2) in verts.iter_cpy().circular_tuple_windows() {
+        let h_1_2 = conn.at_vertex(v1).halfedge_to(v2).ok();
+        let h_1_2 = conn.at_vertex(v2).halfedge_to(v1).ok();
+    }
+}
+
 /// Connects two (not necessarily closed) halfedge loops with faces.
 pub fn bridge_loops(
     mesh: &mut HalfEdgeMesh,
@@ -733,46 +740,75 @@ pub fn bridge_loops(
         .collect_vec();
 
     // Each vertex in the first loop needs to be mapped to a vertex in the other
-    // loop. We find the best possible mapping which minimizes the sum of
-    // distances between vertex pairs
+    // loop. When the loops are open, there's just a single way to do it, but
+    // when the loops are closed there's `loop_len` possible combinations. We
+    // find the best possible mapping which minimizes the sum of distances
+    // between vertex pairs
 
-    let v1_best_shift = (0..loop_len)
-        .position_min_by_key(|i| {
-            // Compute sum of distances after shifting verts_1 by i positions
-            FloatOrd(
-                rotate_iter(verts_1.iter_cpy(), *i, loop_len)
+    let v1_best_shift = if closed {
+        // Computes the sum of distances after shifting verts_1 by i positions
+        let sum_distances_rotated = |i: usize| {
+            let x = FloatOrd(
+                rotate_iter(verts_1.iter_cpy(), i, loop_len)
                     .enumerate()
                     .map(|(j, v_sh)| {
                         // NOTE: We index verts_2 backwards with respect to
                         // verts_1. This is because the two loops are facing in
                         // opposite directions, otherwise we wouldn't be able to
                         // bridge them
-                        positions[v_sh].distance_squared(positions[verts_2[loop_len - 1 - j]])
+                        positions[v_sh].distance_squared(positions[verts_2[(loop_len - 1) - j]])
                     })
                     .sum::<f32>(),
-            )
-        })
-        .expect("Loop should not be empty.");
+            );
+            dbg!(i, x);
+            x
+        };
+
+        // We memoize the sum_distances in a vec because it's a relatively
+        // expensive function and `position_min_by_key` will call it multiple
+        // times per key.
+        let distances = (0..loop_len).map(sum_distances_rotated).collect_vec();
+
+        (0..loop_len)
+            .position_min_by_key(|i| distances[*i])
+            .expect("Loop should not be empty.")
+    } else {
+        // The no-op rotation, in case of bridging two open loops.
+        0
+    };
+
+    dbg!(v1_best_shift);
 
     let verts_1_shifted = rotate_iter(verts_1.iter_cpy(), v1_best_shift, loop_len).collect_vec();
 
+    /*
     for (i, v) in verts_1_shifted.iter().enumerate() {
-        conn.add_debug_vertex(*v, DebugMark::blue(&format!("{i}:{:?}", v.data().as_ffi() & 0x0000_0000_ffff_ffff)))
+        conn.add_debug_vertex(
+            *v,
+            DebugMark::blue(&format!(
+                "{i}th:ID({:?})",
+                v.data().as_ffi() & 0x0000_0000_ffff_ffff
+            )),
+        )
     }
-    for (i, v) in verts_2.iter().enumerate() {
-        conn.add_debug_vertex(*v, DebugMark::blue(&format!("{i}:{:?}", v.data().as_ffi() & 0x0000_0000_ffff_ffff)))
-    }
+    for (i, v) in verts_2.iter().rev().enumerate() {
+        conn.add_debug_vertex(
+            *v,
+            DebugMark::blue(&format!(
+                "{i}th:ID({:?})",
+                v.data().as_ffi() & 0x0000_0000_ffff_ffff
+            )),
+        )
+    } */
 
-    for ((v1, v2), (v3, v4)) in verts_1_shifted
+    for (i, ((v1, v2), (v3, v4))) in verts_1_shifted
         .iter_cpy()
         .circular_tuple_windows()
-        .zip(verts_2.iter_cpy().circular_tuple_windows())
+        .zip(verts_2.iter_cpy().rev().circular_tuple_windows())
+        .enumerate()
     {
-        // WIP: 5/19 I don't think finding the optimal rotation is necessary
-        // here. If we want to sew the two loops together, there's only one way
-        // of doing it that doesn't break in very obvious ways: Iterating the
-        // two loops in parallel, from start to finish.
-
+        conn.add_debug_vertex(v1, DebugMark::blue(&format!("{i}",)));
+        conn.add_debug_vertex(v3, DebugMark::blue(&format!("{i}",)));
         // WIP:
         // - [x] It would also be good if we can draw all of this on the screen to
         //   see if the values we computed up to this point make sense. Time to
