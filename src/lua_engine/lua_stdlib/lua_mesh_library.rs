@@ -117,6 +117,18 @@ pub fn load(lua: &Lua) -> anyhow::Result<()> {
         Ok(())
     });
 
+    lua_fn!(lua, ops, "make_quad", |mesh: AnyUserData,
+                                    vertices: SelectionExpression|
+     -> () {
+        let mesh = mesh.borrow_mut::<HalfEdgeMesh>()?;
+        let loop_1 = mesh
+            .read_connectivity()
+            .resolve_vertex_selection_full(vertices);
+        let mut conn = mesh.write_connectivity();
+        crate::mesh::halfedge::edit_ops::make_quad(&mut conn, &loop_1).map_lua_err()?;
+        Ok(())
+    });
+
     let types = lua.create_table()?;
     types.set("VertexId", ChannelKeyType::VertexId)?;
     types.set("FaceId", ChannelKeyType::FaceId)?;

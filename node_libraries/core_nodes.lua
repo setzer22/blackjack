@@ -114,6 +114,19 @@ local edit_ops = {
             return {out_mesh = out_mesh}
         end
     },
+    MakeQuadFace = {
+        label = "Make face (quad)",
+        inputs = {
+            mesh("in_mesh"), selection("verts")
+        },
+        outputs = {mesh("out_mesh")},
+        returns = "out_mesh",
+        op = function(inputs)
+            local out_mesh = inputs.in_mesh:clone()
+            Ops.make_quad(out_mesh, inputs.verts)
+            return {out_mesh = out_mesh}
+        end
+    },
     MergeMeshes = {
         label = "Merge meshes",
         inputs = {mesh("mesh_a"), mesh("mesh_b")},

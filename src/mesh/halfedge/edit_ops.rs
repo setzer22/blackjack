@@ -633,7 +633,18 @@ pub fn set_smooth_normals(mesh: &mut HalfEdgeMesh) -> Result<()> {
     Ok(())
 }
 
-pub fn make_quad(conn: &mut MeshConnectivity, verts: [VertexId; 4]) -> Result<()> {
+pub fn make_quad(conn: &mut MeshConnectivity, verts: &[VertexId]) -> Result<()> {
+    // WIP: This seems to be working, but has a few issues:
+    // - The order of the faces in the quad seems to be irrespective of the
+    //   order of the operands? -> Somewhere when parsing the selection
+    //   expression the values are getting sorted. I need to split this into 4
+    //   separate parameters, or add an "ordered" list parameter type.
+    // - Where is this sorting behavior coming from anyway?
+
+    if verts.len() != 4 {
+        bail!("The make_quad operation only accepts quads.")
+    }
+
     #[derive(Clone, Copy, Debug, Default)]
     struct EdgeInfo {
         /// The id of the halfedge
@@ -669,11 +680,26 @@ pub fn make_quad(conn: &mut MeshConnectivity, verts: [VertexId; 4]) -> Result<()
         };
     }
 
+    fn prev_i(i: usize, n: usize) -> usize {
+        // NOTE: Use rem_euclid for correct negative modulus and cast to isize
+        // to avoid underflow.
+        ((i as isize - 1).rem_euclid(n as isize)) as usize
+    }
+
+    // Compute the predecessors of a in the original graph. We can only do this
+    // as long as the mesh is well-formed because the `previous()` operator
+    // traverses a full halfedge loop.
+    let mut a_prev_orig = [Default::default(); 4];
+    for (i, a_i) in a_edges.iter_cpy().enumerate() {
+        if a_i.existed {
+            a_prev_orig[i] = conn.at_halfedge(a_i.id).previous().try_end()?;
+        }
+    }
+
     // Fix the next pointer for 'a' predecessors (if any)
     for (i, a_i) in a_edges.iter_cpy().enumerate() {
         if a_i.existed {
-            let a_i_prev = conn.at_halfedge(a_i.id).previous().try_end()?;
-            conn[a_i_prev].next = Some(b_edges[(i - 1).rem_euclid(4)].id);
+            conn[a_prev_orig[i]].next = Some(b_edges[prev_i(i, 4)].id);
         }
     }
 
@@ -684,8 +710,7 @@ pub fn make_quad(conn: &mut MeshConnectivity, verts: [VertexId; 4]) -> Result<()
         conn[b_i.id].next = if b_i.existed {
             conn[b_i.id].next
         } else {
-            // NOTE: Use rem_euclid for negative modulus to be correct
-            let a_prev = a_edges[(i - 1).rem_euclid(4)];
+            let a_prev = a_edges[prev_i(i, 4)];
             if a_prev.existed {
                 Some(
                     conn[a_prev.id]
@@ -693,7 +718,7 @@ pub fn make_quad(conn: &mut MeshConnectivity, verts: [VertexId; 4]) -> Result<()
                         .ok_or_else(|| anyhow!("Fatal: Halfedge should have next"))?,
                 )
             } else {
-                Some(b_edges[(i - 1).rem_euclid(4)].id)
+                Some(b_edges[prev_i(i, 4)].id)
             }
         };
         conn[b_i.id].face = if b_i.existed {
@@ -710,6 +735,14 @@ pub fn make_quad(conn: &mut MeshConnectivity, verts: [VertexId; 4]) -> Result<()
         conn[a_i.id].twin = Some(b_edges[i].id);
         conn[a_i.id].face = Some(face);
         conn[a_i.id].vertex = Some(verts[i]);
+    }
+
+    // Give the face a halfedge
+    conn[face].halfedge = Some(a_edges[0].id);
+
+    // For verts that were disconnected, give them a halfedge
+    for (i, v) in verts.iter_cpy().enumerate() {
+        conn[v].halfedge = Some(a_edges[i].id)
     }
 
     Ok(())
