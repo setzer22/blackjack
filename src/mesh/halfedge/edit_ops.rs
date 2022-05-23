@@ -633,11 +633,86 @@ pub fn set_smooth_normals(mesh: &mut HalfEdgeMesh) -> Result<()> {
     Ok(())
 }
 
-pub fn make_quad(conn: &mut MeshConnectivity, verts: [VertexId; 4]) {
-    for (v1, v2) in verts.iter_cpy().circular_tuple_windows() {
-        let h_1_2 = conn.at_vertex(v1).halfedge_to(v2).ok();
-        let h_1_2 = conn.at_vertex(v2).halfedge_to(v1).ok();
+pub fn make_quad(conn: &mut MeshConnectivity, verts: [VertexId; 4]) -> Result<()> {
+    #[derive(Clone, Copy, Debug, Default)]
+    struct EdgeInfo {
+        /// The id of the halfedge
+        id: HalfEdgeId,
+        /// Did the halfedge exist in the original mesh?
+        existed: bool,
     }
+
+    // The new quad face
+    let face = conn.alloc_face(None);
+
+    // The halfedges in the interior loop, the one that will hold the quad
+    // - NOTE: Default data is replaced in the loop
+    let mut a_edges = [EdgeInfo::default(); 4];
+    // The halfedges in the exterior loop, the twins of interior_hs, in the same
+    // order, so their next pointers are reversed to the order of the array.
+    let mut b_edges = [EdgeInfo::default(); 4];
+
+    // Fill the arrays
+    for (i, (v1, v2)) in verts.iter_cpy().circular_tuple_windows().enumerate() {
+        let a_i = conn.at_vertex(v1).halfedge_to(v2).try_end().ok();
+        let b_i = conn.at_vertex(v2).halfedge_to(v1).try_end().ok();
+
+        // Take note of any existing arcs. Generate new halfedges otherwise. We
+        // will tie them up later.
+        a_edges[i] = EdgeInfo {
+            id: a_i.unwrap_or_else(|| conn.alloc_halfedge(HalfEdge::default())),
+            existed: a_i.is_some(),
+        };
+        b_edges[i] = EdgeInfo {
+            id: b_i.unwrap_or_else(|| conn.alloc_halfedge(HalfEdge::default())),
+            existed: b_i.is_some(),
+        };
+    }
+
+    // Fix the next pointer for 'a' predecessors (if any)
+    for (i, a_i) in a_edges.iter_cpy().enumerate() {
+        if a_i.existed {
+            let a_i_prev = conn.at_halfedge(a_i.id).previous().try_end()?;
+            conn[a_i_prev].next = Some(b_edges[(i - 1).rem_euclid(4)].id);
+        }
+    }
+
+    // Fill data for the 'b' halfedges.
+    for (i, b_i) in b_edges.iter_cpy().enumerate() {
+        conn[b_i.id].twin = Some(a_edges[i].id);
+        conn[b_i.id].vertex = Some(verts[(i + 1) % 4]);
+        conn[b_i.id].next = if b_i.existed {
+            conn[b_i.id].next
+        } else {
+            // NOTE: Use rem_euclid for negative modulus to be correct
+            let a_prev = a_edges[(i - 1).rem_euclid(4)];
+            if a_prev.existed {
+                Some(
+                    conn[a_prev.id]
+                        .next
+                        .ok_or_else(|| anyhow!("Fatal: Halfedge should have next"))?,
+                )
+            } else {
+                Some(b_edges[(i - 1).rem_euclid(4)].id)
+            }
+        };
+        conn[b_i.id].face = if b_i.existed {
+            conn[b_i.id].face
+        } else {
+            None // None here means boundary
+        }
+    }
+
+    // Fill data for the 'a' halfedges. This happens last because we need some
+    // data from the original connectivity before we override it.
+    for (i, a_i) in a_edges.iter_cpy().enumerate() {
+        conn[a_i.id].next = Some(a_edges[(i + 1) % 4].id);
+        conn[a_i.id].twin = Some(b_edges[i].id);
+        conn[a_i.id].face = Some(face);
+        conn[a_i.id].vertex = Some(verts[i]);
+    }
+
+    Ok(())
 }
 
 /// Connects two (not necessarily closed) halfedge loops with faces.
