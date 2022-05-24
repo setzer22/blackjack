@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::{collections::BTreeSet, marker::PhantomData};
 
 use anyhow::{anyhow, bail};
 use float_ord::FloatOrd;
@@ -634,13 +634,6 @@ pub fn set_smooth_normals(mesh: &mut HalfEdgeMesh) -> Result<()> {
 }
 
 pub fn make_quad(conn: &mut MeshConnectivity, verts: &[VertexId]) -> Result<()> {
-    // WIP: This seems to be working, but has a few issues:
-    // - The order of the faces in the quad seems to be irrespective of the
-    //   order of the operands? -> Somewhere when parsing the selection
-    //   expression the values are getting sorted. I need to split this into 4
-    //   separate parameters, or add an "ordered" list parameter type.
-    // - Where is this sorting behavior coming from anyway?
-
     if verts.len() != 4 {
         bail!("The make_quad operation only accepts quads.")
     }
@@ -824,16 +817,6 @@ pub fn bridge_loops(
 
     let closed = closed_1;
 
-    /*
-    for (i, h) in conn
-        .halfedge_loop(seq_head_1)
-        .iter_cpy()
-        .enumerate()
-        .take(loop_1.len())
-    {
-        conn.add_debug_halfedge(h, DebugMark::red(&format!("{i}")));
-    }*/
-
     // At this point, we can be sure that the edges form a loop starting at
     // seq_head and loop_len elements.
     let verts_1 = conn
@@ -885,52 +868,34 @@ pub fn bridge_loops(
         0
     };
 
-    dbg!(v1_best_shift);
-
     let verts_1_shifted = rotate_iter(verts_1.iter_cpy(), v1_best_shift, loop_len).collect_vec();
 
-    /*
-    for (i, v) in verts_1_shifted.iter().enumerate() {
-        conn.add_debug_vertex(
-            *v,
-            DebugMark::blue(&format!(
-                "{i}th:ID({:?})",
-                v.data().as_ffi() & 0x0000_0000_ffff_ffff
-            )),
-        )
-    }
-    for (i, v) in verts_2.iter().rev().enumerate() {
-        conn.add_debug_vertex(
-            *v,
-            DebugMark::blue(&format!(
-                "{i}th:ID({:?})",
-                v.data().as_ffi() & 0x0000_0000_ffff_ffff
-            )),
-        )
-    } */
+    // WIP: Current test 1..8 | 24..31 Logic below seems correct, but there is
+    // an edge case yet to consider. When the loop is not closed, you get one
+    // less quad than expected. This is because the last vertex in the loop is
+    // the *target* vertex of the halfedge. That is: There is one more vertex
+    // than halfedge. This does not happen for the closed loop case.
 
+    println!("====");
     for (i, ((v1, v2), (v3, v4))) in verts_1_shifted
         .iter_cpy()
-        .circular_tuple_windows()
-        .zip(verts_2.iter_cpy().rev().circular_tuple_windows())
+        .branch(
+            closed,
+            |it| it.circular_tuple_windows(),
+            |it| it.tuple_windows(),
+        )
+        .zip(verts_2.iter_cpy().rev().branch(
+            closed,
+            |it| it.circular_tuple_windows(),
+            |it| it.tuple_windows(),
+        ))
         .enumerate()
     {
+        println!("({v1:?}, {v2:?})");
         conn.add_debug_vertex(v1, DebugMark::blue(&format!("{i}",)));
         conn.add_debug_vertex(v3, DebugMark::blue(&format!("{i}",)));
-        // WIP:
-        // - [x] It would also be good if we can draw all of this on the screen to
-        //   see if the values we computed up to this point make sense. Time to
-        //   rescue the on-screen text visualization code?
-        // - [x] Fix the seq_head logic
-        // - Need to find a good strategy to tie all the pointers together here.
-        // - The edge loop we're building requires fixing all the next pointers
-        //   for all the halfedges in the loop. The new edges that bridge the
-        //   gap also need to be tied together to their twins. We can't do all
-        //   of this in a single loop.
-        // - Note that we're not necessarily creating a fool circular loop with
-        //   this op, so maybe it's not circular tuple windows, but just 2d
-        //   windows? Or maybe we need to choose between the two.
-    }
+        make_quad(&mut conn, &[v2, v1, v3, v4])?;
+    };
 
     Ok(())
 }

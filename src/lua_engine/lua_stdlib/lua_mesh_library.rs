@@ -1,6 +1,6 @@
 use std::{cell::RefCell, rc::Rc};
 
-use mlua::{Function, Value};
+use mlua::{ExternalResult, Function, Value};
 
 use crate::prelude::halfedge::{DynChannel, RawChannelId};
 
@@ -118,14 +118,27 @@ pub fn load(lua: &Lua) -> anyhow::Result<()> {
     });
 
     lua_fn!(lua, ops, "make_quad", |mesh: AnyUserData,
-                                    vertices: SelectionExpression|
+                                    a: SelectionExpression,
+                                    b: SelectionExpression,
+                                    c: SelectionExpression,
+                                    d: SelectionExpression|
      -> () {
         let mesh = mesh.borrow_mut::<HalfEdgeMesh>()?;
-        let loop_1 = mesh
-            .read_connectivity()
-            .resolve_vertex_selection_full(vertices);
         let mut conn = mesh.write_connectivity();
-        crate::mesh::halfedge::edit_ops::make_quad(&mut conn, &loop_1).map_lua_err()?;
+
+        let resolve = |sel| {
+            conn.resolve_vertex_selection_full(sel)
+                .first()
+                .copied()
+                .ok_or_else(|| anyhow::anyhow!("Invalid vertex expression"))
+                .to_lua_err()
+        };
+
+        let a = resolve(a)?;
+        let b = resolve(b)?;
+        let c = resolve(c)?;
+        let d = resolve(d)?;
+        crate::mesh::halfedge::edit_ops::make_quad(&mut conn, &[a, b, c, d]).map_lua_err()?;
         Ok(())
     });
 

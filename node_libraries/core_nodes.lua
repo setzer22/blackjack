@@ -117,13 +117,13 @@ local edit_ops = {
     MakeQuadFace = {
         label = "Make face (quad)",
         inputs = {
-            mesh("in_mesh"), selection("verts")
+            mesh("in_mesh"), selection("a"), selection("b"), selection("c"), selection("d"),
         },
         outputs = {mesh("out_mesh")},
         returns = "out_mesh",
         op = function(inputs)
             local out_mesh = inputs.in_mesh:clone()
-            Ops.make_quad(out_mesh, inputs.verts)
+            Ops.make_quad(out_mesh, inputs.a, inputs.b, inputs.c, inputs.d)
             return {out_mesh = out_mesh}
         end
     },
