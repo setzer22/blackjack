@@ -819,16 +819,54 @@ pub fn bridge_loops(
 
     // At this point, we can be sure that the edges form a loop starting at
     // seq_head and loop_len elements.
-    let verts_1 = conn
+    let loop_1 = conn
         .halfedge_loop_iter(seq_head_1)
         .take(loop_len)
-        .map(|h| conn.at_halfedge(h).vertex().end())
         .collect_vec();
-    let verts_2 = conn
+    let loop_2 = conn
         .halfedge_loop_iter(seq_head_2)
         .take(loop_len)
-        .map(|h| conn.at_halfedge(h).vertex().end())
         .collect_vec();
+
+    // When a loop is not closed, we need to add the last halfedge's dst vertex
+    // to the vertex list, because that one also needs a quad. This is not
+    // necessary for closed loops because in that case, the last halfedge's dst
+    // vertex is the first halfedge's src, so we would be repeating one vertex.
+    //
+    // NOTE: Unfortunately this needs to be a local function without captures
+    // and type inference because `impl Trait` is not a thing in closure
+    // parameters and Rust can't infer the types.
+    fn adapt_last_dst(
+        conn: &MeshConnectivity,
+        closed: bool,
+        loop_x: &[HalfEdgeId],
+        it: impl Iterator<Item = VertexId>,
+    ) -> impl Iterator<Item = VertexId> {
+        // We use a branching iterator to add the last vertex depending on the
+        // value of `closed`.
+        it.branch(
+            closed,
+            |it| it,
+            |it| {
+                it.chain(std::iter::once(
+                    conn.at_halfedge(*loop_x.last().expect("cannot be empty"))
+                        .dst_vertex()
+                        .end(),
+                ))
+            },
+        )
+    }
+
+    let verts_1 = loop_1
+        .iter_cpy()
+        .map(|h| conn.at_halfedge(h).vertex().end());
+    let verts_1 = adapt_last_dst(&conn, closed, &loop_1, verts_1).collect_vec();
+    let verts_2 = loop_2
+        .iter_cpy()
+        .map(|h| conn.at_halfedge(h).vertex().end());
+    let verts_2 = adapt_last_dst(&conn, closed, &loop_2, verts_2).collect_vec();
+
+    let verts_len = verts_1.len();
 
     // Each vertex in the first loop needs to be mapped to a vertex in the other
     // loop. When the loops are open, there's just a single way to do it, but
@@ -840,27 +878,26 @@ pub fn bridge_loops(
         // Computes the sum of distances after shifting verts_1 by i positions
         let sum_distances_rotated = |i: usize| {
             let x = FloatOrd(
-                rotate_iter(verts_1.iter_cpy(), i, loop_len)
+                rotate_iter(verts_1.iter_cpy(), i, verts_len)
                     .enumerate()
                     .map(|(j, v_sh)| {
                         // NOTE: We index verts_2 backwards with respect to
                         // verts_1. This is because the two loops are facing in
                         // opposite directions, otherwise we wouldn't be able to
                         // bridge them
-                        positions[v_sh].distance_squared(positions[verts_2[(loop_len - 1) - j]])
+                        positions[v_sh].distance_squared(positions[verts_2[(verts_len - 1) - j]])
                     })
                     .sum::<f32>(),
             );
-            dbg!(i, x);
             x
         };
 
         // We memoize the sum_distances in a vec because it's a relatively
         // expensive function and `position_min_by_key` will call it multiple
         // times per key.
-        let distances = (0..loop_len).map(sum_distances_rotated).collect_vec();
+        let distances = (0..verts_len).map(sum_distances_rotated).collect_vec();
 
-        (0..loop_len)
+        (0..verts_len)
             .position_min_by_key(|i| distances[*i])
             .expect("Loop should not be empty.")
     } else {
@@ -868,15 +905,8 @@ pub fn bridge_loops(
         0
     };
 
-    let verts_1_shifted = rotate_iter(verts_1.iter_cpy(), v1_best_shift, loop_len).collect_vec();
+    let verts_1_shifted = rotate_iter(verts_1.iter_cpy(), v1_best_shift, verts_len).collect_vec();
 
-    // WIP: Current test 1..8 | 24..31 Logic below seems correct, but there is
-    // an edge case yet to consider. When the loop is not closed, you get one
-    // less quad than expected. This is because the last vertex in the loop is
-    // the *target* vertex of the halfedge. That is: There is one more vertex
-    // than halfedge. This does not happen for the closed loop case.
-
-    println!("====");
     for (i, ((v1, v2), (v3, v4))) in verts_1_shifted
         .iter_cpy()
         .branch(
@@ -891,11 +921,10 @@ pub fn bridge_loops(
         ))
         .enumerate()
     {
-        println!("({v1:?}, {v2:?})");
         conn.add_debug_vertex(v1, DebugMark::blue(&format!("{i}",)));
         conn.add_debug_vertex(v3, DebugMark::blue(&format!("{i}",)));
         make_quad(&mut conn, &[v2, v1, v3, v4])?;
-    };
+    }
 
     Ok(())
 }
