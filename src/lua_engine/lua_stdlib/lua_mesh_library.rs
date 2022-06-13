@@ -104,7 +104,8 @@ pub fn load(lua: &Lua) -> anyhow::Result<()> {
 
     lua_fn!(lua, ops, "bridge_loops", |mesh: AnyUserData,
                                        loop_1: SelectionExpression,
-                                       loop_2: SelectionExpression|
+                                       loop_2: SelectionExpression,
+                                       flip: usize|
      -> () {
         let mut mesh = mesh.borrow_mut::<HalfEdgeMesh>()?;
         let loop_1 = mesh
@@ -113,7 +114,7 @@ pub fn load(lua: &Lua) -> anyhow::Result<()> {
         let loop_2 = mesh
             .read_connectivity()
             .resolve_halfedge_selection_full(loop_2);
-        crate::mesh::halfedge::edit_ops::bridge_loops(&mut mesh, &loop_1, &loop_2).map_lua_err()?;
+        crate::mesh::halfedge::edit_ops::bridge_loops_ui(&mut mesh, &loop_1, &loop_2, flip).map_lua_err()?;
         Ok(())
     });
 

@@ -104,13 +104,13 @@ local edit_ops = {
     BridgeLoops = {
         label = "Bridge Loops",
         inputs = {
-            mesh("in_mesh"), selection("loop_1"), selection("loop_2") 
+            mesh("in_mesh"), selection("loop_1"), selection("loop_2"), scalar("flip", 0.0, 0.0, 10.0)
         },
         outputs = {mesh("out_mesh")},
         returns = "out_mesh",
         op = function(inputs)
             local out_mesh = inputs.in_mesh:clone()
-            Ops.bridge_loops(out_mesh, inputs.loop_1, inputs.loop_2)
+            Ops.bridge_loops(out_mesh, inputs.loop_1, inputs.loop_2, inputs.flip)
             return {out_mesh = out_mesh}
         end
     },

@@ -741,6 +741,46 @@ pub fn make_quad(conn: &mut MeshConnectivity, verts: &[VertexId]) -> Result<()> 
     Ok(())
 }
 
+/// In some operations, we want to iterate a line of consecutive halfedges in
+/// order, but typically when a selection of edges comes from the UI the edges
+/// will come in an arbitrary, sometimes non-consecutive, order.
+///
+/// There are two cases we want to distinguish: An open loop and a closed loop.
+///
+/// This function finds the 'sequence head', that is, the first halfedge in the
+/// loop s.t. by following its `next` pointer you reach all other halfedges in
+/// the loop. For closed loops this may be any edge.
+///
+/// The second return value is a boolean, indicating whether the halfedges form
+/// a closed loop or not.
+fn find_sequence_head(conn: &MeshConnectivity, edges: &[HalfEdgeId]) -> Result<(HalfEdgeId, bool)> {
+    let mut remaining = Vec::from_iter(edges.iter_cpy());
+    let mut first_iter = true;
+    let mut closed_loop = false;
+    let mut last_seen = *remaining.first().expect("We asserted not empty");
+
+    while let Some(halfedge) = remaining.last().copied() {
+        last_seen = halfedge;
+        let mut iterator_finished = true;
+        for h in conn.halfedge_loop_iter(halfedge) {
+            if let Some(i) = (&remaining).iter().position(|hh| *hh == h) {
+                remaining.swap_remove(i);
+            } else {
+                if !first_iter && !edges.contains(&h) {
+                    bail!("The halfedges do not form a line or loop.")
+                }
+                iterator_finished = false;
+                break;
+            }
+        }
+        if remaining.is_empty() && first_iter && iterator_finished {
+            closed_loop = true;
+        }
+        first_iter = false;
+    }
+    Ok((last_seen, closed_loop))
+}
+
 /// Connects two (not necessarily closed) halfedge loops with faces.
 pub fn bridge_loops(
     mesh: &mut HalfEdgeMesh,
@@ -767,49 +807,19 @@ pub fn bridge_loops(
         }
     }
 
-    /// The halfedges could come in any order, but we need them as ordered
-    /// sequences, starting at the sequence head when that can be determined.
-    /// There are two cases to distinguish here: closed loop and open loop
-    ///
-    /// This function finds what we call the 'sequence head', that is, the first
-    /// halfedge in the loop s.t. by following its `next` pointer you reach all
-    /// other halfedges in the loop. For closed loops this may be any edge.
-    ///
-    /// The second return value is a boolean, indicating whether the halfedges
-    /// form a closed loop or not.
-    fn find_sequence_head(
-        conn: &MeshConnectivity,
-        edges: &[HalfEdgeId],
-    ) -> Result<(HalfEdgeId, bool)> {
-        let mut remaining = Vec::from_iter(edges.iter_cpy());
-        let mut first_iter = true;
-        let mut closed_loop = false;
-        let mut last_seen = *remaining.first().expect("We asserted not empty");
-
-        while let Some(halfedge) = remaining.last().copied() {
-            last_seen = halfedge;
-            let mut iterator_finished = true;
-            for h in conn.halfedge_loop_iter(halfedge) {
-                if let Some(i) = (&remaining).iter().position(|hh| *hh == h) {
-                    remaining.swap_remove(i);
-                } else {
-                    if !first_iter && !edges.contains(&h) {
-                        bail!("The halfedges do not form a line or loop.")
-                    }
-                    iterator_finished = false;
-                    break;
-                }
-            }
-            if remaining.is_empty() && first_iter && iterator_finished {
-                closed_loop = true;
-            }
-            first_iter = false;
+    for h in loop_1.iter_cpy() {
+        let twin = conn.at_halfedge(h).twin().try_end()?;
+        if dbg!(loop_2.contains(&twin)) {
+            bail!("Trying to bridge the same loop.")
         }
-        Ok((last_seen, closed_loop))
     }
 
     let (seq_head_1, closed_1) = find_sequence_head(&conn, loop_1)?;
     let (seq_head_2, closed_2) = find_sequence_head(&conn, loop_2)?;
+
+    if seq_head_1 == seq_head_2 {
+        bail!("Trying to bridge the same loop.")
+    }
 
     if closed_1 != closed_2 {
         bail!("Can't bridge an open loop with a closed loop")
@@ -925,6 +935,102 @@ pub fn bridge_loops(
         conn.add_debug_vertex(v3, DebugMark::blue(&format!("{i}",)));
         make_quad(&mut conn, &[v2, v1, v3, v4])?;
     }
+
+    Ok(())
+}
+
+pub struct HalfEdgeChain {
+    halfedges: Vec<HalfEdgeId>,
+    closed: bool,
+}
+
+pub fn sort_bag_of_edges(
+    conn: &MeshConnectivity,
+    halfedges: &[HalfEdgeId],
+) -> Result<Vec<HalfEdgeChain>> {
+    let mut clusters = Vec::<Vec<HalfEdgeId>>::new();
+
+    let halfedges_and_their_twins = halfedges.iter_cpy().chain(
+        halfedges
+            .iter()
+            .flat_map(|h| conn.at_halfedge(*h).twin().try_end().ok()),
+    );
+    for halfedge in halfedges_and_their_twins {
+        let next = conn.at_halfedge(halfedge).next().try_end()?;
+        let prev = conn.at_halfedge(halfedge).previous().try_end()?;
+
+        if let Some(cluster) = clusters
+            .iter_mut()
+            .find(|c| c.contains(&next) || c.contains(&prev))
+        {
+            cluster.push(halfedge);
+        } else {
+            clusters.push(vec![halfedge]);
+        }
+    }
+
+    let mut result = vec![];
+
+    for cluster in clusters {
+        let (seq_head, is_closed) = find_sequence_head(conn, &cluster)?;
+        result.push(HalfEdgeChain {
+            halfedges: conn
+                .halfedge_loop_iter(seq_head)
+                .take(cluster.len())
+                .collect_vec(),
+            closed: is_closed,
+        });
+    }
+
+    Ok(result)
+}
+
+/// Same as `bridge_loops`, but a bit smarter. Instead of interpreting `loop_1`
+/// and `loop_2` as two sets of consecutive halfedges in the right winding
+/// order, it takes them as two bags of edges, sorts them and figures out the
+/// right order before calling `bridge_loops`. This is helpful when the set of
+/// edges was obtained as a manual selection from the UI.
+/// 
+/// When multiple candidates are found for the pairs of halfedges to bridge, the
+/// extra flip parameter lets you select multiple alternatives.
+pub fn bridge_loops_ui(
+    mesh: &mut HalfEdgeMesh,
+    loop_1: &[HalfEdgeId],
+    loop_2: &[HalfEdgeId],
+    flip: usize,
+) -> Result<()> {
+    if loop_1.is_empty() || loop_2.is_empty() {
+        bail!("Loops cannot be empty")
+    }
+
+    let conn = mesh.read_connectivity();
+    let positions = mesh.read_positions();
+
+    let mut sorted_1 = sort_bag_of_edges(&conn, loop_1)?;
+    let mut sorted_2 = sort_bag_of_edges(&conn, loop_2)?;
+
+    // Remove edge chains that are not in the boundary, we can't use them to bridge loops.
+    let chain_is_boundary = |chain: &HalfEdgeChain| {
+        chain
+            .halfedges
+            .iter()
+            .any(|h| conn.at_halfedge(*h).is_boundary().unwrap_or(true))
+    };
+    sorted_1.retain(chain_is_boundary);
+    sorted_2.retain(chain_is_boundary);
+
+    if sorted_1.is_empty() || sorted_2.is_empty() {
+        bail!("Could not bridge loops. No boundary edges.")
+    }
+
+    drop(positions);
+    drop(conn);
+
+    let (chain_1, chain_2) = sorted_1.iter().cartesian_product(sorted_2.iter()).cycle().nth(flip).ok_or_else(|| {
+        anyhow!("Could not bridge edge loops")
+    })?;
+
+    bridge_loops(mesh, &chain_1.halfedges, &chain_2.halfedges)?;
 
     Ok(())
 }
