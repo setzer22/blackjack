@@ -114,32 +114,19 @@ pub fn load(lua: &Lua) -> anyhow::Result<()> {
         let loop_2 = mesh
             .read_connectivity()
             .resolve_halfedge_selection_full(loop_2);
-        crate::mesh::halfedge::edit_ops::bridge_loops_ui(&mut mesh, &loop_1, &loop_2, flip).map_lua_err()?;
+        crate::mesh::halfedge::edit_ops::bridge_loops_ui(&mut mesh, &loop_1, &loop_2, flip)
+            .map_lua_err()?;
         Ok(())
     });
 
-    lua_fn!(lua, ops, "make_quad", |mesh: AnyUserData,
-                                    a: SelectionExpression,
-                                    b: SelectionExpression,
-                                    c: SelectionExpression,
-                                    d: SelectionExpression|
+    lua_fn!(lua, ops, "translate", |mesh: AnyUserData,
+                                    translate: Vec3,
+                                    rotate: Vec3,
+                                    scale: Vec3|
      -> () {
-        let mesh = mesh.borrow_mut::<HalfEdgeMesh>()?;
-        let mut conn = mesh.write_connectivity();
-
-        let resolve = |sel| {
-            conn.resolve_vertex_selection_full(sel)
-                .first()
-                .copied()
-                .ok_or_else(|| anyhow::anyhow!("Invalid vertex expression"))
-                .to_lua_err()
-        };
-
-        let a = resolve(a)?;
-        let b = resolve(b)?;
-        let c = resolve(c)?;
-        let d = resolve(d)?;
-        crate::mesh::halfedge::edit_ops::make_quad(&mut conn, &[a, b, c, d]).map_lua_err()?;
+        let mut mesh = mesh.borrow_mut::<HalfEdgeMesh>()?;
+        crate::mesh::halfedge::edit_ops::transform(&mut mesh, translate.0, rotate.0, scale.0)
+            .map_lua_err()?;
         Ok(())
     });
 

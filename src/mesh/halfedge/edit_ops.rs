@@ -990,7 +990,7 @@ pub fn sort_bag_of_edges(
 /// order, it takes them as two bags of edges, sorts them and figures out the
 /// right order before calling `bridge_loops`. This is helpful when the set of
 /// edges was obtained as a manual selection from the UI.
-/// 
+///
 /// When multiple candidates are found for the pairs of halfedges to bridge, the
 /// extra flip parameter lets you select multiple alternatives.
 pub fn bridge_loops_ui(
@@ -1026,11 +1026,32 @@ pub fn bridge_loops_ui(
     drop(positions);
     drop(conn);
 
-    let (chain_1, chain_2) = sorted_1.iter().cartesian_product(sorted_2.iter()).cycle().nth(flip).ok_or_else(|| {
-        anyhow!("Could not bridge edge loops")
-    })?;
+    let (chain_1, chain_2) = sorted_1
+        .iter()
+        .cartesian_product(sorted_2.iter())
+        .cycle()
+        .nth(flip)
+        .ok_or_else(|| anyhow!("Could not bridge edge loops"))?;
 
     bridge_loops(mesh, &chain_1.halfedges, &chain_2.halfedges)?;
+
+    Ok(())
+}
+
+pub fn transform(
+    mesh: &mut HalfEdgeMesh,
+    translate: Vec3,
+    rotate: Vec3,
+    scale: Vec3,
+) -> Result<()> {
+    let mut positions = mesh.write_positions();
+    let conn = mesh.read_connectivity();
+
+    for (v, _) in conn.iter_vertices() {
+        positions[v] = Quat::from_euler(glam::EulerRot::XYZ, rotate.x, rotate.y, rotate.z)
+            * (positions[v] * scale)
+            + translate;
+    }
 
     Ok(())
 }

@@ -160,12 +160,27 @@ local edit_ops = {
         returns = "out_mesh",
         op = function(inputs)
             local out_mesh = inputs.mesh:clone()
-            print(inputs.normals)
             if inputs.normals == "smooth" then
                 Ops.set_smooth_normals(out_mesh)
             else
                 Ops.set_flat_normals(out_mesh)
             end
+            return {out_mesh = out_mesh}
+        end
+    },
+    Translate = {
+        label = "Transform",
+        inputs = {
+                    mesh("mesh"), 
+                    v3("translate", vector(0, 0, 0)),
+                    v3("rotate", vector(0, 0, 0)),
+                    v3("scale", vector(1, 1, 1))
+                },
+        outputs = {mesh("out_mesh")},
+        returns = "out_mesh",
+        op = function(inputs)
+            local out_mesh = inputs.mesh:clone()
+            Ops.translate(out_mesh, inputs.translate, inputs.rotate, inputs.scale)
             return {out_mesh = out_mesh}
         end
     }

@@ -14,13 +14,6 @@ end
 
 local perlin = Blackjack.perlin()
 
-local function translate_mesh(m, delta)
-    local positions = m:get_channel(Types.VertexId, Types.Vec3, "position")
-    for i, pos in ipairs(positions) do positions[i] = pos + delta end
-    m:set_channel(Types.VertexId, Types.Vec3, "position", positions)
-    return m
-end
-
 local function normalize(v)
     local len = math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z)
     return vector(v.x / len, v.y / len, v.z / len)
@@ -41,7 +34,7 @@ local test_channel_nodes = {
                 local noise_pos = pos * (1.0 / 0.323198);
                 local noise = perlin:get_3d(noise_pos.x, noise_pos.y,
                                             noise_pos.z)
-                noise_ch[i] = pos + vector(noise, noise, noise) * 0.025
+                noise_ch[i] = pos + vector(noise, noise, noise) * 0.1
             end
 
             m:set_channel(Types.VertexId, Types.Vec3, "position", noise_ch)
@@ -59,7 +52,7 @@ local test_channel_nodes = {
                                                      "position")
             local acc = Blackjack.mesh()
             for i, pos in ipairs(points) do
-                local new_mesh = translate_mesh(inputs.mesh:clone(), pos)
+                local new_mesh = Ops.translate(inputs.mesh:clone(), pos)
                 Ops.merge(acc, new_mesh)
             end
             return {out_mesh = acc}
@@ -86,6 +79,31 @@ local test_channel_nodes = {
         inputs = {scalar("strength", 0.1, 0.0, 1.0), scalar("noise_scale", 0.1, 0.01, 1.0), scalar("seed", 0.0, 0.0, 100.0)},
         outputs = {mesh("out_mesh")},
         returns = "out_mesh"
+    },
+    Capsule = {
+        label = "Capsule",
+        op = function (inputs)
+            local m = Blackjack.mesh()
+            local r = inputs.radius
+            local rings = inputs.rings
+            for ring=0,rings do
+                local height = r * (ring / rings)
+                local inner_radius = math.sqrt(r*r - height * height)
+
+                local circle = Primitives.circle(vector(0,height,0), inner_radius, 12.0) 
+                circle:ensure_channel(Types.HalfEdgeId, Types.f32, "ring")
+                local ring_ch = circle:get_channel(Types.HalfEdgeId, Types.f32, "ring")
+                for i, _ in ipairs(ring_ch) do
+                    ring_ch[i] = ring
+                end
+                circle:set_channel(Types.HalfEdgeId, Types.f32, "ring", ring_ch)
+
+                Ops.merge(m, circle)
+            end
+            return { out_mesh = m }
+        end,
+        inputs = {scalar("radius", 1.0, 0.0, 10.0), scalar("rings", 5.0, 1.0, 10.0)},
+        outputs = {mesh("out_mesh")},
     }
 }
 
