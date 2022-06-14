@@ -19,7 +19,7 @@ pub fn load(lua: &Lua) -> anyhow::Result<()> {
         mesh.write_connectivity().clear_debug();
         let verts = mesh
             .read_connectivity()
-            .resolve_vertex_selection_full(vertices);
+            .resolve_vertex_selection_full(&vertices);
         for v in verts {
             crate::mesh::halfedge::edit_ops::chamfer_vertex(
                 &mut mesh.write_connectivity(),
@@ -40,7 +40,7 @@ pub fn load(lua: &Lua) -> anyhow::Result<()> {
         {
             let edges = result
                 .read_connectivity()
-                .resolve_halfedge_selection_full(edges);
+                .resolve_halfedge_selection_full(&edges);
             crate::mesh::halfedge::edit_ops::bevel_edges(
                 &mut result.write_connectivity(),
                 &mut result.write_positions(),
@@ -60,7 +60,7 @@ pub fn load(lua: &Lua) -> anyhow::Result<()> {
         {
             let faces = result
                 .read_connectivity()
-                .resolve_face_selection_full(faces);
+                .resolve_face_selection_full(&faces);
             crate::mesh::halfedge::edit_ops::extrude_faces(
                 &mut result.write_connectivity(),
                 &mut result.write_positions(),
@@ -110,10 +110,10 @@ pub fn load(lua: &Lua) -> anyhow::Result<()> {
         let mut mesh = mesh.borrow_mut::<HalfEdgeMesh>()?;
         let loop_1 = mesh
             .read_connectivity()
-            .resolve_halfedge_selection_full(loop_1);
+            .resolve_halfedge_selection_full(&loop_1);
         let loop_2 = mesh
             .read_connectivity()
-            .resolve_halfedge_selection_full(loop_2);
+            .resolve_halfedge_selection_full(&loop_2);
         crate::mesh::halfedge::edit_ops::bridge_loops_ui(&mut mesh, &loop_1, &loop_2, flip)
             .map_lua_err()?;
         Ok(())
@@ -130,12 +130,24 @@ pub fn load(lua: &Lua) -> anyhow::Result<()> {
         Ok(())
     });
 
+    lua_fn!(lua, ops, "make_group", |mesh: AnyUserData,
+                                     key_type: ChannelKeyType,
+                                     selection: SelectionExpression,
+                                     group_name: String|
+     -> () {
+        let mut mesh = mesh.borrow_mut::<HalfEdgeMesh>()?;
+        crate::mesh::halfedge::edit_ops::make_group(&mut mesh, key_type, &selection, &group_name)
+            .map_lua_err()?;
+        Ok(())
+    });
+
     let types = lua.create_table()?;
     types.set("VertexId", ChannelKeyType::VertexId)?;
     types.set("FaceId", ChannelKeyType::FaceId)?;
     types.set("HalfEdgeId", ChannelKeyType::HalfEdgeId)?;
     types.set("Vec3", ChannelValueType::Vec3)?;
     types.set("f32", ChannelValueType::f32)?;
+    types.set("bool", ChannelValueType::bool)?;
     globals.set("Types", types)?;
 
     Ok(())

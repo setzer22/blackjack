@@ -68,7 +68,7 @@ pub fn highlight(ctx: &egui::Context, theme: &CodeTheme, code: &str, language: &
 
 // ----------------------------------------------------------------------------
 
-#[derive(Clone, Copy, Hash, PartialEq)]
+#[derive(Clone, Copy, Hash, PartialEq, Eq)]
 enum SyntectTheme {
     Base16EightiesDark,
     Base16MochaDark,
@@ -130,7 +130,7 @@ impl SyntectTheme {
     }
 }
 
-#[derive(Clone, Copy, Hash, PartialEq)]
+#[derive(Clone, Copy, Hash, PartialEq, Eq)]
 pub struct CodeTheme {
     dark_mode: bool,
     syntect_theme: SyntectTheme,

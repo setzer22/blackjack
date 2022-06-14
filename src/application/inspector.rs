@@ -130,7 +130,7 @@ impl SpreadsheetTab {
                     SpreadsheetViews::Halfedges => ChannelKeyType::HalfEdgeId,
                     SpreadsheetViews::Faces => ChannelKeyType::FaceId,
                 };
-                for vt in [ChannelValueType::Vec3, ChannelValueType::f32] {
+                for vt in [ChannelValueType::Vec3, ChannelValueType::f32, ChannelValueType::bool] {
                     if let Some(ch) = channel_introspect.get(&(kt, vt)) {
                         for (ch_name, ch_contents) in ch.iter() {
                             columns.push((ch_name, ch_contents));

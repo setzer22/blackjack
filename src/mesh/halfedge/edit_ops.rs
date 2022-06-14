@@ -7,6 +7,8 @@ use smallvec::SmallVec;
 
 use crate::prelude::*;
 
+use super::selection::SelectionExpression;
+
 /// Just a place where commented-out code goes to die
 pub mod deprecated;
 
@@ -1051,6 +1053,49 @@ pub fn transform(
         positions[v] = Quat::from_euler(glam::EulerRot::XYZ, rotate.x, rotate.y, rotate.z)
             * (positions[v] * scale)
             + translate;
+    }
+
+    Ok(())
+}
+
+/// Creates a new bool channel with the given `group_name`. The group will
+/// contain all the elements matching `selection` for the given type of mesh
+/// element `kt`.
+///
+/// Returns an error if a group with the same name already exists.
+pub fn make_group(
+    mesh: &mut HalfEdgeMesh,
+    kt: ChannelKeyType,
+    selection: &SelectionExpression,
+    group_name: &str,
+) -> Result<()> {
+    println!("Making group");
+
+    macro_rules! impl_branch {
+        ($channel_type:ty, $resolve_fn:ident) => {{
+            let ch_id = mesh
+                .channels
+                .create_channel::<$channel_type, bool>(group_name)?;
+            let mut group_ch = mesh.channels.write_channel(ch_id)?;
+            let conn = mesh.read_connectivity();
+            let ids = conn.$resolve_fn(selection);
+            // Channel's default is false, we only need to set the true keys.
+            for id in ids {
+                group_ch[id] = true;
+            }
+        }};
+    }
+
+    match kt {
+        ChannelKeyType::VertexId => {
+            impl_branch! { VertexId, resolve_vertex_selection_full }
+        }
+        ChannelKeyType::FaceId => {
+            impl_branch! { FaceId, resolve_face_selection_full }
+        }
+        ChannelKeyType::HalfEdgeId => {
+            impl_branch! { HalfEdgeId, resolve_halfedge_selection_full }
+        }
     }
 
     Ok(())

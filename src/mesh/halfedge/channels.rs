@@ -60,6 +60,12 @@ impl Introspect for f32 {
     }
 }
 
+impl Introspect for bool {
+    fn introspect(&self) -> String {
+        format!("{: >6.3}", self)
+    }
+}
+
 /// The value of a channel is the data that is associated to a specific key.
 /// Values can be scalars (f32) or vectors (Vec3).
 pub trait ChannelValue:
@@ -83,6 +89,7 @@ macro_rules! impl_channel_value {
 }
 impl_channel_value!(Vec3);
 impl_channel_value!(f32);
+impl_channel_value!(bool);
 
 /// The `FromLua` and `ToLua` traits have a lifetime parameter which is
 /// unnecessary for the channel keys and values. We introduce this new trait
@@ -122,6 +129,7 @@ macro_rules! impl_from_to_lua {
 }
 impl_from_to_lua!(wrapped Vec3);
 impl_from_to_lua!(flat f32);
+impl_from_to_lua!(flat bool);
 impl_from_to_lua!(flat VertexId);
 impl_from_to_lua!(flat FaceId);
 impl_from_to_lua!(flat HalfEdgeId);
@@ -137,7 +145,7 @@ pub enum ChannelKeyType { VertexId, FaceId, HalfEdgeId }
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
 #[rustfmt::skip]
 #[allow(non_camel_case_types)]
-pub enum ChannelValueType { Vec3, f32, }
+pub enum ChannelValueType { Vec3, f32, bool }
 
 /// A channel represents a set of data that is associated over all the elements
 /// of a mesh. For instance, the well-known `position` channel of a mesh, is a
@@ -728,10 +736,13 @@ impl MeshChannels {
         do_match! {
             VertexId, Vec3;
             VertexId, f32;
+            VertexId, bool;
             FaceId, Vec3;
             FaceId, f32;
+            FaceId, bool;
             HalfEdgeId, Vec3;
-            HalfEdgeId, f32
+            HalfEdgeId, f32;
+            HalfEdgeId, bool
         }
     }
 

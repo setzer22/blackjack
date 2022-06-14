@@ -113,7 +113,7 @@ pub enum ResolvedSelection<Id: slotmap::Key> {
 impl MeshConnectivity {
     fn resolve_explicit_selection<T: slotmap::Key, U>(
         data: &SlotMap<T, U>,
-        fragments: SelectionExpression,
+        fragments: &SelectionExpression,
     ) -> ResolvedSelection<T> {
         match fragments {
             SelectionExpression::Explicit(ref fragments) => {
@@ -141,12 +141,12 @@ impl MeshConnectivity {
 
     pub fn resolve_face_selection(
         &self,
-        fragments: SelectionExpression,
+        fragments: &SelectionExpression,
     ) -> ResolvedSelection<FaceId> {
         Self::resolve_explicit_selection(&self.faces, fragments)
     }
 
-    pub fn resolve_face_selection_full(&self, fragments: SelectionExpression) -> Vec<FaceId> {
+    pub fn resolve_face_selection_full(&self, fragments: &SelectionExpression) -> Vec<FaceId> {
         match Self::resolve_explicit_selection(&self.faces, fragments) {
             ResolvedSelection::All => self.faces.iter().map(|(a, _)| a).collect(),
             ResolvedSelection::None => vec![],
@@ -158,10 +158,10 @@ impl MeshConnectivity {
         &self,
         fragments: SelectionExpression,
     ) -> ResolvedSelection<VertexId> {
-        Self::resolve_explicit_selection(&self.vertices, fragments)
+        Self::resolve_explicit_selection(&self.vertices, &fragments)
     }
 
-    pub fn resolve_vertex_selection_full(&self, fragments: SelectionExpression) -> Vec<VertexId> {
+    pub fn resolve_vertex_selection_full(&self, fragments: &SelectionExpression) -> Vec<VertexId> {
         match Self::resolve_explicit_selection(&self.vertices, fragments) {
             ResolvedSelection::All => self.vertices.iter().map(|(a, _)| a).collect(),
             ResolvedSelection::None => vec![],
@@ -171,14 +171,14 @@ impl MeshConnectivity {
 
     pub fn resolve_halfedge_selection(
         &self,
-        fragments: SelectionExpression,
+        fragments: &SelectionExpression,
     ) -> ResolvedSelection<HalfEdgeId> {
         Self::resolve_explicit_selection(&self.halfedges, fragments)
     }
 
     pub fn resolve_halfedge_selection_full(
         &self,
-        fragments: SelectionExpression,
+        fragments: &SelectionExpression,
     ) -> Vec<HalfEdgeId> {
         match Self::resolve_explicit_selection(&self.halfedges, fragments) {
             ResolvedSelection::All => self.halfedges.iter().map(|(a, _)| a).collect(),

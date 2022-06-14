@@ -91,13 +91,7 @@ local test_channel_nodes = {
                 local inner_radius = math.sqrt(r*r - height * height)
 
                 local circle = Primitives.circle(vector(0,height,0), inner_radius, 12.0) 
-                circle:ensure_channel(Types.HalfEdgeId, Types.f32, "ring")
-                local ring_ch = circle:get_channel(Types.HalfEdgeId, Types.f32, "ring")
-                for i, _ in ipairs(ring_ch) do
-                    ring_ch[i] = ring
-                end
-                circle:set_channel(Types.HalfEdgeId, Types.f32, "ring", ring_ch)
-
+                Ops.make_group(circle, Types.HalfEdgeId, Blackjack.selection("*"), "ring_"..ring)
                 Ops.merge(m, circle)
             end
             return { out_mesh = m }
