@@ -17,9 +17,7 @@ pub fn load(lua: &Lua) -> anyhow::Result<()> {
      -> () {
         let mesh = mesh.borrow_mut::<HalfEdgeMesh>()?;
         mesh.write_connectivity().clear_debug();
-        let verts = mesh
-            .read_connectivity()
-            .resolve_vertex_selection_full(&vertices);
+        let verts = mesh.resolve_vertex_selection_full(&vertices).map_lua_err()?;
         for v in verts {
             crate::mesh::halfedge::edit_ops::chamfer_vertex(
                 &mut mesh.write_connectivity(),
@@ -38,9 +36,7 @@ pub fn load(lua: &Lua) -> anyhow::Result<()> {
      -> () {
         let result = mesh.borrow_mut::<HalfEdgeMesh>()?;
         {
-            let edges = result
-                .read_connectivity()
-                .resolve_halfedge_selection_full(&edges);
+            let edges = result.resolve_halfedge_selection_full(&edges).map_lua_err()?;
             crate::mesh::halfedge::edit_ops::bevel_edges(
                 &mut result.write_connectivity(),
                 &mut result.write_positions(),
@@ -58,9 +54,7 @@ pub fn load(lua: &Lua) -> anyhow::Result<()> {
      -> () {
         let result = mesh.borrow_mut::<HalfEdgeMesh>()?;
         {
-            let faces = result
-                .read_connectivity()
-                .resolve_face_selection_full(&faces);
+            let faces = result.resolve_face_selection_full(&faces).map_lua_err()?;
             crate::mesh::halfedge::edit_ops::extrude_faces(
                 &mut result.write_connectivity(),
                 &mut result.write_positions(),
@@ -109,11 +103,10 @@ pub fn load(lua: &Lua) -> anyhow::Result<()> {
      -> () {
         let mut mesh = mesh.borrow_mut::<HalfEdgeMesh>()?;
         let loop_1 = mesh
-            .read_connectivity()
-            .resolve_halfedge_selection_full(&loop_1);
+            .resolve_halfedge_selection_full(&loop_1).map_lua_err()?;
         let loop_2 = mesh
-            .read_connectivity()
-            .resolve_halfedge_selection_full(&loop_2);
+            .resolve_halfedge_selection_full(&loop_2).map_lua_err()?;
+
         crate::mesh::halfedge::edit_ops::bridge_loops_ui(&mut mesh, &loop_1, &loop_2, flip)
             .map_lua_err()?;
         Ok(())

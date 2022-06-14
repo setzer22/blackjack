@@ -91,9 +91,16 @@ local test_channel_nodes = {
                 local inner_radius = math.sqrt(r*r - height * height)
 
                 local circle = Primitives.circle(vector(0,height,0), inner_radius, 12.0) 
-                Ops.make_group(circle, Types.HalfEdgeId, Blackjack.selection("*"), "ring_"..ring)
+                Ops.make_group(circle, Types.HalfEdgeId, Blackjack.selection("*"), "ring"..ring)
                 Ops.merge(m, circle)
             end
+
+            -- WIP: I'm getting a malformed mesh error when bridging loops. Did
+            -- I mess up in the implementation?
+            Ops.bridge_loops(m, Blackjack.selection("@ring0"), Blackjack.selection("@ring1"), 2)
+            Ops.bridge_loops(m, Blackjack.selection("@ring2"), Blackjack.selection("@ring3"), 2)
+            Ops.bridge_loops(m, Blackjack.selection("@ring4"), Blackjack.selection("@ring5"), 2)
+
             return { out_mesh = m }
         end,
         inputs = {scalar("radius", 1.0, 0.0, 10.0), scalar("rings", 5.0, 1.0, 10.0)},

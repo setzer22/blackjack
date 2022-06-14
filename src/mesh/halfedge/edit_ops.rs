@@ -811,7 +811,7 @@ pub fn bridge_loops(
 
     for h in loop_1.iter_cpy() {
         let twin = conn.at_halfedge(h).twin().try_end()?;
-        if dbg!(loop_2.contains(&twin)) {
+        if loop_2.contains(&twin) {
             bail!("Trying to bridge the same loop.")
         }
     }
@@ -1069,16 +1069,13 @@ pub fn make_group(
     selection: &SelectionExpression,
     group_name: &str,
 ) -> Result<()> {
-    println!("Making group");
-
     macro_rules! impl_branch {
         ($channel_type:ty, $resolve_fn:ident) => {{
             let ch_id = mesh
                 .channels
                 .create_channel::<$channel_type, bool>(group_name)?;
             let mut group_ch = mesh.channels.write_channel(ch_id)?;
-            let conn = mesh.read_connectivity();
-            let ids = conn.$resolve_fn(selection);
+            let ids = mesh.$resolve_fn(selection)?;
             // Channel's default is false, we only need to set the true keys.
             for id in ids {
                 group_ch[id] = true;

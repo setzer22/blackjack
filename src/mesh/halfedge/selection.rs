@@ -6,6 +6,7 @@ use slotmap::SlotMap;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SelectionFragment {
+    Group(String),
     Range(Range<u32>),
     Single(u32),
 }
@@ -36,13 +37,28 @@ impl SelectionExpression {
     ///  // (empty string), selects nothing
     /// ```
     pub fn parse(input: &str) -> Result<SelectionExpression> {
+        use nom::character::complete::{alphanumeric1, anychar};
+        use nom::combinator::verify;
+        use nom::multi::many0_count;
+        use nom::sequence::pair;
         use nom_prelude::*;
+
         fn str2int(s: &str) -> u32 {
             s.parse().unwrap()
         }
 
         fn number(input: &str) -> IResult<&str, u32> {
             map(digit1, str2int).parse(input)
+        }
+
+        // https://stackoverflow.com/a/61329008
+        pub fn identifier<'a, E: nom::error::ParseError<&'a str>>(
+            s: &'a str,
+        ) -> IResult<&'a str, &'a str, E> {
+            recognize(pair(
+                verify(anychar, |&c| c.is_lowercase()),
+                many0_count(preceded(opt(char('_')), alphanumeric1)),
+            ))(s)
         }
 
         fn single(input: &str) -> IResult<&str, SelectionFragment> {
@@ -56,8 +72,15 @@ impl SelectionExpression {
             .parse(input)
         }
 
+        fn group_fragment(input: &str) -> IResult<&str, SelectionFragment> {
+            map(tuple((tag("@"), identifier)), |(_, y)| {
+                SelectionFragment::Group(y.into())
+            })
+            .parse(input)
+        }
+
         fn selection_fragment(input: &str) -> IResult<&str, SelectionFragment> {
-            alt((range, single)).parse(input)
+            alt((group_fragment, range, single)).parse(input)
         }
 
         fn fragments_all(input: &str) -> IResult<&str, SelectionExpression> {
@@ -110,80 +133,116 @@ pub enum ResolvedSelection<Id: slotmap::Key> {
     Explicit(Vec<Id>),
 }
 
-impl MeshConnectivity {
-    fn resolve_explicit_selection<T: slotmap::Key, U>(
-        data: &SlotMap<T, U>,
+impl HalfEdgeMesh {
+    fn resolve_explicit_selection<K: ChannelKey, V>(
+        &self,
+        data: &SlotMap<K, V>,
         fragments: &SelectionExpression,
-    ) -> ResolvedSelection<T> {
+    ) -> Result<ResolvedSelection<K>> {
         match fragments {
             SelectionExpression::Explicit(ref fragments) => {
                 let mut ids = vec![];
+
                 // TODO: Optimize this
                 for (i, (id, _)) in data.iter().enumerate() {
                     for fragment in fragments {
                         match fragment {
-                            SelectionFragment::Range(r) if r.contains(&(i as u32)) => {
-                                ids.push(id);
+                            SelectionFragment::Range(r) => {
+                                if r.contains(&(i as u32)) {
+                                    ids.push(id);
+                                }
                             }
-                            SelectionFragment::Single(s) if *s == i as u32 => {
-                                ids.push(id);
+                            SelectionFragment::Single(s) => {
+                                if *s == i as u32 {
+                                    ids.push(id);
+                                }
                             }
-                            _ => {}
+                            SelectionFragment::Group(group) => {
+                                let group_ch =
+                                    self.channels.read_channel_by_name::<K, bool>(group)?;
+                                if group_ch[id] {
+                                    ids.push(id);
+                                }
+                            }
                         }
                     }
                 }
-                ResolvedSelection::Explicit(ids)
+                Ok(ResolvedSelection::Explicit(ids))
             }
-            SelectionExpression::All => ResolvedSelection::All,
-            SelectionExpression::None => ResolvedSelection::None,
+            SelectionExpression::All => Ok(ResolvedSelection::All),
+            SelectionExpression::None => Ok(ResolvedSelection::None),
         }
     }
 
     pub fn resolve_face_selection(
         &self,
         fragments: &SelectionExpression,
-    ) -> ResolvedSelection<FaceId> {
-        Self::resolve_explicit_selection(&self.faces, fragments)
+    ) -> Result<ResolvedSelection<FaceId>> {
+        let conn = self.read_connectivity();
+        self.resolve_explicit_selection(&conn.faces, fragments)
     }
 
-    pub fn resolve_face_selection_full(&self, fragments: &SelectionExpression) -> Vec<FaceId> {
-        match Self::resolve_explicit_selection(&self.faces, fragments) {
-            ResolvedSelection::All => self.faces.iter().map(|(a, _)| a).collect(),
-            ResolvedSelection::None => vec![],
-            ResolvedSelection::Explicit(v) => v,
+    pub fn resolve_face_selection_full(
+        &self,
+        fragments: &SelectionExpression,
+    ) -> Result<Vec<FaceId>> {
+        match self.resolve_face_selection(fragments)? {
+            ResolvedSelection::All => Ok(self
+                .read_connectivity()
+                .faces
+                .iter()
+                .map(|(a, _)| a)
+                .collect()),
+            ResolvedSelection::None => Ok(vec![]),
+            ResolvedSelection::Explicit(v) => Ok(v),
         }
     }
 
     pub fn resolve_vertex_selection(
         &self,
-        fragments: SelectionExpression,
-    ) -> ResolvedSelection<VertexId> {
-        Self::resolve_explicit_selection(&self.vertices, &fragments)
+        fragments: &SelectionExpression,
+    ) -> Result<ResolvedSelection<VertexId>> {
+        let conn = self.read_connectivity();
+        self.resolve_explicit_selection(&conn.vertices, fragments)
     }
 
-    pub fn resolve_vertex_selection_full(&self, fragments: &SelectionExpression) -> Vec<VertexId> {
-        match Self::resolve_explicit_selection(&self.vertices, fragments) {
-            ResolvedSelection::All => self.vertices.iter().map(|(a, _)| a).collect(),
-            ResolvedSelection::None => vec![],
-            ResolvedSelection::Explicit(v) => v,
+    pub fn resolve_vertex_selection_full(
+        &self,
+        fragments: &SelectionExpression,
+    ) -> Result<Vec<VertexId>> {
+        match self.resolve_vertex_selection(fragments)? {
+            ResolvedSelection::All => Ok(self
+                .read_connectivity()
+                .vertices
+                .iter()
+                .map(|(a, _)| a)
+                .collect()),
+            ResolvedSelection::None => Ok(vec![]),
+            ResolvedSelection::Explicit(v) => Ok(v),
         }
     }
 
     pub fn resolve_halfedge_selection(
         &self,
         fragments: &SelectionExpression,
-    ) -> ResolvedSelection<HalfEdgeId> {
-        Self::resolve_explicit_selection(&self.halfedges, fragments)
+    ) -> Result<ResolvedSelection<HalfEdgeId>> {
+        let conn = self.read_connectivity();
+        self.resolve_explicit_selection(&conn.halfedges, fragments)
     }
 
     pub fn resolve_halfedge_selection_full(
         &self,
         fragments: &SelectionExpression,
-    ) -> Vec<HalfEdgeId> {
-        match Self::resolve_explicit_selection(&self.halfedges, fragments) {
-            ResolvedSelection::All => self.halfedges.iter().map(|(a, _)| a).collect(),
-            ResolvedSelection::None => vec![],
-            ResolvedSelection::Explicit(v) => v,
+    ) -> Result<Vec<HalfEdgeId>> {
+        match self.resolve_halfedge_selection(fragments)? {
+            ResolvedSelection::All => Ok(self
+                .read_connectivity()
+                .halfedges
+                .iter()
+                .map(|(a, _)| a)
+                .collect()),
+            ResolvedSelection::None => Ok(vec![]),
+            ResolvedSelection::Explicit(v) => Ok(v),
         }
     }
 }
@@ -224,6 +283,8 @@ mod test {
             expl(&[Range(1..5), Range(7..10), Range(15..16)]));
         assert_eq!(SelectionExpression::parse("1..5, 7..10, 15..16, 18, 22, 27").unwrap(), 
             expl(&[Range(1..5), Range(7..10), Range(15..16), Single(18), Single(22), Single(27)]));
+        assert_eq!(SelectionExpression::parse("@test, 4, 3..5, @another").unwrap(), 
+            expl(&[Group("test".into()), Single(4), Range(3..5), Group("another".into())]));
     }
 
     #[test]
@@ -234,5 +295,6 @@ mod test {
         assert!(SelectionExpression::parse("*, 1").is_err());
         assert!(SelectionExpression::parse("1,2,3,a").is_err());
         assert!(SelectionExpression::parse("potato").is_err());
+        assert!(SelectionExpression::parse("@1").is_err());
     }
 }
