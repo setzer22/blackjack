@@ -32,6 +32,9 @@ pub mod utils;
 pub mod lua_engine;
 
 fn main() {
+    #[cfg(feature = "tracy")]
+    let _client = tracy_client::Client::start();
+
     // Setup logging
     env_logger::init();
 
