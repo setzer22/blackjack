@@ -25,11 +25,24 @@ pub enum FaceDrawMode {
     None,
 }
 
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum TextOverlayMode {
+    /// No text overlay
+    None,
+    /// Display mesh information
+    MeshInfo,
+    /// Display mesh debug information set by the developers when debugging a
+    /// problem. This is not intended to be used by regular users.
+    DevDebug,
+}
+
 pub struct Viewport3dSettings {
     pub render_vertices: bool,
     pub matcap: usize,
     pub edge_mode: EdgeDrawMode,
     pub face_mode: FaceDrawMode,
+    pub overlay_mode: TextOverlayMode,
 }
 
 pub struct Viewport3d {
@@ -69,6 +82,7 @@ impl Viewport3d {
             settings: Viewport3dSettings {
                 edge_mode: EdgeDrawMode::FullEdge,
                 face_mode: FaceDrawMode::Real,
+                overlay_mode: TextOverlayMode::None,
                 render_vertices: true,
                 matcap: 0,
             },
@@ -230,6 +244,25 @@ impl Viewport3d {
                             self.settings.matcap += 1;
                         }
                     });
+
+                    ui.horizontal(|ui| {
+                        ui.label("Text Overlay:");
+                        ui.selectable_value(
+                            &mut self.settings.overlay_mode,
+                            TextOverlayMode::None,
+                            "None",
+                        );
+                        ui.selectable_value(
+                            &mut self.settings.overlay_mode,
+                            TextOverlayMode::MeshInfo,
+                            "Info",
+                        );
+                        ui.selectable_value(
+                            &mut self.settings.overlay_mode,
+                            TextOverlayMode::DevDebug,
+                            "Debug",
+                        );
+                    });
                 });
             });
             offscreen_viewport.show(ui, ui.available_size());
@@ -240,6 +273,7 @@ impl Viewport3d {
                 offscreen_viewport.rect,
                 ui.ctx(),
                 mesh,
+                self.settings.overlay_mode,
             );
         }
     }

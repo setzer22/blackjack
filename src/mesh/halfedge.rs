@@ -924,3 +924,58 @@ impl<'a> Iterator for HalfedgeLoopIterator<'a> {
         }
     }
 }
+
+impl Vertex {
+    pub fn introspect(&self, h_mapping: &SecondaryMap<HalfEdgeId, u32>) -> String {
+        let h = self.halfedge.map(|h| h_mapping[h]);
+        format!("halfedge: {h:?}")
+    }
+}
+
+impl Face {
+    pub fn introspect(&self, h_mapping: &SecondaryMap<HalfEdgeId, u32>) -> String {
+        let h = self.halfedge.map(|h| h_mapping[h]);
+        format!("halfedge: {h:?}")
+    }
+}
+
+impl HalfEdge {
+    pub fn introspect(
+        &self,
+        h_mapping: &SecondaryMap<HalfEdgeId, u32>,
+        v_mapping: &SecondaryMap<VertexId, u32>,
+        f_mapping: &SecondaryMap<FaceId, u32>,
+    ) -> String {
+        let next = self.next.map(|h| h_mapping[h]);
+        let twin = self.twin.map(|h| h_mapping[h]);
+        let face = self.face.map(|f| f_mapping[f]);
+        let vertex = self.vertex.map(|v| v_mapping[v]);
+        format!("next: {next:?}\ntwin: {twin:?}\nface: {face:?}\nvertex: {vertex:?}")
+    }
+}
+
+impl MeshConnectivity {
+    pub fn vertex_mapping(&self) -> SecondaryMap<VertexId, u32> {
+        self.vertices
+            .iter()
+            .enumerate()
+            .map(|(i, (v, _))| (v, i as u32))
+            .collect()
+    }
+
+    pub fn face_mapping(&self) -> SecondaryMap<FaceId, u32> {
+        self.faces
+            .iter()
+            .enumerate()
+            .map(|(i, (v, _))| (v, i as u32))
+            .collect()
+    }
+
+    pub fn halfedge_mapping(&self) -> SecondaryMap<HalfEdgeId, u32> {
+        self.halfedges
+            .iter()
+            .enumerate()
+            .map(|(i, (v, _))| (v, i as u32))
+            .collect()
+    }
+}

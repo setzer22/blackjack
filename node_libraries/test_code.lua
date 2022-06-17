@@ -95,11 +95,9 @@ local test_channel_nodes = {
                 Ops.merge(m, circle)
             end
 
-            -- WIP: I'm getting a malformed mesh error when bridging loops. Did
-            -- I mess up in the implementation?
-            Ops.bridge_loops(m, Blackjack.selection("@ring0"), Blackjack.selection("@ring1"), 2)
-            Ops.bridge_loops(m, Blackjack.selection("@ring2"), Blackjack.selection("@ring3"), 2)
-            Ops.bridge_loops(m, Blackjack.selection("@ring4"), Blackjack.selection("@ring5"), 2)
+            for ring=0,rings-1 do
+                Ops.bridge_loops(m, Blackjack.selection("@ring"..ring), Blackjack.selection("@ring"..ring+1), 1)
+            end
 
             return { out_mesh = m }
         end,

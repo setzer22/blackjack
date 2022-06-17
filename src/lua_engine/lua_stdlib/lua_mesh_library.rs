@@ -17,7 +17,9 @@ pub fn load(lua: &Lua) -> anyhow::Result<()> {
      -> () {
         let mesh = mesh.borrow_mut::<HalfEdgeMesh>()?;
         mesh.write_connectivity().clear_debug();
-        let verts = mesh.resolve_vertex_selection_full(&vertices).map_lua_err()?;
+        let verts = mesh
+            .resolve_vertex_selection_full(&vertices)
+            .map_lua_err()?;
         for v in verts {
             crate::mesh::halfedge::edit_ops::chamfer_vertex(
                 &mut mesh.write_connectivity(),
@@ -36,7 +38,9 @@ pub fn load(lua: &Lua) -> anyhow::Result<()> {
      -> () {
         let result = mesh.borrow_mut::<HalfEdgeMesh>()?;
         {
-            let edges = result.resolve_halfedge_selection_full(&edges).map_lua_err()?;
+            let edges = result
+                .resolve_halfedge_selection_full(&edges)
+                .map_lua_err()?;
             crate::mesh::halfedge::edit_ops::bevel_edges(
                 &mut result.write_connectivity(),
                 &mut result.write_positions(),
@@ -103,11 +107,54 @@ pub fn load(lua: &Lua) -> anyhow::Result<()> {
      -> () {
         let mut mesh = mesh.borrow_mut::<HalfEdgeMesh>()?;
         let loop_1 = mesh
-            .resolve_halfedge_selection_full(&loop_1).map_lua_err()?;
+            .resolve_halfedge_selection_full(&loop_1)
+            .map_lua_err()?;
         let loop_2 = mesh
-            .resolve_halfedge_selection_full(&loop_2).map_lua_err()?;
+            .resolve_halfedge_selection_full(&loop_2)
+            .map_lua_err()?;
 
         crate::mesh::halfedge::edit_ops::bridge_loops_ui(&mut mesh, &loop_1, &loop_2, flip)
+            .map_lua_err()?;
+        Ok(())
+    });
+
+    lua_fn!(lua, ops, "make_quad", |mesh: AnyUserData,
+                                    a: SelectionExpression,
+                                    b: SelectionExpression,
+                                    c: SelectionExpression,
+                                    d: SelectionExpression|
+     -> () {
+        let mut mesh = mesh.borrow_mut::<HalfEdgeMesh>()?;
+        let a = mesh
+            .resolve_vertex_selection_full(&a)
+            .map_lua_err()?
+            .get(0)
+            .copied()
+            .ok_or_else(|| anyhow::anyhow!("Empty selection"))
+            .map_lua_err()?;
+        let b = mesh
+            .resolve_vertex_selection_full(&b)
+            .map_lua_err()?
+            .get(0)
+            .copied()
+            .ok_or_else(|| anyhow::anyhow!("Empty selection"))
+            .map_lua_err()?;
+        let c = mesh
+            .resolve_vertex_selection_full(&c)
+            .map_lua_err()?
+            .get(0)
+            .copied()
+            .ok_or_else(|| anyhow::anyhow!("Empty selection"))
+            .map_lua_err()?;
+        let d = mesh
+            .resolve_vertex_selection_full(&d)
+            .map_lua_err()?
+            .get(0)
+            .copied()
+            .ok_or_else(|| anyhow::anyhow!("Empty selection"))
+            .map_lua_err()?;
+
+        crate::mesh::halfedge::edit_ops::make_quad(&mut mesh.write_connectivity(), &[a, b, c, d])
             .map_lua_err()?;
         Ok(())
     });

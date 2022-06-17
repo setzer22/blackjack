@@ -1,4 +1,4 @@
-use crate::prelude::*;
+use crate::{prelude::*, application::viewport_3d::TextOverlayMode};
 use egui::*;
 
 // Need to divide by the pixels per point to accurately position on the
@@ -21,37 +21,68 @@ pub fn draw_gui_overlays(
     viewport_rect: egui::Rect,
     egui_ctx: &CtxRef,
     mesh: &HalfEdgeMesh,
+    overlay_type: TextOverlayMode,
 ) {
     let painter = egui_ctx.debug_painter();
 
     let conn = mesh.read_connectivity();
     let positions = mesh.read_positions();
 
-    for (&v, mark) in conn.iter_debug_vertices() {
-        let point = positions[v];
-        let point = project_point(view_proj, viewport_rect, egui_ctx, point);
-
+    let text = |point: Pos2, text: &str| {
         painter.text(
-            egui::pos2(point.x, point.y),
+            point,
             egui::Align2::CENTER_BOTTOM,
-            &mark.label,
+            text,
             egui::TextStyle::Body,
             egui::Color32::WHITE,
         );
-    }
+    };
 
-    for (&h, mark) in conn.iter_debug_halfedges() {
-        let (src, dst) = conn.at_halfedge(h).src_dst_pair().unwrap();
-        let src_point = positions[src];
-        let dst_point = positions[dst];
-        let point = src_point * 0.333 + dst_point * 0.666;
-        let point = project_point(view_proj, viewport_rect, egui_ctx, point);
-        painter.text(
-            egui::pos2(point.x, point.y),
-            egui::Align2::CENTER_BOTTOM,
-            &mark.label,
-            egui::TextStyle::Body,
-            egui::Color32::WHITE,
-        );
+    match overlay_type {
+        TextOverlayMode::None => {}
+        TextOverlayMode::MeshInfo => {
+            for (i, (v, _)) in conn.iter_vertices().enumerate() {
+                text(
+                    project_point(view_proj, viewport_rect, egui_ctx, positions[v]),
+                    &format!("v{i}"),
+                )
+            }
+            for (i, (h, _)) in conn.iter_halfedges().enumerate() {
+                let (src, dst) = conn.at_halfedge(h).src_dst_pair().unwrap();
+                let src_point = positions[src];
+                let dst_point = positions[dst];
+                let point = src_point * 0.333 + dst_point * 0.666;
+                text(
+                    project_point(view_proj, viewport_rect, egui_ctx, point),
+                    &format!("h{i}"),
+                )
+            }
+            for (i, (f, _)) in conn.iter_faces().enumerate() {
+                let point = conn.face_vertex_average(&positions, f);
+                text(
+                    project_point(view_proj, viewport_rect, egui_ctx, point),
+                    &format!("f{i}"),
+                )
+            }
+        }
+        TextOverlayMode::DevDebug => {
+            for (&v, mark) in conn.iter_debug_vertices() {
+                text(
+                    project_point(view_proj, viewport_rect, egui_ctx, positions[v]),
+                    &mark.label,
+                );
+            }
+
+            for (&h, mark) in conn.iter_debug_halfedges() {
+                let (src, dst) = conn.at_halfedge(h).src_dst_pair().unwrap();
+                let src_point = positions[src];
+                let dst_point = positions[dst];
+                let point = src_point * 0.333 + dst_point * 0.666;
+                text(
+                    project_point(view_proj, viewport_rect, egui_ctx, point),
+                    &mark.label,
+                );
+            }
+        }
     }
 }

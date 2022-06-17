@@ -675,6 +675,16 @@ pub fn make_quad(conn: &mut MeshConnectivity, verts: &[VertexId]) -> Result<()> 
         };
     }
 
+    dbg!(a_edges);
+    dbg!(b_edges);
+
+    // If any of the inner edges already has a face, we can't make the quad.
+    for e in a_edges.iter() {
+        if !conn.at_halfedge(e.id).is_boundary()? {
+            bail!("All halfedges must be in boundary to make a quad but {:?} isn't", e.id)
+        }
+    }
+
     fn prev_i(i: usize, n: usize) -> usize {
         // NOTE: Use rem_euclid for correct negative modulus and cast to isize
         // to avoid underflow.
@@ -917,8 +927,9 @@ pub fn bridge_loops(
         0
     };
 
+    let v_mapping = conn.vertex_mapping();
     let verts_1_shifted = rotate_iter(verts_1.iter_cpy(), v1_best_shift, verts_len).collect_vec();
-
+    
     for (i, ((v1, v2), (v3, v4))) in verts_1_shifted
         .iter_cpy()
         .branch(
@@ -935,12 +946,13 @@ pub fn bridge_loops(
     {
         conn.add_debug_vertex(v1, DebugMark::blue(&format!("{i}",)));
         conn.add_debug_vertex(v3, DebugMark::blue(&format!("{i}",)));
-        make_quad(&mut conn, &[v2, v1, v3, v4])?;
+        make_quad(&mut conn, &[v1, v2, v4, v3])?;
     }
 
     Ok(())
 }
 
+#[derive(Debug)]
 pub struct HalfEdgeChain {
     halfedges: Vec<HalfEdgeId>,
     closed: bool,
