@@ -258,10 +258,13 @@ impl<'a> VertexTraversalHelpers<'a> for Traversal<'a, VertexId> {
     /// Returns the polygon fan around this vertex.
     fn adjacent_faces(&self) -> Result<SVec<FaceId>, TraversalError> {
         self.and_then(|valid| {
-            self.outgoing_halfedges()?
+            Ok(self
+                .outgoing_halfedges()?
                 .into_iter()
-                .map(|h| valid.inner.at_halfedge(h).face().try_end())
-                .collect::<Result<SVec<_>, _>>()
+                // NOTE: Skip halfedges without a face. This is not an error,
+                // just halfedges that lie on the boundary.
+                .filter_map(|h| valid.inner.at_halfedge(h).face().try_end().ok())
+                .collect::<SVec<_>>())
         })
     }
 }

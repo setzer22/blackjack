@@ -675,9 +675,6 @@ pub fn make_quad(conn: &mut MeshConnectivity, verts: &[VertexId]) -> Result<()> 
         };
     }
 
-    dbg!(a_edges);
-    dbg!(b_edges);
-
     // If any of the inner edges already has a face, we can't make the quad.
     for e in a_edges.iter() {
         if !conn.at_halfedge(e.id).is_boundary()? {

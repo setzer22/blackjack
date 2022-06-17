@@ -86,12 +86,22 @@ local test_channel_nodes = {
             local m = Blackjack.mesh()
             local r = inputs.radius
             local rings = inputs.rings
-            for ring=0,rings do
-                local height = r * (ring / rings)
-                local inner_radius = math.sqrt(r*r - height * height)
 
-                local circle = Primitives.circle(vector(0,height,0), inner_radius, 12.0) 
+            for ring=0,rings do
+                local ring_height = r * (ring / rings)
+                local inner_radius = math.sqrt(r*r - ring_height * ring_height)
+
+                local circle = Primitives.circle(vector(0,ring_height + inputs.height / 2,0), inner_radius, 12.0) 
                 Ops.make_group(circle, Types.HalfEdgeId, Blackjack.selection("*"), "ring"..ring)
+                Ops.merge(m, circle)
+            end
+
+            for ring=0,rings do
+                local ring_height = r * (ring / rings)
+                local inner_radius = math.sqrt(r*r - ring_height * ring_height)
+
+                local circle = Primitives.circle(vector(0,-ring_height - inputs.height / 2,0), inner_radius, 12.0)
+                Ops.make_group(circle, Types.HalfEdgeId, Blackjack.selection("*"), "bot_ring"..ring)
                 Ops.merge(m, circle)
             end
 
@@ -99,9 +109,15 @@ local test_channel_nodes = {
                 Ops.bridge_loops(m, Blackjack.selection("@ring"..ring), Blackjack.selection("@ring"..ring+1), 1)
             end
 
+            for ring=0,rings-1 do
+                Ops.bridge_loops(m, Blackjack.selection("@bot_ring"..ring), Blackjack.selection("@bot_ring"..ring+1), 2)
+            end
+
+            Ops.bridge_loops(m, Blackjack.selection("@ring0"), Blackjack.selection("@bot_ring0"), 2)
+
             return { out_mesh = m }
         end,
-        inputs = {scalar("radius", 1.0, 0.0, 10.0), scalar("rings", 5.0, 1.0, 10.0)},
+        inputs = {scalar("radius", 1.0, 0.0, 10.0), scalar("rings", 5.0, 1.0, 10.0), scalar("height", 2.0, 0.0, 5.0)},
         outputs = {mesh("out_mesh")},
     }
 }
