@@ -1,6 +1,6 @@
 use winit::{
     dpi::PhysicalPosition,
-    event::{ElementState, MouseButton, WindowEvent},
+    event::{ElementState, KeyboardInput, ModifiersState, MouseButton, WindowEvent},
 };
 
 use crate::prelude::*;
@@ -8,6 +8,7 @@ use crate::prelude::*;
 #[derive(Default)]
 pub struct InputSystem {
     pub mouse: MouseInput,
+    pub shift_down: bool,
 }
 
 /// Transforms a window-relative position `pos` into viewport relative
@@ -92,6 +93,9 @@ impl InputSystem {
                 ..
             } => {
                 self.mouse.on_button_event(*button, *state);
+            }
+            WindowEvent::ModifiersChanged(state) => {
+                self.shift_down = state.contains(ModifiersState::SHIFT);
             }
             _ => {}
         }

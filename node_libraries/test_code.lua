@@ -77,6 +77,7 @@ type Turtle = {
 type Edge = {
     start_point: Vec3,
     end_point: Vec3,
+    distance: number,
 }
 type LSystemParams = {
     forward_damp: number,
@@ -146,7 +147,11 @@ local function l_system_interpreter(sentence: string, params: LSystemParams) : {
         elseif c == "F" then
             local forward = params.initial_forward * params.forward_damp ^ turtle.distance
             local end_point = turtle.position + turtle.facing * forward
-            table.insert(edges, { start_point = turtle.position, end_point = end_point })
+            table.insert(edges, { 
+                start_point = turtle.position, 
+                end_point = end_point, 
+                distance = turtle.distance
+            })
             turtle.position = end_point
             turtle.distance += 1
         end
@@ -156,9 +161,13 @@ end
 
 local function make_l_system_mesh(edges: {Edge}) : any
     local mesh = Blackjack.mesh()
+    local edge_distances = mesh:ensure_assoc_channel(Types.HalfEdgeId, Types.f32, "distance")
     for _, edge in edges do
-        mesh:add_edge(edge.start_point, edge.end_point)
+        local h_start, h_end = mesh:add_edge(edge.start_point, edge.end_point)
+        edge_distances[h_start] = edge.distance
+        edge_distances[h_end] = -100 -- Mark as negative to ignore these edges
     end
+    mesh:set_assoc_channel(Types.HalfEdgeId, Types.f32, "distance", edge_distances)
     return mesh
 end
 
@@ -288,6 +297,47 @@ local test_channel_nodes = {
         outputs = {mesh("out_mesh")},
         returns = "out_mesh"
     },
+    MakeTrunk = {
+        label = "Make trunk",
+        op = function(inputs)
+            local edge_distances = inputs.l_system:get_assoc_channel(Types.HalfEdgeId, Types.f32, "distance")
+            local result = inputs.l_system:reduce_single_edges(
+                Blackjack.mesh(),
+                function (acc, h_id)
+                    if edge_distances[h_id] < 0 then
+                        return acc
+                    else
+                        local src_pos, dst_pos = inputs.l_system:halfedge_endpoints(h_id)
+
+                        local src_scale = 1.0 * 0.95 ^ edge_distances[h_id]
+                        local dst_scale = 1.0 * 0.95 ^ (edge_distances[h_id] + 1)
+
+                        local src_ring = inputs.ring:clone()
+                        Ops.translate(src_ring, src_pos, vector(0,0,0), vector(src_scale,src_scale,src_scale))
+                        Ops.make_group(src_ring, Types.HalfEdgeId, Blackjack.selection("*"), "src_ring")
+                        
+                        local dst_ring = inputs.ring:clone()
+                        Ops.translate(dst_ring, dst_pos, vector(0,0,0), vector(dst_scale,dst_scale,dst_scale))
+                        Ops.make_group(dst_ring, Types.HalfEdgeId, Blackjack.selection("*"), "dst_ring")
+
+                        Ops.merge(src_ring, dst_ring)
+                        Ops.bridge_loops(src_ring, Blackjack.selection("@src_ring"), Blackjack.selection("@dst_ring"), 1)
+
+                        Ops.merge(acc, src_ring)
+                        return acc
+                    end
+                end 
+            )
+
+            return { out_mesh = result }
+        end,
+        inputs = {
+            mesh("l_system"),
+            mesh("ring"),
+        } :: {any},
+        outputs = { mesh("out_mesh") } :: {any},
+        returns = "out_mesh",
+    }
 }
 
 NodeLibrary:addNodes(test_channel_nodes)

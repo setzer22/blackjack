@@ -25,7 +25,6 @@ pub enum FaceDrawMode {
     None,
 }
 
-
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum TextOverlayMode {
     /// No text overlay
@@ -58,6 +57,7 @@ struct OrbitCamera {
     yaw: f32,
     pitch: f32,
     distance: f32,
+    focus_point: Vec3,
 }
 
 impl Default for OrbitCamera {
@@ -66,6 +66,7 @@ impl Default for OrbitCamera {
             yaw: -30.0,
             pitch: 30.0,
             distance: 8.0,
+            focus_point: Vec3::ZERO,
         }
     }
 }
@@ -109,15 +110,25 @@ impl Viewport3d {
     fn update_camera(&mut self, render_ctx: &mut RenderContext) {
         // Update status
         if self.input.mouse.buttons().pressed(MouseButton::Left) {
-            self.camera.yaw += self.input.mouse.cursor_delta().x * 2.0;
-            self.camera.pitch += self.input.mouse.cursor_delta().y * 2.0;
+            if self.input.shift_down {
+                let cam_rotation = Mat4::from_rotation_y(self.camera.yaw.to_radians())
+                    * Mat4::from_rotation_x(self.camera.pitch.to_radians());
+                let camera_right = cam_rotation.transform_point3(Vec3::X);
+                let camera_up = cam_rotation.transform_vector3(Vec3::Y);
+                self.camera.focus_point += self.input.mouse.cursor_delta().x * camera_right * 0.1
+                    + self.input.mouse.cursor_delta().y * -camera_up * 0.1;
+            } else {
+                self.camera.yaw += self.input.mouse.cursor_delta().x * 2.0;
+                self.camera.pitch += self.input.mouse.cursor_delta().y * 2.0;
+            }
         }
         self.camera.distance += self.input.mouse.wheel_delta() * 0.25;
 
         // Compute view matrix
         let view = Mat4::from_translation(Vec3::Z * self.camera.distance)
             * Mat4::from_rotation_x(-self.camera.pitch.to_radians())
-            * Mat4::from_rotation_y(-self.camera.yaw.to_radians());
+            * Mat4::from_rotation_y(-self.camera.yaw.to_radians())
+            * Mat4::from_translation(self.camera.focus_point);
         render_ctx.set_camera(view);
     }
 

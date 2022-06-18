@@ -315,7 +315,7 @@ pub trait DynChannel: Any + Debug {
     /// modify a full channel, it is generally faster to convert the channel to
     /// a table, let Lua manipulate it freely and then set it back using the
     /// complementary `set_from_table`.
-    fn to_table<'lua>(
+    fn to_seq_table<'lua>(
         &self,
         keys: Box<dyn Iterator<Item = u64> + '_>,
         lua: &'lua mlua::Lua,
@@ -323,9 +323,25 @@ pub trait DynChannel: Any + Debug {
 
     /// Given a Lua table like the one returned by `to_table`, sets the values
     /// in this channel to the ones provided by the table.
-    fn set_from_table<'lua>(
+    fn set_from_seq_table<'lua>(
         &mut self,
         keys: Box<dyn Iterator<Item = u64> + '_>,
+        lua: &'lua mlua::Lua,
+        table: mlua::Table<'lua>,
+    ) -> Result<()>;
+
+    /// Same as `to_seq_table`, but instead of assuming a sequential table, a
+    /// dictionary-like table mapping keys to values is returned
+    fn to_assoc_table<'lua>(
+        &self,
+        keys: Box<dyn Iterator<Item = u64> + '_>,
+        lua: &'lua mlua::Lua,
+    ) -> mlua::Table<'lua>;
+
+    /// Same as `set_from_seq_table`, but instead of taking sequential table, a
+    /// dictionary-like table mapping keys to values is taken
+    fn set_from_assoc_table<'lua>(
+        &mut self,
         lua: &'lua mlua::Lua,
         table: mlua::Table<'lua>,
     ) -> Result<()>;
@@ -344,6 +360,14 @@ pub trait DynChannel: Any + Debug {
     );
 }
 impl<K: ChannelKey, V: ChannelValue> DynChannel for Channel<K, V> {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+
     fn get_lua<'a, 'lua>(
         &'a self,
         lua: &'lua mlua::Lua,
@@ -370,7 +394,7 @@ impl<K: ChannelKey, V: ChannelValue> DynChannel for Channel<K, V> {
         Ok(())
     }
 
-    fn to_table<'lua>(
+    fn to_seq_table<'lua>(
         &self,
         keys: Box<dyn Iterator<Item = u64> + '_>,
         lua: &'lua mlua::Lua,
@@ -379,7 +403,7 @@ impl<K: ChannelKey, V: ChannelValue> DynChannel for Channel<K, V> {
             .unwrap()
     }
 
-    fn set_from_table<'lua>(
+    fn set_from_seq_table<'lua>(
         &mut self,
         keys: Box<dyn Iterator<Item = u64> + '_>,
         lua: &'lua mlua::Lua,
@@ -392,6 +416,32 @@ impl<K: ChannelKey, V: ChannelValue> DynChannel for Channel<K, V> {
                 Ok(())
             })?;
         Ok(())
+    }
+
+    fn to_assoc_table<'lua>(
+        &self,
+        keys: Box<dyn Iterator<Item = u64> + '_>,
+        lua: &'lua mlua::Lua,
+    ) -> mlua::Table<'lua> {
+        lua.create_table_from(
+            keys.map(K::cast_from_ffi)
+                .map(|k| (k.cast_to_lua(lua), self[k].cast_to_lua(lua))),
+        )
+        .unwrap()
+    }
+
+    fn set_from_assoc_table<'lua>(
+        &mut self,
+        lua: &'lua mlua::Lua,
+        table: mlua::Table<'lua>,
+    ) -> Result<()> {
+        table.pairs().try_for_each(|pair| {
+            let (k, v) = pair?;
+            let k = FromToLua::cast_from_lua(k, lua)?;
+            let v = FromToLua::cast_from_lua(v, lua)?;
+            self[k] = v;
+            Ok(())
+        })
     }
 
     fn merge_with_dyn(
@@ -412,14 +462,6 @@ impl<K: ChannelKey, V: ChannelValue> DynChannel for Channel<K, V> {
                 "Tried to merge dynamic channels with different types. This should never happen."
             )
         }
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
     }
 }
 

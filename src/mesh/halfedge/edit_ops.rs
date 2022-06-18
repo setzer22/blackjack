@@ -1112,7 +1112,7 @@ pub fn add_edge(
     mesh: &mut HalfEdgeMesh,
     start: Vec3,
     end: Vec3
-) -> Result<HalfEdgeId> {
+) -> Result<(HalfEdgeId, HalfEdgeId)> {
     let mut conn = mesh.write_connectivity();
     let mut positions = mesh.write_positions();
 
@@ -1135,5 +1135,5 @@ pub fn add_edge(
     conn[h_dst].vertex = Some(v_dst);
     conn[h_dst].face = None;
 
-    Ok(h_src)
+    Ok((h_src, h_dst))
 }

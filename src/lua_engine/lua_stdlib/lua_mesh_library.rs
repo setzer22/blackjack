@@ -1,8 +1,10 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, collections::HashSet, rc::Rc};
 
 use mlua::{ExternalResult, Function, Value};
 
-use crate::prelude::halfedge::{DynChannel, RawChannelId};
+use crate::prelude::halfedge::{
+    AnyTraversal, DynChannel, HalfEdgeTraversal, HalfedgeTraversalHelpers, RawChannelId,
+};
 
 use super::*;
 
@@ -221,12 +223,36 @@ fn mesh_reduce<'lua>(
     Ok(acc)
 }
 
+/// Same as mesh_reduce, but does not iterate each halfedge twice.
+fn reduce_single_edges<'lua>(
+    mesh: &HalfEdgeMesh,
+    init: Value<'lua>,
+    f: Function<'lua>,
+) -> mlua::Result<Value<'lua>> {
+    let mut acc = init;
+    let conn = mesh.read_connectivity();
+    let mut visited = HashSet::new();
+    for (id, _) in conn.iter_halfedges() {
+        let twin = conn.at_halfedge(id).twin().try_end().map_lua_err()?;
+        if visited.insert(twin) {
+            acc = f.call((acc, id))?;
+        }
+    }
+    Ok(acc)
+}
+
+enum LuaTableKind {
+    Sequential,
+    Associative,
+}
+
 fn mesh_channel_to_lua_table<'lua>(
     lua: &'lua Lua,
     mesh: &HalfEdgeMesh,
     kty: ChannelKeyType,
     vty: ChannelValueType,
     ch_id: RawChannelId,
+    kind: LuaTableKind,
 ) -> mlua::Result<mlua::Table<'lua>> {
     use slotmap::Key;
     let conn = mesh.read_connectivity();
@@ -239,11 +265,15 @@ fn mesh_channel_to_lua_table<'lua>(
             Box::new(conn.iter_halfedges().map(|(h_id, _)| h_id.data().as_ffi()))
         }
     };
-    Ok(mesh
+    let ch = mesh
         .channels
         .dyn_read_channel(kty, vty, ch_id)
-        .map_lua_err()?
-        .to_table(keys, lua))
+        .map_lua_err()?;
+
+    match kind {
+        LuaTableKind::Sequential => Ok(ch.to_seq_table(keys, lua)),
+        LuaTableKind::Associative => Ok(ch.to_assoc_table(keys, lua)),
+    }
 }
 
 impl UserData for HalfEdgeMesh {
@@ -256,7 +286,18 @@ impl UserData for HalfEdgeMesh {
                     .channel_id_dyn(kty, vty, &name)
                     .ok_or_else(|| anyhow::anyhow!("Channel '{name}' not found"))
                     .map_lua_err()?;
-                mesh_channel_to_lua_table(lua, this, kty, vty, ch_id)
+                mesh_channel_to_lua_table(lua, this, kty, vty, ch_id, LuaTableKind::Sequential)
+            },
+        );
+        methods.add_method(
+            "get_assoc_channel",
+            |lua, this, (kty, vty, name): (ChannelKeyType, ChannelValueType, String)| {
+                let ch_id = this
+                    .channels
+                    .channel_id_dyn(kty, vty, &name)
+                    .ok_or_else(|| anyhow::anyhow!("Channel '{name}' not found"))
+                    .map_lua_err()?;
+                mesh_channel_to_lua_table(lua, this, kty, vty, ch_id, LuaTableKind::Associative)
             },
         );
         methods.add_method("set_channel", |lua, this, (kty, vty, name, table)| {
@@ -277,14 +318,29 @@ impl UserData for HalfEdgeMesh {
             this.channels
                 .dyn_write_channel_by_name(kty, vty, &name)
                 .map_lua_err()?
-                .set_from_table(keys, lua, table)
+                .set_from_seq_table(keys, lua, table)
+                .map_lua_err()
+        });
+        methods.add_method("set_assoc_channel", |lua, this, (kty, vty, name, table)| {
+            let name: String = name;
+            this.channels
+                .dyn_write_channel_by_name(kty, vty, &name)
+                .map_lua_err()?
+                .set_from_assoc_table(lua, table)
                 .map_lua_err()
         });
         methods.add_method_mut(
             "ensure_channel",
             |lua, this, (kty, vty, name): (ChannelKeyType, ChannelValueType, String)| {
                 let id = this.channels.ensure_channel_dyn(kty, vty, &name);
-                mesh_channel_to_lua_table(lua, this, kty, vty, id)
+                mesh_channel_to_lua_table(lua, this, kty, vty, id, LuaTableKind::Sequential)
+            },
+        );
+        methods.add_method_mut(
+            "ensure_assoc_channel",
+            |lua, this, (kty, vty, name): (ChannelKeyType, ChannelValueType, String)| {
+                let id = this.channels.ensure_channel_dyn(kty, vty, &name);
+                mesh_channel_to_lua_table(lua, this, kty, vty, id, LuaTableKind::Associative)
             },
         );
         methods.add_method("iter_vertices", |lua, this, ()| {
@@ -331,6 +387,10 @@ impl UserData for HalfEdgeMesh {
                 mesh_reduce(this, ChannelKeyType::HalfEdgeId, init, f)
             },
         );
+        methods.add_method(
+            "reduce_single_edges",
+            |_lua, this, (init, f): (Value, Function)| reduce_single_edges(this, init, f),
+        );
 
         methods.add_method(
             "vertex_position",
@@ -341,6 +401,20 @@ impl UserData for HalfEdgeMesh {
             "add_edge",
             |_lua, this: &mut HalfEdgeMesh, (start, end): (Vec3, Vec3)| {
                 crate::prelude::halfedge::edit_ops::add_edge(this, start.0, end.0).map_lua_err()
+            },
+        );
+
+        methods.add_method(
+            "halfedge_endpoints",
+            |_lua, this: &HalfEdgeMesh, h: HalfEdgeId| -> mlua::Result<(Vec3, Vec3)> {
+                let conn = this.read_connectivity();
+                let positions = this.read_positions();
+                let (src, dst) = conn
+                    .at_halfedge(h)
+                    .src_dst_pair()
+                    .map_err(|err| anyhow::anyhow!(err))
+                    .map_lua_err()?;
+                Ok((Vec3(positions[src]), Vec3(positions[dst])))
             },
         );
     }
