@@ -1106,3 +1106,34 @@ pub fn make_group(
 
     Ok(())
 }
+
+/// Adds a disconnected edge to the mesh
+pub fn add_edge(
+    mesh: &mut HalfEdgeMesh,
+    start: Vec3,
+    end: Vec3
+) -> Result<HalfEdgeId> {
+    let mut conn = mesh.write_connectivity();
+    let mut positions = mesh.write_positions();
+
+    let v_src = conn.alloc_vertex(&mut positions, start, None);
+    let v_dst = conn.alloc_vertex(&mut positions, end, None);
+
+    let h_src = conn.alloc_halfedge(HalfEdge::default());
+    let h_dst = conn.alloc_halfedge(HalfEdge::default());
+
+    conn[v_src].halfedge = Some(h_src);
+    conn[v_dst].halfedge = Some(h_dst);
+
+    conn[h_src].next = Some(h_dst);
+    conn[h_src].twin = Some(h_dst);
+    conn[h_src].vertex = Some(v_src);
+    conn[h_src].face = None;
+
+    conn[h_dst].next = Some(h_src);
+    conn[h_dst].twin = Some(h_src);
+    conn[h_dst].vertex = Some(v_dst);
+    conn[h_dst].face = None;
+
+    Ok(h_src)
+}

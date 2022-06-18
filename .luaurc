@@ -1,0 +1,11 @@
+{
+    "languageMode": "strict",
+    "globals": [
+        "Blackjack",
+        "vector",
+        "Primitives",
+        "Types",
+        "Ops",
+        "NodeLibrary"
+    ]
+}

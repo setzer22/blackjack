@@ -336,6 +336,13 @@ impl UserData for HalfEdgeMesh {
             "vertex_position",
             |_lua, this: &HalfEdgeMesh, v: VertexId| Ok(Vec3(this.read_positions()[v])),
         );
+
+        methods.add_method_mut(
+            "add_edge",
+            |_lua, this: &mut HalfEdgeMesh, (start, end): (Vec3, Vec3)| {
+                crate::prelude::halfedge::edit_ops::add_edge(this, start.0, end.0).map_lua_err()
+            },
+        );
     }
 }
 

@@ -11,12 +11,155 @@ local function scalar(name, default, min, max)
         type = "scalar"
     }
 end
+local function strparam(name, default, multiline)
+    return {name = name, default = default, type = "string", multiline = multiline}
+end
 
 local perlin = Blackjack.perlin()
 
-local function normalize(v)
+local function normalize(v: Vec3)
     local len = math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z)
     return vector(v.x / len, v.y / len, v.z / len)
+end
+
+local function circle_noise(pos, radius, seed, strength, noise_scale)
+    local m = Primitives.circle(pos, radius, 12.0)
+    local position_ch = m:get_channel(Types.VertexId, Types.Vec3, "position")
+    for i, pos in ipairs(position_ch) do
+        local noise_pos = pos * noise_scale + vector(seed, seed, seed);
+        local noise = perlin:get_3d(noise_pos.x, noise_pos.y, noise_pos.z)
+        local dir = normalize(pos)
+        position_ch[i] = position_ch[i] + dir * noise * strength
+    end
+    m:set_channel(Types.VertexId, Types.Vec3, "position", position_ch)
+    return m
+end
+
+local function parse_l_system_def(input: string): LSystemDef
+    local axiom : string = ""
+    local rules = {}
+    for line in input:gmatch("[^\r\n]+") do
+        if axiom == "" then
+            local m = line:match("(%a+)")
+            if m ~= nil then 
+                axiom = m 
+            else 
+                print("Invalid axiom definition"..line)
+                axiom = "NONE"
+            end
+        else
+            local lhs : string?, rhs : string? = line:match("(%a+)%s+%->%s+([%a%[%]%+%-]+)")
+            if lhs ~= nil and rhs ~= nil then
+                table.insert(rules, { lhs = lhs, rhs = rhs })
+            else
+                print("Error parsing line of L-System: "..line)
+            end
+        end
+    end
+    return { rules = rules, axiom = axiom }
+end
+
+type Rule = {
+    lhs: string,
+    rhs: string,
+}
+type LSystemDef = {
+    rules: {Rule},
+    axiom: string,
+}
+
+type Vec3 = any
+type Turtle = {
+    facing: Vec3,
+    position: Vec3,
+    distance: number,
+}
+type Edge = {
+    start_point: Vec3,
+    end_point: Vec3,
+}
+type LSystemParams = {
+    forward_damp: number,
+    angle_damp: number,
+    initial_angle: number,
+    initial_forward: number,
+}
+
+local function l_system_substitution(sentence: string, l_system: LSystemDef) : string
+    local new_sentence = ""
+    for c in sentence:gmatch(".") do
+        local some_matched = false
+        for _,rule in l_system.rules do
+            if c == rule.lhs then
+                new_sentence = new_sentence..rule.rhs
+                some_matched = true
+            end
+        end
+        if not some_matched then
+            new_sentence = new_sentence..c
+        end
+    end
+    return new_sentence
+end
+
+local function l_system_iterate(l_system: LSystemDef, iterations: number) : string
+    local sentence = l_system.axiom
+    for i = 1,iterations do
+        sentence = l_system_substitution(sentence, l_system)
+    end
+    return sentence
+end
+
+local function mk_turtle(facing: Vec3, position: Vec3, distance: number): Turtle
+    return {
+        facing = facing,
+        position = position,
+        distance = distance
+    }
+end
+
+local function rotate_vec(v: Vec3, angle: number) : Vec3
+    local x = math.cos(angle) * v.x - math.sin(angle) * v.y
+    local y = math.sin(angle) * v.x + math.cos(angle) * v.y
+    return vector(x, y, v.z)
+end
+
+local PI = 3.1415926535
+
+local function l_system_interpreter(sentence: string, params: LSystemParams) : {Edge}
+    local turtle_stack : {Turtle} = {mk_turtle(vector(0,1,0), vector(0,0,0), 1.0)}
+    local edges = {}
+
+    for c in sentence:gmatch(".") do
+        local turtle = turtle_stack[#turtle_stack]
+
+        if c == "+" then
+            local angle = params.initial_angle * params.angle_damp ^ turtle.distance
+            turtle.facing = rotate_vec(turtle.facing, angle)
+        elseif c == "[" then
+            table.insert(turtle_stack, mk_turtle(turtle.facing, turtle.position, turtle.distance))
+        elseif c == "]" then
+            table.remove(turtle_stack, #turtle_stack)
+        elseif c == "-" then
+            local angle = params.initial_angle * params.angle_damp ^ turtle.distance
+            turtle.facing = rotate_vec(turtle.facing, -angle)
+        elseif c == "F" then
+            local forward = params.initial_forward * params.forward_damp ^ turtle.distance
+            local end_point = turtle.position + turtle.facing * forward
+            table.insert(edges, { start_point = turtle.position, end_point = end_point })
+            turtle.position = end_point
+            turtle.distance += 1
+        end
+    end
+    return edges
+end
+
+local function make_l_system_mesh(edges: {Edge}) : any
+    local mesh = Blackjack.mesh()
+    for _, edge in edges do
+        mesh:add_edge(edge.start_point, edge.end_point)
+    end
+    return mesh
 end
 
 local test_channel_nodes = {
@@ -25,9 +168,9 @@ local test_channel_nodes = {
         op = function(inputs)
             local m = inputs.mesh:clone()
 
-            local noise_ch = m:ensure_channel(Types.VertexId, Types.Vec3,
+            local noise_ch : {Vec3} = m:ensure_channel(Types.VertexId, Types.Vec3,
                                               "noise")
-            local position_ch = m:get_channel(Types.VertexId, Types.Vec3,
+            local position_ch : {Vec3} = m:get_channel(Types.VertexId, Types.Vec3,
                                               "position")
 
             for i, pos in ipairs(position_ch) do
@@ -64,17 +207,7 @@ local test_channel_nodes = {
     CircleNoise = {
         label = "Circle Noise",
         op = function(inputs)
-            local m = Primitives.circle(vector(0,0,0), 1.0, 12.0)
-            local position_ch = m:get_channel(Types.VertexId, Types.Vec3, "position")
-            for i, pos in ipairs(position_ch) do
-                local noise_pos = pos * inputs.noise_scale + vector(inputs.seed, inputs.seed, inputs.seed);
-                local noise = perlin:get_3d(noise_pos.x, noise_pos.y,
-                                            noise_pos.z)
-                local dir = normalize(pos)
-                position_ch[i] = position_ch[i] + dir * noise * inputs.strength
-            end
-            m:set_channel(Types.VertexId, Types.Vec3, "position", position_ch)
-            return {out_mesh = m}
+            return {out_mesh = circle_noise(vector(0,0,0), 1.0, inputs.seed, inputs.strength, inputs.noise_scale)}
         end,
         inputs = {scalar("strength", 0.1, 0.0, 1.0), scalar("noise_scale", 0.1, 0.01, 1.0), scalar("seed", 0.0, 0.0, 100.0)},
         outputs = {mesh("out_mesh")},
@@ -84,14 +217,15 @@ local test_channel_nodes = {
         label = "Capsule",
         op = function (inputs)
             local m = Blackjack.mesh()
-            local r = inputs.radius
+            local r : number = inputs.radius
+            local height : number = inputs.height
             local rings = inputs.rings
 
             for ring=0,rings do
                 local ring_height = r * (ring / rings)
                 local inner_radius = math.sqrt(r*r - ring_height * ring_height)
 
-                local circle = Primitives.circle(vector(0,ring_height + inputs.height / 2,0), inner_radius, 12.0) 
+                local circle = Primitives.circle(vector(0,ring_height + height / 2,0), inner_radius, 12.0) 
                 Ops.make_group(circle, Types.HalfEdgeId, Blackjack.selection("*"), "ring"..ring)
                 Ops.merge(m, circle)
             end
@@ -100,7 +234,7 @@ local test_channel_nodes = {
                 local ring_height = r * (ring / rings)
                 local inner_radius = math.sqrt(r*r - ring_height * ring_height)
 
-                local circle = Primitives.circle(vector(0,-ring_height - inputs.height / 2,0), inner_radius, 12.0)
+                local circle = Primitives.circle(vector(0,-ring_height - height / 2,0), inner_radius, 12.0)
                 Ops.make_group(circle, Types.HalfEdgeId, Blackjack.selection("*"), "bot_ring"..ring)
                 Ops.merge(m, circle)
             end
@@ -117,9 +251,43 @@ local test_channel_nodes = {
 
             return { out_mesh = m }
         end,
-        inputs = {scalar("radius", 1.0, 0.0, 10.0), scalar("rings", 5.0, 1.0, 10.0), scalar("height", 2.0, 0.0, 5.0)},
+        inputs = {
+            scalar("radius", 1.0, 0.0, 10.0),
+            scalar("rings", 5.0, 1.0, 10.0),
+            scalar("height", 2.0, 0.0, 5.0),
+        },
         outputs = {mesh("out_mesh")},
-    }
+    },
+    LSystem = {
+        label = "L-System",
+        op = function(inputs)
+            local rule : string = inputs.rule
+            local l_system_def = parse_l_system_def(rule);
+
+            local params : LSystemParams = {
+                forward_damp = inputs.forward_damp,
+                angle_damp = inputs.angle_damp,
+                initial_angle = inputs.initial_angle,
+                initial_forward = inputs.initial_forward,
+            }
+
+            local sentence = l_system_iterate(l_system_def, math.floor(inputs.iterations))
+            local edges = l_system_interpreter(sentence, params)
+            local mesh = make_l_system_mesh(edges)
+
+            return {out_mesh = mesh}
+        end,
+        inputs = {
+            strparam("rule", "F+[F--F]", true), 
+            scalar("iterations", 1, 1, 10),
+            scalar("initial_forward", 1, 0, 5),
+            scalar("forward_damp", 0.1, 0, 1),
+            scalar("initial_angle", PI / 6, 0, 2 * PI),
+            scalar("angle_damp", 0.1, 0, 1)
+        } :: {any},
+        outputs = {mesh("out_mesh")},
+        returns = "out_mesh"
+    },
 }
 
 NodeLibrary:addNodes(test_channel_nodes)

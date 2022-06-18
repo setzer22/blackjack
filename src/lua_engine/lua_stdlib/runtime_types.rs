@@ -2,6 +2,7 @@ use noise::NoiseFn;
 
 use super::*;
 
+#[derive(Debug)]
 pub struct Vec3(pub glam::Vec3);
 impl<'lua> ToLua<'lua> for Vec3 {
     fn to_lua(self, _lua: &'lua Lua) -> mlua::Result<mlua::Value<'lua>> {
