@@ -17,6 +17,7 @@ tracy = ["profiling/profile-with-tracy", "tracy-client"]
 # Forked crates
 egui_wgpu_backend = { git = "https://github.com/setzer22/egui_wgpu_backend", rev = "3abd9145aaf2c79417d2ea2207df52f4e302ae28" }
 wavefront_rs = { git = "https://github.com/setzer22/wavefront_rs", rev = "e303f33" }
+tessellation = { git ="https://github.com/setzer22/tessellation", rev = "063530f" }
 
 # Git dependencies
 egui_winit_platform = { git = "https://github.com/hasenbanck/egui_winit_platform", rev = "eea97f778a17c7f97f3cf1758f3ebb5ff6251e11" }

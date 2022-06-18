@@ -678,7 +678,10 @@ pub fn make_quad(conn: &mut MeshConnectivity, verts: &[VertexId]) -> Result<()> 
     // If any of the inner edges already has a face, we can't make the quad.
     for e in a_edges.iter() {
         if !conn.at_halfedge(e.id).is_boundary()? {
-            bail!("All halfedges must be in boundary to make a quad but {:?} isn't", e.id)
+            bail!(
+                "All halfedges must be in boundary to make a quad but {:?} isn't",
+                e.id
+            )
         }
     }
 
@@ -926,7 +929,7 @@ pub fn bridge_loops(
 
     let v_mapping = conn.vertex_mapping();
     let verts_1_shifted = rotate_iter(verts_1.iter_cpy(), v1_best_shift, verts_len).collect_vec();
-    
+
     for (i, ((v1, v2), (v3, v4))) in verts_1_shifted
         .iter_cpy()
         .branch(
@@ -1111,7 +1114,7 @@ pub fn make_group(
 pub fn add_edge(
     mesh: &mut HalfEdgeMesh,
     start: Vec3,
-    end: Vec3
+    end: Vec3,
 ) -> Result<(HalfEdgeId, HalfEdgeId)> {
     let mut conn = mesh.write_connectivity();
     let mut positions = mesh.write_positions();
@@ -1136,4 +1139,28 @@ pub fn add_edge(
     conn[h_dst].face = None;
 
     Ok((h_src, h_dst))
+}
+
+/// Adds an empty vertex to the mesh. Useful when the mesh is representing a
+/// point cloud. Otherwise it's preferrable to use higher-level operators
+pub fn add_vertex(this: &mut HalfEdgeMesh, pos: Vec3) -> Result<()> {
+    this.write_connectivity()
+        .alloc_vertex(&mut this.write_positions(), pos, None);
+    Ok(())
+}
+
+/// Returns a point cloud mesh, selecting a set of vertices from the given mesh
+pub fn point_cloud(mesh: &HalfEdgeMesh, sel: SelectionExpression) -> Result<HalfEdgeMesh> {
+    let vertices = mesh.resolve_vertex_selection_full(&sel)?;
+    let positions = mesh.read_positions();
+
+    let new_mesh = HalfEdgeMesh::new();
+    let mut new_conn = new_mesh.write_connectivity();
+    let mut new_pos = new_mesh.write_positions();
+    for v in vertices {
+        new_conn.alloc_vertex(&mut new_pos, positions[v], None);
+    }
+    drop(new_conn);
+    drop(new_pos);
+    Ok(new_mesh)
 }

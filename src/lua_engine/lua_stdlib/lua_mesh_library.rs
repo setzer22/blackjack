@@ -404,17 +404,35 @@ impl UserData for HalfEdgeMesh {
             },
         );
 
+        methods.add_method_mut("add_vertex", |_lua, this: &mut HalfEdgeMesh, pos: Vec3| {
+            crate::prelude::halfedge::edit_ops::add_vertex(this, pos.0).map_lua_err()
+        });
+
         methods.add_method(
             "halfedge_endpoints",
             |_lua, this: &HalfEdgeMesh, h: HalfEdgeId| -> mlua::Result<(Vec3, Vec3)> {
                 let conn = this.read_connectivity();
                 let positions = this.read_positions();
-                let (src, dst) = conn
-                    .at_halfedge(h)
-                    .src_dst_pair()
-                    .map_err(|err| anyhow::anyhow!(err))
-                    .map_lua_err()?;
+                let (src, dst) = conn.at_halfedge(h).src_dst_pair().map_lua_err()?;
                 Ok((Vec3(positions[src]), Vec3(positions[dst])))
+            },
+        );
+
+        methods.add_method(
+            "halfedge_vertex_id",
+            |_lua, this: &HalfEdgeMesh, h: HalfEdgeId| {
+                this.read_connectivity()
+                    .at_halfedge(h)
+                    .vertex()
+                    .try_end()
+                    .map_lua_err()
+            },
+        );
+
+        methods.add_method(
+            "point_cloud",
+            |_lua, this: &HalfEdgeMesh, sel: SelectionExpression| {
+                crate::prelude::halfedge::edit_ops::point_cloud(this, sel).map_lua_err()
             },
         );
     }

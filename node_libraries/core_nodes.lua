@@ -188,6 +188,16 @@ local edit_ops = {
 
 -- Math: Nodes to perform vector or scalar math operations
 local math = {
+    MakeScalar = {
+        label = "Scalar",
+        inputs = {
+            scalar("x", 0.0, 0.0, 2.0),
+        },
+        outputs = {scalar("x")},
+        op = function(inputs)
+            return {x = inputs.x}
+        end
+    },
     MakeVector = {
         label = "MakeVector",
         inputs = {

@@ -2,6 +2,7 @@ local function mesh(name) return {name = name, type = "mesh"} end
 local function v3(name, default)
     return {name = name, default = default, type = "vec3"}
 end
+local function selection(name) return {name = name, type = "selection"} end
 local function scalar(name, default, min, max)
     return {
         name = name,
@@ -22,8 +23,8 @@ local function normalize(v: Vec3)
     return vector(v.x / len, v.y / len, v.z / len)
 end
 
-local function circle_noise(pos, radius, seed, strength, noise_scale)
-    local m = Primitives.circle(pos, radius, 12.0)
+local function circle_noise(pos, radius, seed, strength, noise_scale, points)
+    local m = Primitives.circle(pos, radius, points)
     local position_ch = m:get_channel(Types.VertexId, Types.Vec3, "position")
     for i, pos in ipairs(position_ch) do
         local noise_pos = pos * noise_scale + vector(seed, seed, seed);
@@ -73,11 +74,13 @@ type Turtle = {
     facing: Vec3,
     position: Vec3,
     distance: number,
+    did_draw: boolean,
 }
 type Edge = {
     start_point: Vec3,
     end_point: Vec3,
     distance: number,
+    final: boolean,
 }
 type LSystemParams = {
     forward_damp: number,
@@ -115,7 +118,8 @@ local function mk_turtle(facing: Vec3, position: Vec3, distance: number): Turtle
     return {
         facing = facing,
         position = position,
-        distance = distance
+        distance = distance,
+        did_draw = false,
     }
 end
 
@@ -141,19 +145,24 @@ local function l_system_interpreter(sentence: string, params: LSystemParams) : {
             table.insert(turtle_stack, mk_turtle(turtle.facing, turtle.position, turtle.distance))
         elseif c == "]" then
             table.remove(turtle_stack, #turtle_stack)
+            if turtle.did_draw then
+                edges[#edges].final = true
+            end
         elseif c == "-" then
             local angle = params.initial_angle * params.angle_damp ^ turtle.distance
             turtle.facing = rotate_vec(turtle.facing, -angle)
         elseif c == "F" then
             local forward = params.initial_forward * params.forward_damp ^ turtle.distance
             local end_point = turtle.position + turtle.facing * forward
-            table.insert(edges, { 
+            table.insert(edges, {
                 start_point = turtle.position, 
                 end_point = end_point, 
-                distance = turtle.distance
+                distance = turtle.distance,
+                final = false -- set later by the ] branch
             })
             turtle.position = end_point
             turtle.distance += 1
+            turtle.did_draw = true
         end
     end
     return edges
@@ -162,12 +171,15 @@ end
 local function make_l_system_mesh(edges: {Edge}) : any
     local mesh = Blackjack.mesh()
     local edge_distances = mesh:ensure_assoc_channel(Types.HalfEdgeId, Types.f32, "distance")
+    local final_verts = mesh:ensure_assoc_channel(Types.VertexId, Types.bool, "final")
     for _, edge in edges do
         local h_start, h_end = mesh:add_edge(edge.start_point, edge.end_point)
         edge_distances[h_start] = edge.distance
         edge_distances[h_end] = -100 -- Mark as negative to ignore these edges
+        final_verts[mesh:halfedge_vertex_id(h_end)] = edge.final
     end
     mesh:set_assoc_channel(Types.HalfEdgeId, Types.f32, "distance", edge_distances)
+    mesh:set_assoc_channel(Types.VertexId, Types.bool, "final", final_verts)
     return mesh
 end
 
@@ -204,7 +216,8 @@ local test_channel_nodes = {
                                                      "position")
             local acc = Blackjack.mesh()
             for i, pos in ipairs(points) do
-                local new_mesh = Ops.translate(inputs.mesh:clone(), pos)
+                local new_mesh = inputs.mesh:clone()
+                Ops.translate(new_mesh, pos, vector(0,0,0), vector(1,1,1))
                 Ops.merge(acc, new_mesh)
             end
             return {out_mesh = acc}
@@ -216,9 +229,14 @@ local test_channel_nodes = {
     CircleNoise = {
         label = "Circle Noise",
         op = function(inputs)
-            return {out_mesh = circle_noise(vector(0,0,0), 1.0, inputs.seed, inputs.strength, inputs.noise_scale)}
+            return {out_mesh = circle_noise(vector(0,0,0), 1.0, inputs.seed, inputs.strength, inputs.noise_scale, inputs.points)}
         end,
-        inputs = {scalar("strength", 0.1, 0.0, 1.0), scalar("noise_scale", 0.1, 0.01, 1.0), scalar("seed", 0.0, 0.0, 100.0)},
+        inputs = {
+            scalar("strength", 0.1, 0.0, 1.0), 
+            scalar("noise_scale", 0.1, 0.01, 1.0),
+            scalar("seed", 0.0, 0.0, 100.0),
+            scalar("points", 8.0, 3.0, 16.0)
+        },
         outputs = {mesh("out_mesh")},
         returns = "out_mesh"
     },
@@ -300,17 +318,18 @@ local test_channel_nodes = {
     MakeTrunk = {
         label = "Make trunk",
         op = function(inputs)
-            local edge_distances = inputs.l_system:get_assoc_channel(Types.HalfEdgeId, Types.f32, "distance")
+            local edge_distances  = inputs.l_system:get_assoc_channel(Types.HalfEdgeId, Types.f32, "distance")
             local result = inputs.l_system:reduce_single_edges(
                 Blackjack.mesh(),
                 function (acc, h_id)
+                    local scale_damp : number = inputs.scale_damp
                     if edge_distances[h_id] < 0 then
                         return acc
                     else
                         local src_pos, dst_pos = inputs.l_system:halfedge_endpoints(h_id)
 
-                        local src_scale = 1.0 * 0.95 ^ edge_distances[h_id]
-                        local dst_scale = 1.0 * 0.95 ^ (edge_distances[h_id] + 1)
+                        local src_scale = 1.0 * scale_damp ^ edge_distances[h_id]
+                        local dst_scale = 1.0 * scale_damp ^ (edge_distances[h_id] + 1)
 
                         local src_ring = inputs.ring:clone()
                         Ops.translate(src_ring, src_pos, vector(0,0,0), vector(src_scale,src_scale,src_scale))
@@ -328,12 +347,43 @@ local test_channel_nodes = {
                     end
                 end 
             )
-
             return { out_mesh = result }
         end,
         inputs = {
             mesh("l_system"),
             mesh("ring"),
+            scalar("scale_damp", 0.95, 0.0, 1.0),
+        } :: {any},
+        outputs = { mesh("out_mesh") } :: {any},
+        returns = "out_mesh",
+    },
+    MakeLeaves = {
+        label = "Make leaves",
+        op = function(inputs)
+            local result = Blackjack.mesh()
+            local final_verts = inputs.l_system:get_assoc_channel(Types.VertexId, Types.bool, "final")
+            for v,is_final in final_verts do
+                if is_final then
+                    result:add_vertex(inputs.l_system:vertex_position(v))
+                end
+            end
+
+            return { out_mesh = result }
+        end,
+        inputs = {
+            mesh("l_system"),
+        } :: {any},
+        outputs = { mesh("out_mesh") } :: {any},
+        returns = "out_mesh",
+    },
+    PointCloud = {
+        label = "Point cloud",
+        op = function(inputs)
+            return { out_mesh = inputs.mesh:point_cloud(inputs.points) }
+        end,
+        inputs = {
+            mesh("mesh"),
+            selection("points")
         } :: {any},
         outputs = { mesh("out_mesh") } :: {any},
         returns = "out_mesh",
