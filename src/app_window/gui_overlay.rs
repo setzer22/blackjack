@@ -6,7 +6,6 @@ use egui::*;
 pub fn project_point(
     view_proj: &Mat4,
     viewport_rect: Rect,
-    egui_ctx: &CtxRef,
     point: Vec3,
 ) -> Pos2 {
     let size = glam::Vec2::new(viewport_rect.size().x, viewport_rect.size().y);
@@ -43,7 +42,7 @@ pub fn draw_gui_overlays(
         TextOverlayMode::MeshInfo => {
             for (i, (v, _)) in conn.iter_vertices().enumerate() {
                 text(
-                    project_point(view_proj, viewport_rect, egui_ctx, positions[v]),
+                    project_point(view_proj, viewport_rect, positions[v]),
                     &format!("v{i}"),
                 )
             }
@@ -53,14 +52,14 @@ pub fn draw_gui_overlays(
                 let dst_point = positions[dst];
                 let point = src_point * 0.333 + dst_point * 0.666;
                 text(
-                    project_point(view_proj, viewport_rect, egui_ctx, point),
+                    project_point(view_proj, viewport_rect, point),
                     &format!("h{i}"),
                 )
             }
             for (i, (f, _)) in conn.iter_faces().enumerate() {
                 let point = conn.face_vertex_average(&positions, f);
                 text(
-                    project_point(view_proj, viewport_rect, egui_ctx, point),
+                    project_point(view_proj, viewport_rect, point),
                     &format!("f{i}"),
                 )
             }
@@ -68,7 +67,7 @@ pub fn draw_gui_overlays(
         TextOverlayMode::DevDebug => {
             for (&v, mark) in conn.iter_debug_vertices() {
                 text(
-                    project_point(view_proj, viewport_rect, egui_ctx, positions[v]),
+                    project_point(view_proj, viewport_rect, positions[v]),
                     &mark.label,
                 );
             }
@@ -79,7 +78,7 @@ pub fn draw_gui_overlays(
                 let dst_point = positions[dst];
                 let point = src_point * 0.333 + dst_point * 0.666;
                 text(
-                    project_point(view_proj, viewport_rect, egui_ctx, point),
+                    project_point(view_proj, viewport_rect, point),
                     &mark.label,
                 );
             }

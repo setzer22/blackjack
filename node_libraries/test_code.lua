@@ -189,23 +189,25 @@ local test_channel_nodes = {
         op = function(inputs)
             local m = inputs.mesh:clone()
 
-            local noise_ch : {Vec3} = m:ensure_channel(Types.VertexId, Types.Vec3,
-                                              "noise")
-            local position_ch : {Vec3} = m:get_channel(Types.VertexId, Types.Vec3,
-                                              "position")
+            local position_ch : {Vec3} = m:get_channel(Types.VertexId, Types.Vec3, "position")
+            local normal_ch : {Vec3} = m:get_channel(Types.VertexId, Types.Vec3, "vertex_normal")
 
             for i, pos in ipairs(position_ch) do
-                local noise_pos = pos * (1.0 / 0.323198);
-                local noise = perlin:get_3d(noise_pos.x, noise_pos.y,
-                                            noise_pos.z)
-                noise_ch[i] = pos + vector(noise, noise, noise) * 0.1
+                local noise_pos = pos * inputs.scale + inputs.offset;
+                local noise = perlin:get_3d(noise_pos.x, noise_pos.y, noise_pos.z)
+                position_ch[i] = pos + normal_ch[i] * noise * inputs.strength
             end
 
-            m:set_channel(Types.VertexId, Types.Vec3, "position", noise_ch)
+            m:set_channel(Types.VertexId, Types.Vec3, "position", position_ch)
 
             return {out_mesh = m}
         end,
-        inputs = {mesh("mesh")},
+        inputs = {
+            mesh("mesh"),
+            scalar("scale", 3.0, 0.0, 10.0),
+            v3("offset", vector(0, 0, 0)),
+            scalar("strength", 0.1, 0.0, 1.0),
+        },
         outputs = {mesh("out_mesh")},
         returns = "out_mesh"
     },
@@ -411,17 +413,6 @@ local test_channel_nodes = {
         outputs = { mesh("out_mesh") } :: {any},
         returns = "out_mesh",
     },
-    PointCloudTessellate = {
-        label = "Tessellate point cloud",
-        op = function(inputs)
-            return { out_mesh = Ops.point_cloud_tessellate(inputs.mesh) }
-        end,
-        inputs = {
-            mesh("mesh"),
-        } :: {any},
-        outputs = { mesh("out_mesh") } :: {any},
-        returns = "out_mesh",
-    }
 }
 
 NodeLibrary:addNodes(test_channel_nodes)

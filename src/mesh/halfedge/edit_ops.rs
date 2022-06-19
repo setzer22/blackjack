@@ -1,4 +1,4 @@
-use std::{collections::BTreeSet};
+use std::{collections::BTreeSet, f32::consts::PI};
 
 use anyhow::{anyhow, bail};
 use float_ord::FloatOrd;
@@ -615,7 +615,7 @@ pub fn generate_smooth_normals_channel(mesh: &HalfEdgeMesh) -> Result<Channel<Ve
         for face in adjacent_faces.iter_cpy() {
             normal += conn.face_normal(&positions, face).unwrap_or(Vec3::ZERO);
         }
-        normals[vertex] = normal;
+        normals[vertex] = normal.normalize_or_zero();
     }
 
     Ok(normals)
@@ -631,6 +631,55 @@ pub fn set_smooth_normals(mesh: &mut HalfEdgeMesh) -> Result<()> {
     mesh.gen_config.smooth_normals = true;
     mesh.default_channels.vertex_normals = Some(normals_ch_id);
 
+    Ok(())
+}
+
+/// Generates an UV channel for the mesh where ever polygon is mapped to the
+/// full UV range. Triangles will take half the UV space, quads will take the
+/// full space, and n-gons will take as much space as possible, being centered
+/// in the middle.
+pub fn generate_full_range_uvs_channel(mesh: &HalfEdgeMesh) -> Result<Channel<VertexId, Vec3>> {
+    let conn = mesh.read_connectivity();
+    let mut uvs = Channel::<VertexId, Vec3>::new();
+
+    for (face, _) in conn.iter_faces() {
+        let verts = conn.face_vertices(face);
+        // WIP: This doesn't work, because vertices are shared between faces, we
+        // can't store one UV per vertex, because setting the UV for a vertex
+        // would override the UVs for that same vertex in another face.
+        match verts.len() {
+            x if x <= 2 => { /* Ignore */}
+            3 => {
+                // Triangle
+                uvs[verts[0]] = Vec3::new(1.0, 0.0, 0.0);
+                uvs[verts[1]] = Vec3::new(1.0, 1.0, 0.0);
+                uvs[verts[2]] = Vec3::new(0.0, 1.0, 0.0);
+            }
+            4 => {
+                // Quad
+                uvs[verts[0]] = Vec3::new(0.0, 0.0, 0.0);
+                uvs[verts[1]] = Vec3::new(1.0, 0.0, 0.0);
+                uvs[verts[2]] = Vec3::new(1.0, 1.0, 0.0);
+                uvs[verts[3]] = Vec3::new(0.0, 1.0, 0.0);
+            }
+            len => {
+                // N-gon
+                let angle_delta = 2.0 * PI / len as f32;
+                for i in 0..len {
+                    let q = Quat::from_rotation_y(angle_delta * i as f32);
+                    uvs[verts[i]] = Vec3::ONE * 0.5 + (q * Vec3::Y);
+                }
+            }
+        }
+    }
+
+    Ok(uvs)
+}
+
+pub fn set_full_range_uvs(mesh: &mut HalfEdgeMesh) -> Result<()> {
+    let uvs = generate_full_range_uvs_channel(mesh)?;
+    let uvs_ch_id = mesh.channels.replace_or_create_channel("uv", uvs);
+    mesh.default_channels.uvs = Some(uvs_ch_id);
     Ok(())
 }
 
@@ -1161,4 +1210,73 @@ pub fn point_cloud(mesh: &HalfEdgeMesh, sel: SelectionExpression) -> Result<Half
     drop(new_conn);
     drop(new_pos);
     Ok(new_mesh)
+}
+
+pub fn vertex_attribute_transfer<V: ChannelValue>(
+    src_mesh: &HalfEdgeMesh,
+    dst_mesh: &mut HalfEdgeMesh,
+    channel_name: &str,
+) -> Result<()> {
+    use rstar::{PointDistance, RTree, RTreeObject, AABB};
+
+    // This is not that difficult to support, I just didn't have time to do it.
+    // If done naively, this would lead to a double-borrow error on the channel.
+    if channel_name == "position" {
+        bail!("Attribute transfer using the 'position' channel is currently unsupported.")
+    }
+
+    // Retrieve the channel ids early so we can error if they don't exist.
+    let src_channel_id = src_mesh
+        .channels
+        .channel_id::<VertexId, V>(channel_name)
+        .ok_or_else(|| anyhow!("Source mesh has no channel called '{channel_name}'"))?;
+    let dst_channel_id = dst_mesh
+        .channels
+        .ensure_channel::<VertexId, V>(channel_name);
+
+    // Build a spatial index for the vertices in the source mesh. This takes
+    // O(n) but in turn allows very efficient nearest-neighbor queries.
+    pub struct VertexPos {
+        vertex: VertexId,
+        pos: Vec3,
+    }
+
+    impl RTreeObject for VertexPos {
+        type Envelope = AABB<[f32; 3]>;
+        fn envelope(&self) -> Self::Envelope {
+            AABB::from_point(self.pos.to_array())
+        }
+    }
+
+    impl PointDistance for VertexPos {
+        fn distance_2(
+            &self,
+            point: &<Self::Envelope as rstar::Envelope>::Point,
+        ) -> <<Self::Envelope as rstar::Envelope>::Point as rstar::Point>::Scalar {
+            self.pos.distance_squared(Vec3::from_slice(point))
+        }
+    }
+
+    let tree_index = RTree::bulk_load(
+        src_mesh
+            .read_connectivity()
+            .iter_vertices_with_channel(&src_mesh.read_positions())
+            .map(|(v_id, _, pos)| VertexPos { vertex: v_id, pos })
+            .collect_vec(),
+    );
+
+    let src_channel = src_mesh.channels.read_channel(src_channel_id)?;
+    let mut dst_channel = dst_mesh.channels.write_channel(dst_channel_id)?;
+    for (dst_v, _, dst_pos) in dst_mesh
+        .read_connectivity()
+        .iter_vertices_with_channel(&dst_mesh.read_positions())
+    {
+        let nearest = tree_index
+            .nearest_neighbor(&dst_pos.to_array())
+            .ok_or_else(|| anyhow!("No nearest neighbor"))?;
+        let src_value = src_channel[nearest.vertex];
+        dst_channel[dst_v] = src_value;
+    }
+
+    Ok(())
 }

@@ -231,6 +231,8 @@ pub struct DefaultChannels {
     pub position: ChannelId<VertexId, Vec3>,
     pub vertex_normals: Option<ChannelId<VertexId, Vec3>>,
     pub face_normals: Option<ChannelId<FaceId, Vec3>>,
+    /// There are no Vec2 channels. Uvs simply use the first two coordinates.
+    pub uvs: Option<ChannelId<VertexId, Vec3>>,
 }
 
 impl<K: ChannelKey, V: ChannelValue> std::ops::Index<K> for Channel<K, V> {
@@ -968,6 +970,7 @@ impl DefaultChannels {
             position,
             vertex_normals: None,
             face_normals: None,
+            uvs: None,
         }
     }
 }

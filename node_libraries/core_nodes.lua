@@ -12,6 +12,9 @@ local function v3(name, default)
 end
 local function mesh(name) return {name = name, type = "mesh"} end
 local function selection(name) return {name = name, type = "selection"} end
+local function strparam(name, default, multiline)
+    return {name = name, default = default, type = "string", multiline = multiline}
+end
 local function enum(name, values, selected)
     return {
         name = name,
@@ -190,6 +193,32 @@ local edit_ops = {
         op = function(inputs)
             local out_mesh = inputs.mesh:clone()
             Ops.translate(out_mesh, inputs.translate, inputs.rotate, inputs.scale)
+            return {out_mesh = out_mesh}
+        end
+    },
+    VertexAttribTransfer = {
+        label = "Vertex attribute transfer",
+        inputs = {
+                    mesh("src_mesh"), 
+                    mesh("dst_mesh"),
+                    strparam("channel", "", false)
+                },
+        outputs = {mesh("out_mesh")},
+        returns = "out_mesh",
+        op = function(inputs)
+            local out_mesh = inputs.dst_mesh:clone()
+            Ops.vertex_attribute_transfer(inputs.src_mesh, out_mesh, Types.Vec3, inputs.channel)
+            return {out_mesh = out_mesh}
+        end
+    },
+    SetFullRangeUVs = {
+        label = "Set full range UVs",
+        inputs = {mesh("mesh")},
+        outputs = {mesh("out_mesh")},
+        returns = "out_mesh",
+        op = function(inputs)
+            local out_mesh = inputs.mesh:clone()
+            Ops.set_full_range_uvs(out_mesh);
             return {out_mesh = out_mesh}
         end
     }

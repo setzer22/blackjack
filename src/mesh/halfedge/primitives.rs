@@ -116,7 +116,7 @@ impl UVSphere {
                 let x = phi.sin() * theta.cos() * radius;
                 let y = phi.cos() * radius;
                 let z = phi.sin() * theta.sin() * radius;
-                vertices.push(Vec3::new(x, y, z));
+                vertices.push(center + Vec3::new(x, y, z));
             }
         }
 

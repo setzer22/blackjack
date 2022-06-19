@@ -174,13 +174,36 @@ pub fn load(lua: &Lua) -> anyhow::Result<()> {
     lua_fn!(
         lua,
         ops,
-        "point_cloud_tessellate",
-        |mesh: AnyUserData| -> HalfEdgeMesh {
-            let mesh = mesh.borrow_mut::<HalfEdgeMesh>()?;
-            let cloud = crate::mesh::sdf::point_cloud_to_halfedge(&mesh).map_lua_err()?;
-            Ok(cloud)
+        "vertex_attribute_transfer",
+        |src_mesh: AnyUserData,
+         dst_mesh: AnyUserData,
+         value_type: ChannelValueType,
+         channel_name: String|
+         -> () {
+            use crate::mesh::halfedge::edit_ops::vertex_attribute_transfer;
+            let src_mesh = src_mesh.borrow::<HalfEdgeMesh>()?;
+            let mut dst_mesh = dst_mesh.borrow_mut::<HalfEdgeMesh>()?;
+            match value_type {
+                ChannelValueType::Vec3 => {
+                    vertex_attribute_transfer::<glam::Vec3>(&src_mesh, &mut dst_mesh, &channel_name)
+                }
+                ChannelValueType::f32 => {
+                    vertex_attribute_transfer::<f32>(&src_mesh, &mut dst_mesh, &channel_name)
+                }
+                ChannelValueType::bool => {
+                    vertex_attribute_transfer::<bool>(&src_mesh, &mut dst_mesh, &channel_name)
+                }
+            }
+            .map_lua_err()?;
+            Ok(())
         }
     );
+
+    lua_fn!(lua, ops, "set_full_range_uvs", |mesh: AnyUserData| -> () {
+        let mut mesh = mesh.borrow_mut::<HalfEdgeMesh>()?;
+        crate::mesh::halfedge::edit_ops::set_full_range_uvs(&mut mesh).map_lua_err()?;
+        Ok(())
+    });
 
     let types = lua.create_table()?;
     types.set("VertexId", ChannelKeyType::VertexId)?;
