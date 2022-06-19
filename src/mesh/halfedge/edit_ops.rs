@@ -647,6 +647,8 @@ pub fn generate_full_range_uvs_channel(mesh: &HalfEdgeMesh) -> Result<Channel<Ve
         // WIP: This doesn't work, because vertices are shared between faces, we
         // can't store one UV per vertex, because setting the UV for a vertex
         // would override the UVs for that same vertex in another face.
+        // SOLUTION: Store the uv information in the halfedges instead. There's
+        // one halfedge for each (vertex, face) combination!
         match verts.len() {
             x if x <= 2 => { /* Ignore */}
             3 => {
