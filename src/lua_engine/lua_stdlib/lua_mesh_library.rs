@@ -1,6 +1,6 @@
 use std::{cell::RefCell, collections::HashSet, rc::Rc};
 
-use mlua::{ExternalResult, Function, Value};
+use mlua::{Function, Value};
 
 use crate::prelude::halfedge::{
     AnyTraversal, DynChannel, HalfEdgeTraversal, HalfedgeTraversalHelpers, RawChannelId,
@@ -126,35 +126,23 @@ pub fn load(lua: &Lua) -> anyhow::Result<()> {
                                     c: SelectionExpression,
                                     d: SelectionExpression|
      -> () {
-        let mut mesh = mesh.borrow_mut::<HalfEdgeMesh>()?;
-        let a = mesh
-            .resolve_vertex_selection_full(&a)
-            .map_lua_err()?
-            .get(0)
-            .copied()
-            .ok_or_else(|| anyhow::anyhow!("Empty selection"))
-            .map_lua_err()?;
-        let b = mesh
-            .resolve_vertex_selection_full(&b)
-            .map_lua_err()?
-            .get(0)
-            .copied()
-            .ok_or_else(|| anyhow::anyhow!("Empty selection"))
-            .map_lua_err()?;
-        let c = mesh
-            .resolve_vertex_selection_full(&c)
-            .map_lua_err()?
-            .get(0)
-            .copied()
-            .ok_or_else(|| anyhow::anyhow!("Empty selection"))
-            .map_lua_err()?;
-        let d = mesh
-            .resolve_vertex_selection_full(&d)
-            .map_lua_err()?
-            .get(0)
-            .copied()
-            .ok_or_else(|| anyhow::anyhow!("Empty selection"))
-            .map_lua_err()?;
+        let mesh = mesh.borrow_mut::<HalfEdgeMesh>()?;
+
+        macro_rules! get_selection {
+            ($sel:expr) => {
+                mesh.resolve_vertex_selection_full(&a)
+                    .map_lua_err()?
+                    .get(0)
+                    .copied()
+                    .ok_or_else(|| anyhow::anyhow!("Empty selection"))
+                    .map_lua_err()?
+            };
+        }
+
+        let a = get_selection!(a);
+        let b = get_selection!(b);
+        let c = get_selection!(c);
+        let d = get_selection!(d);
 
         crate::mesh::halfedge::edit_ops::make_quad(&mut mesh.write_connectivity(), &[a, b, c, d])
             .map_lua_err()?;

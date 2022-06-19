@@ -1,6 +1,6 @@
 use winit::{
     dpi::PhysicalPosition,
-    event::{ElementState, KeyboardInput, ModifiersState, MouseButton, WindowEvent},
+    event::{ElementState, ModifiersState, MouseButton, WindowEvent},
 };
 
 use crate::prelude::*;

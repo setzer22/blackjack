@@ -1,7 +1,11 @@
 use halfedge::selection::SelectionExpression;
 use mlua::{ExternalResult, Lua, ToLua};
 
-use crate::{lua_engine::lua_stdlib, prelude::graph::{*, ValueType}, prelude::*};
+use crate::{
+    lua_engine::lua_stdlib,
+    prelude::graph::{ValueType, *},
+    prelude::*,
+};
 
 use std::fmt::Write;
 
@@ -240,10 +244,11 @@ fn codegen_node(
         let mut args = String::from("{\n");
         for input_name in graph[node_id].inputs.iter().map(|x| &x.0) {
             let input_addr = codegen_input(graph, ctx, node_id, input_name)?;
-            args += &format!(
-                "{indent}{indent}{input_name} = {},\n",
+            writeln!(
+                args,
+                "{indent}{indent}{input_name} = {},",
                 input_addr.generate_code(graph, ctx)?
-            );
+            )?;
         }
         args + indent.as_str() + "}"
     };
@@ -311,7 +316,7 @@ pub fn extract_params<'lua>(
                     .clone(),
             )
             .to_lua(lua),
-            ValueType::String { text, multiline } => text.clone().to_lua(lua),
+            ValueType::String { text, .. } => text.clone().to_lua(lua),
         }?;
         table.set(ident, value)?;
     }

@@ -12,8 +12,8 @@ impl Sphere {
     pub fn bbox(&self) -> tessellation::BoundingBox<f32> {
         let rv = na::Vector3::<f32>::from_element(self.radius);
         tessellation::BoundingBox {
-            min: na::Point3::from(self.position - rv),
-            max: na::Point3::from(self.position + rv),
+            min: self.position - rv,
+            max: self.position + rv,
         }
     }
 }

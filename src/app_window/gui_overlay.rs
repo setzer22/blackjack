@@ -12,7 +12,7 @@ pub fn project_point(
     let size = glam::Vec2::new(viewport_rect.size().x, viewport_rect.size().y);
     let offset = glam::Vec2::new(viewport_rect.left_top().x, viewport_rect.left_top().y);
     let projected =
-        RenderContext::project_point(view_proj, point, size, offset) / egui_ctx.pixels_per_point();
+        RenderContext::project_point(view_proj, point, size, offset);
     egui::pos2(projected.x, projected.y)
 }
 

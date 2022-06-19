@@ -1,8 +1,7 @@
-use std::{collections::BTreeSet, marker::PhantomData};
+use std::{collections::BTreeSet};
 
 use anyhow::{anyhow, bail};
 use float_ord::FloatOrd;
-use slotmap::Key;
 use smallvec::SmallVec;
 
 use crate::prelude::*;
@@ -927,7 +926,6 @@ pub fn bridge_loops(
         0
     };
 
-    let v_mapping = conn.vertex_mapping();
     let verts_1_shifted = rotate_iter(verts_1.iter_cpy(), v1_best_shift, verts_len).collect_vec();
 
     for (i, ((v1, v2), (v3, v4))) in verts_1_shifted
@@ -954,8 +952,8 @@ pub fn bridge_loops(
 
 #[derive(Debug)]
 pub struct HalfEdgeChain {
-    halfedges: Vec<HalfEdgeId>,
-    closed: bool,
+    pub halfedges: Vec<HalfEdgeId>,
+    pub closed: bool,
 }
 
 pub fn sort_bag_of_edges(
