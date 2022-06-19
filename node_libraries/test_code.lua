@@ -214,10 +214,13 @@ local test_channel_nodes = {
         op = function(inputs)
             local points = inputs.points:get_channel(Types.VertexId, Types.Vec3,
                                                      "position")
+            local sizes = inputs.points:get_channel(Types.VertexId, Types.f32,
+                                                     "size")
             local acc = Blackjack.mesh()
             for i, pos in ipairs(points) do
+                local size = sizes[i]
                 local new_mesh = inputs.mesh:clone()
-                Ops.translate(new_mesh, pos, vector(0,0,0), vector(1,1,1))
+                Ops.translate(new_mesh, pos, vector(0,0,0), vector(size, size, size))
                 Ops.merge(acc, new_mesh)
             end
             return {out_mesh = acc}
@@ -384,6 +387,37 @@ local test_channel_nodes = {
         inputs = {
             mesh("mesh"),
             selection("points")
+        } :: {any},
+        outputs = { mesh("out_mesh") } :: {any},
+        returns = "out_mesh",
+    },
+    RandomizeSize = {
+        label = "Randomize size",
+        op = function(inputs)
+            local mesh = inputs.mesh:clone()
+            local size_ch = mesh:ensure_channel(Types.VertexId, Types.f32, "size")
+            math.randomseed(inputs.seed)
+            for i = 0,#size_ch do
+                size_ch[i] = math.random() * inputs.scale
+            end
+            mesh:set_channel(Types.VertexId, Types.f32, "size", size_ch)
+            return { out_mesh = mesh }
+        end,
+        inputs = {
+            mesh("mesh"),
+            scalar("scale", 1.0, 0.0, 2.0),
+            scalar("seed", 0.0, 0.0, 100.0),
+        } :: {any},
+        outputs = { mesh("out_mesh") } :: {any},
+        returns = "out_mesh",
+    },
+    PointCloudTessellate = {
+        label = "Tessellate point cloud",
+        op = function(inputs)
+            return { out_mesh = Ops.point_cloud_tessellate(inputs.mesh) }
+        end,
+        inputs = {
+            mesh("mesh"),
         } :: {any},
         outputs = { mesh("out_mesh") } :: {any},
         returns = "out_mesh",

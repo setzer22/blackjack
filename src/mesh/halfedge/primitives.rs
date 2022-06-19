@@ -99,3 +99,56 @@ impl Circle {
         circle
     }
 }
+
+pub struct UVSphere;
+impl UVSphere {
+    pub fn build(center: Vec3, segments: u32, rings: u32, radius: f32) -> HalfEdgeMesh {
+        let mut vertices = Vec::<Vec3>::new();
+        let mut polygons = Vec::<SVec<u32>>::new();
+
+        let top_vertex = 0;
+        vertices.push(center + Vec3::Y * radius);
+
+        for i in 0..rings - 1 {
+            let phi = PI * (i + 1) as f32 / rings as f32;
+            for j in 0..segments {
+                let theta = 2.0 * PI * j as f32 / segments as f32;
+                let x = phi.sin() * theta.cos() * radius;
+                let y = phi.cos() * radius;
+                let z = phi.sin() * theta.sin() * radius;
+                vertices.push(Vec3::new(x, y, z));
+            }
+        }
+
+        let bottom_vertex = vertices.len() as u32;
+        vertices.push(center - Vec3::Y * radius);
+
+        // Top triangles
+        for i in 0..segments {
+            let i0 = i + 1;
+            let i1 = (i + 1) % segments + 1;
+            polygons.push(smallvec::smallvec![top_vertex, i1, i0]);
+        }
+        // Bottom triangles
+        for i in 0..segments {
+            let i0 = i + segments * (rings - 2) + 1;
+            let i1 = (i + 1) % segments + segments * (rings - 2) + 1;
+            polygons.push(smallvec::smallvec![bottom_vertex, i0, i1]);
+        }
+        // Middle quads
+        for j in 0..rings - 2 {
+            let j0 = j * segments + 1;
+            let j1 = (j + 1) * segments + 1;
+            for i in 0..segments {
+                let i0 = j0 + i;
+                let i1 = j0 + (i + 1) % segments;
+                let i2 = j1 + (i + 1) % segments;
+                let i3 = j1 + i;
+                polygons.push(smallvec::smallvec![i0, i1, i2, i3]);
+            }
+        }
+
+        HalfEdgeMesh::build_from_polygons(&vertices, &polygons)
+            .expect("Sphere construction should not fail")
+    }
+}

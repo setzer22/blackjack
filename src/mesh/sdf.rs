@@ -1,6 +1,8 @@
+use itertools::Itertools;
 use tessellation::nalgebra as na;
 
-use crate::prelude::HalfEdgeMesh;
+use crate::prelude::{transmute_vec, HalfEdgeMesh, VertexId};
+use anyhow::Result;
 
 struct Sphere {
     position: na::Point3<f32>,
@@ -77,18 +79,34 @@ pub fn test() {
     dbg!(triangles);
 }
 
-fn point_cloud_to_halfedge(
-    points: impl Iterator<Item = glam::Vec3>,
-    sizes: impl Iterator<Item = f32>,
-) -> HalfEdgeMesh {
-    let spheres = points
-        .iter()
-        .zip(sizes.iter())
-        .map(|point, size| Sphere {
-            position: na::Vector3::new(point.x, point.y, point.z),
-            radius: size,
+pub fn point_cloud_to_halfedge(mesh: &HalfEdgeMesh) -> Result<HalfEdgeMesh> {
+    let positions = mesh.read_positions();
+    let sizes = mesh
+        .channels
+        .read_channel_by_name::<VertexId, f32>("size")?;
+
+    let spheres = mesh
+        .read_connectivity()
+        .iter_vertices()
+        .map(|(v, _)| {
+            let point = positions[v];
+            let size = sizes[v];
+            Sphere {
+                position: na::Point3::new(point.x, point.y, point.z),
+                radius: size,
+            }
         })
         .collect_vec();
 
-    let mut mesh = HalfEdgeMesh::build_from_polygons(positions, polygons);
+    let cloud = SphereCloud::new(spheres);
+
+    let mut mdc = tessellation::ManifoldDualContouring::new(&cloud, 0.05, 0.1);
+    let triangles = mdc
+        .tessellate()
+        .ok_or_else(|| anyhow::anyhow!("Failed to tessellate sdf"))?;
+
+    // SAFETY: Vec3 and [f32;3] have the exact same layout and both are Copy
+    let positions = unsafe { transmute_vec::<_, glam::Vec3>(triangles.vertices) };
+
+    HalfEdgeMesh::build_from_polygons(&positions, &triangles.faces)
 }

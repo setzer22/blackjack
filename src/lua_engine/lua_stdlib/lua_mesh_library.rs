@@ -183,6 +183,17 @@ pub fn load(lua: &Lua) -> anyhow::Result<()> {
         Ok(())
     });
 
+    lua_fn!(
+        lua,
+        ops,
+        "point_cloud_tessellate",
+        |mesh: AnyUserData| -> HalfEdgeMesh {
+            let mesh = mesh.borrow_mut::<HalfEdgeMesh>()?;
+            let cloud = crate::mesh::sdf::point_cloud_to_halfedge(&mesh).map_lua_err()?;
+            Ok(cloud)
+        }
+    );
+
     let types = lua.create_table()?;
     types.set("VertexId", ChannelKeyType::VertexId)?;
     types.set("FaceId", ChannelKeyType::FaceId)?;

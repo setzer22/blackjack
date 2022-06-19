@@ -57,6 +57,15 @@ local primitives = {
         outputs = {mesh("out_mesh")},
         returns = "out_mesh"
     },
+    MakeUVSphere = {
+         label = "UV Sphere",
+        op = function(inputs)
+            return {out_mesh = Primitives.uv_sphere(inputs.center, inputs.radius, inputs.segments, inputs.rings)}
+        end,
+        inputs = {v3("center", vector(0,0,0)), scalar("radius", 1.0, 0.0, 10.0), scalar("segments", 12, 3, 64), scalar("rings", 6, 3, 64)},
+        outputs = {mesh("out_mesh")},
+        returns = "out_mesh"
+    },
 }
 
 -- Edit ops: Nodes to edit existing meshes
