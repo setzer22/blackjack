@@ -71,7 +71,7 @@ pub enum ValueType {
     String {
         multiline: bool,
         text: String,
-    }
+    },
 }
 
 /// Blackjack-specific node responses (graph side-effects)

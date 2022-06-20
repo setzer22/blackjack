@@ -648,7 +648,7 @@ pub fn generate_full_range_uvs_channel(mesh: &HalfEdgeMesh) -> Result<Channel<Ha
         // separate vertices for each face.
         let halfedges = conn.face_edges(face);
         match halfedges.len() {
-            x if x <= 2 => { /* Ignore */}
+            x if x <= 2 => { /* Ignore */ }
             3 => {
                 // Triangle
                 uvs[halfedges[0]] = Vec3::new(1.0, 0.0, 0.0);

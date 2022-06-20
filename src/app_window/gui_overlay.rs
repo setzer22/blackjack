@@ -1,17 +1,12 @@
-use crate::{prelude::*, application::viewport_3d::TextOverlayMode};
+use crate::{application::viewport_3d::TextOverlayMode, prelude::*};
 use egui::*;
 
 // Need to divide by the pixels per point to accurately position on the
 // screen at given coordinates.
-pub fn project_point(
-    view_proj: &Mat4,
-    viewport_rect: Rect,
-    point: Vec3,
-) -> Pos2 {
+pub fn project_point(view_proj: &Mat4, viewport_rect: Rect, point: Vec3) -> Pos2 {
     let size = glam::Vec2::new(viewport_rect.size().x, viewport_rect.size().y);
     let offset = glam::Vec2::new(viewport_rect.left_top().x, viewport_rect.left_top().y);
-    let projected =
-        RenderContext::project_point(view_proj, point, size, offset);
+    let projected = RenderContext::project_point(view_proj, point, size, offset);
     egui::pos2(projected.x, projected.y)
 }
 
@@ -77,10 +72,7 @@ pub fn draw_gui_overlays(
                 let src_point = positions[src];
                 let dst_point = positions[dst];
                 let point = src_point * 0.333 + dst_point * 0.666;
-                text(
-                    project_point(view_proj, viewport_rect, point),
-                    &mark.label,
-                );
+                text(project_point(view_proj, viewport_rect, point), &mark.label);
             }
         }
     }

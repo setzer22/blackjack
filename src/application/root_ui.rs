@@ -73,7 +73,7 @@ impl RootViewport {
                         .offscreen_viewports
                         .get_mut(&OffscreenViewport::Viewport3d)
                         .unwrap(),
-                    payload.app_context.mesh.as_ref()
+                    payload.app_context.mesh.as_ref(),
                 );
             }
             "graph_editor" => {

@@ -132,7 +132,12 @@ impl RenderContext {
         });
     }
 
-    pub fn project_point(view_proj: &Mat4, point: Vec3, viewport_size: Vec2, viewport_offset: Vec2) -> Vec2 {
+    pub fn project_point(
+        view_proj: &Mat4,
+        point: Vec3,
+        viewport_size: Vec2,
+        viewport_offset: Vec2,
+    ) -> Vec2 {
         let clip = view_proj.project_point3(point);
         let clip = Vec2::new(clip.x, -clip.y);
         let zero_to_one = (Vec2::new(clip.x, clip.y) + Vec2::ONE) * 0.5;
