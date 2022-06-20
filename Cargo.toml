@@ -16,7 +16,6 @@ tracy = ["profiling/profile-with-tracy", "tracy-client"]
 
 # Forked crates
 egui_wgpu_backend = { git = "https://github.com/setzer22/egui_wgpu_backend", rev = "3abd9145aaf2c79417d2ea2207df52f4e302ae28" }
-wavefront_rs = { git = "https://github.com/setzer22/wavefront_rs", rev = "7351b32" }
 
 # Git dependencies
 egui_winit_platform = { git = "https://github.com/hasenbanck/egui_winit_platform", rev = "eea97f778a17c7f97f3cf1758f3ebb5ff6251e11" }
@@ -64,6 +63,7 @@ bimap = "0.6.2"
 dyn-clone = "1.0"
 noise = "0.7"
 rstar = "0.9.3"
+wavefront_rs = "1.0.4"
 
 # Image loading is too slow in debug mode. This compiles all dependencies with optimizations.
 [profile.dev.package."*"]
