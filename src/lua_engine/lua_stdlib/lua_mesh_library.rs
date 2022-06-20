@@ -245,24 +245,6 @@ fn mesh_reduce<'lua>(
     Ok(acc)
 }
 
-/// Same as mesh_reduce, but does not iterate each halfedge twice.
-fn reduce_single_edges<'lua>(
-    mesh: &HalfEdgeMesh,
-    init: Value<'lua>,
-    f: Function<'lua>,
-) -> mlua::Result<Value<'lua>> {
-    let mut acc = init;
-    let conn = mesh.read_connectivity();
-    let mut visited = HashSet::new();
-    for (id, _) in conn.iter_halfedges() {
-        let twin = conn.at_halfedge(id).twin().try_end().map_lua_err()?;
-        if visited.insert(twin) {
-            acc = f.call((acc, id))?;
-        }
-    }
-    Ok(acc)
-}
-
 enum LuaTableKind {
     Sequential,
     Associative,
@@ -410,15 +392,9 @@ impl UserData for HalfEdgeMesh {
             },
         );
         methods.add_method(
-            "reduce_single_edges",
-            |_lua, this, (init, f): (Value, Function)| reduce_single_edges(this, init, f),
-        );
-
-        methods.add_method(
             "vertex_position",
             |_lua, this: &HalfEdgeMesh, v: VertexId| Ok(Vec3(this.read_positions()[v])),
         );
-
         methods.add_method_mut(
             "add_edge",
             |_lua, this: &mut HalfEdgeMesh, (start, end): (Vec3, Vec3)| {
