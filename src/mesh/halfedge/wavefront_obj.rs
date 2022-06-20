@@ -1,3 +1,4 @@
+use slotmap::SecondaryMap;
 use std::{
     fs::File,
     io::{BufReader, BufWriter, Write},
@@ -17,7 +18,7 @@ impl HalfEdgeMesh {
         // We need to store the mapping between vertex ids and indices in the
         // generated OBJ
         // NOTE: OBJ Wavefront indices start at 1
-        let mut imap = HashMap::<VertexId, i32>::new();
+        let mut imap = SecondaryMap::<VertexId, i32>::new();
 
         obj::format_writer::FormatWriter::write(
             &mut writer,
@@ -68,11 +69,15 @@ impl HalfEdgeMesh {
             println!("TODO: Exporting per-face normals is not yet implemented.")
         }
 
+        // Since UVs are stored in halfedges, we need the same mapping as `imap`
+        // above, but for halfedges instead.
+        let mut h_imap = SecondaryMap::<HalfEdgeId, i32>::new();
         let mut has_uvs = false;
         if let Some(uvs_ch) = self.read_uvs() {
             has_uvs = true;
-            for (v, _) in conn.iter_vertices() {
-                let uv = uvs_ch[v];
+            for (idx, (h, _)) in conn.iter_halfedges().enumerate() {
+                h_imap.insert(h, (idx + 1) as i32);
+                let uv = uvs_ch[h];
                 obj::format_writer::FormatWriter::write(
                     &mut writer,
                     &Entity::VertexTexture {
@@ -89,18 +94,19 @@ impl HalfEdgeMesh {
             let vertices = conn
                 .face_vertices(face_id)
                 .iter()
-                .map(|v_id| FaceVertex {
-                    vertex: imap[v_id] as i64,
+                .zip(conn.face_edges(face_id).iter())
+                .map(|(v_id, h_id)| FaceVertex {
+                    vertex: imap[*v_id] as i64,
                     // TODO: For now we rely on emitting one normal per vertex.
                     // Sometimes there might be less, when we implement flat
                     // shaded normals.
                     normal: if has_normals {
-                        Some(imap[v_id] as i64)
+                        Some(imap[*v_id] as i64)
                     } else {
                         None
                     },
                     texture: if has_uvs {
-                        Some(imap[v_id] as i64)
+                        Some(h_imap[*h_id] as i64)
                     } else {
                         None
                     },

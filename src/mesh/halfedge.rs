@@ -580,7 +580,7 @@ impl HalfEdgeMesh {
         })
     }
 
-    pub fn read_uvs(&self) -> Option<Ref<'_, Channel<VertexId, Vec3>>> {
+    pub fn read_uvs(&self) -> Option<Ref<'_, Channel<HalfEdgeId, Vec3>>> {
         self.default_channels.uvs.map(|ch_id| {
             self.channels
                 .read_channel(ch_id)

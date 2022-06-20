@@ -638,38 +638,36 @@ pub fn set_smooth_normals(mesh: &mut HalfEdgeMesh) -> Result<()> {
 /// full UV range. Triangles will take half the UV space, quads will take the
 /// full space, and n-gons will take as much space as possible, being centered
 /// in the middle.
-pub fn generate_full_range_uvs_channel(mesh: &HalfEdgeMesh) -> Result<Channel<VertexId, Vec3>> {
+pub fn generate_full_range_uvs_channel(mesh: &HalfEdgeMesh) -> Result<Channel<HalfEdgeId, Vec3>> {
     let conn = mesh.read_connectivity();
-    let mut uvs = Channel::<VertexId, Vec3>::new();
+    let mut uvs = Channel::<HalfEdgeId, Vec3>::new();
 
     for (face, _) in conn.iter_faces() {
-        let verts = conn.face_vertices(face);
-        // WIP: This doesn't work, because vertices are shared between faces, we
-        // can't store one UV per vertex, because setting the UV for a vertex
-        // would override the UVs for that same vertex in another face.
-        // SOLUTION: Store the uv information in the halfedges instead. There's
-        // one halfedge for each (vertex, face) combination!
-        match verts.len() {
+        // We use halfedges as a proxy for vertices, because we are interested
+        // in vertices, not just as points in space, but we actually want
+        // separate vertices for each face.
+        let halfedges = conn.face_edges(face);
+        match halfedges.len() {
             x if x <= 2 => { /* Ignore */}
             3 => {
                 // Triangle
-                uvs[verts[0]] = Vec3::new(1.0, 0.0, 0.0);
-                uvs[verts[1]] = Vec3::new(1.0, 1.0, 0.0);
-                uvs[verts[2]] = Vec3::new(0.0, 1.0, 0.0);
+                uvs[halfedges[0]] = Vec3::new(1.0, 0.0, 0.0);
+                uvs[halfedges[1]] = Vec3::new(1.0, 1.0, 0.0);
+                uvs[halfedges[2]] = Vec3::new(0.0, 1.0, 0.0);
             }
             4 => {
                 // Quad
-                uvs[verts[0]] = Vec3::new(0.0, 0.0, 0.0);
-                uvs[verts[1]] = Vec3::new(1.0, 0.0, 0.0);
-                uvs[verts[2]] = Vec3::new(1.0, 1.0, 0.0);
-                uvs[verts[3]] = Vec3::new(0.0, 1.0, 0.0);
+                uvs[halfedges[0]] = Vec3::new(0.0, 0.0, 0.0);
+                uvs[halfedges[1]] = Vec3::new(1.0, 0.0, 0.0);
+                uvs[halfedges[2]] = Vec3::new(1.0, 1.0, 0.0);
+                uvs[halfedges[3]] = Vec3::new(0.0, 1.0, 0.0);
             }
             len => {
                 // N-gon
                 let angle_delta = 2.0 * PI / len as f32;
                 for i in 0..len {
                     let q = Quat::from_rotation_y(angle_delta * i as f32);
-                    uvs[verts[i]] = Vec3::ONE * 0.5 + (q * Vec3::Y);
+                    uvs[halfedges[i]] = Vec3::ONE * 0.5 + (q * Vec3::Y);
                 }
             }
         }

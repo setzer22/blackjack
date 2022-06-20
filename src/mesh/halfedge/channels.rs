@@ -232,7 +232,10 @@ pub struct DefaultChannels {
     pub vertex_normals: Option<ChannelId<VertexId, Vec3>>,
     pub face_normals: Option<ChannelId<FaceId, Vec3>>,
     /// There are no Vec2 channels. Uvs simply use the first two coordinates.
-    pub uvs: Option<ChannelId<VertexId, Vec3>>,
+    /// You can store different UVs for every face a vertex belongs to. We use
+    /// the outgoing halfedges to represent this relation and store UVs in them
+    /// instead.
+    pub uvs: Option<ChannelId<HalfEdgeId, Vec3>>,
 }
 
 impl<K: ChannelKey, V: ChannelValue> std::ops::Index<K> for Channel<K, V> {
