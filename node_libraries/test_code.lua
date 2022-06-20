@@ -222,7 +222,7 @@ local test_channel_nodes = {
             for i, pos in ipairs(points) do
                 local size = sizes[i]
                 local new_mesh = inputs.mesh:clone()
-                Ops.translate(new_mesh, pos, vector(0,0,0), vector(size, size, size))
+                Ops.transform(new_mesh, pos, vector(0,0,0), vector(size, size, size))
                 Ops.merge(acc, new_mesh)
             end
             return {out_mesh = acc}
@@ -337,11 +337,11 @@ local test_channel_nodes = {
                         local dst_scale = 1.0 * scale_damp ^ (edge_distances[h_id] + 1)
 
                         local src_ring = inputs.ring:clone()
-                        Ops.translate(src_ring, src_pos, vector(0,0,0), vector(src_scale,src_scale,src_scale))
+                        Ops.transform(src_ring, src_pos, vector(0,0,0), vector(src_scale,src_scale,src_scale))
                         Ops.make_group(src_ring, Types.HalfEdgeId, Blackjack.selection("*"), "src_ring")
                         
                         local dst_ring = inputs.ring:clone()
-                        Ops.translate(dst_ring, dst_pos, vector(0,0,0), vector(dst_scale,dst_scale,dst_scale))
+                        Ops.transform(dst_ring, dst_pos, vector(0,0,0), vector(dst_scale,dst_scale,dst_scale))
                         Ops.make_group(dst_ring, Types.HalfEdgeId, Blackjack.selection("*"), "dst_ring")
 
                         Ops.merge(src_ring, dst_ring)

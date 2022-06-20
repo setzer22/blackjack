@@ -149,7 +149,7 @@ pub fn load(lua: &Lua) -> anyhow::Result<()> {
         Ok(())
     });
 
-    lua_fn!(lua, ops, "translate", |mesh: AnyUserData,
+    lua_fn!(lua, ops, "transform", |mesh: AnyUserData,
                                     translate: Vec3,
                                     rotate: Vec3,
                                     scale: Vec3|

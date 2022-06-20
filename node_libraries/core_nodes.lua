@@ -180,7 +180,7 @@ local edit_ops = {
             return {out_mesh = out_mesh}
         end
     },
-    Translate = {
+    Transform = {
         label = "Transform",
         inputs = {
                     mesh("mesh"), 
@@ -192,7 +192,7 @@ local edit_ops = {
         returns = "out_mesh",
         op = function(inputs)
             local out_mesh = inputs.mesh:clone()
-            Ops.translate(out_mesh, inputs.translate, inputs.rotate, inputs.scale)
+            Ops.transform(out_mesh, inputs.translate, inputs.rotate, inputs.scale)
             return {out_mesh = out_mesh}
         end
     },
