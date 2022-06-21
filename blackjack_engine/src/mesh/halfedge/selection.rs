@@ -41,7 +41,15 @@ impl SelectionExpression {
         use nom::combinator::verify;
         use nom::multi::many0_count;
         use nom::sequence::pair;
-        use nom_prelude::*;
+        use nom::{
+            branch::alt,
+            bytes::complete::tag,
+            character::complete::{char, digit1},
+            combinator::{map, opt, recognize},
+            multi::{many0, separated_list1},
+            sequence::{preceded, tuple},
+            IResult, Parser,
+        };
 
         fn str2int(s: &str) -> u32 {
             s.parse().unwrap()

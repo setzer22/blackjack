@@ -39,16 +39,3 @@ pub mod graph {
     pub use crate::graph::node_graph::*;
     pub use egui_node_graph::{InputId, Node, NodeId, OutputId};
 }
-
-pub mod nom_prelude {
-    pub use nom::{
-        branch::alt,
-        bytes::complete::tag,
-        character::complete::{alpha1, char, digit0, digit1, multispace0, multispace1, one_of},
-        combinator::{cut, map, map_res, opt, recognize},
-        error::{context, ErrorKind, VerboseError},
-        multi::{many0, many1, separated_list0, separated_list1},
-        sequence::{delimited, preceded, terminated, tuple},
-        IResult, Parser,
-    };
-}
