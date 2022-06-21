@@ -80,8 +80,6 @@ pub struct NodeDefinition {
     pub executable: bool,
 }
 
-pub struct NodeDefinitions(pub BTreeMap<String, NodeDefinition>);
-
 fn data_type_from_str(s: &str) -> Result<DataType> {
     match s {
         "vec3" => Ok(DataType::Vector),
@@ -176,3 +174,5 @@ impl NodeDefinition {
             .map(NodeDefinitions)
     }
 }
+
+pub struct NodeDefinitions(pub BTreeMap<String, NodeDefinition>);
