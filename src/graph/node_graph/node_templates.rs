@@ -51,6 +51,7 @@ fn data_type_from_str(s: &str) -> Result<DataType> {
         "mesh" => Ok(DataType::Mesh),
         "enum" => Ok(DataType::Enum),
         "file" => Ok(DataType::NewFile),
+        "string" => Ok(DataType::String),
         _ => Err(anyhow!("Invalid datatype in node definition {:?}", s)),
     }
 }
@@ -78,6 +79,10 @@ impl InputDefinition {
                 selected: table.get::<_, Option<u32>>("selected")?,
             }),
             DataType::NewFile => Some(ValueType::NewFile { path: None }),
+            DataType::String => Some(ValueType::String {
+                text: table.get::<_, String>("default")?,
+                multiline: table.get::<_, bool>("multiline")?,
+            }),
         };
 
         Ok(InputDefinition {
@@ -167,6 +172,7 @@ impl NodeTemplateTrait for NodeDefinition {
                 DataType::Mesh => InputParamKind::ConnectionOnly,
                 DataType::Enum => InputParamKind::ConstantOnly,
                 DataType::NewFile => InputParamKind::ConstantOnly,
+                DataType::String => InputParamKind::ConnectionOrConstant,
             };
 
             graph.add_input_param(

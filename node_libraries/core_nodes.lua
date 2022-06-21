@@ -12,6 +12,9 @@ local function v3(name, default)
 end
 local function mesh(name) return {name = name, type = "mesh"} end
 local function selection(name) return {name = name, type = "selection"} end
+local function strparam(name, default, multiline)
+    return {name = name, default = default, type = "string", multiline = multiline}
+end
 local function enum(name, values, selected)
     return {
         name = name,
@@ -47,7 +50,25 @@ local primitives = {
         },
         outputs = {mesh("out_mesh")},
         returns = "out_mesh"
-    }
+    },
+    MakeCircle = {
+         label = "Circle",
+        op = function(inputs)
+            return {out_mesh = Primitives.circle(inputs.center, inputs.radius, inputs.num_vertices)}
+        end,
+        inputs = {v3("center", vector(0,0,0)), scalar("radius", 1.0, 0.0, 10.0), scalar("num_vertices", 8.0, 3.0, 32.0)},
+        outputs = {mesh("out_mesh")},
+        returns = "out_mesh"
+    },
+    MakeUVSphere = {
+         label = "UV Sphere",
+        op = function(inputs)
+            return {out_mesh = Primitives.uv_sphere(inputs.center, inputs.radius, inputs.segments, inputs.rings)}
+        end,
+        inputs = {v3("center", vector(0,0,0)), scalar("radius", 1.0, 0.0, 10.0), scalar("segments", 12, 3, 64), scalar("rings", 6, 3, 64)},
+        outputs = {mesh("out_mesh")},
+        returns = "out_mesh"
+    },
 }
 
 -- Edit ops: Nodes to edit existing meshes
@@ -92,6 +113,32 @@ local edit_ops = {
             return {out_mesh = out_mesh}
         end
     },
+    BridgeLoops = {
+        label = "Bridge Loops",
+        inputs = {
+            mesh("in_mesh"), selection("loop_1"), selection("loop_2"), scalar("flip", 0.0, 0.0, 10.0)
+        },
+        outputs = {mesh("out_mesh")},
+        returns = "out_mesh",
+        op = function(inputs)
+            local out_mesh = inputs.in_mesh:clone()
+            Ops.bridge_loops(out_mesh, inputs.loop_1, inputs.loop_2, inputs.flip)
+            return {out_mesh = out_mesh}
+        end
+    },
+    MakeQuadFace = {
+        label = "Make face (quad)",
+        inputs = {
+            mesh("in_mesh"), selection("a"), selection("b"), selection("c"), selection("d"),
+        },
+        outputs = {mesh("out_mesh")},
+        returns = "out_mesh",
+        op = function(inputs)
+            local out_mesh = inputs.in_mesh:clone()
+            Ops.make_quad(out_mesh, inputs.a, inputs.b, inputs.c, inputs.d)
+            return {out_mesh = out_mesh}
+        end
+    },
     MergeMeshes = {
         label = "Merge meshes",
         inputs = {mesh("mesh_a"), mesh("mesh_b")},
@@ -125,7 +172,6 @@ local edit_ops = {
         returns = "out_mesh",
         op = function(inputs)
             local out_mesh = inputs.mesh:clone()
-            print(inputs.normals)
             if inputs.normals == "smooth" then
                 Ops.set_smooth_normals(out_mesh)
             else
@@ -133,11 +179,63 @@ local edit_ops = {
             end
             return {out_mesh = out_mesh}
         end
+    },
+    Transform = {
+        label = "Transform",
+        inputs = {
+                    mesh("mesh"), 
+                    v3("translate", vector(0, 0, 0)),
+                    v3("rotate", vector(0, 0, 0)),
+                    v3("scale", vector(1, 1, 1))
+                },
+        outputs = {mesh("out_mesh")},
+        returns = "out_mesh",
+        op = function(inputs)
+            local out_mesh = inputs.mesh:clone()
+            Ops.transform(out_mesh, inputs.translate, inputs.rotate, inputs.scale)
+            return {out_mesh = out_mesh}
+        end
+    },
+    VertexAttribTransfer = {
+        label = "Vertex attribute transfer",
+        inputs = {
+                    mesh("src_mesh"), 
+                    mesh("dst_mesh"),
+                    strparam("channel", "", false)
+                },
+        outputs = {mesh("out_mesh")},
+        returns = "out_mesh",
+        op = function(inputs)
+            local out_mesh = inputs.dst_mesh:clone()
+            Ops.vertex_attribute_transfer(inputs.src_mesh, out_mesh, Types.Vec3, inputs.channel)
+            return {out_mesh = out_mesh}
+        end
+    },
+    SetFullRangeUVs = {
+        label = "Set full range UVs",
+        inputs = {mesh("mesh")},
+        outputs = {mesh("out_mesh")},
+        returns = "out_mesh",
+        op = function(inputs)
+            local out_mesh = inputs.mesh:clone()
+            Ops.set_full_range_uvs(out_mesh);
+            return {out_mesh = out_mesh}
+        end
     }
 }
 
 -- Math: Nodes to perform vector or scalar math operations
 local math = {
+    MakeScalar = {
+        label = "Scalar",
+        inputs = {
+            scalar("x", 0.0, 0.0, 2.0),
+        },
+        outputs = {scalar("x")},
+        op = function(inputs)
+            return {x = inputs.x}
+        end
+    },
     MakeVector = {
         label = "MakeVector",
         inputs = {

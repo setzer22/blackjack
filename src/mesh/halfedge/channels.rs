@@ -60,6 +60,12 @@ impl Introspect for f32 {
     }
 }
 
+impl Introspect for bool {
+    fn introspect(&self) -> String {
+        format!("{: >6.3}", self)
+    }
+}
+
 /// The value of a channel is the data that is associated to a specific key.
 /// Values can be scalars (f32) or vectors (Vec3).
 pub trait ChannelValue:
@@ -83,6 +89,7 @@ macro_rules! impl_channel_value {
 }
 impl_channel_value!(Vec3);
 impl_channel_value!(f32);
+impl_channel_value!(bool);
 
 /// The `FromLua` and `ToLua` traits have a lifetime parameter which is
 /// unnecessary for the channel keys and values. We introduce this new trait
@@ -122,6 +129,7 @@ macro_rules! impl_from_to_lua {
 }
 impl_from_to_lua!(wrapped Vec3);
 impl_from_to_lua!(flat f32);
+impl_from_to_lua!(flat bool);
 impl_from_to_lua!(flat VertexId);
 impl_from_to_lua!(flat FaceId);
 impl_from_to_lua!(flat HalfEdgeId);
@@ -137,7 +145,7 @@ pub enum ChannelKeyType { VertexId, FaceId, HalfEdgeId }
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
 #[rustfmt::skip]
 #[allow(non_camel_case_types)]
-pub enum ChannelValueType { Vec3, f32, }
+pub enum ChannelValueType { Vec3, f32, bool }
 
 /// A channel represents a set of data that is associated over all the elements
 /// of a mesh. For instance, the well-known `position` channel of a mesh, is a
@@ -223,6 +231,11 @@ pub struct DefaultChannels {
     pub position: ChannelId<VertexId, Vec3>,
     pub vertex_normals: Option<ChannelId<VertexId, Vec3>>,
     pub face_normals: Option<ChannelId<FaceId, Vec3>>,
+    /// There are no Vec2 channels. Uvs simply use the first two coordinates.
+    /// You can store different UVs for every face a vertex belongs to. We use
+    /// the outgoing halfedges to represent this relation and store UVs in them
+    /// instead.
+    pub uvs: Option<ChannelId<HalfEdgeId, Vec3>>,
 }
 
 impl<K: ChannelKey, V: ChannelValue> std::ops::Index<K> for Channel<K, V> {
@@ -307,7 +320,7 @@ pub trait DynChannel: Any + Debug {
     /// modify a full channel, it is generally faster to convert the channel to
     /// a table, let Lua manipulate it freely and then set it back using the
     /// complementary `set_from_table`.
-    fn to_table<'lua>(
+    fn to_seq_table<'lua>(
         &self,
         keys: Box<dyn Iterator<Item = u64> + '_>,
         lua: &'lua mlua::Lua,
@@ -315,9 +328,25 @@ pub trait DynChannel: Any + Debug {
 
     /// Given a Lua table like the one returned by `to_table`, sets the values
     /// in this channel to the ones provided by the table.
-    fn set_from_table<'lua>(
+    fn set_from_seq_table<'lua>(
         &mut self,
         keys: Box<dyn Iterator<Item = u64> + '_>,
+        lua: &'lua mlua::Lua,
+        table: mlua::Table<'lua>,
+    ) -> Result<()>;
+
+    /// Same as `to_seq_table`, but instead of assuming a sequential table, a
+    /// dictionary-like table mapping keys to values is returned
+    fn to_assoc_table<'lua>(
+        &self,
+        keys: Box<dyn Iterator<Item = u64> + '_>,
+        lua: &'lua mlua::Lua,
+    ) -> mlua::Table<'lua>;
+
+    /// Same as `set_from_seq_table`, but instead of taking sequential table, a
+    /// dictionary-like table mapping keys to values is taken
+    fn set_from_assoc_table<'lua>(
+        &mut self,
         lua: &'lua mlua::Lua,
         table: mlua::Table<'lua>,
     ) -> Result<()>;
@@ -336,6 +365,14 @@ pub trait DynChannel: Any + Debug {
     );
 }
 impl<K: ChannelKey, V: ChannelValue> DynChannel for Channel<K, V> {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+
     fn get_lua<'a, 'lua>(
         &'a self,
         lua: &'lua mlua::Lua,
@@ -362,7 +399,7 @@ impl<K: ChannelKey, V: ChannelValue> DynChannel for Channel<K, V> {
         Ok(())
     }
 
-    fn to_table<'lua>(
+    fn to_seq_table<'lua>(
         &self,
         keys: Box<dyn Iterator<Item = u64> + '_>,
         lua: &'lua mlua::Lua,
@@ -371,7 +408,7 @@ impl<K: ChannelKey, V: ChannelValue> DynChannel for Channel<K, V> {
             .unwrap()
     }
 
-    fn set_from_table<'lua>(
+    fn set_from_seq_table<'lua>(
         &mut self,
         keys: Box<dyn Iterator<Item = u64> + '_>,
         lua: &'lua mlua::Lua,
@@ -384,6 +421,32 @@ impl<K: ChannelKey, V: ChannelValue> DynChannel for Channel<K, V> {
                 Ok(())
             })?;
         Ok(())
+    }
+
+    fn to_assoc_table<'lua>(
+        &self,
+        keys: Box<dyn Iterator<Item = u64> + '_>,
+        lua: &'lua mlua::Lua,
+    ) -> mlua::Table<'lua> {
+        lua.create_table_from(
+            keys.map(K::cast_from_ffi)
+                .map(|k| (k.cast_to_lua(lua), self[k].cast_to_lua(lua))),
+        )
+        .unwrap()
+    }
+
+    fn set_from_assoc_table<'lua>(
+        &mut self,
+        lua: &'lua mlua::Lua,
+        table: mlua::Table<'lua>,
+    ) -> Result<()> {
+        table.pairs().try_for_each(|pair| {
+            let (k, v) = pair?;
+            let k = FromToLua::cast_from_lua(k, lua)?;
+            let v = FromToLua::cast_from_lua(v, lua)?;
+            self[k] = v;
+            Ok(())
+        })
     }
 
     fn merge_with_dyn(
@@ -404,14 +467,6 @@ impl<K: ChannelKey, V: ChannelValue> DynChannel for Channel<K, V> {
                 "Tried to merge dynamic channels with different types. This should never happen."
             )
         }
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
     }
 }
 
@@ -728,10 +783,13 @@ impl MeshChannels {
         do_match! {
             VertexId, Vec3;
             VertexId, f32;
+            VertexId, bool;
             FaceId, Vec3;
             FaceId, f32;
+            FaceId, bool;
             HalfEdgeId, Vec3;
-            HalfEdgeId, f32
+            HalfEdgeId, f32;
+            HalfEdgeId, bool
         }
     }
 
@@ -915,6 +973,7 @@ impl DefaultChannels {
             position,
             vertex_normals: None,
             face_normals: None,
+            uvs: None,
         }
     }
 }

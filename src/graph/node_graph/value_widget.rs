@@ -65,6 +65,16 @@ impl WidgetValueTrait for ValueType {
                     }
                 });
             }
+            ValueType::String { text, multiline } => {
+                ui.horizontal(|ui| {
+                    ui.label(param_name);
+                    if *multiline {
+                        ui.text_edit_multiline(text);
+                    } else {
+                        ui.text_edit_singleline(text);
+                    }
+                });
+            }
         }
     }
 }

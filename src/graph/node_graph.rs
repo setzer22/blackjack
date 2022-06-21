@@ -42,6 +42,7 @@ pub enum DataType {
     Enum,
     // The path to a (possibly new) file where export contents will be saved to
     NewFile,
+    String,
 }
 
 /// Blackjack-specific constant types (inline widget)
@@ -66,6 +67,10 @@ pub enum ValueType {
     },
     NewFile {
         path: Option<std::path::PathBuf>,
+    },
+    String {
+        multiline: bool,
+        text: String,
     },
 }
 
@@ -95,6 +100,7 @@ impl DataTypeTrait for DataType {
             DataType::Vector => color_from_hex("#eecf6d").unwrap(),
             DataType::Scalar => color_from_hex("#eb9fef").unwrap(),
             DataType::Selection => color_from_hex("#4b7f52").unwrap(),
+            DataType::String => color_from_hex("#904056").unwrap(),
             DataType::Enum => color_from_hex("#ff0000").unwrap(), // Should never be in a port, so highlight in red
             DataType::NewFile => color_from_hex("#ff0000").unwrap(), // Should never be in a port, so highlight in red
         }
@@ -108,6 +114,7 @@ impl DataTypeTrait for DataType {
             DataType::Mesh => "mesh",
             DataType::Enum => "enum",
             DataType::NewFile => "newfile",
+            DataType::String => "string",
         }
     }
 }

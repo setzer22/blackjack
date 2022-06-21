@@ -2,7 +2,9 @@ use std::{cell::RefCell, rc::Rc};
 
 use mlua::{Function, Value};
 
-use crate::prelude::halfedge::{DynChannel, RawChannelId};
+use crate::prelude::halfedge::{
+    AnyTraversal, DynChannel, HalfEdgeTraversal, HalfedgeTraversalHelpers, RawChannelId,
+};
 
 use super::*;
 
@@ -18,8 +20,8 @@ pub fn load(lua: &Lua) -> anyhow::Result<()> {
         let mesh = mesh.borrow_mut::<HalfEdgeMesh>()?;
         mesh.write_connectivity().clear_debug();
         let verts = mesh
-            .read_connectivity()
-            .resolve_vertex_selection_full(vertices);
+            .resolve_vertex_selection_full(&vertices)
+            .map_lua_err()?;
         for v in verts {
             crate::mesh::halfedge::edit_ops::chamfer_vertex(
                 &mut mesh.write_connectivity(),
@@ -39,8 +41,8 @@ pub fn load(lua: &Lua) -> anyhow::Result<()> {
         let result = mesh.borrow_mut::<HalfEdgeMesh>()?;
         {
             let edges = result
-                .read_connectivity()
-                .resolve_halfedge_selection_full(edges);
+                .resolve_halfedge_selection_full(&edges)
+                .map_lua_err()?;
             crate::mesh::halfedge::edit_ops::bevel_edges(
                 &mut result.write_connectivity(),
                 &mut result.write_positions(),
@@ -58,9 +60,7 @@ pub fn load(lua: &Lua) -> anyhow::Result<()> {
      -> () {
         let result = mesh.borrow_mut::<HalfEdgeMesh>()?;
         {
-            let faces = result
-                .read_connectivity()
-                .resolve_face_selection_full(faces);
+            let faces = result.resolve_face_selection_full(&faces).map_lua_err()?;
             crate::mesh::halfedge::edit_ops::extrude_faces(
                 &mut result.write_connectivity(),
                 &mut result.write_positions(),
@@ -102,12 +102,116 @@ pub fn load(lua: &Lua) -> anyhow::Result<()> {
         Ok(())
     });
 
+    lua_fn!(lua, ops, "bridge_loops", |mesh: AnyUserData,
+                                       loop_1: SelectionExpression,
+                                       loop_2: SelectionExpression,
+                                       flip: usize|
+     -> () {
+        let mut mesh = mesh.borrow_mut::<HalfEdgeMesh>()?;
+        let loop_1 = mesh
+            .resolve_halfedge_selection_full(&loop_1)
+            .map_lua_err()?;
+        let loop_2 = mesh
+            .resolve_halfedge_selection_full(&loop_2)
+            .map_lua_err()?;
+
+        crate::mesh::halfedge::edit_ops::bridge_loops_ui(&mut mesh, &loop_1, &loop_2, flip)
+            .map_lua_err()?;
+        Ok(())
+    });
+
+    lua_fn!(lua, ops, "make_quad", |mesh: AnyUserData,
+                                    a: SelectionExpression,
+                                    b: SelectionExpression,
+                                    c: SelectionExpression,
+                                    d: SelectionExpression|
+     -> () {
+        let mesh = mesh.borrow_mut::<HalfEdgeMesh>()?;
+
+        macro_rules! get_selection {
+            ($sel:expr) => {
+                mesh.resolve_vertex_selection_full(&a)
+                    .map_lua_err()?
+                    .get(0)
+                    .copied()
+                    .ok_or_else(|| anyhow::anyhow!("Empty selection"))
+                    .map_lua_err()?
+            };
+        }
+
+        let a = get_selection!(a);
+        let b = get_selection!(b);
+        let c = get_selection!(c);
+        let d = get_selection!(d);
+
+        crate::mesh::halfedge::edit_ops::make_quad(&mut mesh.write_connectivity(), &[a, b, c, d])
+            .map_lua_err()?;
+        Ok(())
+    });
+
+    lua_fn!(lua, ops, "transform", |mesh: AnyUserData,
+                                    translate: Vec3,
+                                    rotate: Vec3,
+                                    scale: Vec3|
+     -> () {
+        let mut mesh = mesh.borrow_mut::<HalfEdgeMesh>()?;
+        crate::mesh::halfedge::edit_ops::transform(&mut mesh, translate.0, rotate.0, scale.0)
+            .map_lua_err()?;
+        Ok(())
+    });
+
+    lua_fn!(lua, ops, "make_group", |mesh: AnyUserData,
+                                     key_type: ChannelKeyType,
+                                     selection: SelectionExpression,
+                                     group_name: String|
+     -> () {
+        let mut mesh = mesh.borrow_mut::<HalfEdgeMesh>()?;
+        crate::mesh::halfedge::edit_ops::make_group(&mut mesh, key_type, &selection, &group_name)
+            .map_lua_err()?;
+        Ok(())
+    });
+
+    lua_fn!(
+        lua,
+        ops,
+        "vertex_attribute_transfer",
+        |src_mesh: AnyUserData,
+         dst_mesh: AnyUserData,
+         value_type: ChannelValueType,
+         channel_name: String|
+         -> () {
+            use crate::mesh::halfedge::edit_ops::vertex_attribute_transfer;
+            let src_mesh = src_mesh.borrow::<HalfEdgeMesh>()?;
+            let mut dst_mesh = dst_mesh.borrow_mut::<HalfEdgeMesh>()?;
+            match value_type {
+                ChannelValueType::Vec3 => {
+                    vertex_attribute_transfer::<glam::Vec3>(&src_mesh, &mut dst_mesh, &channel_name)
+                }
+                ChannelValueType::f32 => {
+                    vertex_attribute_transfer::<f32>(&src_mesh, &mut dst_mesh, &channel_name)
+                }
+                ChannelValueType::bool => {
+                    vertex_attribute_transfer::<bool>(&src_mesh, &mut dst_mesh, &channel_name)
+                }
+            }
+            .map_lua_err()?;
+            Ok(())
+        }
+    );
+
+    lua_fn!(lua, ops, "set_full_range_uvs", |mesh: AnyUserData| -> () {
+        let mut mesh = mesh.borrow_mut::<HalfEdgeMesh>()?;
+        crate::mesh::halfedge::edit_ops::set_full_range_uvs(&mut mesh).map_lua_err()?;
+        Ok(())
+    });
+
     let types = lua.create_table()?;
     types.set("VertexId", ChannelKeyType::VertexId)?;
     types.set("FaceId", ChannelKeyType::FaceId)?;
     types.set("HalfEdgeId", ChannelKeyType::HalfEdgeId)?;
     types.set("Vec3", ChannelValueType::Vec3)?;
     types.set("f32", ChannelValueType::f32)?;
+    types.set("bool", ChannelValueType::bool)?;
     globals.set("Types", types)?;
 
     Ok(())
@@ -141,12 +245,18 @@ fn mesh_reduce<'lua>(
     Ok(acc)
 }
 
+enum LuaTableKind {
+    Sequential,
+    Associative,
+}
+
 fn mesh_channel_to_lua_table<'lua>(
     lua: &'lua Lua,
     mesh: &HalfEdgeMesh,
     kty: ChannelKeyType,
     vty: ChannelValueType,
     ch_id: RawChannelId,
+    kind: LuaTableKind,
 ) -> mlua::Result<mlua::Table<'lua>> {
     use slotmap::Key;
     let conn = mesh.read_connectivity();
@@ -159,11 +269,15 @@ fn mesh_channel_to_lua_table<'lua>(
             Box::new(conn.iter_halfedges().map(|(h_id, _)| h_id.data().as_ffi()))
         }
     };
-    Ok(mesh
+    let ch = mesh
         .channels
         .dyn_read_channel(kty, vty, ch_id)
-        .map_lua_err()?
-        .to_table(keys, lua))
+        .map_lua_err()?;
+
+    match kind {
+        LuaTableKind::Sequential => Ok(ch.to_seq_table(keys, lua)),
+        LuaTableKind::Associative => Ok(ch.to_assoc_table(keys, lua)),
+    }
 }
 
 impl UserData for HalfEdgeMesh {
@@ -176,7 +290,18 @@ impl UserData for HalfEdgeMesh {
                     .channel_id_dyn(kty, vty, &name)
                     .ok_or_else(|| anyhow::anyhow!("Channel '{name}' not found"))
                     .map_lua_err()?;
-                mesh_channel_to_lua_table(lua, this, kty, vty, ch_id)
+                mesh_channel_to_lua_table(lua, this, kty, vty, ch_id, LuaTableKind::Sequential)
+            },
+        );
+        methods.add_method(
+            "get_assoc_channel",
+            |lua, this, (kty, vty, name): (ChannelKeyType, ChannelValueType, String)| {
+                let ch_id = this
+                    .channels
+                    .channel_id_dyn(kty, vty, &name)
+                    .ok_or_else(|| anyhow::anyhow!("Channel '{name}' not found"))
+                    .map_lua_err()?;
+                mesh_channel_to_lua_table(lua, this, kty, vty, ch_id, LuaTableKind::Associative)
             },
         );
         methods.add_method("set_channel", |lua, this, (kty, vty, name, table)| {
@@ -197,14 +322,29 @@ impl UserData for HalfEdgeMesh {
             this.channels
                 .dyn_write_channel_by_name(kty, vty, &name)
                 .map_lua_err()?
-                .set_from_table(keys, lua, table)
+                .set_from_seq_table(keys, lua, table)
+                .map_lua_err()
+        });
+        methods.add_method("set_assoc_channel", |lua, this, (kty, vty, name, table)| {
+            let name: String = name;
+            this.channels
+                .dyn_write_channel_by_name(kty, vty, &name)
+                .map_lua_err()?
+                .set_from_assoc_table(lua, table)
                 .map_lua_err()
         });
         methods.add_method_mut(
             "ensure_channel",
             |lua, this, (kty, vty, name): (ChannelKeyType, ChannelValueType, String)| {
                 let id = this.channels.ensure_channel_dyn(kty, vty, &name);
-                mesh_channel_to_lua_table(lua, this, kty, vty, id)
+                mesh_channel_to_lua_table(lua, this, kty, vty, id, LuaTableKind::Sequential)
+            },
+        );
+        methods.add_method_mut(
+            "ensure_assoc_channel",
+            |lua, this, (kty, vty, name): (ChannelKeyType, ChannelValueType, String)| {
+                let id = this.channels.ensure_channel_dyn(kty, vty, &name);
+                mesh_channel_to_lua_table(lua, this, kty, vty, id, LuaTableKind::Associative)
             },
         );
         methods.add_method("iter_vertices", |lua, this, ()| {
@@ -251,10 +391,47 @@ impl UserData for HalfEdgeMesh {
                 mesh_reduce(this, ChannelKeyType::HalfEdgeId, init, f)
             },
         );
-
         methods.add_method(
             "vertex_position",
             |_lua, this: &HalfEdgeMesh, v: VertexId| Ok(Vec3(this.read_positions()[v])),
+        );
+        methods.add_method_mut(
+            "add_edge",
+            |_lua, this: &mut HalfEdgeMesh, (start, end): (Vec3, Vec3)| {
+                crate::prelude::halfedge::edit_ops::add_edge(this, start.0, end.0).map_lua_err()
+            },
+        );
+
+        methods.add_method_mut("add_vertex", |_lua, this: &mut HalfEdgeMesh, pos: Vec3| {
+            crate::prelude::halfedge::edit_ops::add_vertex(this, pos.0).map_lua_err()
+        });
+
+        methods.add_method(
+            "halfedge_endpoints",
+            |_lua, this: &HalfEdgeMesh, h: HalfEdgeId| -> mlua::Result<(Vec3, Vec3)> {
+                let conn = this.read_connectivity();
+                let positions = this.read_positions();
+                let (src, dst) = conn.at_halfedge(h).src_dst_pair().map_lua_err()?;
+                Ok((Vec3(positions[src]), Vec3(positions[dst])))
+            },
+        );
+
+        methods.add_method(
+            "halfedge_vertex_id",
+            |_lua, this: &HalfEdgeMesh, h: HalfEdgeId| {
+                this.read_connectivity()
+                    .at_halfedge(h)
+                    .vertex()
+                    .try_end()
+                    .map_lua_err()
+            },
+        );
+
+        methods.add_method(
+            "point_cloud",
+            |_lua, this: &HalfEdgeMesh, sel: SelectionExpression| {
+                crate::prelude::halfedge::edit_ops::point_cloud(this, sel).map_lua_err()
+            },
         );
     }
 }

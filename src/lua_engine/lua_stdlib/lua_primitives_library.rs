@@ -26,5 +26,26 @@ pub fn load(lua: &Lua) -> anyhow::Result<()> {
         ))
     });
 
+    lua_fn!(lua, primitives, "circle", |center: Vec3,
+                                        radius: f32,
+                                        num_vertices: f32|
+     -> HalfEdgeMesh {
+        Ok(crate::mesh::halfedge::primitives::Circle::build_open(
+            center.0,
+            radius,
+            num_vertices as usize,
+        ))
+    });
+
+    lua_fn!(lua, primitives, "uv_sphere", |center: Vec3,
+                                           radius: f32,
+                                           segments: u32,
+                                           rings: u32|
+     -> HalfEdgeMesh {
+        Ok(crate::mesh::halfedge::primitives::UVSphere::build(
+            center.0, segments, rings, radius,
+        ))
+    });
+
     Ok(())
 }

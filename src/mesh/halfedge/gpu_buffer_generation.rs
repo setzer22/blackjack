@@ -276,7 +276,7 @@ impl HalfEdgeMesh {
                 conn.face_normal(&positions_ch, twin_face)
                     .unwrap_or(Vec3::ZERO)
             } else {
-                Vec3::ZERO
+                Vec3::Y
             };
 
             let tangent = normal.cross(bitangent);

@@ -25,11 +25,23 @@ pub enum FaceDrawMode {
     None,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum TextOverlayMode {
+    /// No text overlay
+    None,
+    /// Display mesh information
+    MeshInfo,
+    /// Display mesh debug information set by the developers when debugging a
+    /// problem. This is not intended to be used by regular users.
+    DevDebug,
+}
+
 pub struct Viewport3dSettings {
     pub render_vertices: bool,
     pub matcap: usize,
     pub edge_mode: EdgeDrawMode,
     pub face_mode: FaceDrawMode,
+    pub overlay_mode: TextOverlayMode,
 }
 
 pub struct Viewport3d {
@@ -38,12 +50,14 @@ pub struct Viewport3d {
     viewport_rect: egui::Rect,
     parent_scale: f32,
     pub settings: Viewport3dSettings,
+    view_proj: Mat4,
 }
 
 struct OrbitCamera {
     yaw: f32,
     pitch: f32,
     distance: f32,
+    focus_point: Vec3,
 }
 
 impl Default for OrbitCamera {
@@ -52,6 +66,7 @@ impl Default for OrbitCamera {
             yaw: -30.0,
             pitch: 30.0,
             distance: 8.0,
+            focus_point: Vec3::ZERO,
         }
     }
 }
@@ -68,9 +83,11 @@ impl Viewport3d {
             settings: Viewport3dSettings {
                 edge_mode: EdgeDrawMode::FullEdge,
                 face_mode: FaceDrawMode::Real,
+                overlay_mode: TextOverlayMode::None,
                 render_vertices: true,
                 matcap: 0,
             },
+            view_proj: Mat4::default(),
         }
     }
 
@@ -93,15 +110,25 @@ impl Viewport3d {
     fn update_camera(&mut self, render_ctx: &mut RenderContext) {
         // Update status
         if self.input.mouse.buttons().pressed(MouseButton::Left) {
-            self.camera.yaw += self.input.mouse.cursor_delta().x * 2.0;
-            self.camera.pitch += self.input.mouse.cursor_delta().y * 2.0;
+            if self.input.shift_down {
+                let cam_rotation = Mat4::from_rotation_y(self.camera.yaw.to_radians())
+                    * Mat4::from_rotation_x(self.camera.pitch.to_radians());
+                let camera_right = cam_rotation.transform_point3(Vec3::X);
+                let camera_up = cam_rotation.transform_vector3(Vec3::Y);
+                self.camera.focus_point += self.input.mouse.cursor_delta().x * camera_right * 0.1
+                    + self.input.mouse.cursor_delta().y * -camera_up * 0.1;
+            } else {
+                self.camera.yaw += self.input.mouse.cursor_delta().x * 2.0;
+                self.camera.pitch += self.input.mouse.cursor_delta().y * 2.0;
+            }
         }
         self.camera.distance += self.input.mouse.wheel_delta() * 0.25;
 
         // Compute view matrix
         let view = Mat4::from_translation(Vec3::Z * self.camera.distance)
             * Mat4::from_rotation_x(-self.camera.pitch.to_radians())
-            * Mat4::from_rotation_y(-self.camera.yaw.to_radians());
+            * Mat4::from_rotation_y(-self.camera.yaw.to_radians())
+            * Mat4::from_translation(self.camera.focus_point);
         render_ctx.set_camera(view);
     }
 
@@ -116,6 +143,9 @@ impl Viewport3d {
 
         self.update_camera(render_ctx);
         self.input.update();
+
+        let camera_manager = &render_ctx.renderer.data_core.lock().camera_manager;
+        self.view_proj = camera_manager.view_proj();
 
         // TODO: What if we ever have multiple 3d viewports? There's no way to
         // set the aspect ratio differently for different render passes in rend3
@@ -155,7 +185,12 @@ impl Viewport3d {
         )
     }
 
-    pub fn show_ui(&mut self, ui: &mut egui::Ui, offscreen_viewport: &mut AppViewport) {
+    pub fn show_ui(
+        &mut self,
+        ui: &mut egui::Ui,
+        offscreen_viewport: &mut AppViewport,
+        mesh: Option<&HalfEdgeMesh>,
+    ) {
         ui.vertical(|ui| {
             ui.horizontal(|ui| {
                 mesh_visuals_popup(ui, |ui| {
@@ -220,10 +255,38 @@ impl Viewport3d {
                             self.settings.matcap += 1;
                         }
                     });
+
+                    ui.horizontal(|ui| {
+                        ui.label("Text Overlay:");
+                        ui.selectable_value(
+                            &mut self.settings.overlay_mode,
+                            TextOverlayMode::None,
+                            "None",
+                        );
+                        ui.selectable_value(
+                            &mut self.settings.overlay_mode,
+                            TextOverlayMode::MeshInfo,
+                            "Info",
+                        );
+                        ui.selectable_value(
+                            &mut self.settings.overlay_mode,
+                            TextOverlayMode::DevDebug,
+                            "Debug",
+                        );
+                    });
                 });
             });
             offscreen_viewport.show(ui, ui.available_size());
         });
+        if let Some(mesh) = mesh {
+            crate::app_window::gui_overlay::draw_gui_overlays(
+                &self.view_proj,
+                offscreen_viewport.rect,
+                ui.ctx(),
+                mesh,
+                self.settings.overlay_mode,
+            );
+        }
     }
 }
 

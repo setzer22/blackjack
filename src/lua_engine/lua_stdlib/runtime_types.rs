@@ -2,6 +2,7 @@ use noise::NoiseFn;
 
 use super::*;
 
+#[derive(Debug)]
 pub struct Vec3(pub glam::Vec3);
 impl<'lua> ToLua<'lua> for Vec3 {
     fn to_lua(self, _lua: &'lua Lua) -> mlua::Result<mlua::Value<'lua>> {
@@ -79,6 +80,6 @@ impl UserData for PerlinNoise {
     fn add_methods<'lua, M: mlua::UserDataMethods<'lua, Self>>(methods: &mut M) {
         methods.add_method("get_3d", |_lua, this, (x, y, z): (f64, f64, f64)| {
             Ok(this.0.get([x, y, z]))
-        })
+        });
     }
 }

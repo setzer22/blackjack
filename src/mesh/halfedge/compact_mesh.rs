@@ -545,20 +545,6 @@ impl AtomicVec3 {
     }
 }
 
-/// Transmutes a vector of `T`s into a vector of `U`s.
-///
-/// # Safety
-/// This is only safe when `T` and `U` have the same size, plus all the
-/// additional safety considerations required when calling `transmute::<T,U>`
-unsafe fn transmute_vec<T, U>(v: Vec<T>) -> Vec<U> {
-    let mut v = std::mem::ManuallyDrop::new(v);
-    let ptr = v.as_mut_ptr();
-    let len = v.len();
-    let cap = v.capacity();
-
-    Vec::from_raw_parts(ptr as *mut U, len, cap)
-}
-
 #[cfg(test)]
 pub mod test {
     use super::*;

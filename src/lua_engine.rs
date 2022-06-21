@@ -19,6 +19,12 @@ impl<T> ToLuaError<T> for anyhow::Result<T> {
     }
 }
 
+impl<T> ToLuaError<T> for Result<T, TraversalError> {
+    fn map_lua_err(self) -> mlua::Result<T> {
+        self.map_err(|err| mlua::Error::RuntimeError(format!("{:?}", err)))
+    }
+}
+
 pub fn run_program<'lua>(
     lua: &'lua Lua,
     lua_program: &str,
