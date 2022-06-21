@@ -60,7 +60,6 @@ mlua = { version = "0.8.0-beta.3", features = ["luau"] }
 notify = "4.0"
 walkdir = "2"
 syntect = "4.6"
-enum-map = "2.0"
 bimap = "0.6.2"
 dyn-clone = "1.0"
 noise = "0.7"
