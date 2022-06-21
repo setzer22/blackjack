@@ -1,0 +1,68 @@
+[package]
+name = "blackjack_ui"
+description = "A procedural, node-based modelling tool, made in Rust"
+homepage = "https://github.com/setzer22/blackjack"
+repository = "https://github.com/setzer22/blackjack"
+license = "MIT"
+version = "0.1.0"
+keywords = ["gamedev", "3d", "modelling", "procedural"]
+authors = ["setzer22"]
+edition = "2021"
+
+[features]
+tracy = ["profiling/profile-with-tracy"]
+
+[dependencies]
+# Workspace dependencies
+blackjack_commons = { path = "../blackjack_commons" }
+blackjack_engine = { path = "../blackjack_engine" }
+
+# Forked crates
+egui_wgpu_backend = { git = "https://github.com/setzer22/egui_wgpu_backend", rev = "3abd9145aaf2c79417d2ea2207df52f4e302ae28" }
+
+# Git dependencies
+egui_winit_platform = { git = "https://github.com/hasenbanck/egui_winit_platform", rev = "eea97f778a17c7f97f3cf1758f3ebb5ff6251e11" }
+egui_node_graph = { git = "https://github.com/setzer22/egui_node_graph", rev = "d8c31a5", features = [
+    "persistence",
+] }
+rend3 = { git = "https://github.com/BVE-Reborn/rend3", rev = "763a721842ad02b08d3812791027ede451b4ec18" }
+rend3-routine = { git = "https://github.com/BVE-Reborn/rend3", rev = "763a721842ad02b08d3812791027ede451b4ec18" }
+glsl-include = { git = "https://github.com/setzer22/glsl-include", rev = "d9b1ade" }
+
+# Crates.io crates
+egui = { version = "0.16", features = ["persistence"] }
+glam = { version = "0.20", features = ["serde", "bytemuck"] }
+env_logger = { version = "0.9", default-features = false, features = [
+    "termcolor",
+    "atty",
+] }
+winit = { version = "0.26" }
+wgpu = "0.12"
+pollster = "0.2"
+smallvec = { version = "1.7.0", features = ["serde"] }
+itertools = "0.10"
+anyhow = { version = "1.0", features = ["backtrace"] }
+bytemuck = { version = "1.7", features = ["derive"] }
+serde = { version = "1.0", features = ["derive"] }
+ron = "0.7"
+rfd = "0.6"
+float-ord = "0.3.2"
+spin_sleep = "1.0.0"
+rayon = "1.5.1"
+nonmax = "0.5"
+slotmap = { version = "1.0", features = ["serde"] }
+num-traits = "0.2.14"
+atomic_float = "0.1"
+profiling = { version = "1.0" }
+image = { version = "0.24", default-features = false, features = ["png"] }
+nom = "7.1"
+mlua = { version = "0.8.0-beta.3", features = ["luau"] }
+notify = "4.0"
+walkdir = "2"
+syntect = "4.6"
+enum-map = "2.0"
+bimap = "0.6.2"
+dyn-clone = "1.0"
+noise = "0.7"
+rstar = "0.9.3"
+wavefront_rs = "1.0.4"
