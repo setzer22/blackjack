@@ -97,7 +97,7 @@ impl NodeOutputAddr {
     fn variable_name(self, graph: &Graph) -> Result<String> {
         let node = &graph[self.id];
         let unique = slotmap_id_str(node.id);
-        Ok(format!("{}_{}", node.user_data.0.op_name, unique,))
+        Ok(format!("{}_{}", node.user_data.op_name, unique,))
     }
 
     /// The string that should be used to reference an output value from this
@@ -113,7 +113,7 @@ impl NodeOutputAddr {
             .ok_or_else(|| anyhow!("Error creating string ident"))?;
         Ok(format!(
             "{}_{}.{}",
-            node.user_data.0.op_name, unique, param_name
+            node.user_data.op_name, unique, param_name
         ))
     }
 }
@@ -124,7 +124,7 @@ impl ConstParamAddr {
     pub fn const_value_ref(self, graph: &Graph) -> Result<String> {
         let param = &graph[self.id];
         let node = &graph[param.node];
-        let op_name = &node.user_data.0.op_name;
+        let op_name = &node.user_data.op_name;
         let unique = slotmap_id_str(node.id);
         let param_name = node
             .inputs
@@ -254,7 +254,7 @@ fn codegen_node(
         args + indent.as_str() + "}"
     };
     let output_addr = codegen_output(graph, ctx, node_id)?.variable_name(graph)?;
-    let node_name = graph[node_id].user_data.0.op_name.as_str();
+    let node_name = graph[node_id].user_data.op_name.as_str();
 
     emit_line!("local {output_addr} = NodeLibrary:callNode('{node_name}', {args})");
 

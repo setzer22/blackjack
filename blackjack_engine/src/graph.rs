@@ -5,14 +5,6 @@ use mlua::Table;
 use serde::{Serialize, Deserialize};
 use anyhow::{anyhow, Result};
 
-/// Blackjack-specific per-node data.
-#[derive(Clone, Serialize, Deserialize)]
-pub struct NodeData {
-    pub op_name: String,
-    pub returns: Option<String>,
-    pub is_executable: bool,
-}
-
 /// Blackjack-specific graph data types.
 #[derive(Copy, Clone, PartialEq, Eq, Serialize, Deserialize, Debug)]
 pub enum DataType {

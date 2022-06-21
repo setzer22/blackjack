@@ -6,17 +6,17 @@ use egui_node_graph::{
 };
 use serde::{Deserialize, Serialize};
 
-use blackjack_engine::{graph::{DataType, NodeData, NodeDefinition, NodeDefinitions, ValueType}, prelude::selection::SelectionExpression};
+use blackjack_engine::{graph::{DataType, NodeDefinition, NodeDefinitions, ValueType}, prelude::selection::SelectionExpression};
 
 use egui_node_graph::{InputParamKind, NodeTemplateTrait};
 
 pub mod value_widget;
 
 /// A generic egui_node_graph graph, with blackjack-specific parameters
-pub type Graph = egui_node_graph::Graph<NodeDataUi, DataTypeUi, ValueTypeUi>;
+pub type Graph = egui_node_graph::Graph<NodeData, DataTypeUi, ValueTypeUi>;
 /// The graph editor state, with blackjack-specific parameters
 pub type GraphEditorState = egui_node_graph::GraphEditorState<
-    NodeDataUi,
+    NodeData,
     DataTypeUi,
     ValueTypeUi,
     NodeDefinitionUi,
@@ -74,8 +74,12 @@ impl UserResponseTrait for CustomNodeResponse {}
 
 /// The node data trait can be used to insert a custom UI inside nodes
 #[derive(Clone, Serialize, Deserialize)]
-pub struct NodeDataUi(pub NodeData); // Prevents orphan rules
-impl NodeDataTrait for NodeDataUi {
+pub struct NodeData {
+    pub op_name: String,
+    pub returns: Option<String>,
+    pub is_executable: bool,
+}
+impl NodeDataTrait for NodeData {
     type Response = CustomNodeResponse;
     type UserState = CustomGraphState;
     type DataType = DataTypeUi;
@@ -119,7 +123,7 @@ impl NodeDataTrait for NodeDataUi {
                 });
             }
             // Show 'Run' button for executable nodes
-            if self.0.is_executable && ui.button("⛭ Run").clicked() {
+            if self.is_executable && ui.button("⛭ Run").clicked() {
                 responses.push(NodeResponse::User(CustomNodeResponse::RunNodeSideEffect(
                     node_id,
                 )));
@@ -170,7 +174,7 @@ pub fn draw_node_graph(ctx: &egui::CtxRef, state: &mut GraphEditorState, defs: &
 #[derive(Clone, Debug)]
 pub struct NodeDefinitionUi(pub NodeDefinition);
 impl NodeTemplateTrait for NodeDefinitionUi {
-    type NodeData = NodeDataUi;
+    type NodeData = NodeData;
     type DataType = DataTypeUi;
     type ValueType = ValueTypeUi;
 
@@ -183,11 +187,11 @@ impl NodeTemplateTrait for NodeDefinitionUi {
     }
 
     fn user_data(&self) -> Self::NodeData {
-        NodeDataUi(NodeData {
+        NodeData {
             op_name: self.0.name.clone(),
             returns: self.0.returns.clone(),
             is_executable: self.0.executable,
-        })
+        }
     }
 
     fn build_node(
