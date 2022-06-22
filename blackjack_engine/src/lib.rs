@@ -9,3 +9,5 @@ pub mod lua_engine;
 
 /// The graph core datatypes
 pub mod graph;
+
+pub mod graph_data_model;
