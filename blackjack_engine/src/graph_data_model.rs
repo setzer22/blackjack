@@ -111,18 +111,28 @@ impl BjkGraph {
         dst_node: BjkNodeId,
         dst_param: &str,
     ) -> Result<()> {
-        if !self.nodes[src_node]
+        let src_data_type = self.nodes[src_node]
             .outputs
             .iter()
-            .any(|output| output.name == src_param)
-        {
-            bail!("Input parameter named {dst_param} does not exist for node {dst_node:?}");
-        }
+            .find(|output| output.name == src_param)
+            .map(|output| output.data_type)
+            .ok_or_else(|| {
+                anyhow!("Input parameter named {dst_param} does not exist for node {dst_node:?}")
+            })?;
+
         if let Some(input) = self.nodes[dst_node]
             .inputs
             .iter_mut()
             .find(|input| input.name == dst_param)
         {
+            if input.data_type != src_data_type {
+                bail!(
+                    "Incompatible types. Input is {:?}, but its corresponding output is {:?}",
+                    input.data_type,
+                    src_data_type
+                );
+            }
+
             input.kind = DependencyKind::Connection {
                 node: src_node,
                 param_name: src_param.into(),
