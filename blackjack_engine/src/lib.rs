@@ -10,4 +10,5 @@ pub mod lua_engine;
 /// The graph core datatypes
 pub mod graph;
 
-pub mod graph_data_model;
+/// Converts graphs into Lua programs
+pub mod graph_compiler;

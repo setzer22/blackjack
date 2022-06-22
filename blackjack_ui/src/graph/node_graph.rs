@@ -1,12 +1,18 @@
+use std::rc::Rc;
+
 use crate::prelude::*;
 use egui::RichText;
 use egui_node_graph::{
     DataTypeTrait, NodeDataTrait, NodeId, NodeResponse, NodeTemplateIter, UserResponseTrait,
     WidgetValueTrait,
 };
+use noise::Select;
 use serde::{Deserialize, Serialize};
 
-use blackjack_engine::{graph::{DataType, NodeDefinition, NodeDefinitions, ValueType}, prelude::selection::SelectionExpression};
+use blackjack_engine::{
+    graph::{DataType, InputDefinition, InputValueConfig, NodeDefinition, NodeDefinitions},
+    prelude::selection::SelectionExpression,
+};
 
 use egui_node_graph::{InputParamKind, NodeTemplateTrait};
 
@@ -52,8 +58,6 @@ impl DataTypeTrait for DataTypeUi {
             DataType::Scalar => color_from_hex("#eb9fef").unwrap(),
             DataType::Selection => color_from_hex("#4b7f52").unwrap(),
             DataType::String => color_from_hex("#904056").unwrap(),
-            DataType::Enum => color_from_hex("#ff0000").unwrap(), // Should never be in a port, so highlight in red
-            DataType::NewFile => color_from_hex("#ff0000").unwrap(), // Should never be in a port, so highlight in red
         }
     }
 
@@ -63,8 +67,6 @@ impl DataTypeTrait for DataTypeUi {
             DataType::Scalar => "scalar",
             DataType::Selection => "selection",
             DataType::Mesh => "mesh",
-            DataType::Enum => "enum",
-            DataType::NewFile => "newfile",
             DataType::String => "string",
         }
     }
@@ -188,7 +190,7 @@ impl NodeTemplateTrait for NodeDefinitionUi {
 
     fn user_data(&self) -> Self::NodeData {
         NodeData {
-            op_name: self.0.name.clone(),
+            op_name: self.0.op_name.clone(),
             returns: self.0.returns.clone(),
             is_executable: self.0.executable,
         }
@@ -205,8 +207,6 @@ impl NodeTemplateTrait for NodeDefinitionUi {
                 DataType::Scalar => InputParamKind::ConnectionOrConstant,
                 DataType::Selection => InputParamKind::ConnectionOrConstant,
                 DataType::Mesh => InputParamKind::ConnectionOnly,
-                DataType::Enum => InputParamKind::ConstantOnly,
-                DataType::NewFile => InputParamKind::ConstantOnly,
                 DataType::String => InputParamKind::ConnectionOrConstant,
             };
 
@@ -214,7 +214,13 @@ impl NodeTemplateTrait for NodeDefinitionUi {
                 node_id,
                 input.name.clone(),
                 DataTypeUi(input.data_type),
-                ValueTypeUi(input.value.as_ref().unwrap_or(&ValueType::None).clone()),
+                ValueTypeUi(
+                    input
+                        .default_value
+                        .as_ref()
+                        .unwrap_or(&InputValueConfig::None)
+                        .clone(),
+                ),
                 input_param_kind,
                 true,
             );
@@ -225,15 +231,25 @@ impl NodeTemplateTrait for NodeDefinitionUi {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ValueStorage {
+    Vector(glam::Vec3),
+    Scalar(f32),
+    String(String),
+    Selection(String, Option<SelectionExpression>),
+}
+
 /// The widget value trait is used to determine how to display each [`ValueType`]
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ValueTypeUi(pub ValueType);
+pub struct ValueTypeUi {
+    pub storage: ValueStorage,
+    pub config: InputValueConfig,
+}
 impl WidgetValueTrait for ValueTypeUi {
     fn value_widget(&mut self, param_name: &str, ui: &mut egui::Ui) {
-        match &mut self.0 {
-            ValueType::Vector(vector) => {
+        match (&mut self.storage, &self.config) {
+            (ValueStorage::Vector(vector), InputValueConfig::Vector { .. }) => {
                 ui.label(param_name);
-
                 ui.horizontal(|ui| {
                     ui.label("x");
                     ui.add(egui::DragValue::new(&mut vector.x).speed(0.1));
@@ -243,56 +259,46 @@ impl WidgetValueTrait for ValueTypeUi {
                     ui.add(egui::DragValue::new(&mut vector.z).speed(0.1));
                 });
             }
-            ValueType::Scalar { value, min, max } => {
+            (ValueStorage::Scalar(value), InputValueConfig::Scalar { min, max, .. }) => {
                 ui.horizontal(|ui| {
                     ui.label(param_name);
                     ui.add(egui::Slider::new(value, *min..=*max));
                 });
             }
-            ValueType::Selection { text, selection } => {
-                if ui.text_edit_singleline(text).changed() {
-                    *selection = SelectionExpression::parse(text).ok();
-                }
-            }
-            ValueType::None => {
-                ui.label(param_name);
-            }
-            ValueType::Enum {
-                values,
-                selected: selection,
-            } => {
-                let selected = if let Some(selection) = selection {
-                    values[*selection as usize].clone()
-                } else {
-                    "".to_owned()
-                };
+            (
+                ValueStorage::String(string),
+                InputValueConfig::Enum {
+                    values,
+                    default_selection,
+                },
+            ) => {
                 egui::ComboBox::from_label(param_name)
-                    .selected_text(selected)
+                    .selected_text(*string)
                     .show_ui(ui, |ui| {
                         for (idx, value) in values.iter().enumerate() {
-                            ui.selectable_value(selection, Some(idx as u32), value);
+                            ui.selectable_value(string, value.clone(), value);
                         }
                     });
             }
-            ValueType::NewFile { path } => {
+            (ValueStorage::String(path), InputValueConfig::FilePath { default_path }) => {
                 ui.label(param_name);
                 ui.horizontal(|ui| {
                     if ui.button("Select").clicked() {
-                        *path = rfd::FileDialog::new().save_file();
-                    }
-                    if let Some(ref path) = path {
-                        ui.label(
-                            path.clone()
+                        if let Some(new_path) = rfd::FileDialog::new().save_file() {
+                            *path = new_path
                                 .into_os_string()
                                 .into_string()
-                                .unwrap_or_else(|_| "<Invalid string>".to_owned()),
-                        );
+                                .unwrap_or_else(|err| format!("INVALID PATH: {err:?}"))
+                        }
+                    }
+                    if !path.is_empty() {
+                        ui.label(path.clone());
                     } else {
                         ui.label("No file selected");
                     }
                 });
             }
-            ValueType::String { text, multiline } => {
+            (ValueStorage::String(text), InputValueConfig::String { multiline, .. }) => {
                 ui.horizontal(|ui| {
                     ui.label(param_name);
                     if *multiline {
@@ -301,6 +307,17 @@ impl WidgetValueTrait for ValueTypeUi {
                         ui.text_edit_singleline(text);
                     }
                 });
+            }
+            (
+                ValueStorage::Selection(text, selection),
+                InputValueConfig::Selection { default_selection },
+            ) => {
+                if ui.text_edit_singleline(text).changed() {
+                    *selection = SelectionExpression::parse(text).ok();
+                }
+            }
+            (a, b) => {
+                panic!("Invalid combination {a:?} {b:?}")
             }
         }
     }

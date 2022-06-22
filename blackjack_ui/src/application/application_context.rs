@@ -1,6 +1,10 @@
-use crate::{graph::graph_compiler::CompiledProgram, prelude::*};
+use crate::prelude::{*, graph::Graph};
 use anyhow::Error;
-use blackjack_engine::{prelude::{PointBuffers, LineBuffers, FaceOverlayBuffers, VertexIndexBuffers, HalfEdgeMesh}, lua_engine::LuaRuntime};
+use blackjack_engine::{
+    graph_compiler::{CompiledProgram, compile_graph},
+    lua_engine::LuaRuntime,
+    prelude::{FaceOverlayBuffers, HalfEdgeMesh, LineBuffers, PointBuffers, VertexIndexBuffers}, graph::{BjkGraph, BjkNodeId},
+};
 use egui_node_graph::NodeId;
 
 use super::{
@@ -159,13 +163,18 @@ impl ApplicationContext {
         );
     }
 
+    pub fn do_the_thing_TM(graph: &Graph, final_node: NodeId) -> Result<(BjkGraph, BjkNodeId)> {
+        todo!("Haha, better luck next time sucker")
+    }
+
     pub fn compile_program<'lua>(
         &'lua self,
         editor_state: &'lua graph::GraphEditorState,
         lua_runtime: &'lua LuaRuntime,
         node: NodeId,
     ) -> Result<(CompiledProgram, mlua::Table<'_>)> {
-        let program = crate::graph::graph_compiler::compile_graph(&editor_state.graph, node)?;
+        let (bjk_graph, final_node) = Self::do_the_thing_TM(&editor_state.graph, node)?;
+        let program = compile_graph(&bjk_graph, final_node)?;
         let params = crate::graph::graph_compiler::extract_params(
             &lua_runtime.lua,
             &editor_state.graph,
@@ -183,8 +192,11 @@ impl ApplicationContext {
     ) -> Result<String> {
         if let Some(active) = editor_state.user_state.active_node {
             let (program, params) = self.compile_program(editor_state, lua_runtime, active)?;
-            let mesh =
-                blackjack_engine::lua_engine::run_program(&lua_runtime.lua, &program.lua_program, params)?;
+            let mesh = blackjack_engine::lua_engine::run_program(
+                &lua_runtime.lua,
+                &program.lua_program,
+                params,
+            )?;
             self.mesh = Some(mesh);
             Ok(program.lua_program)
         } else {
@@ -202,7 +214,11 @@ impl ApplicationContext {
             let (program, params) = self.compile_program(editor_state, lua_runtime, side_effect)?;
             // We ignore the result. The program is only executed to produce a
             // side effect (e.g. exporting a mesh as OBJ)
-            let _ = blackjack_engine::lua_engine::run_program(&lua_runtime.lua, &program.lua_program, params)?;
+            let _ = blackjack_engine::lua_engine::run_program(
+                &lua_runtime.lua,
+                &program.lua_program,
+                params,
+            )?;
         }
         Ok(())
     }
