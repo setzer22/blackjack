@@ -3,16 +3,12 @@ use std::ops::Index;
 use super::node_graph::Graph;
 
 use crate::prelude::*;
-use blackjack_engine::graph::BlackjackValue;
 use blackjack_engine::graph_compiler::ExternalParameterValues;
-use blackjack_engine::lua_engine::lua_stdlib::LVec3;
 use blackjack_engine::{
     graph::{BjkGraph, BjkNodeId},
     graph_compiler::CompiledProgram,
-    prelude::selection::SelectionExpression,
 };
 use egui_node_graph::{InputId, NodeId, OutputId};
-use mlua::ToLua;
 use slotmap::SecondaryMap;
 
 #[derive(Clone, Debug)]

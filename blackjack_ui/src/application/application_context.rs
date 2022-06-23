@@ -167,7 +167,6 @@ impl ApplicationContext {
     pub fn compile_program<'lua>(
         &'lua self,
         editor_state: &'lua graph::GraphEditorState,
-        lua_runtime: &'lua LuaRuntime,
         node: NodeId,
     ) -> Result<(CompiledProgram, ExternalParameterValues)> {
         let (bjk_graph, mapping) = graph_interop::ui_graph_to_blackjack_graph(&editor_state.graph)?;
@@ -189,7 +188,7 @@ impl ApplicationContext {
         lua_runtime: &LuaRuntime,
     ) -> Result<String> {
         if let Some(active) = editor_state.user_state.active_node {
-            let (program, params) = self.compile_program(editor_state, lua_runtime, active)?;
+            let (program, params) = self.compile_program(editor_state, active)?;
             let mesh = blackjack_engine::lua_engine::run_program(
                 &lua_runtime.lua,
                 &program.lua_program,
@@ -209,7 +208,7 @@ impl ApplicationContext {
         lua_runtime: &LuaRuntime,
     ) -> Result<()> {
         if let Some(side_effect) = editor_state.user_state.run_side_effect.take() {
-            let (program, params) = self.compile_program(editor_state, lua_runtime, side_effect)?;
+            let (program, params) = self.compile_program(editor_state, side_effect)?;
             // We ignore the result. The program is only executed to produce a
             // side effect (e.g. exporting a mesh as OBJ)
             let _ = blackjack_engine::lua_engine::run_program(

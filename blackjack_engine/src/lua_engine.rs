@@ -4,7 +4,7 @@ use std::{
 };
 
 use crate::{prelude::*, graph::NodeDefinitions, graph_compiler::ExternalParameterValues};
-use mlua::{Function, Lua, Table};
+use mlua::{Function, Lua};
 use notify::{DebouncedEvent, Watcher};
 
 pub mod lua_stdlib;

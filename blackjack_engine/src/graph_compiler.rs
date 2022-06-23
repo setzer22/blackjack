@@ -3,7 +3,6 @@ use crate::prelude::*;
 use derive_more::Deref;
 use derive_more::DerefMut;
 use derive_more::Display;
-use halfedge::selection::SelectionExpression;
 use mlua::ToLua;
 use serde::Deserialize;
 use serde::Serialize;

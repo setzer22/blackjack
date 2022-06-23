@@ -1,0 +1,15 @@
+[package]
+name = "blackjack_godot"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+glam = { version = "0.20", features = ["serde", "bytemuck"] }
+blackjack_engine = { path = "../blackjack_engine" }
+gdnative = "0.10.0"
+anyhow = { version = "1.0", features = ["backtrace"] }
+serde = { version = "1.0", features = ["derive"] }
+ron = "0.7"

@@ -7,10 +7,7 @@ use crate::{
         point_cloud_routine::PointCloudRoutine, wireframe_routine::WireframeRoutine,
     },
 };
-use blackjack_engine::{
-    graph_compiler::{compile_graph, BlackjackGameAsset},
-    lua_engine::LuaRuntime,
-};
+use blackjack_engine::{graph_compiler::BlackjackGameAsset, lua_engine::LuaRuntime};
 use egui::{FontDefinitions, Style};
 use egui_wgpu_backend::{RenderPass, ScreenDescriptor};
 use egui_winit_platform::{Platform, PlatformDescriptor};
@@ -239,7 +236,6 @@ impl RootViewport {
                 if let Some(active_node) = self.graph_editor.state.user_state.active_node {
                     let (program, params) = self.app_context.compile_program(
                         &self.graph_editor.state,
-                        &self.lua_runtime,
                         active_node,
                     )?;
                     let bga = BlackjackGameAsset { program, params };
