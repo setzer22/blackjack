@@ -3,7 +3,7 @@ use std::{
     time::Duration,
 };
 
-use crate::{prelude::*, graph::NodeDefinitions};
+use crate::{prelude::*, graph::NodeDefinitions, graph_compiler::ExternalParameterValues};
 use mlua::{Function, Lua, Table};
 use notify::{DebouncedEvent, Watcher};
 
@@ -28,12 +28,13 @@ impl<T> ToLuaError<T> for Result<T, TraversalError> {
 pub fn run_program<'lua>(
     lua: &'lua Lua,
     lua_program: &str,
-    input: Table<'lua>,
+    input: &ExternalParameterValues,
 ) -> Result<HalfEdgeMesh> {
     lua.load(lua_program).exec()?;
+    let values = input.to_lua(lua)?;
     let entry_point: Function = lua.globals().get("main")?;
     let mesh = entry_point
-        .call::<_, HalfEdgeMesh>(input)
+        .call::<_, HalfEdgeMesh>(values)
         .map_err(|err| anyhow!("{}", err))?;
     Ok(mesh)
 }

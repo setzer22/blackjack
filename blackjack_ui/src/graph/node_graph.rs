@@ -7,7 +7,7 @@ use egui_node_graph::{
 use serde::{Deserialize, Serialize};
 
 use blackjack_engine::{
-    graph::{DataType, InputValueConfig, NodeDefinition, NodeDefinitions},
+    graph::{DataType, InputValueConfig, NodeDefinition, NodeDefinitions, BlackjackValue},
     prelude::selection::SelectionExpression,
 };
 
@@ -218,26 +218,26 @@ impl NodeTemplateTrait for NodeDefinitionUi {
                             default_selection,
                         } => {
                             if let Some(i) = default_selection {
-                                ValueStorage::String(values[i as usize].clone())
+                                BlackjackValue::String(values[i as usize].clone())
                             } else {
-                                ValueStorage::String("".into())
+                                BlackjackValue::String("".into())
                             }
                         }
-                        InputValueConfig::Vector { default } => ValueStorage::Vector(default),
-                        InputValueConfig::Scalar { default, .. } => ValueStorage::Scalar(default),
+                        InputValueConfig::Vector { default } => BlackjackValue::Vector(default),
+                        InputValueConfig::Scalar { default, .. } => BlackjackValue::Scalar(default),
                         InputValueConfig::Selection {
                             ref default_selection,
-                        } => ValueStorage::Selection(
+                        } => BlackjackValue::Selection(
                             default_selection.unparse(),
                             Some(default_selection.clone()),
                         ),
-                        InputValueConfig::FilePath { ref default_path } => ValueStorage::String(
+                        InputValueConfig::FilePath { ref default_path } => BlackjackValue::String(
                             default_path.as_ref().cloned().unwrap_or_else(|| "".into()),
                         ),
                         InputValueConfig::String {
                             ref default_text, ..
-                        } => ValueStorage::String(default_text.clone()),
-                        InputValueConfig::None => ValueStorage::None,
+                        } => BlackjackValue::String(default_text.clone()),
+                        InputValueConfig::None => BlackjackValue::None,
                     },
                     config: input.config.clone(),
                 }, /*(
@@ -257,25 +257,16 @@ impl NodeTemplateTrait for NodeDefinitionUi {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum ValueStorage {
-    Vector(glam::Vec3),
-    Scalar(f32),
-    String(String),
-    Selection(String, Option<SelectionExpression>),
-    None,
-}
-
 /// The widget value trait is used to determine how to display each [`ValueType`]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ValueTypeUi {
-    pub storage: ValueStorage,
+    pub storage: BlackjackValue,
     pub config: InputValueConfig,
 }
 impl WidgetValueTrait for ValueTypeUi {
     fn value_widget(&mut self, param_name: &str, ui: &mut egui::Ui) {
         match (&mut self.storage, &self.config) {
-            (ValueStorage::Vector(vector), InputValueConfig::Vector { .. }) => {
+            (BlackjackValue::Vector(vector), InputValueConfig::Vector { .. }) => {
                 ui.label(param_name);
                 ui.horizontal(|ui| {
                     ui.label("x");
@@ -286,13 +277,13 @@ impl WidgetValueTrait for ValueTypeUi {
                     ui.add(egui::DragValue::new(&mut vector.z).speed(0.1));
                 });
             }
-            (ValueStorage::Scalar(value), InputValueConfig::Scalar { min, max, .. }) => {
+            (BlackjackValue::Scalar(value), InputValueConfig::Scalar { min, max, .. }) => {
                 ui.horizontal(|ui| {
                     ui.label(param_name);
                     ui.add(egui::Slider::new(value, *min..=*max));
                 });
             }
-            (ValueStorage::String(string), InputValueConfig::Enum { values, .. }) => {
+            (BlackjackValue::String(string), InputValueConfig::Enum { values, .. }) => {
                 egui::ComboBox::from_label(param_name)
                     .selected_text(string.clone())
                     .show_ui(ui, |ui| {
@@ -301,7 +292,7 @@ impl WidgetValueTrait for ValueTypeUi {
                         }
                     });
             }
-            (ValueStorage::String(path), InputValueConfig::FilePath { .. }) => {
+            (BlackjackValue::String(path), InputValueConfig::FilePath { .. }) => {
                 ui.label(param_name);
                 ui.horizontal(|ui| {
                     if ui.button("Select").clicked() {
@@ -319,7 +310,7 @@ impl WidgetValueTrait for ValueTypeUi {
                     }
                 });
             }
-            (ValueStorage::String(text), InputValueConfig::String { multiline, .. }) => {
+            (BlackjackValue::String(text), InputValueConfig::String { multiline, .. }) => {
                 ui.horizontal(|ui| {
                     ui.label(param_name);
                     if *multiline {
@@ -329,7 +320,7 @@ impl WidgetValueTrait for ValueTypeUi {
                     }
                 });
             }
-            (ValueStorage::Selection(text, selection), InputValueConfig::Selection { .. }) => {
+            (BlackjackValue::Selection(text, selection), InputValueConfig::Selection { .. }) => {
                 if ui.text_edit_singleline(text).changed() {
                     *selection = SelectionExpression::parse(text).ok();
                 }

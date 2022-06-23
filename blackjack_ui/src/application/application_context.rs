@@ -2,7 +2,7 @@ use crate::graph::graph_interop;
 use crate::prelude::*;
 use anyhow::Error;
 use blackjack_engine::{
-    graph_compiler::{compile_graph, CompiledProgram},
+    graph_compiler::{compile_graph, CompiledProgram, ExternalParameterValues},
     lua_engine::LuaRuntime,
     prelude::{FaceOverlayBuffers, HalfEdgeMesh, LineBuffers, PointBuffers, VertexIndexBuffers},
 };
@@ -169,12 +169,11 @@ impl ApplicationContext {
         editor_state: &'lua graph::GraphEditorState,
         lua_runtime: &'lua LuaRuntime,
         node: NodeId,
-    ) -> Result<(CompiledProgram, mlua::Table<'_>)> {
+    ) -> Result<(CompiledProgram, ExternalParameterValues)> {
         let (bjk_graph, mapping) = graph_interop::ui_graph_to_blackjack_graph(&editor_state.graph)?;
         let final_node = mapping[node];
         let program = compile_graph(&bjk_graph, final_node)?;
         let params = graph_interop::extract_graph_params(
-            &lua_runtime.lua,
             &editor_state.graph,
             &mapping,
             &program,
@@ -194,7 +193,7 @@ impl ApplicationContext {
             let mesh = blackjack_engine::lua_engine::run_program(
                 &lua_runtime.lua,
                 &program.lua_program,
-                params,
+                &params,
             )?;
             self.mesh = Some(mesh);
             Ok(program.lua_program)
@@ -216,7 +215,7 @@ impl ApplicationContext {
             let _ = blackjack_engine::lua_engine::run_program(
                 &lua_runtime.lua,
                 &program.lua_program,
-                params,
+                &params,
             )?;
         }
         Ok(())

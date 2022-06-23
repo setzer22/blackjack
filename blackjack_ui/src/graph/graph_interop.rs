@@ -3,6 +3,8 @@ use std::ops::Index;
 use super::node_graph::Graph;
 
 use crate::prelude::*;
+use blackjack_engine::graph::BlackjackValue;
+use blackjack_engine::graph_compiler::ExternalParameterValues;
 use blackjack_engine::lua_engine::lua_stdlib::LVec3;
 use blackjack_engine::{
     graph::{BjkGraph, BjkNodeId},
@@ -66,30 +68,19 @@ pub fn ui_graph_to_blackjack_graph(graph: &Graph) -> Result<(BjkGraph, NodeMappi
     Ok((bjk_graph, NodeMapping(mapping, rev_mapping)))
 }
 
-pub fn extract_graph_params<'lua>(
-    lua: &'lua mlua::Lua,
+pub fn extract_graph_params(
     graph: &Graph,
     mapping: &NodeMapping,
     program: &CompiledProgram,
-) -> Result<mlua::Table<'lua>> {
-    let table = lua.create_table()?;
+) -> Result<ExternalParameterValues> {
+    let mut params = ExternalParameterValues::default();
 
     for external_def in &program.external_parameters {
         let node = mapping[external_def.node_id];
         let input = graph[node].get_input(&external_def.param_name)?;
-        let value = match graph[input].value.storage {
-            graph::ValueStorage::Vector(v) => LVec3(v).to_lua(lua)?,
-            graph::ValueStorage::Scalar(s) => s.to_lua(lua)?,
-            graph::ValueStorage::String(ref s) => s.as_str().to_lua(lua)?,
-            graph::ValueStorage::Selection(_, ref sel) => sel
-                .as_ref()
-                .cloned()
-                .unwrap_or(SelectionExpression::None)
-                .to_lua(lua)?,
-            graph::ValueStorage::None => todo!(),
-        };
-
-        table.set(external_def.addr.0.clone().to_lua(lua)?, value)?;
+        let value = graph[input].value.storage.clone();
+        params.insert(external_def.addr.clone(), value);
     }
-    Ok(table)
+
+    Ok(params)
 }

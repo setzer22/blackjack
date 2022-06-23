@@ -1,10 +1,16 @@
 use crate::graph::*;
 use crate::prelude::*;
+use derive_more::Deref;
+use derive_more::DerefMut;
 use derive_more::Display;
+use halfedge::selection::SelectionExpression;
+use mlua::ToLua;
+use serde::Deserialize;
+use serde::Serialize;
 use std::fmt::Write;
 
 /// The Lua symbol representing a key in the external inputs dictionary
-#[derive(Debug, Clone, Display)]
+#[derive(Debug, Clone, Display, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct ExternalParamAddr(pub String);
 
 /// The Lua symbol to representing a dictionary containing a node's outputs
@@ -13,7 +19,7 @@ pub struct NodeOutputAddr(pub String);
 
 /// External parameters can be provided to the graph from the outside. They
 /// correspond to all input properties not connected to any node.
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ExternalParameterDef {
     pub addr: ExternalParamAddr,
     pub data_type: DataType,
@@ -39,8 +45,20 @@ impl ExternalParameterDef {
     }
 }
 
+#[derive(Default, Debug, Clone, Deref, DerefMut, Serialize, Deserialize)]
+pub struct ExternalParameterValues(HashMap<ExternalParamAddr, BlackjackValue>);
+impl ExternalParameterValues {
+    pub fn to_lua<'lua>(&self, lua: &'lua mlua::Lua) -> Result<mlua::Table<'lua>> {
+        let table = lua.create_table()?;
+        for (k, v) in &self.0 {
+            table.set(k.clone().0.to_lua(lua)?, v.clone().to_lua(lua)?)?;
+        }
+        Ok(table)
+    }
+}
+
 /// The resulting compiled program
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct CompiledProgram {
     /// A string of lua code, ready to be loaded by the Lua runtime.
     pub lua_program: String,
@@ -50,6 +68,12 @@ pub struct CompiledProgram {
     /// the nodes that appear for some data types when there's no input
     /// connection.
     pub external_parameters: Vec<ExternalParameterDef>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct BlackjackGameAsset {
+    pub program: CompiledProgram,
+    pub params: ExternalParameterValues,
 }
 
 /// A context object for code generation, storing several fields

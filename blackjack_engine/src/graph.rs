@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use crate::prelude::*;
 use crate::{lua_engine::lua_stdlib::LVec3, mesh::halfedge::selection::SelectionExpression};
 use anyhow::{anyhow, Result};
-use mlua::Table;
+use mlua::{Table, ToLua};
 use serde::{Deserialize, Serialize};
 use slotmap::SlotMap;
 
@@ -29,6 +29,27 @@ pub enum DataType {
     Selection,
     Mesh,
     String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum BlackjackValue {
+    Vector(glam::Vec3),
+    Scalar(f32),
+    String(String),
+    Selection(String, Option<SelectionExpression>),
+    None,
+}
+
+impl<'lua> ToLua<'lua> for BlackjackValue {
+    fn to_lua(self, lua: &'lua mlua::Lua) -> mlua::Result<mlua::Value<'lua>> {
+        match self {
+            BlackjackValue::Vector(v) => Ok(v.cast_to_lua(lua)),
+            BlackjackValue::Scalar(s) => Ok(s.cast_to_lua(lua)),
+            BlackjackValue::String(s) => s.to_lua(lua),
+            BlackjackValue::Selection(_, sel) => sel.to_lua(lua),
+            BlackjackValue::None => Ok(mlua::Value::Nil),
+        }
+    }
 }
 
 /// An input parameter in the graph. Inputs represent data dependencies that

@@ -7,14 +7,17 @@ use crate::{
         point_cloud_routine::PointCloudRoutine, wireframe_routine::WireframeRoutine,
     },
 };
-use blackjack_engine::lua_engine::LuaRuntime;
+use blackjack_engine::{
+    graph_compiler::{compile_graph, BlackjackGameAsset},
+    lua_engine::LuaRuntime,
+};
 use egui::{FontDefinitions, Style};
 use egui_wgpu_backend::{RenderPass, ScreenDescriptor};
 use egui_winit_platform::{Platform, PlatformDescriptor};
 
 use self::{
     app_viewport::AppViewport, application_context::ApplicationContext, graph_editor::GraphEditor,
-    root_ui::AppRootAction, viewport_3d::Viewport3d, inspector::InspectorTabs,
+    inspector::InspectorTabs, root_ui::AppRootAction, viewport_3d::Viewport3d,
 };
 
 pub struct RootViewport {
@@ -230,6 +233,19 @@ impl RootViewport {
             }
             AppRootAction::Load(path) => {
                 self.graph_editor.state = serialization::load(path)?;
+                Ok(())
+            }
+            AppRootAction::ExportGameAsset(path) => {
+                if let Some(active_node) = self.graph_editor.state.user_state.active_node {
+                    let (program, params) = self.app_context.compile_program(
+                        &self.graph_editor.state,
+                        &self.lua_runtime,
+                        active_node,
+                    )?;
+                    let bga = BlackjackGameAsset { program, params };
+                    let writer = std::io::BufWriter::new(std::fs::File::create(path)?);
+                    ron::ser::to_writer(writer, &bga)?;
+                }
                 Ok(())
             }
             AppRootAction::SetCodeViewerCode(code) => {
