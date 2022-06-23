@@ -1,16 +1,13 @@
-use std::rc::Rc;
-
 use crate::prelude::*;
 use egui::RichText;
 use egui_node_graph::{
     DataTypeTrait, NodeDataTrait, NodeId, NodeResponse, NodeTemplateIter, UserResponseTrait,
     WidgetValueTrait,
 };
-use noise::Select;
 use serde::{Deserialize, Serialize};
 
 use blackjack_engine::{
-    graph::{DataType, InputDefinition, InputValueConfig, NodeDefinition, NodeDefinitions},
+    graph::{DataType, InputValueConfig, NodeDefinition, NodeDefinitions},
     prelude::selection::SelectionExpression,
 };
 
@@ -214,13 +211,42 @@ impl NodeTemplateTrait for NodeDefinitionUi {
                 node_id,
                 input.name.clone(),
                 DataTypeUi(input.data_type),
-                ValueTypeUi(
-                    input
-                        .default_value
-                        .as_ref()
-                        .unwrap_or(&InputValueConfig::None)
-                        .clone(),
-                ),
+                ValueTypeUi {
+                    storage: match input.config {
+                        InputValueConfig::Enum {
+                            ref values,
+                            default_selection,
+                        } => {
+                            if let Some(i) = default_selection {
+                                ValueStorage::String(values[i as usize].clone())
+                            } else {
+                                ValueStorage::String("".into())
+                            }
+                        }
+                        InputValueConfig::Vector { default } => ValueStorage::Vector(default),
+                        InputValueConfig::Scalar { default, .. } => ValueStorage::Scalar(default),
+                        InputValueConfig::Selection {
+                            ref default_selection,
+                        } => ValueStorage::Selection(
+                            default_selection.unparse(),
+                            Some(default_selection.clone()),
+                        ),
+                        InputValueConfig::FilePath { ref default_path } => ValueStorage::String(
+                            default_path.as_ref().cloned().unwrap_or_else(|| "".into()),
+                        ),
+                        InputValueConfig::String {
+                            ref default_text, ..
+                        } => ValueStorage::String(default_text.clone()),
+                        InputValueConfig::None => ValueStorage::None,
+                    },
+                    config: input.config.clone(),
+                }, /*(
+                       input
+                           .default_value
+                           .as_ref()
+                           .unwrap_or(&InputValueConfig::None)
+                           .clone(),
+                   )*/
                 input_param_kind,
                 true,
             );
@@ -237,6 +263,7 @@ pub enum ValueStorage {
     Scalar(f32),
     String(String),
     Selection(String, Option<SelectionExpression>),
+    None,
 }
 
 /// The widget value trait is used to determine how to display each [`ValueType`]
@@ -265,22 +292,16 @@ impl WidgetValueTrait for ValueTypeUi {
                     ui.add(egui::Slider::new(value, *min..=*max));
                 });
             }
-            (
-                ValueStorage::String(string),
-                InputValueConfig::Enum {
-                    values,
-                    default_selection,
-                },
-            ) => {
+            (ValueStorage::String(string), InputValueConfig::Enum { values, .. }) => {
                 egui::ComboBox::from_label(param_name)
-                    .selected_text(*string)
+                    .selected_text(string.clone())
                     .show_ui(ui, |ui| {
-                        for (idx, value) in values.iter().enumerate() {
+                        for value in values.iter() {
                             ui.selectable_value(string, value.clone(), value);
                         }
                     });
             }
-            (ValueStorage::String(path), InputValueConfig::FilePath { default_path }) => {
+            (ValueStorage::String(path), InputValueConfig::FilePath { .. }) => {
                 ui.label(param_name);
                 ui.horizontal(|ui| {
                     if ui.button("Select").clicked() {
@@ -308,10 +329,7 @@ impl WidgetValueTrait for ValueTypeUi {
                     }
                 });
             }
-            (
-                ValueStorage::Selection(text, selection),
-                InputValueConfig::Selection { default_selection },
-            ) => {
+            (ValueStorage::Selection(text, selection), InputValueConfig::Selection { .. }) => {
                 if ui.text_edit_singleline(text).changed() {
                     *selection = SelectionExpression::parse(text).ok();
                 }

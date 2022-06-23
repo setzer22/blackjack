@@ -1,9 +1,10 @@
-use crate::prelude::{*, graph::Graph};
+use crate::graph::graph_interop;
+use crate::prelude::*;
 use anyhow::Error;
 use blackjack_engine::{
-    graph_compiler::{CompiledProgram, compile_graph},
+    graph_compiler::{compile_graph, CompiledProgram},
     lua_engine::LuaRuntime,
-    prelude::{FaceOverlayBuffers, HalfEdgeMesh, LineBuffers, PointBuffers, VertexIndexBuffers}, graph::{BjkGraph, BjkNodeId},
+    prelude::{FaceOverlayBuffers, HalfEdgeMesh, LineBuffers, PointBuffers, VertexIndexBuffers},
 };
 use egui_node_graph::NodeId;
 
@@ -163,21 +164,19 @@ impl ApplicationContext {
         );
     }
 
-    pub fn do_the_thing_TM(graph: &Graph, final_node: NodeId) -> Result<(BjkGraph, BjkNodeId)> {
-        todo!("Haha, better luck next time sucker")
-    }
-
     pub fn compile_program<'lua>(
         &'lua self,
         editor_state: &'lua graph::GraphEditorState,
         lua_runtime: &'lua LuaRuntime,
         node: NodeId,
     ) -> Result<(CompiledProgram, mlua::Table<'_>)> {
-        let (bjk_graph, final_node) = Self::do_the_thing_TM(&editor_state.graph, node)?;
+        let (bjk_graph, mapping) = graph_interop::ui_graph_to_blackjack_graph(&editor_state.graph)?;
+        let final_node = mapping[node];
         let program = compile_graph(&bjk_graph, final_node)?;
-        let params = crate::graph::graph_compiler::extract_params(
+        let params = graph_interop::extract_graph_params(
             &lua_runtime.lua,
             &editor_state.graph,
+            &mapping,
             &program,
         )?;
 

@@ -4,6 +4,8 @@ use std::ops::Range;
 use serde::{Deserialize, Serialize};
 use slotmap::SlotMap;
 
+use std::fmt::Write;
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SelectionFragment {
     Group(String),
@@ -131,6 +133,32 @@ impl SelectionExpression {
                         Ok(parsed)
                     }
                 })
+        }
+    }
+
+    pub fn unparse(&self) -> String {
+        match self {
+            SelectionExpression::All => "*".into(),
+            SelectionExpression::None => "".into(),
+            SelectionExpression::Explicit(segments) => {
+                let mut out = String::new();
+                let mut first = true;
+                for segment in segments {
+                    if first {
+                        first = false;
+                    } else {
+                        write!(out, " ").unwrap();
+                    }
+                    match segment {
+                        SelectionFragment::Group(name) => write!(out, "@{name}").unwrap(),
+                        SelectionFragment::Range(r) => {
+                            write!(out, "{}..{}", r.start, r.end).unwrap()
+                        }
+                        SelectionFragment::Single(i) => write!(out, "{}", i).unwrap(),
+                    }
+                }
+                out
+            }
         }
     }
 }

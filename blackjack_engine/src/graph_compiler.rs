@@ -5,11 +5,11 @@ use std::fmt::Write;
 
 /// The Lua symbol representing a key in the external inputs dictionary
 #[derive(Debug, Clone, Display)]
-pub struct ExternalParamAddr(String);
+pub struct ExternalParamAddr(pub String);
 
 /// The Lua symbol to representing a dictionary containing a node's outputs
 #[derive(Debug, Clone, Display)]
-pub struct NodeOutputAddr(String);
+pub struct NodeOutputAddr(pub String);
 
 /// External parameters can be provided to the graph from the outside. They
 /// correspond to all input properties not connected to any node.
@@ -17,6 +17,8 @@ pub struct NodeOutputAddr(String);
 pub struct ExternalParameterDef {
     pub addr: ExternalParamAddr,
     pub data_type: DataType,
+    pub node_id: BjkNodeId,
+    pub param_name: String,
 }
 
 impl ExternalParameterDef {
@@ -29,8 +31,10 @@ impl ExternalParameterDef {
             .ok_or_else(|| anyhow!("Param not found: {param}"))?;
         let op_name = &node.op_name;
         Ok(ExternalParameterDef {
-            addr: ExternalParamAddr(format!("{op_name}_{:?}_{param}", node_id.display_id())),
+            addr: ExternalParamAddr(format!("{op_name}_{}_{param}", node_id.display_id())),
             data_type: input.data_type,
+            node_id,
+            param_name: param.into(),
         })
     }
 }
@@ -166,7 +170,7 @@ fn codegen_node(
         args + indent.as_str() + "}"
     };
     let op_name = &node.op_name;
-    let output_addr = NodeOutputAddr(format!("{op_name}_{:?}_out", node_id.display_id()));
+    let output_addr = NodeOutputAddr(format!("{op_name}_{}_out", node_id.display_id()));
     ctx.outputs_cache.insert(node_id, output_addr.clone());
 
     let node_name = &node.op_name;

@@ -71,7 +71,7 @@ pub struct BjkGraph {
 /// The settings to describe an input value in a node template. This information
 /// is used by the UI, or engine integrations, to know which default values
 /// should be displayed in widgets when no other value is provided.
-/// 
+///
 /// The variants in this structure will typically offer more information than
 /// the value itself, such as the limits for that parameter or other useful
 /// validation information. There is not a 1:1 correspondence between data types
@@ -88,19 +88,20 @@ pub enum InputValueConfig {
         max: f32,
     },
     Selection {
-        default_selection: Option<SelectionExpression>,
+        default_selection: SelectionExpression,
     },
     Enum {
         values: Vec<String>,
         default_selection: Option<u32>,
     },
     FilePath {
-        default_path: Option<std::path::PathBuf>,
+        default_path: Option<String>,
     },
     String {
         multiline: bool,
         default_text: String,
     },
+    None,
 }
 
 /// The definition of an input parameter inside the node library.
@@ -108,7 +109,7 @@ pub enum InputValueConfig {
 pub struct InputDefinition {
     pub name: String,
     pub data_type: DataType,
-    pub default_value: Option<InputValueConfig>,
+    pub config: InputValueConfig,
 }
 
 /// The definition of an output parameter inside the node library
@@ -164,38 +165,38 @@ impl InputDefinition {
         let type_str: String = table.get::<_, String>("type")?;
         let data_type = data_type_from_str(&type_str)?;
         let value = match data_type {
-            DataType::Vector => Some(InputValueConfig::Vector {
+            DataType::Vector => InputValueConfig::Vector {
                 default: table.get::<_, LVec3>("default")?.0,
-            }),
-            DataType::Scalar => Some(InputValueConfig::Scalar {
+            },
+            DataType::Scalar => InputValueConfig::Scalar {
                 default: table.get::<_, f32>("default")?,
                 min: table.get::<_, f32>("min")?,
                 max: table.get::<_, f32>("max")?,
-            }),
-            DataType::Selection => Some(InputValueConfig::Selection {
-                default_selection: None,
-            }),
-            DataType::Mesh => None,
-            DataType::String if type_str == "enum" => Some(InputValueConfig::Enum {
+            },
+            DataType::Selection => InputValueConfig::Selection {
+                default_selection: SelectionExpression::None,
+            },
+            DataType::Mesh => InputValueConfig::None,
+            DataType::String if type_str == "enum" => InputValueConfig::Enum {
                 values: table
                     .get::<_, Table>("values")?
                     .sequence_values::<String>()
                     .collect::<Result<Vec<_>, _>>()?,
                 default_selection: table.get::<_, Option<u32>>("selected")?,
-            }),
+            },
             DataType::String if type_str == "file" => {
-                Some(InputValueConfig::FilePath { default_path: None })
+                InputValueConfig::FilePath { default_path: None }
             }
-            DataType::String => Some(InputValueConfig::String {
+            DataType::String => InputValueConfig::String {
                 default_text: table.get::<_, String>("default")?,
                 multiline: table.get::<_, bool>("multiline")?,
-            }),
+            },
         };
 
         Ok(InputDefinition {
             name: table.get("name")?,
             data_type,
-            default_value: value,
+            config: value,
         })
     }
 }
