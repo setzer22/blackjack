@@ -33,7 +33,7 @@ preload!(STRING_PROP_SCN, PackedScene, "res://StringProp.tscn");
 impl BlackjackAsset {
     fn new(_owner: &Node) -> Self {
         let reader =
-            std::io::BufReader::new(std::fs::File::open("/home/josep/capsule_demo.bga").unwrap());
+            std::io::BufReader::new(std::fs::File::open("/home/josep/promoted_test.bga").unwrap());
         let asset: BlackjackGameAsset = ron::de::from_reader(reader).unwrap();
 
         BlackjackAsset {
@@ -94,47 +94,57 @@ impl BlackjackAsset {
         ui.set_size(Vector2::new(80.0, 600.0), false);
 
         for (param_addr, value) in self.asset.params.iter() {
-            let prop = match (&value.config, &value.value) {
-                (_, BlackjackValue::Vector(v)) => {
-                    let prop =
-                        instance_preloaded::<Control, _>(VECTOR_PROP_SCN.clone(), vbox.as_ref());
-                    gdcall!(prop, init, param_addr.0, Vector3::new(v.x, v.y, v.z));
-                    prop
-                }
-                (InputValueConfig::Scalar { min, max, .. }, BlackjackValue::Scalar(s)) => {
-                    let prop =
-                        instance_preloaded::<Control, _>(SCALAR_PROP_SCN.clone(), vbox.as_ref());
-                    gdcall!(prop, init, param_addr.0, s, min, max); // TODO: Get bounds
-                    prop
-                }
-                (_, BlackjackValue::String(s)) => {
-                    let prop =
-                        instance_preloaded::<Control, _>(STRING_PROP_SCN.clone(), vbox.as_ref());
-                    gdcall!(prop, init, param_addr.0, s);
-                    prop
-                }
-                (_, BlackjackValue::Selection(_, s)) => {
-                    let prop =
-                        instance_preloaded::<Control, _>(SELECTION_PROP_SCN.clone(), vbox.as_ref());
-                    gdcall!(
-                        prop,
-                        init,
-                        param_addr.0,
-                        s.clone().unwrap_or(SelectionExpression::None).unparse()
-                    );
-                    prop
-                }
-                // TODO: For now this ignore any malformed parameters.
-                _ => continue,
-            };
-            prop.connect(
-                "on_changed",
-                owner,
-                "on_param_changed",
-                VariantArray::from_iter(&[param_addr.0.to_variant()]).into_shared(),
-                0,
-            )
-            .expect("Failed to connect signal");
+            if let Some(param_name) = &value.promoted_name {
+                let prop = match (&value.config, &value.value) {
+                    (_, BlackjackValue::Vector(v)) => {
+                        let prop = instance_preloaded::<Control, _>(
+                            VECTOR_PROP_SCN.clone(),
+                            vbox.as_ref(),
+                        );
+                        gdcall!(prop, init, param_name, Vector3::new(v.x, v.y, v.z));
+                        prop
+                    }
+                    (InputValueConfig::Scalar { min, max, .. }, BlackjackValue::Scalar(s)) => {
+                        let prop = instance_preloaded::<Control, _>(
+                            SCALAR_PROP_SCN.clone(),
+                            vbox.as_ref(),
+                        );
+                        gdcall!(prop, init, param_name, s, min, max);
+                        prop
+                    }
+                    (_, BlackjackValue::String(s)) => {
+                        let prop = instance_preloaded::<Control, _>(
+                            STRING_PROP_SCN.clone(),
+                            vbox.as_ref(),
+                        );
+                        gdcall!(prop, init, param_name, s);
+                        prop
+                    }
+                    (_, BlackjackValue::Selection(_, s)) => {
+                        let prop = instance_preloaded::<Control, _>(
+                            SELECTION_PROP_SCN.clone(),
+                            vbox.as_ref(),
+                        );
+                        gdcall!(
+                            prop,
+                            init,
+                            param_addr.0,
+                            s.clone().unwrap_or(SelectionExpression::None).unparse()
+                        );
+                        prop
+                    }
+                    // TODO: For now this ignore any malformed parameters.
+                    _ => continue,
+                };
+                prop.connect(
+                    "on_changed",
+                    owner,
+                    "on_param_changed",
+                    VariantArray::from_iter(&[param_addr.0.to_variant()]).into_shared(),
+                    0,
+                )
+                .expect("Failed to connect signal");
+            }
         }
 
         ui.upcast::<Control>().claim()
