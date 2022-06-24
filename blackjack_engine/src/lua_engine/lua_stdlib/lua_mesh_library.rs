@@ -174,6 +174,18 @@ pub fn load(lua: &Lua) -> anyhow::Result<()> {
     lua_fn!(
         lua,
         ops,
+        "set_material",
+        |mesh: AnyUserData, selection: SelectionExpression, material_index: f32| -> () {
+            let mut mesh = mesh.borrow_mut::<HalfEdgeMesh>()?;
+            crate::mesh::halfedge::edit_ops::set_material(&mut mesh, &selection, material_index)
+                .map_lua_err()?;
+            Ok(())
+        }
+    );
+
+    lua_fn!(
+        lua,
+        ops,
         "vertex_attribute_transfer",
         |src_mesh: AnyUserData,
          dst_mesh: AnyUserData,

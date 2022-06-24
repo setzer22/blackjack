@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use blackjack_engine::graph::BlackjackValue;
 use blackjack_engine::graph::InputValueConfig;
 use blackjack_engine::graph_compiler::BlackjackGameAsset;
@@ -7,6 +9,7 @@ use blackjack_engine::mesh::halfedge::HalfEdgeMesh;
 use blackjack_engine::prelude::selection::SelectionExpression;
 use blackjack_engine::prelude::*;
 use gdnative::api as gd;
+use gdnative::api::SpatialMaterial;
 use gdnative::prelude::*;
 
 use anyhow::{anyhow, bail, Result};
@@ -29,11 +32,14 @@ preload!(VECTOR_PROP_SCN, PackedScene, "res://VectorProp.tscn");
 preload!(SELECTION_PROP_SCN, PackedScene, "res://SelectionProp.tscn");
 preload!(STRING_PROP_SCN, PackedScene, "res://StringProp.tscn");
 
+preload!(MAT1, SpatialMaterial, "res://Mat1.tres");
+preload!(MAT2, SpatialMaterial, "res://Mat2.tres");
+
 #[methods]
 impl BlackjackAsset {
     fn new(_owner: &Node) -> Self {
         let reader =
-            std::io::BufReader::new(std::fs::File::open("/home/josep/promoted_test.bga").unwrap());
+            std::io::BufReader::new(std::fs::File::open("/home/josep/material_test.bga").unwrap());
         let asset: BlackjackGameAsset = ron::de::from_reader(reader).unwrap();
 
         BlackjackAsset {
@@ -162,7 +168,7 @@ impl BlackjackAsset {
     }
 
     #[export]
-    fn _process(&self, _owner: &Node, _delta: f64) {
+    fn _process(&mut self, _owner: &Node, _delta: f64) {
         if self.needs_update {
             let mesh = blackjack_engine::lua_engine::run_program(
                 &self.lua_runtime.lua,
@@ -173,24 +179,48 @@ impl BlackjackAsset {
             let godot_mesh = halfedge_to_godot_mesh(&mesh).unwrap();
             let child = unsafe { self.child_mesh_instance.unwrap().assume_safe() };
             child.set_mesh(godot_mesh);
+            self.needs_update = false;
         }
+
     }
+}
+
+#[derive(Default)]
+pub struct GdMeshBuffers {
+    gd_verts: PoolArray<Vector3>,
+    gd_uvs: PoolArray<Vector2>,
+    gd_normals: PoolArray<Vector3>,
+    gd_indices: PoolArray<i32>,
+    counter: i32,
 }
 
 /// Converts a Blackjack HalfEdgeMesh into a Godot ArrayMesh
 fn halfedge_to_godot_mesh(mesh: &HalfEdgeMesh) -> Result<Ref<gd::ArrayMesh>> {
-    let mut gd_verts = PoolArray::<Vector3>::new();
-    let mut gd_uvs = PoolArray::<Vector2>::new();
-    let mut gd_normals = PoolArray::<Vector3>::new();
-    let mut gd_indices = PoolArray::<i32>::new();
+    let mut surfaces = BTreeMap::<i32, GdMeshBuffers>::new();
 
     let conn = mesh.read_connectivity();
     let positions = mesh.read_positions();
     let normals = mesh.read_vertex_normals(); // TODO: No face normal support for now
     let uvs = mesh.read_uvs();
+    let materials = mesh
+        .channels
+        .read_channel_by_name::<FaceId, f32>("material");
 
-    let mut counter = 0;
     for (f_id, _) in conn.iter_faces() {
+        let material_idx = if let Ok(materials) = &materials {
+            godot_print!("Has materials");
+            godot_dbg!(materials[f_id] as i32)
+        } else {
+            0
+        };
+        let GdMeshBuffers {
+            ref mut gd_verts,
+            ref mut gd_uvs,
+            ref mut gd_normals,
+            ref mut gd_indices,
+            ref mut counter,
+        } = surfaces.entry(material_idx).or_default();
+
         let face_halfedges = conn.face_edges(f_id);
         // NOTE: Iterate halfedges in reverse order because godot uses the other
         // winding direction.
@@ -215,33 +245,56 @@ fn halfedge_to_godot_mesh(mesh: &HalfEdgeMesh) -> Result<Ref<gd::ArrayMesh>> {
         }
 
         // Indices. Simple fan triangulation using the face vertices.
-        let i0 = counter;
-        for (i1, i2) in (counter + 1..counter + face_halfedges.len()).tuple_windows() {
+        let i0 = *counter;
+        for (i1, i2) in (*counter + 1..*counter + face_halfedges.len() as i32).tuple_windows() {
             gd_indices.push(i0 as i32);
             gd_indices.push(i1 as i32);
             gd_indices.push(i2 as i32);
         }
-        counter += face_halfedges.len();
+        *counter += face_halfedges.len() as i32;
     }
-
-    let arr = VariantArray::new();
-    arr.resize(gd::Mesh::ARRAY_MAX as i32);
-    arr.set(gd::Mesh::ARRAY_VERTEX as i32, gd_verts);
-    if uvs.is_some() {
-        arr.set(gd::Mesh::ARRAY_TEX_UV as i32, gd_uvs);
-    }
-    if normals.is_some() {
-        arr.set(gd::Mesh::ARRAY_NORMAL as i32, gd_normals);
-    }
-    arr.set(gd::Mesh::ARRAY_INDEX as i32, gd_indices);
 
     let mesh = gd::ArrayMesh::new();
-    mesh.add_surface_from_arrays(
-        gd::Mesh::PRIMITIVE_TRIANGLES,
-        arr.into_shared(),
-        VariantArray::new_shared(),
-        gd::Mesh::ARRAY_COMPRESS_DEFAULT,
-    );
+    for (
+        surface_idx,
+        GdMeshBuffers {
+            gd_verts,
+            gd_uvs,
+            gd_normals,
+            gd_indices,
+            counter: _,
+        },
+    ) in surfaces
+    {
+        let arr = VariantArray::new();
+        arr.resize(gd::Mesh::ARRAY_MAX as i32);
+        arr.set(gd::Mesh::ARRAY_VERTEX as i32, gd_verts);
+        if uvs.is_some() {
+            arr.set(gd::Mesh::ARRAY_TEX_UV as i32, gd_uvs);
+        }
+        if normals.is_some() {
+            arr.set(gd::Mesh::ARRAY_NORMAL as i32, gd_normals);
+        }
+        arr.set(gd::Mesh::ARRAY_INDEX as i32, gd_indices);
+
+        mesh.add_surface_from_arrays(
+            gd::Mesh::PRIMITIVE_TRIANGLES,
+            arr.into_shared(),
+            VariantArray::new_shared(),
+            gd::Mesh::ARRAY_COMPRESS_DEFAULT,
+        );
+
+        // TODO: UGLY HACK
+        match surface_idx {
+            0 => {
+                mesh.surface_set_material(0, MAT1.clone());
+            }
+            1 => {
+                mesh.surface_set_material(1, MAT2.clone());
+            }
+            _ => {}
+        }
+    }
 
     Ok(mesh.into_shared())
 }

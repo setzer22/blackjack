@@ -221,6 +221,17 @@ local edit_ops = {
             Ops.set_full_range_uvs(out_mesh);
             return {out_mesh = out_mesh}
         end
+    },
+    SetMaterial = {
+        label = "Set material",
+        inputs = {mesh("mesh"), selection("faces"), scalar("material_index", 0.0, 0.0, 5.0)},
+        outputs = {mesh("out_mesh")},
+        returns = "out_mesh",
+        op = function(inputs)
+            local out_mesh = inputs.mesh:clone()
+            Ops.set_material(out_mesh, inputs.faces, inputs.material_index);
+            return {out_mesh = out_mesh}
+        end
     }
 }
 

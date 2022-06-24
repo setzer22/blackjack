@@ -1280,3 +1280,18 @@ pub fn vertex_attribute_transfer<V: ChannelValue>(
 
     Ok(())
 }
+
+pub fn set_material(
+    mesh: &mut HalfEdgeMesh,
+    selection: &SelectionExpression,
+    material: f32,
+) -> Result<()> {
+    // TODO: Use default channels?
+    let ch_id = mesh.channels.ensure_channel::<FaceId, f32>("material");
+    let mut material_ch = mesh.channels.write_channel(ch_id)?;
+    let ids = mesh.resolve_face_selection_full(selection)?;
+    for id in ids {
+        material_ch[id] = material;
+    }
+    Ok(())
+}
