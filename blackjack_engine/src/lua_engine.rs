@@ -31,7 +31,7 @@ pub fn run_program<'lua>(
     input: &ExternalParameterValues,
 ) -> Result<HalfEdgeMesh> {
     lua.load(lua_program).exec()?;
-    let values = input.to_lua(lua)?;
+    let values = input.make_input_table(lua)?;
     let entry_point: Function = lua.globals().get("main")?;
     let mesh = entry_point
         .call::<_, HalfEdgeMesh>(values)

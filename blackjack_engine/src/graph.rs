@@ -40,6 +40,12 @@ pub enum BlackjackValue {
     None,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BlackjackParameter {
+    pub value: BlackjackValue,
+    pub config: InputValueConfig,
+}
+
 impl<'lua> ToLua<'lua> for BlackjackValue {
     fn to_lua(self, lua: &'lua mlua::Lua) -> mlua::Result<mlua::Value<'lua>> {
         match self {

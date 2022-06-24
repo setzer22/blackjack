@@ -45,12 +45,12 @@ impl ExternalParameterDef {
 }
 
 #[derive(Default, Debug, Clone, Deref, DerefMut, Serialize, Deserialize)]
-pub struct ExternalParameterValues(HashMap<ExternalParamAddr, BlackjackValue>);
+pub struct ExternalParameterValues(HashMap<ExternalParamAddr, BlackjackParameter>);
 impl ExternalParameterValues {
-    pub fn to_lua<'lua>(&self, lua: &'lua mlua::Lua) -> Result<mlua::Table<'lua>> {
+    pub fn make_input_table<'lua>(&self, lua: &'lua mlua::Lua) -> Result<mlua::Table<'lua>> {
         let table = lua.create_table()?;
         for (k, v) in &self.0 {
-            table.set(k.clone().0.to_lua(lua)?, v.clone().to_lua(lua)?)?;
+            table.set(k.clone().0.to_lua(lua)?, v.clone().value.to_lua(lua)?)?;
         }
         Ok(table)
     }

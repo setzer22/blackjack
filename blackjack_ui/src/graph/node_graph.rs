@@ -325,6 +325,9 @@ impl WidgetValueTrait for ValueTypeUi {
                     *selection = SelectionExpression::parse(text).ok();
                 }
             }
+            (BlackjackValue::None, InputValueConfig::None) => {
+                ui.label(param_name);
+            }
             (a, b) => {
                 panic!("Invalid combination {a:?} {b:?}")
             }

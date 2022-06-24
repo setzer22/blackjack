@@ -324,7 +324,7 @@ local test_channel_nodes = {
         label = "Make trunk",
         op = function(inputs)
             local edge_distances  = inputs.l_system:get_assoc_channel(Types.HalfEdgeId, Types.f32, "distance")
-            local result = inputs.l_system:reduce_single_edges(
+            local result = inputs.l_system:reduce_halfedges(
                 Blackjack.mesh(),
                 function (acc, h_id)
                     local scale_damp : number = inputs.scale_damp

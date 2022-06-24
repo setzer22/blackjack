@@ -3,7 +3,8 @@ use std::ops::Index;
 use super::node_graph::Graph;
 
 use crate::prelude::*;
-use blackjack_engine::graph_compiler::ExternalParameterValues;
+use blackjack_engine::graph::BlackjackParameter;
+use blackjack_engine::graph_compiler::{BlackjackGameAsset, ExternalParameterValues};
 use blackjack_engine::{
     graph::{BjkGraph, BjkNodeId},
     graph_compiler::CompiledProgram,
@@ -75,7 +76,15 @@ pub fn extract_graph_params(
         let node = mapping[external_def.node_id];
         let input = graph[node].get_input(&external_def.param_name)?;
         let value = graph[input].value.storage.clone();
-        params.insert(external_def.addr.clone(), value);
+        params.insert(
+            external_def.addr.clone(),
+            // TODO: Do we want the UI to copy the configs? This feels a bit
+            // wasteful. Address during review.
+            BlackjackParameter {
+                value,
+                config: graph[input].value.config.clone(),
+            },
+        );
     }
 
     Ok(params)

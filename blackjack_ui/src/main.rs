@@ -24,7 +24,7 @@ pub mod color_hex_utils;
 
 fn main() {
     #[cfg(feature = "tracy")]
-    let _client = tracy_client::Client::start();
+    let _client = profiling::tracy_client::Client::start();
 
     // Setup logging
     env_logger::init();
