@@ -32,9 +32,8 @@ preload!(STRING_PROP_SCN, PackedScene, "res://StringProp.tscn");
 #[methods]
 impl BlackjackAsset {
     fn new(_owner: &Node) -> Self {
-        let reader = std::io::BufReader::new(
-            std::fs::File::open("/home/josep/capsule_demo.bga").unwrap(),
-        );
+        let reader =
+            std::io::BufReader::new(std::fs::File::open("/home/josep/capsule_demo.bga").unwrap());
         let asset: BlackjackGameAsset = ron::de::from_reader(reader).unwrap();
 
         BlackjackAsset {

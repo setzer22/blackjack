@@ -44,6 +44,10 @@ pub enum BlackjackValue {
 pub struct BlackjackParameter {
     pub value: BlackjackValue,
     pub config: InputValueConfig,
+    /// Stores the name of the promoted parameter, if this parameter is
+    /// promoted. A promoted parameter will be visible on external editors, such
+    /// as the ones offered by game engine integrations.
+    pub promoted_name: Option<String>,
 }
 
 impl<'lua> ToLua<'lua> for BlackjackValue {

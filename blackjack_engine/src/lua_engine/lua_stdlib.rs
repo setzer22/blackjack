@@ -1,6 +1,7 @@
 use mlua::{AnyUserData, AsChunk, FromLua, Lua, Table, ToLua, UserData};
 
 use crate::{
+    graph::NodeDefinitions,
     lua_engine::ToLuaError,
     prelude::{
         compact_mesh::CompactMesh,
@@ -9,7 +10,7 @@ use crate::{
             ChannelKeyType, ChannelValueType, HalfEdgeMesh,
         },
         selection::SelectionExpression,
-    }, graph::NodeDefinitions,
+    },
 };
 
 /// Convenience macro for registering a lua function inside a global table.

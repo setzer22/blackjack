@@ -1,7 +1,9 @@
 use crate::prelude::*;
-use blackjack_engine::prelude::{ChannelKeyType, HalfEdgeMesh, ChannelValueType, selection::SelectionExpression};
+use blackjack_engine::prelude::{
+    selection::SelectionExpression, ChannelKeyType, ChannelValueType, HalfEdgeMesh,
+};
 use egui::*;
-use egui_node_graph::WidgetValueTrait;
+use egui_node_graph::{InputId, WidgetValueTrait};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum InspectorTab {
@@ -21,7 +23,9 @@ impl InspectorTabs {
     pub fn new() -> Self {
         Self {
             current_view: InspectorTab::Properties,
-            properties: PropertiesTab {},
+            properties: PropertiesTab {
+                new_promoted_popup: None,
+            },
             spreadsheet: SpreadsheetTab {
                 current_view: SpreadsheetViews::Vertices,
             },
@@ -41,7 +45,14 @@ impl Default for InspectorTabs {
     }
 }
 
-pub struct PropertiesTab {}
+pub struct NewPromotedPopup {
+    name: String,
+    param: InputId,
+}
+
+pub struct PropertiesTab {
+    new_promoted_popup: Option<NewPromotedPopup>,
+}
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum SpreadsheetViews {
@@ -99,7 +110,39 @@ pub fn tiny_checkbox(ui: &mut Ui, value: &mut bool) {
 }
 
 impl PropertiesTab {
-    fn ui(&self, ui: &mut Ui, editor_state: &mut graph::GraphEditorState) {
+    fn maybe_show_new_promoted_modal(
+        &mut self,
+        ctx: &CtxRef,
+        editor_state: &mut graph::GraphEditorState,
+    ) {
+        let mut should_clear_popup = false;
+        if let Some(popup) = &mut self.new_promoted_popup {
+            Window::new("new_promoted_paramater_modal")
+                .anchor(Align2::CENTER_CENTER, egui::Vec2::ZERO)
+                .show(ctx, |ui| {
+                    ui.label("Name of the parameter");
+                    ui.text_edit_singleline(&mut popup.name);
+                    ui.horizontal(|ui| {
+                        if ui.button("Cancel").clicked() {
+                            should_clear_popup = true;
+                        } else if ui.button("Ok").clicked() {
+                            should_clear_popup = true;
+                            // Might've been removed by now. If so, simply ignore.
+                            if let Some(input) = editor_state.graph.inputs.get_mut(popup.param) {
+                                input.value.0.promoted_name = Some(popup.name.take());
+                            }
+                        }
+                    });
+                });
+        }
+        if should_clear_popup {
+            self.new_promoted_popup = None;
+        }
+    }
+
+    fn ui(&mut self, ui: &mut Ui, editor_state: &mut graph::GraphEditorState) {
+        self.maybe_show_new_promoted_modal(ui.ctx(), editor_state);
+
         let graph = &mut editor_state.graph;
         if let Some(node) = editor_state.selected_node {
             let node = &graph[node];
@@ -111,6 +154,29 @@ impl PropertiesTab {
                     } else {
                         ui.horizontal(|ui| {
                             tiny_checkbox(ui, &mut graph[param].shown_inline);
+                            if let Some(ref promoted_name) = graph[param].value.0.promoted_name {
+                                if ui
+                                    .button("❌")
+                                    .on_hover_text(format!(
+                                        "Promoted as '{promoted_name}'. Click to undo."
+                                    ))
+                                    .clicked()
+                                {
+                                    graph[param].value.0.promoted_name = None;
+                                };
+                            } else if ui
+                                .button("⤴")
+                                .on_hover_text(
+                                    "Click to promote parameter. \
+                            Promoted parameters will be tweakable in exported assets.",
+                                )
+                                .clicked()
+                            {
+                                self.new_promoted_popup = Some(NewPromotedPopup {
+                                    name: String::new(),
+                                    param,
+                                })
+                            }
                             graph[param].value.value_widget(&param_name, ui);
                         });
                     }

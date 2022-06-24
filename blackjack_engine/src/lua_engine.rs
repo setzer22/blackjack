@@ -3,7 +3,7 @@ use std::{
     time::Duration,
 };
 
-use crate::{prelude::*, graph::NodeDefinitions, graph_compiler::ExternalParameterValues};
+use crate::{graph::NodeDefinitions, graph_compiler::ExternalParameterValues, prelude::*};
 use mlua::{Function, Lua};
 use notify::{DebouncedEvent, Watcher};
 

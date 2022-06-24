@@ -234,10 +234,9 @@ impl RootViewport {
             }
             AppRootAction::ExportGameAsset(path) => {
                 if let Some(active_node) = self.graph_editor.state.user_state.active_node {
-                    let (program, params) = self.app_context.compile_program(
-                        &self.graph_editor.state,
-                        active_node,
-                    )?;
+                    let (program, params) = self
+                        .app_context
+                        .compile_program(&self.graph_editor.state, active_node)?;
                     let bga = BlackjackGameAsset { program, params };
                     let writer = std::io::BufWriter::new(std::fs::File::create(path)?);
                     ron::ser::to_writer(writer, &bga)?;

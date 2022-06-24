@@ -172,11 +172,7 @@ impl ApplicationContext {
         let (bjk_graph, mapping) = graph_interop::ui_graph_to_blackjack_graph(&editor_state.graph)?;
         let final_node = mapping[node];
         let program = compile_graph(&bjk_graph, final_node)?;
-        let params = graph_interop::extract_graph_params(
-            &editor_state.graph,
-            &mapping,
-            &program,
-        )?;
+        let params = graph_interop::extract_graph_params(&editor_state.graph, &mapping, &program)?;
 
         Ok((program, params))
     }

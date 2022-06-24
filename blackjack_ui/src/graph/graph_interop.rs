@@ -75,16 +75,10 @@ pub fn extract_graph_params(
     for external_def in &program.external_parameters {
         let node = mapping[external_def.node_id];
         let input = graph[node].get_input(&external_def.param_name)?;
-        let value = graph[input].value.storage.clone();
-        params.insert(
-            external_def.addr.clone(),
-            // TODO: Do we want the UI to copy the configs? This feels a bit
-            // wasteful. Address during review.
-            BlackjackParameter {
-                value,
-                config: graph[input].value.config.clone(),
-            },
-        );
+        // TODO: @perf The whole parameter definition is copied here, but we're
+        // just interested in the data table that we'll feed into Lua. Maybe we
+        // need two different concepts here?
+        params.insert(external_def.addr.clone(), graph[input].value.0.clone());
     }
 
     Ok(params)

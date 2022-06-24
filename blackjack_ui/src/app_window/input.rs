@@ -3,7 +3,7 @@ use winit::{
     event::{ElementState, ModifiersState, MouseButton, WindowEvent},
 };
 
-use crate::{prelude::*, egui_ext::RectUtils};
+use crate::{egui_ext::RectUtils, prelude::*};
 
 #[derive(Default)]
 pub struct InputSystem {

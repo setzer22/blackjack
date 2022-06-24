@@ -9,8 +9,8 @@ use std::{
 };
 
 use crate::lua_engine::lua_stdlib;
-use mlua::{FromLua, Lua, ToLua};
 use glam::Vec3;
+use mlua::{FromLua, Lua, ToLua};
 
 use super::*;
 

@@ -7,7 +7,10 @@ use egui_node_graph::{
 use serde::{Deserialize, Serialize};
 
 use blackjack_engine::{
-    graph::{DataType, InputValueConfig, NodeDefinition, NodeDefinitions, BlackjackValue},
+    graph::{
+        BlackjackParameter, BlackjackValue, DataType, InputValueConfig, NodeDefinition,
+        NodeDefinitions,
+    },
     prelude::selection::SelectionExpression,
 };
 
@@ -211,8 +214,8 @@ impl NodeTemplateTrait for NodeDefinitionUi {
                 node_id,
                 input.name.clone(),
                 DataTypeUi(input.data_type),
-                ValueTypeUi {
-                    storage: match input.config {
+                ValueTypeUi(BlackjackParameter {
+                    value: match input.config {
                         InputValueConfig::Enum {
                             ref values,
                             default_selection,
@@ -239,14 +242,9 @@ impl NodeTemplateTrait for NodeDefinitionUi {
                         } => BlackjackValue::String(default_text.clone()),
                         InputValueConfig::None => BlackjackValue::None,
                     },
+                    promoted_name: None,
                     config: input.config.clone(),
-                }, /*(
-                       input
-                           .default_value
-                           .as_ref()
-                           .unwrap_or(&InputValueConfig::None)
-                           .clone(),
-                   )*/
+                }),
                 input_param_kind,
                 true,
             );
@@ -259,13 +257,10 @@ impl NodeTemplateTrait for NodeDefinitionUi {
 
 /// The widget value trait is used to determine how to display each [`ValueType`]
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ValueTypeUi {
-    pub storage: BlackjackValue,
-    pub config: InputValueConfig,
-}
+pub struct ValueTypeUi(pub BlackjackParameter);
 impl WidgetValueTrait for ValueTypeUi {
     fn value_widget(&mut self, param_name: &str, ui: &mut egui::Ui) {
-        match (&mut self.storage, &self.config) {
+        match (&mut self.0.value, &self.0.config) {
             (BlackjackValue::Vector(vector), InputValueConfig::Vector { .. }) => {
                 ui.label(param_name);
                 ui.horizontal(|ui| {
