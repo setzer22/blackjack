@@ -9,7 +9,6 @@ use blackjack_engine::mesh::halfedge::HalfEdgeMesh;
 use blackjack_engine::prelude::selection::SelectionExpression;
 use blackjack_engine::prelude::*;
 use gdnative::api as gd;
-use gdnative::api::SpatialMaterial;
 use gdnative::prelude::*;
 
 use anyhow::{anyhow, bail, Result};
@@ -18,7 +17,10 @@ use anyhow::{anyhow, bail, Result};
 mod helpers;
 use helpers::*;
 
+mod inspector_plugin;
+
 #[derive(NativeClass)]
+#[register_with(Self::register_properties)]
 #[inherit(Node)]
 pub struct BlackjackAsset {
     asset: BlackjackGameAsset,
@@ -27,13 +29,29 @@ pub struct BlackjackAsset {
     needs_update: bool,
 }
 
-preload!(SCALAR_PROP_SCN, PackedScene, "res://ScalarProp.tscn");
-preload!(VECTOR_PROP_SCN, PackedScene, "res://VectorProp.tscn");
-preload!(SELECTION_PROP_SCN, PackedScene, "res://SelectionProp.tscn");
-preload!(STRING_PROP_SCN, PackedScene, "res://StringProp.tscn");
+preload!(
+    SCALAR_PROP_SCN,
+    PackedScene,
+    "res://addons/blackjack_engine_godot/ScalarProp.tscn"
+);
+preload!(
+    VECTOR_PROP_SCN,
+    PackedScene,
+    "res://addons/blackjack_engine_godot/VectorProp.tscn"
+);
+preload!(
+    SELECTION_PROP_SCN,
+    PackedScene,
+    "res://addons/blackjack_engine_godot/SelectionProp.tscn"
+);
+preload!(
+    STRING_PROP_SCN,
+    PackedScene,
+    "res://addons/blackjack_engine_godot/StringProp.tscn"
+);
 
-preload!(MAT1, SpatialMaterial, "res://Mat1.tres");
-preload!(MAT2, SpatialMaterial, "res://Mat2.tres");
+preload!(MAT1, gd::SpatialMaterial, "res://Mat1.tres");
+preload!(MAT2, gd::SpatialMaterial, "res://Mat2.tres");
 
 #[methods]
 impl BlackjackAsset {
@@ -49,6 +67,24 @@ impl BlackjackAsset {
             child_mesh_instance: None,
             needs_update: true,
         }
+    }
+
+    fn register_properties(builder: &ClassBuilder<Self>) {
+        builder
+            .property("blackjack_params")
+            .with_setter(|this, owner, dict| this.set_params_from_dictionary(owner, dict))
+            .with_getter(|this, owner| this.get_params_as_dictionary(owner))
+            .done();
+    }
+
+    #[export]
+    fn set_params_from_dictionary(&mut self, _owner: TRef<Node>, dict: Dictionary) {
+        todo!()
+    }
+
+    #[export]
+    fn get_params_as_dictionary(&self, _owner: TRef<Node>) -> Dictionary {
+        todo!()
     }
 
     #[export]
@@ -181,7 +217,6 @@ impl BlackjackAsset {
             child.set_mesh(godot_mesh);
             self.needs_update = false;
         }
-
     }
 }
 
@@ -300,7 +335,8 @@ fn halfedge_to_godot_mesh(mesh: &HalfEdgeMesh) -> Result<Ref<gd::ArrayMesh>> {
 }
 
 fn init(handle: InitHandle) {
-    handle.add_class::<BlackjackAsset>();
+    handle.add_tool_class::<BlackjackAsset>();
+    handle.add_class::<inspector_plugin::BlackjackInspectorPlugin>();
 }
 
 godot_init!(init);
