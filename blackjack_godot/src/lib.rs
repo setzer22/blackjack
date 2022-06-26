@@ -1,4 +1,6 @@
+use parking_lot::Mutex;
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use blackjack_engine::graph::BlackjackValue;
 use blackjack_engine::graph::InputValueConfig;
@@ -16,15 +18,37 @@ use anyhow::{anyhow, bail, Result};
 #[macro_use]
 mod helpers;
 use helpers::*;
+use once_cell::sync::Lazy;
 
 mod inspector_plugin;
+
+mod godot_lua_io;
+
+pub struct BlackjackGodotRuntime {
+    lua_runtime: LuaRuntime,
+}
+unsafe impl Send for BlackjackGodotRuntime {}
+
+static RUNTIME: Lazy<Result<Arc<Mutex<BlackjackGodotRuntime>>>> = Lazy::new(|| {
+    godot_print!("Loading lua runtime");
+    let project_settings = gd::ProjectSettings::godot_singleton();
+    let library_path = project_settings
+        .get_setting("Blackjack/library_path")
+        .try_to::<String>()
+        .unwrap_or_else(|e| {
+            godot_error!("Invalid path in project settings {e}");
+            "".into()
+        });
+    LuaRuntime::initialize_custom(library_path, godot_lua_io::load_node_libraries_with_godot)
+        .map(|lua_runtime| Arc::new(Mutex::new(BlackjackGodotRuntime { lua_runtime })))
+});
 
 #[derive(NativeClass)]
 #[register_with(Self::register_properties)]
 #[inherit(Node)]
 pub struct BlackjackAsset {
-    asset: BlackjackGameAsset,
-    lua_runtime: LuaRuntime,
+    asset_path: String,
+    asset: Option<BlackjackGameAsset>,
     child_mesh_instance: Option<Ref<gd::MeshInstance>>,
     needs_update: bool,
 }
@@ -49,6 +73,11 @@ preload!(
     PackedScene,
     "res://addons/blackjack_engine_godot/StringProp.tscn"
 );
+preload!(
+    ERROR_LABEL_SCN,
+    PackedScene,
+    "res://addons/blackjack_engine_godot/ErrorLabel.tscn"
+);
 
 preload!(MAT1, gd::SpatialMaterial, "res://Mat1.tres");
 preload!(MAT2, gd::SpatialMaterial, "res://Mat2.tres");
@@ -56,14 +85,9 @@ preload!(MAT2, gd::SpatialMaterial, "res://Mat2.tres");
 #[methods]
 impl BlackjackAsset {
     fn new(_owner: &Node) -> Self {
-        let reader =
-            std::io::BufReader::new(std::fs::File::open("/home/josep/material_test.bga").unwrap());
-        let asset: BlackjackGameAsset = ron::de::from_reader(reader).unwrap();
-
         BlackjackAsset {
-            asset,
-            // TODO: Gotta send a path to `initialize`
-            lua_runtime: LuaRuntime::initialize().unwrap(),
+            asset_path: "".into(),
+            asset: None,
             child_mesh_instance: None,
             needs_update: true,
         }
@@ -71,20 +95,16 @@ impl BlackjackAsset {
 
     fn register_properties(builder: &ClassBuilder<Self>) {
         builder
-            .property("blackjack_params")
-            .with_setter(|this, owner, dict| this.set_params_from_dictionary(owner, dict))
-            .with_getter(|this, owner| this.get_params_as_dictionary(owner))
+            .property("asset_path")
+            .with_default("".into())
+            .with_getter(|this, _| this.asset_path.to_string())
+            .with_setter(|this, owner, new_val| {
+                this.asset_path = new_val;
+                this.reload_asset(owner)
+            })
             .done();
-    }
-
-    #[export]
-    fn set_params_from_dictionary(&mut self, _owner: TRef<Node>, dict: Dictionary) {
-        todo!()
-    }
-
-    #[export]
-    fn get_params_as_dictionary(&self, _owner: TRef<Node>) -> Dictionary {
-        todo!()
+        builder.signal("mesh_gen_error").done();
+        builder.signal("mesh_gen_clear_error").done();
     }
 
     #[export]
@@ -94,7 +114,11 @@ impl BlackjackAsset {
         new_value: Variant,
         param_name: String,
     ) -> Option<()> {
-        if let Some(value) = self.asset.params.get_mut(&ExternalParamAddr(param_name)) {
+        if let Some(value) = self
+            .asset
+            .as_mut()
+            .and_then(|asset| asset.params.get_mut(&ExternalParamAddr(param_name)))
+        {
             match &mut value.value {
                 blackjack_engine::graph::BlackjackValue::Vector(v) => {
                     let new_v = new_value.try_to::<Vector3>().ok()?;
@@ -131,70 +155,107 @@ impl BlackjackAsset {
         let vbox = unsafe { gd::VBoxContainer::new().into_shared().assume_safe() };
 
         ui.add_child(scroll, true);
+
         scroll.add_child(vbox, true);
         scroll.set_enable_h_scroll(false);
         ui.set_size(Vector2::new(80.0, 600.0), false);
+        ui.set_custom_minimum_size(Vector2::new(80.0, 600.0));
 
-        for (param_addr, value) in self.asset.params.iter() {
-            if let Some(param_name) = &value.promoted_name {
-                let prop = match (&value.config, &value.value) {
-                    (_, BlackjackValue::Vector(v)) => {
-                        let prop = instance_preloaded::<Control, _>(
-                            VECTOR_PROP_SCN.clone(),
-                            vbox.as_ref(),
-                        );
-                        gdcall!(prop, init, param_name, Vector3::new(v.x, v.y, v.z));
-                        prop
-                    }
-                    (InputValueConfig::Scalar { min, max, .. }, BlackjackValue::Scalar(s)) => {
-                        let prop = instance_preloaded::<Control, _>(
-                            SCALAR_PROP_SCN.clone(),
-                            vbox.as_ref(),
-                        );
-                        gdcall!(prop, init, param_name, s, min, max);
-                        prop
-                    }
-                    (_, BlackjackValue::String(s)) => {
-                        let prop = instance_preloaded::<Control, _>(
-                            STRING_PROP_SCN.clone(),
-                            vbox.as_ref(),
-                        );
-                        gdcall!(prop, init, param_name, s);
-                        prop
-                    }
-                    (_, BlackjackValue::Selection(_, s)) => {
-                        let prop = instance_preloaded::<Control, _>(
-                            SELECTION_PROP_SCN.clone(),
-                            vbox.as_ref(),
-                        );
-                        gdcall!(
-                            prop,
-                            init,
-                            param_addr.0,
-                            s.clone().unwrap_or(SelectionExpression::None).unparse()
-                        );
-                        prop
-                    }
-                    // TODO: For now this ignore any malformed parameters.
-                    _ => continue,
-                };
-                prop.connect(
-                    "on_changed",
-                    owner,
-                    "on_param_changed",
-                    VariantArray::from_iter(&[param_addr.0.to_variant()]).into_shared(),
+        if let Some(asset) = &self.asset {
+            for (param_addr, value) in asset.params.iter() {
+                if let Some(param_name) = &value.promoted_name {
+                    let prop = match (&value.config, &value.value) {
+                        (_, BlackjackValue::Vector(v)) => {
+                            let prop = instance_preloaded::<Control, _>(
+                                VECTOR_PROP_SCN.clone(),
+                                vbox.as_ref(),
+                            );
+                            gdcall!(prop, init, param_name, Vector3::new(v.x, v.y, v.z));
+                            prop
+                        }
+                        (InputValueConfig::Scalar { min, max, .. }, BlackjackValue::Scalar(s)) => {
+                            let prop = instance_preloaded::<Control, _>(
+                                SCALAR_PROP_SCN.clone(),
+                                vbox.as_ref(),
+                            );
+                            gdcall!(prop, init, param_name, s, min, max);
+                            prop
+                        }
+                        (_, BlackjackValue::String(s)) => {
+                            let prop = instance_preloaded::<Control, _>(
+                                STRING_PROP_SCN.clone(),
+                                vbox.as_ref(),
+                            );
+                            gdcall!(prop, init, param_name, s);
+                            prop
+                        }
+                        (_, BlackjackValue::Selection(_, s)) => {
+                            let prop = instance_preloaded::<Control, _>(
+                                SELECTION_PROP_SCN.clone(),
+                                vbox.as_ref(),
+                            );
+                            gdcall!(
+                                prop,
+                                init,
+                                param_addr.0,
+                                s.clone().unwrap_or(SelectionExpression::None).unparse()
+                            );
+                            prop
+                        }
+                        // TODO: For now this ignore any malformed parameters.
+                        _ => continue,
+                    };
+                    prop.connect(
+                        "on_changed",
+                        owner,
+                        "on_param_changed",
+                        VariantArray::from_iter(&[param_addr.0.to_variant()]).into_shared(),
+                        0,
+                    )
+                    .expect("Failed to connect signal");
+                }
+            }
+            let error_label =
+                instance_preloaded::<Control, _>(ERROR_LABEL_SCN.clone(), vbox.as_ref());
+            owner
+                .connect(
+                    "mesh_gen_error",
+                    error_label,
+                    "_on_error",
+                    VariantArray::new_shared(),
                     0,
                 )
-                .expect("Failed to connect signal");
-            }
+                .expect("Connecting signal should not fail");
+            owner
+                .connect(
+                    "mesh_gen_clear_error",
+                    error_label,
+                    "_on_clear_error",
+                    VariantArray::new_shared(),
+                    0,
+                )
+                .expect("Connecting signal should not fail");
         }
 
         ui.upcast::<Control>().claim()
     }
 
     #[export]
+    fn reload_asset(&mut self, _owner: TRef<Node>) {
+        // TODO: Read using godot API
+        (|| -> Result<()> {
+            let reader = std::io::BufReader::new(std::fs::File::open(&self.asset_path)?);
+            let asset: BlackjackGameAsset = ron::de::from_reader(reader)?;
+            self.asset = Some(asset);
+            Ok(())
+        })()
+        .unwrap_or_else(|err| godot_error!("Error while loading Blackjack asset {err}"));
+    }
+
+    #[export]
     fn _ready(&mut self, owner: TRef<Node>) {
-        godot_print!("Hello, world.");
+        self.reload_asset(owner);
+
         let child_mesh_instance = gd::MeshInstance::new().into_shared();
         owner.add_child(unsafe { child_mesh_instance.assume_safe() }, false);
         self.child_mesh_instance = Some(child_mesh_instance);
@@ -204,18 +265,37 @@ impl BlackjackAsset {
     }
 
     #[export]
-    fn _process(&mut self, _owner: &Node, _delta: f64) {
+    fn _process(&mut self, owner: &Node, _delta: f64) {
         if self.needs_update {
-            let mesh = blackjack_engine::lua_engine::run_program(
-                &self.lua_runtime.lua,
-                &self.asset.program.lua_program,
-                &self.asset.params,
-            )
-            .unwrap();
-            let godot_mesh = halfedge_to_godot_mesh(&mesh).unwrap();
-            let child = unsafe { self.child_mesh_instance.unwrap().assume_safe() };
-            child.set_mesh(godot_mesh);
-            self.needs_update = false;
+            match (&self.asset, &*RUNTIME) {
+                (Some(asset), Ok(runtime)) => {
+                    let runtime = &runtime.lock();
+                    match blackjack_engine::lua_engine::run_program(
+                        &runtime.lua_runtime.lua,
+                        &asset.program.lua_program,
+                        &asset.params,
+                    ) {
+                        Ok(mesh) => {
+                            let godot_mesh = halfedge_to_godot_mesh(&mesh).unwrap();
+                            let child = unsafe { self.child_mesh_instance.unwrap().assume_safe() };
+                            child.set_mesh(godot_mesh);
+                            owner.emit_signal("mesh_gen_clear_error", &[]);
+                            self.needs_update = false;
+                        }
+                        Err(err) => {
+                            owner.emit_signal("mesh_gen_error", &[err.to_string().to_variant()]);
+                            self.needs_update = false;
+                        }
+                    }
+                }
+                (_, Err(err)) => {
+                    godot_error!("Blackjack could not find the Lua node libraries. Did you set the path in user settings? {err}");
+                    self.needs_update = false; // No point in retrying
+                }
+                (None, _) => {
+                    godot_error!("Unexpected: There is no blackjack asset");
+                }
+            }
         }
     }
 }
@@ -243,8 +323,7 @@ fn halfedge_to_godot_mesh(mesh: &HalfEdgeMesh) -> Result<Ref<gd::ArrayMesh>> {
 
     for (f_id, _) in conn.iter_faces() {
         let material_idx = if let Ok(materials) = &materials {
-            godot_print!("Has materials");
-            godot_dbg!(materials[f_id] as i32)
+            materials[f_id] as i32
         } else {
             0
         };

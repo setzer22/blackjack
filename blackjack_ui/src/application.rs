@@ -114,7 +114,9 @@ impl RootViewport {
             diagnostics_open: false,
             code_viewer_open: false,
             code_viewer_code: None,
-            lua_runtime: LuaRuntime::initialize().expect("Init lua should not fail"),
+            // TODO: Hardcoded node libraries path. Read from cmd line?
+            lua_runtime: LuaRuntime::initialize_with_std("./node_libraries/".into())
+                .expect("Init lua should not fail"),
         }
     }
 

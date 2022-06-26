@@ -34,7 +34,7 @@ impl RootViewport {
                 }
                 if ui.button("Export game asset").clicked() {
                     let file_location = rfd::FileDialog::new()
-                        .add_filter("Blackjack Game Assets", &["blg"])
+                        .add_filter("Blackjack Game Assets", &["bga"])
                         .save_file();
                     if let Some(path) = file_location {
                         action = Some(AppRootAction::ExportGameAsset(path))

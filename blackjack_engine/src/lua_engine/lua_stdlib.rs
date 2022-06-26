@@ -65,9 +65,9 @@ pub fn load_host_libraries(lua: &Lua) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Loads all the registered node libraries by running all the files in the
-/// NODE_LIBRARIES_PATH folder and returns the node definitions for the
-/// registered nodes found.
-pub fn load_node_libraries(lua: &Lua) -> anyhow::Result<NodeDefinitions> {
-    lua_node_libraries::load(lua)
+pub fn load_node_libraries_with_std(
+    lua: &Lua,
+    node_libs_path: &str,
+) -> anyhow::Result<NodeDefinitions> {
+    lua_node_libraries::load_node_libraries_with_std(lua, node_libs_path)
 }

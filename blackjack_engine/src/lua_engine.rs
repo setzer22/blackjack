@@ -44,16 +44,31 @@ pub struct LuaRuntime {
     pub node_definitions: NodeDefinitions,
     pub watcher: notify::RecommendedWatcher,
     pub watcher_channel: Receiver<notify::DebouncedEvent>,
+    pub node_libraries_path: String,
+    pub load_libraries_fn: Box<dyn Fn(&Lua, &str) -> Result<NodeDefinitions>>,
 }
 
 const NODE_LIBRARIES_PATH: &str = "node_libraries";
 
 impl LuaRuntime {
-    pub fn initialize() -> anyhow::Result<LuaRuntime> {
+    /// Initializes and returns the Blackjack Lua runtime. This function will
+    /// use the `std::fs` API to load Lua source files. Some integrations may
+    /// prefer to use other file reading methods with `initialize_custom`.
+    pub fn initialize_with_std(node_libraries_path: String) -> anyhow::Result<LuaRuntime> {
+        Self::initialize_custom(
+            node_libraries_path,
+            lua_stdlib::load_node_libraries_with_std,
+        )
+    }
+
+    pub fn initialize_custom(
+        node_libraries_path: String,
+        load_libraries_fn: impl Fn(&Lua, &str) -> Result<NodeDefinitions> + 'static,
+    ) -> anyhow::Result<LuaRuntime> {
         let lua = Lua::new();
         lua_stdlib::load_host_libraries(&lua)?;
         lua_stdlib::load_lua_libraries(&lua)?;
-        let node_definitions = lua_stdlib::load_node_libraries(&lua)?;
+        let node_definitions = load_libraries_fn(&lua, &node_libraries_path)?;
         let (watcher, watcher_channel) = {
             let (tx, rx) = mpsc::channel();
             let mut watcher = notify::watcher(tx, Duration::from_secs(1))?;
@@ -68,6 +83,8 @@ impl LuaRuntime {
             node_definitions,
             watcher,
             watcher_channel,
+            node_libraries_path,
+            load_libraries_fn: Box::new(load_libraries_fn),
         })
     }
 
@@ -79,7 +96,8 @@ impl LuaRuntime {
                 | DebouncedEvent::Remove(_)
                 | DebouncedEvent::Rename(_, _) => {
                     println!("Reloading Lua scripts...");
-                    self.node_definitions = lua_stdlib::load_node_libraries(&self.lua)?;
+                    self.node_definitions =
+                        (self.load_libraries_fn)(&self.lua, &self.node_libraries_path)?;
                 }
                 _ => {}
             }
