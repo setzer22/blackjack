@@ -1,10 +1,8 @@
-use gdnative::export::hint::EnumHint;
-use gdnative::export::hint::StringHint;
-use gdnative::export::user_data::MapMut;
-use parking_lot::Mutex;
+use gdnative::api::Material;
+use slotmap::KeyData;
 use slotmap::SlotMap;
 use std::collections::BTreeMap;
-use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 
 use blackjack_engine::graph::BlackjackValue;
 use blackjack_engine::graph::InputValueConfig;
@@ -17,29 +15,45 @@ use blackjack_engine::prelude::*;
 use gdnative::api as gd;
 use gdnative::prelude::*;
 
-use anyhow::{anyhow, bail, Result};
-
-#[macro_use]
-mod helpers;
-use helpers::*;
-use once_cell::sync::Lazy;
-
-mod inspector_plugin;
+use anyhow::Result;
 
 mod godot_lua_io;
 
 slotmap::new_key_type! { pub struct AssetId; }
 
+impl FromVariant for AssetId {
+    fn from_variant(variant: &Variant) -> Result<Self, FromVariantError> {
+        match variant.dispatch() {
+            VariantDispatch::I64(id_data) => Ok(AssetId(KeyData::from_ffi(id_data as u64))),
+            _ => Err(FromVariantError::Custom("Invalid AssetId value".into())),
+        }
+    }
+}
+impl ToVariant for AssetId {
+    fn to_variant(&self) -> Variant {
+        self.0.as_ffi().to_variant()
+    }
+}
+
+/// A singleton node that manages the lifetime for all the loaded assets. This
+/// node is never directly used by GDscript, which instead accesses it via the
+/// [`BlackjackApi`].
+///
+/// This node is lazily initialized as an autoload-like structure when
+/// `get_singleton` is called.
 #[derive(NativeClass)]
+#[no_constructor]
 #[inherit(Node)]
 pub struct BlackjackGodotRuntime {
-    lua_runtime: Option<LuaRuntime>,
-    assets: SlotMap<AssetId, BlackjackAsset>,
+    lua_runtime: LuaRuntime,
+    assets: SlotMap<AssetId, Option<BlackjackGameAsset>>,
 }
+
+static LUA_NEEDS_INIT: AtomicBool = AtomicBool::new(true);
 
 #[methods]
 impl BlackjackGodotRuntime {
-    fn new(owner: &Node) -> Self {
+    fn initialize() -> Result<Self> {
         godot_print!("Loading lua runtime");
         let project_settings = gd::ProjectSettings::godot_singleton();
         let library_path = project_settings
@@ -52,25 +66,18 @@ impl BlackjackGodotRuntime {
         let lua_runtime = LuaRuntime::initialize_custom(
             library_path,
             godot_lua_io::load_node_libraries_with_godot,
-        )
-        .map_err(|err| {
-            godot_error!(
-                "Blackjack could not find the Lua node libraries.\
-                 Did you set the path in user settings? {err}"
-            );
-            err
-        })
-        .ok();
+        )?;
 
-        Self {
+        Ok(Self {
             lua_runtime,
             assets: SlotMap::with_key(),
-        }
+        })
     }
 
     fn get_singleton() -> Option<Instance<Self>> {
+        let engine = gd::Engine::godot_singleton();
         let tree_root = unsafe {
-            gd::Engine::godot_singleton()
+            engine
                 .get_main_loop()
                 .unwrap()
                 .assume_safe()
@@ -90,96 +97,97 @@ impl BlackjackGodotRuntime {
                 godot_error!("BlackjackRuntime singleton is not of the expected type.");
                 None
             }
-        } else {
-            let new = Self::new_instance();
+        } else if LUA_NEEDS_INIT.swap(false, std::sync::atomic::Ordering::Relaxed) {
+            let new = Self::emplace(
+                Self::initialize()
+                    .map_err(|err| {
+                        godot_error!("Error while loading Blackjack runtime: {err}");
+                        err
+                    })
+                    .ok()?,
+            );
             new.base().set_name("BlackjackRuntime");
             let new = new.into_shared();
-            tree_root.add_child(new.clone(), false);
+            if engine.is_editor_hint() {
+                tree_root.add_child(new.clone(), false);
+            } else {
+                unsafe {
+                    tree_root.call_deferred("add_child", &[new.to_variant()]);
+                }
+            }
             Some(new)
+        } else {
+            None
         }
     }
 }
 
-#[derive(NativeClass)]
-#[register_with(Self::register_properties)]
-#[inherit(Node)]
-pub struct BlackjackAsset {
-    #[property]
-    asset_res: Option<Ref<gd::Resource>>,
-    asset_path: String,
-    asset: Option<BlackjackGameAsset>,
-    child_mesh_instance: Option<Ref<gd::MeshInstance>>,
-    needs_update: bool,
+#[derive(ToVariant)]
+pub enum UpdateAssetResult {
+    Ok(Ref<gd::ArrayMesh>),
+    Err(String),
 }
 
-preload!(
-    SCALAR_PROP_SCN,
-    PackedScene,
-    "res://addons/blackjack_engine_godot/ScalarProp.tscn"
-);
-preload!(
-    VECTOR_PROP_SCN,
-    PackedScene,
-    "res://addons/blackjack_engine_godot/VectorProp.tscn"
-);
-preload!(
-    SELECTION_PROP_SCN,
-    PackedScene,
-    "res://addons/blackjack_engine_godot/SelectionProp.tscn"
-);
-preload!(
-    STRING_PROP_SCN,
-    PackedScene,
-    "res://addons/blackjack_engine_godot/StringProp.tscn"
-);
-preload!(
-    ERROR_LABEL_SCN,
-    PackedScene,
-    "res://addons/blackjack_engine_godot/ErrorLabel.tscn"
-);
-
-preload!(MAT1, gd::SpatialMaterial, "res://Mat1.tres");
-preload!(MAT2, gd::SpatialMaterial, "res://Mat2.tres");
+/// A facade-like API exposed to GDScript.
+#[derive(NativeClass)]
+#[inherit(gd::Resource)]
+pub struct BlackjackApi {}
 
 #[methods]
-impl BlackjackAsset {
-    fn new(_owner: &Node) -> Self {
-        BlackjackAsset {
-            asset_res: None,
-            asset_path: "".into(),
-            asset: None,
-            child_mesh_instance: None,
-            needs_update: true,
-        }
+impl BlackjackApi {
+    fn new(_owner: &gd::Resource) -> Self {
+        Self {}
     }
 
-    fn register_properties(builder: &ClassBuilder<Self>) {
-        builder
-            .property("asset_path")
-            .with_default("".into())
-            .with_getter(|this, _| this.asset_path.to_string())
-            .with_setter(|this, owner, new_val| {
-                this.asset_path = new_val;
-                this.reload_asset(owner)
-            })
-            .with_hint(StringHint::File(EnumHint::new(vec![".bga".into()])))
-            .done();
-        builder.signal("mesh_gen_error").done();
-        builder.signal("mesh_gen_clear_error").done();
+    fn with_runtime<U>(f: impl FnOnce(&mut BlackjackGodotRuntime) -> Option<U>) -> Option<U> {
+        let runtime = BlackjackGodotRuntime::get_singleton()?;
+        let runtime = unsafe { runtime.assume_safe() };
+        runtime.map_mut(|runtime, _| f(runtime)).ok()?
     }
 
     #[export]
-    fn on_param_changed(
+    fn ping(&self, _owner: &gd::Resource) -> String {
+        "PONG".into()
+    }
+
+    #[export]
+    fn make_asset(&self, _owner: &gd::Resource) -> Option<AssetId> {
+        Self::with_runtime(|runtime| Some(runtime.assets.insert(None)))
+    }
+
+    #[export]
+    fn set_asset(
         &mut self,
-        _owner: &Node,
-        new_value: Variant,
+        _owner: &gd::Resource,
+        asset_id: AssetId,
+        asset: Ref<gd::Resource>,
+    ) -> Option<bool> {
+        Self::with_runtime(|runtime| {
+            let asset = unsafe { asset.assume_safe() };
+            let contents = match asset.get("contents").dispatch() {
+                VariantDispatch::GodotString(contents) => contents,
+                _ => {
+                    godot_error!("Could not load asset. Empty contents?");
+                    return None;
+                }
+            };
+            let loaded: BlackjackGameAsset = ron::from_str(&contents.to_string()).ok()?;
+            *runtime.assets.get_mut(asset_id)? = Some(loaded);
+            Some(true)
+        })
+    }
+
+    #[export]
+    fn set_param(
+        &mut self,
+        _owner: &gd::Resource,
+        asset_id: AssetId,
         param_name: String,
-    ) -> Option<()> {
-        if let Some(value) = self
-            .asset
-            .as_mut()
-            .and_then(|asset| asset.params.get_mut(&ExternalParamAddr(param_name)))
-        {
+        new_value: Variant,
+    ) -> Option<bool> {
+        Self::with_runtime(|runtime| {
+            let asset = runtime.assets.get_mut(asset_id)?.as_mut()?;
+            let value = asset.params.get_mut(&ExternalParamAddr(param_name))?;
             match &mut value.value {
                 blackjack_engine::graph::BlackjackValue::Vector(v) => {
                     let new_v = new_value.try_to::<Vector3>().ok()?;
@@ -205,168 +213,106 @@ impl BlackjackAsset {
                 }
                 blackjack_engine::graph::BlackjackValue::None => {}
             }
-            self.needs_update = true;
-        }
-        Some(())
+            Some(true)
+        })
     }
 
-    fn generate_params_gui(&self, owner: TRef<Node>) -> Ref<Control> {
-        let ui = unsafe { gd::PanelContainer::new().into_shared().assume_safe() };
-        let scroll = unsafe { gd::ScrollContainer::new().into_shared().assume_safe() };
-        let vbox = unsafe { gd::VBoxContainer::new().into_shared().assume_safe() };
+    #[export]
+    fn get_params(&mut self, _owner: &gd::Resource, asset_id: AssetId) -> Option<Variant> {
+        #[derive(FromVariant, ToVariant)]
+        struct ScalarDef {
+            label: String,
+            addr: String,
+            typ: String,
+            val: f32,
+            min: f32,
+            max: f32,
+        }
 
-        ui.add_child(scroll, true);
+        #[derive(FromVariant, ToVariant)]
+        struct GenericDef {
+            label: String,
+            addr: String,
+            typ: String,
+            val: Variant,
+        }
 
-        scroll.add_child(vbox, true);
-        scroll.set_enable_h_scroll(false);
-        ui.set_size(Vector2::new(80.0, 600.0), false);
-        ui.set_custom_minimum_size(Vector2::new(80.0, 600.0));
+        Self::with_runtime(|runtime| {
+            let asset = runtime.assets.get(asset_id)?.as_ref()?;
 
-        if let Some(asset) = &self.asset {
+            #[allow(unused_mut)]
+            let mut params = VariantArray::new();
+
             for (param_addr, value) in asset.params.iter() {
                 if let Some(param_name) = &value.promoted_name {
-                    let prop = match (&value.config, &value.value) {
-                        (_, BlackjackValue::Vector(v)) => {
-                            let prop = instance_preloaded::<Control, _>(
-                                VECTOR_PROP_SCN.clone(),
-                                vbox.as_ref(),
-                            );
-                            gdcall!(prop, init, param_name, Vector3::new(v.x, v.y, v.z));
-                            prop
-                        }
+                    let label = param_name.clone();
+                    let addr = param_addr.0.clone();
+
+                    match (&value.config, &value.value) {
+                        (_, BlackjackValue::Vector(v)) => params.push(GenericDef {
+                            label,
+                            addr,
+                            typ: "Vector".into(),
+                            val: Vector3::new(v.x, v.y, v.z).to_variant(),
+                        }),
                         (InputValueConfig::Scalar { min, max, .. }, BlackjackValue::Scalar(s)) => {
-                            let prop = instance_preloaded::<Control, _>(
-                                SCALAR_PROP_SCN.clone(),
-                                vbox.as_ref(),
-                            );
-                            gdcall!(prop, init, param_name, s, min, max);
-                            prop
+                            params.push(ScalarDef {
+                                label,
+                                addr,
+                                typ: "Scalar".into(),
+                                val: *s,
+                                min: *min,
+                                max: *max,
+                            })
                         }
-                        (_, BlackjackValue::String(s)) => {
-                            let prop = instance_preloaded::<Control, _>(
-                                STRING_PROP_SCN.clone(),
-                                vbox.as_ref(),
-                            );
-                            gdcall!(prop, init, param_name, s);
-                            prop
-                        }
-                        (_, BlackjackValue::Selection(_, s)) => {
-                            let prop = instance_preloaded::<Control, _>(
-                                SELECTION_PROP_SCN.clone(),
-                                vbox.as_ref(),
-                            );
-                            gdcall!(
-                                prop,
-                                init,
-                                param_addr.0,
-                                s.clone().unwrap_or(SelectionExpression::None).unparse()
-                            );
-                            prop
-                        }
+                        (_, BlackjackValue::String(s)) => params.push(GenericDef {
+                            label,
+                            addr,
+                            typ: "String".into(),
+                            val: s.clone().to_variant(),
+                        }),
+                        (_, BlackjackValue::Selection(_, s)) => params.push(GenericDef {
+                            label,
+                            addr,
+                            typ: "Selection".into(),
+                            val: s
+                                .as_ref()
+                                .cloned()
+                                .unwrap_or(SelectionExpression::None)
+                                .unparse()
+                                .to_variant(),
+                        }),
                         // TODO: For now this ignore any malformed parameters.
                         _ => continue,
-                    };
-                    prop.connect(
-                        "on_changed",
-                        owner,
-                        "on_param_changed",
-                        VariantArray::from_iter(&[param_addr.0.to_variant()]).into_shared(),
-                        0,
-                    )
-                    .expect("Failed to connect signal");
+                    }
                 }
             }
-            let error_label =
-                instance_preloaded::<Control, _>(ERROR_LABEL_SCN.clone(), vbox.as_ref());
-            owner
-                .connect(
-                    "mesh_gen_error",
-                    error_label,
-                    "_on_error",
-                    VariantArray::new_shared(),
-                    0,
-                )
-                .expect("Connecting signal should not fail");
-            owner
-                .connect(
-                    "mesh_gen_clear_error",
-                    error_label,
-                    "_on_clear_error",
-                    VariantArray::new_shared(),
-                    0,
-                )
-                .expect("Connecting signal should not fail");
-        }
 
-        ui.upcast::<Control>().claim()
+            Some(params.into_shared().to_variant())
+        })
     }
 
     #[export]
-    fn reload_asset(&mut self, _owner: TRef<Node>) {
-        // TODO: Read using godot API
-        (|| -> Result<()> {
-            let reader = std::io::BufReader::new(std::fs::File::open(&self.asset_path)?);
-            let asset: BlackjackGameAsset = ron::de::from_reader(reader)?;
-            self.asset = Some(asset);
-            Ok(())
-        })()
-        .unwrap_or_else(|err| godot_error!("Error while loading Blackjack asset {err}"));
-    }
-
-    #[export]
-    fn _ready(&mut self, owner: TRef<Node>) {
-        self.reload_asset(owner);
-
-        let child_mesh_instance = gd::MeshInstance::new().into_shared();
-        owner.add_child(unsafe { child_mesh_instance.assume_safe() }, false);
-        self.child_mesh_instance = Some(child_mesh_instance);
-
-        let child_gui = self.generate_params_gui(owner);
-        owner.add_child(child_gui, true);
-    }
-
-    #[export]
-    fn _process(&mut self, owner: &Node, _delta: f64) {
-        if self.needs_update {
-            match (&self.asset, BlackjackGodotRuntime::get_singleton()) {
-                (Some(asset), Some(runtime)) => {
-                    let runtime = unsafe { runtime.assume_safe() };
-                    runtime
-                        .map_mut(|runtime, _| {
-                            if let Some(lua_r) = runtime.lua_runtime.as_ref() {
-                                match blackjack_engine::lua_engine::run_program(
-                                    &lua_r.lua,
-                                    &asset.program.lua_program,
-                                    &asset.params,
-                                ) {
-                                    Ok(mesh) => {
-                                        let godot_mesh = halfedge_to_godot_mesh(&mesh).unwrap();
-                                        let child = unsafe {
-                                            self.child_mesh_instance.unwrap().assume_safe()
-                                        };
-                                        child.set_mesh(godot_mesh);
-                                        owner.emit_signal("mesh_gen_clear_error", &[]);
-                                        self.needs_update = false;
-                                    }
-                                    Err(err) => {
-                                        owner.emit_signal(
-                                            "mesh_gen_error",
-                                            &[err.to_string().to_variant()],
-                                        );
-                                        self.needs_update = false;
-                                    }
-                                }
-                            } else {
-                                godot_error!("Lua runtime failed loading")
-                            }
-                        })
-                        .expect("Could map mut");
+    fn update_asset(
+        &mut self,
+        _owner: &gd::Resource,
+        asset_id: AssetId,
+        materials: Vec<Ref<Material>>,
+    ) -> Option<UpdateAssetResult> {
+        Self::with_runtime(|runtime| {
+            let asset = runtime.assets.get(asset_id)?.as_ref()?;
+            match blackjack_engine::lua_engine::run_program(
+                &runtime.lua_runtime.lua,
+                &asset.program.lua_program,
+                &asset.params,
+            ) {
+                Ok(mesh) => {
+                    let godot_mesh = halfedge_to_godot_mesh(&mesh, materials).unwrap();
+                    Some(UpdateAssetResult::Ok(godot_mesh))
                 }
-                (_, _) => {
-                    godot_error!("Unexpected error while generating mesh");
-                }
+                Err(err) => Some(UpdateAssetResult::Err(err.to_string())),
             }
-        }
+        })
     }
 }
 
@@ -380,7 +326,10 @@ pub struct GdMeshBuffers {
 }
 
 /// Converts a Blackjack HalfEdgeMesh into a Godot ArrayMesh
-fn halfedge_to_godot_mesh(mesh: &HalfEdgeMesh) -> Result<Ref<gd::ArrayMesh>> {
+fn halfedge_to_godot_mesh(
+    mesh: &HalfEdgeMesh,
+    materials_vec: Vec<Ref<Material>>,
+) -> Result<Ref<gd::ArrayMesh>> {
     let mut surfaces = BTreeMap::<i32, GdMeshBuffers>::new();
 
     let conn = mesh.read_connectivity();
@@ -468,15 +417,8 @@ fn halfedge_to_godot_mesh(mesh: &HalfEdgeMesh) -> Result<Ref<gd::ArrayMesh>> {
             gd::Mesh::ARRAY_COMPRESS_DEFAULT,
         );
 
-        // TODO: UGLY HACK
-        match surface_idx {
-            0 => {
-                mesh.surface_set_material(0, MAT1.clone());
-            }
-            1 => {
-                mesh.surface_set_material(1, MAT2.clone());
-            }
-            _ => {}
+        if let Some(mat) = materials_vec.get(surface_idx as usize) {
+            mesh.surface_set_material(surface_idx as i64, mat.clone());
         }
     }
 
@@ -484,9 +426,8 @@ fn halfedge_to_godot_mesh(mesh: &HalfEdgeMesh) -> Result<Ref<gd::ArrayMesh>> {
 }
 
 fn init(handle: InitHandle) {
-    handle.add_tool_class::<BlackjackAsset>();
+    handle.add_tool_class::<BlackjackApi>();
     handle.add_tool_class::<BlackjackGodotRuntime>();
-    handle.add_class::<inspector_plugin::BlackjackInspectorPlugin>();
 }
 
 godot_init!(init);
