@@ -26,21 +26,17 @@ pub fn load_node_libraries_with_godot(
     lua: &Lua,
     node_libs_path: &str,
 ) -> anyhow::Result<NodeDefinitions> {
-    godot_print!("Start");
     pub fn eval_recursive(lua: &Lua, path: GodotString) -> Result<()> {
-        godot_print!("Eval recursive for {path}");
         let folder = gd::Directory::new();
         folder.open(path)?;
         folder.list_dir_begin(true, false)?;
         let mut file_name = folder.get_next();
         while file_name != "".into() {
-            godot_print!("File name {file_name}");
             if folder.current_is_dir() {
                 eval_recursive(lua, folder.get_current_dir())?;
             } else if file_name.ends_with(&GodotString::from_str(".lua")) {
                 let path =
                     folder.get_current_dir() + GodotString::from_str("/") + file_name.clone();
-                godot_print!("Loading Lua node libraries from {path}");
                 let file = gd::File::new();
                 file.open(path.clone(), gd::File::READ)?;
                 let contents = file.get_as_text().to_string();

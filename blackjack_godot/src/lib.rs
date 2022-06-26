@@ -1,4 +1,8 @@
+use gdnative::export::hint::EnumHint;
+use gdnative::export::hint::StringHint;
+use gdnative::export::user_data::MapMut;
 use parking_lot::Mutex;
+use slotmap::SlotMap;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
@@ -24,29 +28,84 @@ mod inspector_plugin;
 
 mod godot_lua_io;
 
-pub struct BlackjackGodotRuntime {
-    lua_runtime: LuaRuntime,
-}
-unsafe impl Send for BlackjackGodotRuntime {}
+slotmap::new_key_type! { pub struct AssetId; }
 
-static RUNTIME: Lazy<Result<Arc<Mutex<BlackjackGodotRuntime>>>> = Lazy::new(|| {
-    godot_print!("Loading lua runtime");
-    let project_settings = gd::ProjectSettings::godot_singleton();
-    let library_path = project_settings
-        .get_setting("Blackjack/library_path")
-        .try_to::<String>()
-        .unwrap_or_else(|e| {
-            godot_error!("Invalid path in project settings {e}");
-            "".into()
-        });
-    LuaRuntime::initialize_custom(library_path, godot_lua_io::load_node_libraries_with_godot)
-        .map(|lua_runtime| Arc::new(Mutex::new(BlackjackGodotRuntime { lua_runtime })))
-});
+#[derive(NativeClass)]
+#[inherit(Node)]
+pub struct BlackjackGodotRuntime {
+    lua_runtime: Option<LuaRuntime>,
+    assets: SlotMap<AssetId, BlackjackAsset>,
+}
+
+#[methods]
+impl BlackjackGodotRuntime {
+    fn new(owner: &Node) -> Self {
+        godot_print!("Loading lua runtime");
+        let project_settings = gd::ProjectSettings::godot_singleton();
+        let library_path = project_settings
+            .get_setting("Blackjack/library_path")
+            .try_to::<String>()
+            .unwrap_or_else(|e| {
+                godot_error!("Invalid path in project settings {e}");
+                "".into()
+            });
+        let lua_runtime = LuaRuntime::initialize_custom(
+            library_path,
+            godot_lua_io::load_node_libraries_with_godot,
+        )
+        .map_err(|err| {
+            godot_error!(
+                "Blackjack could not find the Lua node libraries.\
+                 Did you set the path in user settings? {err}"
+            );
+            err
+        })
+        .ok();
+
+        Self {
+            lua_runtime,
+            assets: SlotMap::with_key(),
+        }
+    }
+
+    fn get_singleton() -> Option<Instance<Self>> {
+        let tree_root = unsafe {
+            gd::Engine::godot_singleton()
+                .get_main_loop()
+                .unwrap()
+                .assume_safe()
+                .cast::<SceneTree>()
+                .unwrap()
+                .root()
+                .unwrap()
+                .assume_safe()
+        };
+
+        if tree_root.has_node("BlackjackRuntime") {
+            let node = tree_root.get_node("BlackjackRuntime").unwrap();
+            let node = unsafe { node.assume_safe() };
+            if let Some(inst) = node.cast_instance::<Self>() {
+                Some(inst.claim())
+            } else {
+                godot_error!("BlackjackRuntime singleton is not of the expected type.");
+                None
+            }
+        } else {
+            let new = Self::new_instance();
+            new.base().set_name("BlackjackRuntime");
+            let new = new.into_shared();
+            tree_root.add_child(new.clone(), false);
+            Some(new)
+        }
+    }
+}
 
 #[derive(NativeClass)]
 #[register_with(Self::register_properties)]
 #[inherit(Node)]
 pub struct BlackjackAsset {
+    #[property]
+    asset_res: Option<Ref<gd::Resource>>,
     asset_path: String,
     asset: Option<BlackjackGameAsset>,
     child_mesh_instance: Option<Ref<gd::MeshInstance>>,
@@ -86,6 +145,7 @@ preload!(MAT2, gd::SpatialMaterial, "res://Mat2.tres");
 impl BlackjackAsset {
     fn new(_owner: &Node) -> Self {
         BlackjackAsset {
+            asset_res: None,
             asset_path: "".into(),
             asset: None,
             child_mesh_instance: None,
@@ -102,6 +162,7 @@ impl BlackjackAsset {
                 this.asset_path = new_val;
                 this.reload_asset(owner)
             })
+            .with_hint(StringHint::File(EnumHint::new(vec![".bga".into()])))
             .done();
         builder.signal("mesh_gen_error").done();
         builder.signal("mesh_gen_clear_error").done();
@@ -267,33 +328,42 @@ impl BlackjackAsset {
     #[export]
     fn _process(&mut self, owner: &Node, _delta: f64) {
         if self.needs_update {
-            match (&self.asset, &*RUNTIME) {
-                (Some(asset), Ok(runtime)) => {
-                    let runtime = &runtime.lock();
-                    match blackjack_engine::lua_engine::run_program(
-                        &runtime.lua_runtime.lua,
-                        &asset.program.lua_program,
-                        &asset.params,
-                    ) {
-                        Ok(mesh) => {
-                            let godot_mesh = halfedge_to_godot_mesh(&mesh).unwrap();
-                            let child = unsafe { self.child_mesh_instance.unwrap().assume_safe() };
-                            child.set_mesh(godot_mesh);
-                            owner.emit_signal("mesh_gen_clear_error", &[]);
-                            self.needs_update = false;
-                        }
-                        Err(err) => {
-                            owner.emit_signal("mesh_gen_error", &[err.to_string().to_variant()]);
-                            self.needs_update = false;
-                        }
-                    }
+            match (&self.asset, BlackjackGodotRuntime::get_singleton()) {
+                (Some(asset), Some(runtime)) => {
+                    let runtime = unsafe { runtime.assume_safe() };
+                    runtime
+                        .map_mut(|runtime, _| {
+                            if let Some(lua_r) = runtime.lua_runtime.as_ref() {
+                                match blackjack_engine::lua_engine::run_program(
+                                    &lua_r.lua,
+                                    &asset.program.lua_program,
+                                    &asset.params,
+                                ) {
+                                    Ok(mesh) => {
+                                        let godot_mesh = halfedge_to_godot_mesh(&mesh).unwrap();
+                                        let child = unsafe {
+                                            self.child_mesh_instance.unwrap().assume_safe()
+                                        };
+                                        child.set_mesh(godot_mesh);
+                                        owner.emit_signal("mesh_gen_clear_error", &[]);
+                                        self.needs_update = false;
+                                    }
+                                    Err(err) => {
+                                        owner.emit_signal(
+                                            "mesh_gen_error",
+                                            &[err.to_string().to_variant()],
+                                        );
+                                        self.needs_update = false;
+                                    }
+                                }
+                            } else {
+                                godot_error!("Lua runtime failed loading")
+                            }
+                        })
+                        .expect("Could map mut");
                 }
-                (_, Err(err)) => {
-                    godot_error!("Blackjack could not find the Lua node libraries. Did you set the path in user settings? {err}");
-                    self.needs_update = false; // No point in retrying
-                }
-                (None, _) => {
-                    godot_error!("Unexpected: There is no blackjack asset");
+                (_, _) => {
+                    godot_error!("Unexpected error while generating mesh");
                 }
             }
         }
@@ -415,6 +485,7 @@ fn halfedge_to_godot_mesh(mesh: &HalfEdgeMesh) -> Result<Ref<gd::ArrayMesh>> {
 
 fn init(handle: InitHandle) {
     handle.add_tool_class::<BlackjackAsset>();
+    handle.add_tool_class::<BlackjackGodotRuntime>();
     handle.add_class::<inspector_plugin::BlackjackInspectorPlugin>();
 }
 
