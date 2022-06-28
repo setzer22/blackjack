@@ -54,7 +54,7 @@ static LUA_NEEDS_INIT: AtomicBool = AtomicBool::new(true);
 #[methods]
 impl BlackjackGodotRuntime {
     fn initialize() -> Result<Self> {
-        godot_print!("Loading lua runtime");
+        godot_print!("Loading Blackjack runtime");
         let project_settings = gd::ProjectSettings::godot_singleton();
         let library_path = project_settings
             .get_setting("Blackjack/library_path")
@@ -108,13 +108,7 @@ impl BlackjackGodotRuntime {
             );
             new.base().set_name("BlackjackRuntime");
             let new = new.into_shared();
-            if engine.is_editor_hint() {
-                tree_root.add_child(new.clone(), false);
-            } else {
-                unsafe {
-                    tree_root.call_deferred("add_child", &[new.to_variant()]);
-                }
-            }
+            tree_root.add_child(new.clone(), false);
             Some(new)
         } else {
             None
