@@ -361,7 +361,8 @@ fn halfedge_to_godot_mesh(
             // UV
             if let Some(uvs) = uvs.as_ref() {
                 let uv = uvs[h_id];
-                gd_uvs.push(Vector2::new(uv.x, uv.y));
+                // UV y coordinate needs to be flipped in Godot meshes.
+                gd_uvs.push(Vector2::new(uv.x, -uv.y));
             }
 
             // Normal
