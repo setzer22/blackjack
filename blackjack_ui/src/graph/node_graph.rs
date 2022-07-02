@@ -241,6 +241,7 @@ impl NodeTemplateTrait for NodeDefinitionUi {
                             ref default_text, ..
                         } => BlackjackValue::String(default_text.clone()),
                         InputValueConfig::None => BlackjackValue::None,
+                        InputValueConfig::LuaString {} => BlackjackValue::String("".into()),
                     },
                     promoted_name: None,
                     config: input.config.clone(),
@@ -314,6 +315,11 @@ impl WidgetValueTrait for ValueTypeUi {
                         ui.text_edit_singleline(text);
                     }
                 });
+            }
+            (BlackjackValue::String(text), InputValueConfig::LuaString {  }) => {
+                ui.label(param_name);
+                ui.add(egui::TextEdit::multiline(text).text_style(egui::TextStyle::Monospace).desired_width(f32::INFINITY));
+                
             }
             (BlackjackValue::Selection(text, selection), InputValueConfig::Selection { .. }) => {
                 if ui.text_edit_singleline(text).changed() {

@@ -15,6 +15,9 @@ local function selection(name) return {name = name, type = "selection"} end
 local function strparam(name, default, multiline)
     return {name = name, default = default, type = "string", multiline = multiline}
 end
+local function lua_str(name)
+    return {name = name, type = "lua_string"}
+end
 local function enum(name, values, selected)
     return {
         name = name,
@@ -79,6 +82,23 @@ local primitives = {
         returns = "out_mesh"
     },
 }
+
+local function parse_ch_key(s)
+    if s == "Vertex" then
+        return Types.VertexId
+    elseif s == "Face" then
+        return Types.FaceId
+    elseif s == "Halfedge" then
+        return Types.HalfEdgeId
+    end
+end
+local function parse_ch_val(s)
+    if s == "f32" then
+        return Types.F32
+    elseif s == "Vec3" then
+        return Types.Vec3
+    end
+end
 
 -- Edit ops: Nodes to edit existing meshes
 local edit_ops = {
@@ -249,16 +269,65 @@ local edit_ops = {
         returns = "out_mesh",
         op = function(inputs)
             local out_mesh = inputs.mesh:clone()
-            local typ
-            if inputs.type == "Vertex" then
-                typ = Types.VertexId
-            elseif inputs.type == "Face" then
-                typ = Types.FaceId
-            elseif inputs.type == "Halfedge" then
-                typ = Types.HalfEdgeId
-            end
+            local typ = parse_ch_key(inputs.type)
             Ops.make_group(out_mesh, typ, inputs.selection, inputs.name);
             return {out_mesh = out_mesh}
+        end
+    },
+    EditChannels = {
+        label = "Edit channels",
+        inputs = { 
+            mesh("mesh"),
+            enum("channel_key", {"Vertex", "Face", "Halfedge"}, 0),
+            enum("channel_val", {"f32", "Vec3"}, 0),
+            strparam("channels", ""),
+            lua_str("code"),
+        },
+
+        outputs = { mesh("out_mesh") },
+        returns = "out_mesh",
+        op = function(inputs)
+            local out_mesh = inputs.mesh:clone()
+            local typ = parse_ch_key(inputs.channel_key) 
+            local val = parse_ch_val(inputs.channel_val) 
+
+            local func, err = loadstring(inputs.code)
+            if err ~= nil then
+                error(err)
+                return
+            end
+            if typeof(func) ~= 'function' then
+                error('Code should be a single lua function')
+            end
+
+            local ch_size = 0
+            local ch_by_name = {}
+            for ch_name in inputs.channels:gmatch("[^, ]+") do
+                -- TODO: The `val` in get_channel could be inferred.
+                local ch = out_mesh:ensure_channel(typ, val, ch_name)
+                ch_size = #ch
+                ch_by_name[ch_name] = ch
+            end
+
+            for i = 1,ch_size do
+                local ch_i_map = { index = i }
+                for ch_name, ch in ch_by_name do
+                    ch_i_map[ch_name] = ch[i]
+                end
+                local ch_i_out = func(ch_i_map)
+                for ch_name, val in ch_i_out do
+                    local ch = ch_by_name[ch_name]
+                    if ch ~= nil then
+                        ch_by_name[ch_name][i] = val
+                    end
+                end
+            end
+
+            for ch_name, ch in ch_by_name do
+                out_mesh:set_channel(typ, val, ch_name, ch)
+            end
+            
+            return { out_mesh = out_mesh }
         end
     }
 }

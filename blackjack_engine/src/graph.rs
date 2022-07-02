@@ -132,6 +132,9 @@ pub enum InputValueConfig {
         multiline: bool,
         default_text: String,
     },
+    LuaString {
+
+    },
     None,
 }
 
@@ -186,6 +189,7 @@ fn data_type_from_str(s: &str) -> Result<DataType> {
         "enum" => Ok(DataType::String),
         "file" => Ok(DataType::String),
         "string" => Ok(DataType::String),
+        "lua_string" => Ok(DataType::String),
         _ => Err(anyhow!("Invalid datatype in node definition {:?}", s)),
     }
 }
@@ -217,6 +221,9 @@ impl InputDefinition {
             },
             DataType::String if type_str == "file" => {
                 InputValueConfig::FilePath { default_path: None }
+            }
+            DataType::String if type_str == "lua_string" => {
+                InputValueConfig::LuaString {  }
             }
             DataType::String => InputValueConfig::String {
                 default_text: table.get::<_, String>("default")?,
