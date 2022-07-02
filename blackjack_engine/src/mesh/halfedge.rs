@@ -379,6 +379,7 @@ impl MeshConnectivity {
         ret
     }
 
+    #[allow(dead_code)] // Might become useful later
     fn halfedge_loop_iter(&self, h0: HalfEdgeId) -> HalfedgeLoopIterator<'_> {
         HalfedgeLoopIterator {
             conn: self,

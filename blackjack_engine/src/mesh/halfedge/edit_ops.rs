@@ -1,4 +1,7 @@
-use std::{collections::BTreeSet, f32::consts::PI};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    f32::consts::PI,
+};
 
 use anyhow::{anyhow, bail};
 use float_ord::FloatOrd;
@@ -801,161 +804,57 @@ pub fn make_quad(conn: &mut MeshConnectivity, verts: &[VertexId]) -> Result<()> 
     Ok(())
 }
 
-/// In some operations, we want to iterate a line of consecutive halfedges in
-/// order, but typically when a selection of edges comes from the UI the edges
-/// will come in an arbitrary, sometimes non-consecutive, order.
-///
-/// There are two cases we want to distinguish: An open loop and a closed loop.
-///
-/// This function finds the 'sequence head', that is, the first halfedge in the
-/// loop s.t. by following its `next` pointer you reach all other halfedges in
-/// the loop. For closed loops this may be any edge.
-///
-/// The second return value is a boolean, indicating whether the halfedges form
-/// a closed loop or not.
-fn find_sequence_head(conn: &MeshConnectivity, edges: &[HalfEdgeId]) -> Result<(HalfEdgeId, bool)> {
-    let mut remaining = Vec::from_iter(edges.iter_cpy());
-    let mut first_iter = true;
-    let mut closed_loop = false;
-    let mut last_seen = *remaining.first().expect("We asserted not empty");
-
-    while let Some(halfedge) = remaining.last().copied() {
-        last_seen = halfedge;
-        let mut iterator_finished = true;
-        for h in conn.halfedge_loop_iter(halfedge) {
-            if let Some(i) = (&remaining).iter().position(|hh| *hh == h) {
-                remaining.swap_remove(i);
-            } else {
-                if !first_iter && !edges.contains(&h) {
-                    bail!("The halfedges do not form a line or loop.")
-                }
-                iterator_finished = false;
-                break;
-            }
-        }
-        if remaining.is_empty() && first_iter && iterator_finished {
-            closed_loop = true;
-        }
-        first_iter = false;
-    }
-    Ok((last_seen, closed_loop))
-}
-
 /// Connects two (not necessarily closed) halfedge loops with faces.
-pub fn bridge_loops(
+pub fn bridge_chains(
     mesh: &mut HalfEdgeMesh,
-    loop_1: &[HalfEdgeId],
-    loop_2: &[HalfEdgeId],
+    chain_1: &[VertexId],
+    chain_2: &[VertexId],
+    is_closed: bool,
 ) -> Result<()> {
-    let mut conn = mesh.write_connectivity();
-    let positions = mesh.read_positions();
-
-    if loop_1.len() != loop_2.len() {
+    if chain_1.len() != chain_2.len() {
         bail!("Loops to bridge need to be of the same length.")
     }
-
-    // We know the two loops have the same length
-    let loop_len = loop_1.len();
-
-    if loop_1.is_empty() || loop_2.is_empty() {
+    if chain_1.is_empty() || chain_2.is_empty() {
         bail!("Loops to bridge cannot be empty.")
     }
 
-    for h in loop_1.iter().chain(loop_2.iter()) {
-        if !conn.at_halfedge(*h).is_boundary()? {
-            bail!("Cannot bridge loops with edges that are not in a boundary. This would lead to a non-manifold mesh.")
+    let mut conn = mesh.write_connectivity();
+    let positions = mesh.read_positions();
+    let chain_len = chain_1.len(); // same length
+
+    for (v, w) in chain_1
+        .iter()
+        .tuple_windows()
+        .chain(chain_2.iter().rev().tuple_windows())
+    {
+        if !conn.at_vertex(*v).halfedge_to(*w).is_boundary()? {
+            bail!("Cannot bridge loops with edges that are not in a boundary. This would lead to a non-manifold mesh.");
         }
     }
 
-    for h in loop_1.iter_cpy() {
-        let twin = conn.at_halfedge(h).twin().try_end()?;
-        if loop_2.contains(&twin) {
+    for v in chain_1.iter_cpy() {
+        if chain_2.contains(&v) {
             bail!("Trying to bridge the same loop.")
         }
     }
-
-    let (seq_head_1, closed_1) = find_sequence_head(&conn, loop_1)?;
-    let (seq_head_2, closed_2) = find_sequence_head(&conn, loop_2)?;
-
-    if seq_head_1 == seq_head_2 {
-        bail!("Trying to bridge the same loop.")
-    }
-
-    if closed_1 != closed_2 {
-        bail!("Can't bridge an open loop with a closed loop")
-    }
-
-    let closed = closed_1;
-
-    // At this point, we can be sure that the edges form a loop starting at
-    // seq_head and loop_len elements.
-    let loop_1 = conn
-        .halfedge_loop_iter(seq_head_1)
-        .take(loop_len)
-        .collect_vec();
-    let loop_2 = conn
-        .halfedge_loop_iter(seq_head_2)
-        .take(loop_len)
-        .collect_vec();
-
-    // When a loop is not closed, we need to add the last halfedge's dst vertex
-    // to the vertex list, because that one also needs a quad. This is not
-    // necessary for closed loops because in that case, the last halfedge's dst
-    // vertex is the first halfedge's src, so we would be repeating one vertex.
-    //
-    // NOTE: Unfortunately this needs to be a local function without captures
-    // and type inference because `impl Trait` is not a thing in closure
-    // parameters and Rust can't infer the types.
-    fn adapt_last_dst(
-        conn: &MeshConnectivity,
-        closed: bool,
-        loop_x: &[HalfEdgeId],
-        it: impl Iterator<Item = VertexId>,
-    ) -> impl Iterator<Item = VertexId> {
-        // We use a branching iterator to add the last vertex depending on the
-        // value of `closed`.
-        it.branch(
-            closed,
-            |it| it,
-            |it| {
-                it.chain(std::iter::once(
-                    conn.at_halfedge(*loop_x.last().expect("cannot be empty"))
-                        .dst_vertex()
-                        .end(),
-                ))
-            },
-        )
-    }
-
-    let verts_1 = loop_1
-        .iter_cpy()
-        .map(|h| conn.at_halfedge(h).vertex().end());
-    let verts_1 = adapt_last_dst(&conn, closed, &loop_1, verts_1).collect_vec();
-    let verts_2 = loop_2
-        .iter_cpy()
-        .map(|h| conn.at_halfedge(h).vertex().end());
-    let verts_2 = adapt_last_dst(&conn, closed, &loop_2, verts_2).collect_vec();
-
-    let verts_len = verts_1.len();
 
     // Each vertex in the first loop needs to be mapped to a vertex in the other
     // loop. When the loops are open, there's just a single way to do it, but
     // when the loops are closed there's `loop_len` possible combinations. We
     // find the best possible mapping which minimizes the sum of distances
     // between vertex pairs
-
-    let v1_best_shift = if closed {
+    let chain_1_best_shift = if is_closed {
         // Computes the sum of distances after shifting verts_1 by i positions
         let sum_distances_rotated = |i: usize| {
             let x = FloatOrd(
-                rotate_iter(verts_1.iter_cpy(), i, verts_len)
+                rotate_iter(chain_1.iter_cpy(), i, chain_len)
                     .enumerate()
                     .map(|(j, v_sh)| {
                         // NOTE: We index verts_2 backwards with respect to
-                        // verts_1. This is because the two loops are facing in
+                        // verts_1. This is because the two chains are facing in
                         // opposite directions, otherwise we wouldn't be able to
                         // bridge them
-                        positions[v_sh].distance_squared(positions[verts_2[(verts_len - 1) - j]])
+                        positions[v_sh].distance_squared(positions[chain_2[(chain_len - 1) - j]])
                     })
                     .sum::<f32>(),
             );
@@ -965,9 +864,9 @@ pub fn bridge_loops(
         // We memoize the sum_distances in a vec because it's a relatively
         // expensive function and `position_min_by_key` will call it multiple
         // times per key.
-        let distances = (0..verts_len).map(sum_distances_rotated).collect_vec();
+        let distances = (0..chain_len).map(sum_distances_rotated).collect_vec();
 
-        (0..verts_len)
+        (0..chain_len)
             .position_min_by_key(|i| distances[*i])
             .expect("Loop should not be empty.")
     } else {
@@ -975,17 +874,18 @@ pub fn bridge_loops(
         0
     };
 
-    let verts_1_shifted = rotate_iter(verts_1.iter_cpy(), v1_best_shift, verts_len).collect_vec();
+    let chain_1_shifted =
+        rotate_iter(chain_1.iter_cpy(), chain_1_best_shift, chain_len).collect_vec();
 
-    for (i, ((v1, v2), (v3, v4))) in verts_1_shifted
+    for (i, ((v1, v2), (v3, v4))) in chain_1_shifted
         .iter_cpy()
         .branch(
-            closed,
+            is_closed,
             |it| it.circular_tuple_windows(),
             |it| it.tuple_windows(),
         )
-        .zip(verts_2.iter_cpy().rev().branch(
-            closed,
+        .zip(chain_2.iter_cpy().rev().branch(
+            is_closed,
             |it| it.circular_tuple_windows(),
             |it| it.tuple_windows(),
         ))
@@ -999,52 +899,111 @@ pub fn bridge_loops(
     Ok(())
 }
 
-#[derive(Debug)]
-pub struct HalfEdgeChain {
-    pub halfedges: Vec<HalfEdgeId>,
-    pub closed: bool,
-}
+pub fn sort_bag_of_edges2(
+    mesh: &MeshConnectivity,
+    bag: &[HalfEdgeId],
+) -> Result<(SVec<VertexId>, bool)> {
+    /// An ordered pair of halfedges
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+    pub struct EdgeId {
+        a: HalfEdgeId,
+        b: HalfEdgeId,
+    }
 
-pub fn sort_bag_of_edges(
-    conn: &MeshConnectivity,
-    halfedges: &[HalfEdgeId],
-) -> Result<Vec<HalfEdgeChain>> {
-    let mut clusters = Vec::<Vec<HalfEdgeId>>::new();
+    impl EdgeId {
+        pub fn new(h1: HalfEdgeId, h2: HalfEdgeId) -> Self {
+            assert!(
+                h1 != h2,
+                "Invariant: Don't create an EdgeId for two equal halfedges."
+            );
+            Self {
+                a: h1.min(h2),
+                b: h1.max(h2),
+            }
+        }
 
-    let halfedges_and_their_twins = halfedges.iter_cpy().chain(
-        halfedges
-            .iter()
-            .flat_map(|h| conn.at_halfedge(*h).twin().try_end().ok()),
-    );
-    for halfedge in halfedges_and_their_twins {
-        let next = conn.at_halfedge(halfedge).next().try_end()?;
-        let prev = conn.at_halfedge(halfedge).previous().try_end()?;
-
-        if let Some(cluster) = clusters
-            .iter_mut()
-            .find(|c| c.contains(&next) || c.contains(&prev))
-        {
-            cluster.push(halfedge);
-        } else {
-            clusters.push(vec![halfedge]);
+        pub fn find_other(&self, conn: &MeshConnectivity, v: VertexId) -> VertexId {
+            let (src, dst) = conn.at_halfedge(self.a).src_dst_pair().unwrap();
+            if v == src {
+                dst
+            } else {
+                src
+            }
         }
     }
 
-    let mut result = vec![];
-
-    for cluster in clusters {
-        let (seq_head, is_closed) = find_sequence_head(conn, &cluster)?;
-        result.push(HalfEdgeChain {
-            halfedges: conn
-                .halfedge_loop_iter(seq_head)
-                .take(cluster.len())
-                .collect_vec(),
-            closed: is_closed,
-        });
+    if bag.is_empty() {
+        bail!("Bag cannot be empty");
     }
 
-    Ok(result)
+    // Stores a mapping between vertices and the edges they participate in.
+    let mut vert_to_edges = BTreeMap::<VertexId, BTreeSet<EdgeId>>::new();
+
+    for h in bag.iter_cpy() {
+        let (src, dst) = mesh.at_halfedge(h).src_dst_pair()?;
+        let twin = mesh.at_halfedge(h).twin().try_end()?;
+        let edge_id = EdgeId::new(h, twin);
+        vert_to_edges.entry(src).or_default().insert(edge_id);
+        vert_to_edges.entry(dst).or_default().insert(edge_id);
+    }
+
+    let endpoints = vert_to_edges
+        .iter()
+        .filter(|(_, es)| es.len() == 1)
+        .map(|(v, _)| *v)
+        .collect_svec();
+
+    if endpoints.is_empty() {
+        // If there are no endpoints, it means the edges form a closed loop.
+        // (Or more than one, this gets checked later on.)
+
+        // If the halfedges have a loop, we simply break the loop and
+        // restart the function.
+        let e = vert_to_edges
+            .iter_mut()
+            .next()
+            .and_then(|(_, es)| es.pop_first2())
+            .expect("Not empty");
+        let new_bag = bag
+            .iter_cpy()
+            .filter(|h| e.a != *h && e.b != *h)
+            .collect_vec();
+        let (verts, _) = sort_bag_of_edges2(mesh, &new_bag)?;
+        Ok((verts, true)) // Mark the loop
+    } else {
+        // We take the first endpoint. To get the other loop, reverse list.
+        let endpoint = endpoints[0];
+        let mut sorted_vertices = SVec::new();
+
+        let mut v = endpoint;
+        while sorted_vertices.len() < vert_to_edges.len() {
+            if sorted_vertices.contains(&v) {
+                bail!("Halfedges do not form a chain.")
+            }
+
+            let v_es = vert_to_edges.get_mut(&v).unwrap();
+            if v_es.len() == 1 {
+                let v_e = v_es.pop_first2().unwrap();
+                let w = v_e.find_other(mesh, v);
+
+                // Remove the edge from the other vertex, now it is an endpoint.
+                let w_es = vert_to_edges.get_mut(&w).unwrap();
+                w_es.remove(&v_e);
+
+                sorted_vertices.push(v);
+                v = w;
+            } else if v_es.is_empty() {
+                sorted_vertices.push(v);
+                break;
+            } else {
+                bail!("Halfedges do not form a chain")
+            }
+        }
+
+        Ok((sorted_vertices, false))
+    }
 }
+
 
 /// Same as `bridge_loops`, but a bit smarter. Instead of interpreting `loop_1`
 /// and `loop_2` as two sets of consecutive halfedges in the right winding
@@ -1056,45 +1015,42 @@ pub fn sort_bag_of_edges(
 /// extra flip parameter lets you select multiple alternatives.
 pub fn bridge_loops_ui(
     mesh: &mut HalfEdgeMesh,
-    loop_1: &[HalfEdgeId],
-    loop_2: &[HalfEdgeId],
+    bag_1: &[HalfEdgeId],
+    bag_2: &[HalfEdgeId],
     flip: usize,
 ) -> Result<()> {
-    if loop_1.is_empty() || loop_2.is_empty() {
+    if bag_1.is_empty() || bag_2.is_empty() {
         bail!("Loops cannot be empty")
     }
 
-    let conn = mesh.read_connectivity();
-    let positions = mesh.read_positions();
-
-    let mut sorted_1 = sort_bag_of_edges(&conn, loop_1)?;
-    let mut sorted_2 = sort_bag_of_edges(&conn, loop_2)?;
-
-    // Remove edge chains that are not in the boundary, we can't use them to bridge loops.
-    let chain_is_boundary = |chain: &HalfEdgeChain| {
-        chain
-            .halfedges
-            .iter()
-            .any(|h| conn.at_halfedge(*h).is_boundary().unwrap_or(true))
-    };
-    sorted_1.retain(chain_is_boundary);
-    sorted_2.retain(chain_is_boundary);
-
-    if sorted_1.is_empty() || sorted_2.is_empty() {
-        bail!("Could not bridge loops. No boundary edges.")
-    }
-
-    drop(positions);
+    let conn = mesh.write_connectivity();
+    let (mut chain_1, is_closed_1) = sort_bag_of_edges2(&conn, bag_1)?;
+    let (mut chain_2, is_closed_2) = sort_bag_of_edges2(&conn, bag_2)?;
     drop(conn);
 
-    let (chain_1, chain_2) = sorted_1
-        .iter()
-        .cartesian_product(sorted_2.iter())
-        .cycle()
-        .nth(flip)
-        .ok_or_else(|| anyhow!("Could not bridge edge loops"))?;
+    dbg!(&chain_1, &chain_2);
 
-    bridge_loops(mesh, &chain_1.halfedges, &chain_2.halfedges)?;
+    if is_closed_1 != is_closed_2 {
+        bail!("You can't bridge a loop with a non-loop.")
+    }
+    let is_closed = is_closed_1;
+
+    match (flip + 1) % 4 { // That +1 is experimentally determined to give nice results
+        0 => {}
+        1 => {
+            chain_1.reverse();
+        }
+        2 => {
+            chain_2.reverse();
+        }
+        3 => {
+            chain_1.reverse();
+            chain_2.reverse();
+        }
+        _ => unreachable!()
+    }
+
+    bridge_chains(mesh, &chain_1, &chain_2, is_closed)?;
 
     Ok(())
 }
@@ -1294,4 +1250,29 @@ pub fn set_material(
         material_ch[id] = material;
     }
     Ok(())
+}
+
+/// TODO: Remove this once #[feature(map_first_last)] stabilizes
+pub trait MapPolyfill<T> {
+    fn pop_first2(&mut self) -> Option<T>;
+}
+impl<K, V> MapPolyfill<(K, V)> for BTreeMap<K, V>
+where
+    K: Clone + Ord,
+{
+    fn pop_first2(&mut self) -> Option<(K, V)> {
+        let k = self.keys().next()?.clone();
+        let v = self.remove(&k)?;
+        Some((k, v))
+    }
+}
+impl<T> MapPolyfill<T> for BTreeSet<T>
+where
+    T: Clone + Ord,
+{
+    fn pop_first2(&mut self) -> Option<T> {
+        let k = self.iter().next()?.clone();
+        self.remove(&k);
+        Some(k)
+    }
 }

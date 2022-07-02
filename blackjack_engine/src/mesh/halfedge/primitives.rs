@@ -152,3 +152,70 @@ impl UVSphere {
             .expect("Sphere construction should not fail")
     }
 }
+
+pub struct Line;
+impl Line {
+    pub fn build(start: Vec3, end: Vec3, segments: u32) -> HalfEdgeMesh {
+        let mesh = HalfEdgeMesh::new();
+        let mut conn = mesh.write_connectivity();
+        let mut pos = mesh.write_positions();
+
+        let mut forward_halfedges = SVec::new();
+        let mut backward_halfedges = SVec::new();
+
+        let mut v = conn.alloc_vertex(&mut pos, start, None);
+        for i in 0..segments {
+            let w = conn.alloc_vertex(
+                &mut pos,
+                start.lerp(end, (i+1) as f32 / segments as f32),
+                None,
+            );
+
+            let h_v_w = conn.alloc_halfedge(HalfEdge {
+                twin: None,
+                next: None,
+                vertex: Some(v),
+                face: None,
+            });
+            let h_w_v = conn.alloc_halfedge(HalfEdge {
+                twin: None,
+                next: None,
+                vertex: Some(w),
+                face: None,
+            });
+
+            conn[h_v_w].twin = Some(h_w_v);
+            conn[h_w_v].twin = Some(h_v_w);
+
+            conn[v].halfedge = Some(h_v_w);
+            conn[w].halfedge = Some(h_w_v);
+
+            forward_halfedges.push(h_v_w);
+            backward_halfedges.push(h_w_v);
+
+            // For the next iteration, repeat same operation starting at w
+            v = w;
+        }
+
+        // Make a chain with all the halfedges in the line
+        for (h, h2) in forward_halfedges.iter_cpy().tuple_windows() {
+            conn[h].next = Some(h2);
+        }
+        for (h, h2) in backward_halfedges.iter_cpy().rev().tuple_windows() {
+            conn[h].next = Some(h2);
+        }
+        
+        // Tie the ends together, forming a loop
+        let f_h_first = forward_halfedges.iter_cpy().next().expect("At least one halfedge");
+        let f_h_last = forward_halfedges.iter_cpy().last().expect("At least one halfedge");
+        let b_h_first = backward_halfedges.iter_cpy().next().expect("At least one halfedge");
+        let b_h_last = backward_halfedges.iter_cpy().last().expect("At least one halfedge");
+        conn[f_h_last].next = Some(b_h_last);
+        conn[b_h_first].next = Some(f_h_first);
+
+        drop(conn);
+        drop(pos);
+        
+        mesh
+    }
+}

@@ -69,6 +69,15 @@ local primitives = {
         outputs = {mesh("out_mesh")},
         returns = "out_mesh"
     },
+    MakeLine = {
+         label = "Line",
+        op = function(inputs)
+            return {out_mesh = Primitives.line(inputs.start_point, inputs.end_point, inputs.segments)}
+        end,
+        inputs = {v3("start_point", vector(0,0,0)), v3("end_point", vector(0.0, 1.0, 0.0)), scalar("segments", 1, 1, 32)},
+        outputs = {mesh("out_mesh")},
+        returns = "out_mesh"
+    },
 }
 
 -- Edit ops: Nodes to edit existing meshes
@@ -230,6 +239,25 @@ local edit_ops = {
         op = function(inputs)
             local out_mesh = inputs.mesh:clone()
             Ops.set_material(out_mesh, inputs.faces, inputs.material_index);
+            return {out_mesh = out_mesh}
+        end
+    },
+    MakeGroup = {
+        label = "Make group",
+        inputs = {mesh("mesh"), enum("type", {"Vertex", "Face", "Halfedge"}, 0), strparam("name", ""), selection("selection")},
+        outputs = {mesh("out_mesh")},
+        returns = "out_mesh",
+        op = function(inputs)
+            local out_mesh = inputs.mesh:clone()
+            local typ
+            if inputs.type == "Vertex" then
+                typ = Types.VertexId
+            elseif inputs.type == "Face" then
+                typ = Types.FaceId
+            elseif inputs.type == "Halfedge" then
+                typ = Types.HalfEdgeId
+            end
+            Ops.make_group(out_mesh, typ, inputs.selection, inputs.name);
             return {out_mesh = out_mesh}
         end
     }
