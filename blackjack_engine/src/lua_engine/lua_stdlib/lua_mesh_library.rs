@@ -102,7 +102,7 @@ pub fn load(lua: &Lua) -> anyhow::Result<()> {
         Ok(())
     });
 
-    lua_fn!(lua, ops, "bridge_loops", |mesh: AnyUserData,
+    lua_fn!(lua, ops, "bridge_chains", |mesh: AnyUserData,
                                        loop_1: SelectionExpression,
                                        loop_2: SelectionExpression,
                                        flip: usize|
@@ -115,7 +115,7 @@ pub fn load(lua: &Lua) -> anyhow::Result<()> {
             .resolve_halfedge_selection_full(&loop_2)
             .map_lua_err()?;
 
-        crate::mesh::halfedge::edit_ops::bridge_loops_ui(&mut mesh, &loop_1, &loop_2, flip)
+        crate::mesh::halfedge::edit_ops::bridge_chains_ui(&mut mesh, &loop_1, &loop_2, flip)
             .map_lua_err()?;
         Ok(())
     });

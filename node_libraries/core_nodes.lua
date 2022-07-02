@@ -131,7 +131,7 @@ local edit_ops = {
         returns = "out_mesh",
         op = function(inputs)
             local out_mesh = inputs.in_mesh:clone()
-            Ops.bridge_loops(out_mesh, inputs.loop_1, inputs.loop_2, inputs.flip)
+            Ops.bridge_chains(out_mesh, inputs.loop_1, inputs.loop_2, inputs.flip)
             return {out_mesh = out_mesh}
         end
     },

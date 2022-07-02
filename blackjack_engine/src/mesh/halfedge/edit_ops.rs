@@ -804,7 +804,8 @@ pub fn make_quad(conn: &mut MeshConnectivity, verts: &[VertexId]) -> Result<()> 
     Ok(())
 }
 
-/// Connects two (not necessarily closed) halfedge loops with faces.
+/// Connects two (not necessarily closed) edge chains with faces. Edges are
+/// implicitly defined by the 2-size windows of vertices.
 pub fn bridge_chains(
     mesh: &mut HalfEdgeMesh,
     chain_1: &[VertexId],
@@ -899,7 +900,7 @@ pub fn bridge_chains(
     Ok(())
 }
 
-pub fn sort_bag_of_edges2(
+pub fn sort_bag_of_edges(
     mesh: &MeshConnectivity,
     bag: &[HalfEdgeId],
 ) -> Result<(SVec<VertexId>, bool)> {
@@ -968,7 +969,7 @@ pub fn sort_bag_of_edges2(
             .iter_cpy()
             .filter(|h| e.a != *h && e.b != *h)
             .collect_vec();
-        let (verts, _) = sort_bag_of_edges2(mesh, &new_bag)?;
+        let (verts, _) = sort_bag_of_edges(mesh, &new_bag)?;
         Ok((verts, true)) // Mark the loop
     } else {
         // We take the first endpoint. To get the other loop, reverse list.
@@ -1005,15 +1006,15 @@ pub fn sort_bag_of_edges2(
 }
 
 
-/// Same as `bridge_loops`, but a bit smarter. Instead of interpreting `loop_1`
-/// and `loop_2` as two sets of consecutive halfedges in the right winding
-/// order, it takes them as two bags of edges, sorts them and figures out the
-/// right order before calling `bridge_loops`. This is helpful when the set of
-/// edges was obtained as a manual selection from the UI.
+/// Same as `bridge_chains`, but a bit smarter. Instead of taking the two
+/// ordered chains, it takes two bags of edges that come from a UI selection.
+/// sorts them and figures out the right order before calling `bridge_chains`.
+/// This is helpful when the set of edges was obtained as a manual selection
+/// from the UI.
 ///
-/// When multiple candidates are found for the pairs of halfedges to bridge, the
-/// extra flip parameter lets you select multiple alternatives.
-pub fn bridge_loops_ui(
+/// The extra flip parameter lets you select all permutations of flipping either
+/// the first or second chain, leading to different winding orders.
+pub fn bridge_chains_ui(
     mesh: &mut HalfEdgeMesh,
     bag_1: &[HalfEdgeId],
     bag_2: &[HalfEdgeId],
@@ -1024,14 +1025,12 @@ pub fn bridge_loops_ui(
     }
 
     let conn = mesh.write_connectivity();
-    let (mut chain_1, is_closed_1) = sort_bag_of_edges2(&conn, bag_1)?;
-    let (mut chain_2, is_closed_2) = sort_bag_of_edges2(&conn, bag_2)?;
+    let (mut chain_1, is_closed_1) = sort_bag_of_edges(&conn, bag_1)?;
+    let (mut chain_2, is_closed_2) = sort_bag_of_edges(&conn, bag_2)?;
     drop(conn);
 
-    dbg!(&chain_1, &chain_2);
-
     if is_closed_1 != is_closed_2 {
-        bail!("You can't bridge a loop with a non-loop.")
+        bail!("You can't bridge a closed chain with an open chain.")
     }
     let is_closed = is_closed_1;
 
