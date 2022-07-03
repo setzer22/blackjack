@@ -339,6 +339,15 @@ local edit_ops = {
         outputs = {mesh("out_mesh")},
         returns = "out_mesh"
     },
+    ExtrudeAlongCurve = {
+        label = "Extrude along curve",
+        op = function(inputs)
+            return {out_mesh = Ops.extrude_along_curve(inputs.backbone, inputs.cross_section, inputs.flip)}
+        end,
+        inputs = {mesh("backbone"), mesh("cross_section"), scalar("flip", 0.0, 0.0, 10.0)},
+        outputs = {mesh("out_mesh")},
+        returns = "out_mesh"
+    },
 }
 
 -- Math: Nodes to perform vector or scalar math operations

@@ -223,6 +223,12 @@ pub fn load(lua: &Lua) -> anyhow::Result<()> {
         crate::mesh::halfedge::edit_ops::copy_to_points(&points, &mesh).map_lua_err()
     });
 
+    lua_fn!(lua, ops, "extrude_along_curve", |backbone: AnyUserData, cross_section: AnyUserData, flip: usize| -> HalfEdgeMesh {
+        let backbone = backbone.borrow::<HalfEdgeMesh>()?;
+        let cross_section = cross_section.borrow::<HalfEdgeMesh>()?;
+        crate::mesh::halfedge::edit_ops::extrude_along_curve(&backbone, &cross_section, flip).map_lua_err()
+    });
+
     let types = lua.create_table()?;
     types.set("VertexId", ChannelKeyType::VertexId)?;
     types.set("FaceId", ChannelKeyType::FaceId)?;
