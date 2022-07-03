@@ -329,7 +329,16 @@ local edit_ops = {
             
             return { out_mesh = out_mesh }
         end
-    }
+    },
+    CopyToPoints = {
+        label = "Copy to points",
+        op = function(inputs)
+            return {out_mesh = Ops.copy_to_points(inputs.points, inputs.mesh)}
+        end,
+        inputs = {mesh("points"), mesh("mesh")},
+        outputs = {mesh("out_mesh")},
+        returns = "out_mesh"
+    },
 }
 
 -- Math: Nodes to perform vector or scalar math operations

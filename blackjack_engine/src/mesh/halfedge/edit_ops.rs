@@ -1005,7 +1005,6 @@ pub fn sort_bag_of_edges(
     }
 }
 
-
 /// Same as `bridge_chains`, but a bit smarter. Instead of taking the two
 /// ordered chains, it takes two bags of edges that come from a UI selection.
 /// sorts them and figures out the right order before calling `bridge_chains`.
@@ -1034,7 +1033,8 @@ pub fn bridge_chains_ui(
     }
     let is_closed = is_closed_1;
 
-    match (flip + 1) % 4 { // That +1 is experimentally determined to give nice results
+    match (flip + 1) % 4 {
+        // That +1 is experimentally determined to give nice results
         0 => {}
         1 => {
             chain_1.reverse();
@@ -1046,7 +1046,7 @@ pub fn bridge_chains_ui(
             chain_1.reverse();
             chain_2.reverse();
         }
-        _ => unreachable!()
+        _ => unreachable!(),
     }
 
     bridge_chains(mesh, &chain_1, &chain_2, is_closed)?;
@@ -1274,4 +1274,51 @@ where
         self.remove(&k);
         Some(k)
     }
+}
+
+pub fn copy_to_points(points: &HalfEdgeMesh, cpy_mesh: &HalfEdgeMesh) -> Result<HalfEdgeMesh> {
+    let conn = points.read_connectivity();
+    let position_ch = points.read_positions();
+    let size_ch = points
+        .channels
+        .read_channel_by_name::<VertexId, f32>("size");
+    let normal_ch = points
+        .channels
+        .read_channel_by_name::<VertexId, Vec3>("normal");
+    let tangent_ch = points
+        .channels
+        .read_channel_by_name::<VertexId, Vec3>("tangent");
+
+    let mut result = HalfEdgeMesh::new();
+    for (v, _) in conn.iter_vertices() {
+        let mut cpy_instance = cpy_mesh.clone();
+
+        let scale = if let Ok(ref size) = size_ch {
+            Vec3::splat(size[v])
+        } else {
+            Vec3::ONE
+        };
+
+        let rotate =
+            if let (Ok(normal_ch), Ok(tangent_ch)) = (normal_ch.as_ref(), tangent_ch.as_ref()) {
+                let normal = normal_ch[v];
+                let tangent = tangent_ch[v];
+                let cotangent = normal.cross(tangent);
+                let (_, rotate, _) = glam::Affine3A::from_cols(
+                    cotangent.into(),
+                    normal.into(),
+                    tangent.into(),
+                    glam::Vec3A::ZERO,
+                )
+                .to_scale_rotation_translation();
+                rotate.to_euler(glam::EulerRot::XYZ).into()
+            } else {
+                Vec3::ZERO
+            };
+
+        transform(&mut cpy_instance, position_ch[v], rotate, scale)?;
+        result.merge_with(&cpy_instance);
+    }
+
+    Ok(result)
 }

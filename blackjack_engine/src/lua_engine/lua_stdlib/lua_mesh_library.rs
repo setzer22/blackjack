@@ -217,6 +217,12 @@ pub fn load(lua: &Lua) -> anyhow::Result<()> {
         Ok(())
     });
 
+    lua_fn!(lua, ops, "copy_to_points", |points: AnyUserData, mesh: AnyUserData| -> HalfEdgeMesh {
+        let points = points.borrow::<HalfEdgeMesh>()?;
+        let mesh = mesh.borrow::<HalfEdgeMesh>()?;
+        crate::mesh::halfedge::edit_ops::copy_to_points(&points, &mesh).map_lua_err()
+    });
+
     let types = lua.create_table()?;
     types.set("VertexId", ChannelKeyType::VertexId)?;
     types.set("FaceId", ChannelKeyType::FaceId)?;

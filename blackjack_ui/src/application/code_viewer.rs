@@ -51,6 +51,27 @@ pub fn code_view_ui(ui: &mut egui::Ui, mut code: &str) {
     );
 }
 
+#[allow(clippy::ptr_arg)] // clippy is wrong here. You can't grow a &mut str.
+pub fn code_edit_ui(ui: &mut egui::Ui, code: &mut String) {
+    let language = "lua";
+    let theme = CodeTheme::from_memory(ui.ctx());
+
+    let mut layouter = |ui: &egui::Ui, string: &str, _wrap_width: f32| {
+        let layout_job = highlight(ui.ctx(), &theme, string, language);
+        // layout_job.wrap_width = wrap_width; // no wrapping
+        ui.fonts().layout_job(layout_job)
+    };
+
+    ui.add(
+        egui::TextEdit::multiline(code)
+            .text_style(egui::TextStyle::Monospace) // for cursor height
+            .code_editor()
+            .desired_rows(1)
+            .lock_focus(true)
+            .layouter(&mut layouter),
+    );
+}
+
 /// Memoized Code highlighting
 pub fn highlight(ctx: &egui::Context, theme: &CodeTheme, code: &str, language: &str) -> LayoutJob {
     impl egui::util::cache::ComputerMut<(&CodeTheme, &str, &str), LayoutJob> for Highligher {

@@ -211,26 +211,6 @@ local test_channel_nodes = {
         outputs = {mesh("out_mesh")},
         returns = "out_mesh"
     },
-    CopyToPoints = {
-        label = "Copy to points",
-        op = function(inputs)
-            local points = inputs.points:get_channel(Types.VertexId, Types.Vec3,
-                                                     "position")
-            local sizes = inputs.points:get_channel(Types.VertexId, Types.f32,
-                                                     "size")
-            local acc = Blackjack.mesh()
-            for i, pos in ipairs(points) do
-                local size = sizes[i]
-                local new_mesh = inputs.mesh:clone()
-                Ops.transform(new_mesh, pos, vector(0,0,0), vector(size, size, size))
-                Ops.merge(acc, new_mesh)
-            end
-            return {out_mesh = acc}
-        end,
-        inputs = {mesh("points"), mesh("mesh")},
-        outputs = {mesh("out_mesh")},
-        returns = "out_mesh"
-    },
     CircleNoise = {
         label = "Circle Noise",
         op = function(inputs)
