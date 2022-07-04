@@ -1,0 +1,31 @@
+[gd_scene load_steps=2 format=2]
+
+[ext_resource path="res://addons/blackjack_engine_godot/ScalarProp.gd" type="Script" id=1]
+
+[node name="ScalarProp" type="HBoxContainer"]
+margin_right = 293.0
+margin_bottom = 16.0
+script = ExtResource( 1 )
+
+[node name="Label" type="Label" parent="."]
+margin_top = 1.0
+margin_right = 62.0
+margin_bottom = 15.0
+text = "Iterations"
+
+[node name="HSlider" type="HSlider" parent="."]
+margin_left = 66.0
+margin_right = 239.0
+margin_bottom = 16.0
+size_flags_horizontal = 3
+
+[node name="Label2" type="Label" parent="."]
+margin_left = 243.0
+margin_top = 1.0
+margin_right = 293.0
+margin_bottom = 15.0
+rect_min_size = Vector2( 50, 0 )
+text = "0.25"
+align = 2
+
+[connection signal="value_changed" from="HSlider" to="." method="_on_HSlider_value_changed"]

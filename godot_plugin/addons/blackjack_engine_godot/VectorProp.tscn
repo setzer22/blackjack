@@ -1,0 +1,34 @@
+[gd_scene load_steps=2 format=2]
+
+[ext_resource path="res://addons/blackjack_engine_godot/VectorProp.gd" type="Script" id=1]
+
+[node name="VectorProp" type="HBoxContainer"]
+margin_top = 20.0
+margin_right = 293.0
+margin_bottom = 44.0
+script = ExtResource( 1 )
+
+[node name="Label" type="Label" parent="."]
+margin_top = 5.0
+margin_right = 52.0
+margin_bottom = 19.0
+text = "Position"
+
+[node name="X" type="LineEdit" parent="."]
+margin_left = 56.0
+margin_right = 114.0
+margin_bottom = 24.0
+
+[node name="Y" type="LineEdit" parent="."]
+margin_left = 118.0
+margin_right = 176.0
+margin_bottom = 24.0
+
+[node name="Z" type="LineEdit" parent="."]
+margin_left = 180.0
+margin_right = 238.0
+margin_bottom = 24.0
+
+[connection signal="text_changed" from="X" to="." method="_on_X_text_changed"]
+[connection signal="text_changed" from="Y" to="." method="_on_Y_text_changed"]
+[connection signal="text_changed" from="Z" to="." method="_on_Z_text_changed"]

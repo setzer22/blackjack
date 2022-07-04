@@ -1,0 +1,22 @@
+[gd_scene load_steps=2 format=2]
+
+[ext_resource path="res://addons/blackjack_engine_godot/SelectionProp.gd" type="Script" id=1]
+
+[node name="SelectionProp" type="HBoxContainer"]
+margin_right = 293.0
+margin_bottom = 24.0
+script = ExtResource( 1 )
+
+[node name="Label" type="Label" parent="."]
+margin_top = 5.0
+margin_right = 59.0
+margin_bottom = 19.0
+text = "Selection"
+
+[node name="LineEdit3" type="LineEdit" parent="."]
+margin_left = 63.0
+margin_right = 293.0
+margin_bottom = 24.0
+size_flags_horizontal = 3
+
+[connection signal="text_changed" from="LineEdit3" to="." method="_on_LineEdit3_text_changed"]
