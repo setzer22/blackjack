@@ -53,6 +53,7 @@ Blackjack is built using Rust 🦀 and stands on the shoulders of giants. Here's
 - [rend3](https://github.com/BVE-Reborn/rend3) is used for all rendering purposes.
 - [egui](https://github.com/emilk/egui) is used as the UI toolkit powering all 2d interaction.
 - [wgpu](https://github.com/gfx-rs/wgpu), as the base of `rend3`, is used for all custom visual effects.
+- [mlua](https://github.com/khvzak/mlua) is used to integrate (Luau)[https://github.com/Roblox/luau] as an extension language.
 
 ## Tool Maturity
 Blackjack is still under active development. Many features are missing and are bound to change. For now, **no promises are made with regards to stability**, but API breakage will be considered only when absolutely necessary.
