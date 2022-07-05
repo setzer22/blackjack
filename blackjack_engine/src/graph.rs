@@ -133,9 +133,7 @@ pub enum InputValueConfig {
         multiline: bool,
         default_text: String,
     },
-    LuaString {
-
-    },
+    LuaString {},
     None,
 }
 
@@ -223,9 +221,7 @@ impl InputDefinition {
             DataType::String if type_str == "file" => {
                 InputValueConfig::FilePath { default_path: None }
             }
-            DataType::String if type_str == "lua_string" => {
-                InputValueConfig::LuaString {  }
-            }
+            DataType::String if type_str == "lua_string" => InputValueConfig::LuaString {},
             DataType::String => InputValueConfig::String {
                 default_text: table.get::<_, String>("default")?,
                 multiline: table.get::<_, bool>("multiline")?,

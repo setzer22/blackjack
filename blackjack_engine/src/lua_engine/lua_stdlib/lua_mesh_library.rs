@@ -103,9 +103,9 @@ pub fn load(lua: &Lua) -> anyhow::Result<()> {
     });
 
     lua_fn!(lua, ops, "bridge_chains", |mesh: AnyUserData,
-                                       loop_1: SelectionExpression,
-                                       loop_2: SelectionExpression,
-                                       flip: usize|
+                                        loop_1: SelectionExpression,
+                                        loop_2: SelectionExpression,
+                                        flip: usize|
      -> () {
         let mut mesh = mesh.borrow_mut::<HalfEdgeMesh>()?;
         let loop_1 = mesh
@@ -217,17 +217,25 @@ pub fn load(lua: &Lua) -> anyhow::Result<()> {
         Ok(())
     });
 
-    lua_fn!(lua, ops, "copy_to_points", |points: AnyUserData, mesh: AnyUserData| -> HalfEdgeMesh {
+    lua_fn!(lua, ops, "copy_to_points", |points: AnyUserData,
+                                         mesh: AnyUserData|
+     -> HalfEdgeMesh {
         let points = points.borrow::<HalfEdgeMesh>()?;
         let mesh = mesh.borrow::<HalfEdgeMesh>()?;
         crate::mesh::halfedge::edit_ops::copy_to_points(&points, &mesh).map_lua_err()
     });
 
-    lua_fn!(lua, ops, "extrude_along_curve", |backbone: AnyUserData, cross_section: AnyUserData, flip: usize| -> HalfEdgeMesh {
-        let backbone = backbone.borrow::<HalfEdgeMesh>()?;
-        let cross_section = cross_section.borrow::<HalfEdgeMesh>()?;
-        crate::mesh::halfedge::edit_ops::extrude_along_curve(&backbone, &cross_section, flip).map_lua_err()
-    });
+    lua_fn!(
+        lua,
+        ops,
+        "extrude_along_curve",
+        |backbone: AnyUserData, cross_section: AnyUserData, flip: usize| -> HalfEdgeMesh {
+            let backbone = backbone.borrow::<HalfEdgeMesh>()?;
+            let cross_section = cross_section.borrow::<HalfEdgeMesh>()?;
+            crate::mesh::halfedge::edit_ops::extrude_along_curve(&backbone, &cross_section, flip)
+                .map_lua_err()
+        }
+    );
 
     let types = lua.create_table()?;
     types.set("VertexId", ChannelKeyType::VertexId)?;

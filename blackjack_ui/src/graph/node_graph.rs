@@ -1,4 +1,4 @@
-use crate::{prelude::*, application::code_viewer::code_edit_ui};
+use crate::{application::code_viewer::code_edit_ui, prelude::*};
 use egui::RichText;
 use egui_node_graph::{
     DataTypeTrait, NodeDataTrait, NodeId, NodeResponse, NodeTemplateIter, UserResponseTrait,
@@ -314,11 +314,10 @@ impl WidgetValueTrait for ValueTypeUi {
                     }
                 });
             }
-            (BlackjackValue::String(text), InputValueConfig::LuaString {  }) => {
+            (BlackjackValue::String(text), InputValueConfig::LuaString {}) => {
                 ui.label(param_name);
                 code_edit_ui(ui, text);
                 //ui.add(egui::TextEdit::multiline(text).text_style(egui::TextStyle::Monospace).desired_width(f32::INFINITY));
-                
             }
             (BlackjackValue::Selection(text, selection), InputValueConfig::Selection { .. }) => {
                 if ui.text_edit_singleline(text).changed() {

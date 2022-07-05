@@ -18,7 +18,10 @@ impl<'lua> AsChunk<'lua> for LuaSourceFile {
     }
 }
 
-pub fn load_node_libraries_with_std(lua: &Lua, node_libs_path: &str) -> anyhow::Result<NodeDefinitions> {
+pub fn load_node_libraries_with_std(
+    lua: &Lua,
+    node_libs_path: &str,
+) -> anyhow::Result<NodeDefinitions> {
     for entry in walkdir::WalkDir::new(node_libs_path)
         .into_iter()
         .filter_map(|e| e.ok())
