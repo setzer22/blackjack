@@ -1,0 +1,41 @@
+change_in_place: true
+excludes:
+  - \.gitignore
+  - .*lock
+  - \.git/.*
+  - \.licensure\.yml
+  - README.*
+  - LICENSE.*
+  - .*\.(md|rst|txt)
+licenses:
+  - files: "(^.*\\.rs$|^.*\\.lua$|^.*\\.gd$)"
+    ident: MPL-2.0
+    authors:
+      - name: setzer22 and contributors
+    template: "Copyright (C) [year] [name of author]\n\n
+
+This Source Code Form is subject to the terms of the Mozilla Public
+License, v. 2.0. If a copy of the MPL was not distributed with this
+file, You can obtain one at https://mozilla.org/MPL/2.0/."
+comments:
+  - columns: 70
+    extensions:
+      - rs
+    commenter:
+      type: line
+      comment_char: "//"
+      trailing_lines: 1
+  - columns: 70
+    extensions:
+      - lua
+    commenter:
+      type: line
+      comment_char: "--"
+      trailing_lines: 1
+  - columns: 70
+    extensions:
+      - gd
+    commenter:
+      type: line
+      comment_char: "#"
+      trailing_lines: 1
