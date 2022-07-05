@@ -5,7 +5,6 @@ use std::{
 
 use anyhow::{anyhow, bail};
 use float_ord::FloatOrd;
-use rayon::result;
 use smallvec::SmallVec;
 
 use crate::prelude::*;

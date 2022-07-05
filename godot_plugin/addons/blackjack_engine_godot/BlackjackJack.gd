@@ -11,37 +11,37 @@ var BlackjackPropertiesTweaker = preload("res://addons/blackjack_engine_godot/Bl
 # https://github.com/godotengine/godot/issues/5988
 #
 # These get saved with the scene
-var asset_resource : Resource setget set_asset,get_asset
+var jack_resource : Resource setget set_jack, get_jack
 var show_gui : bool = false setget set_show_gui
 var overriden_params : Dictionary = {}
 var materials : Array = []
 
 # Non exported vars
-var asset_id = null
+var jack_id = null
 var needs_update = false
 var child_mesh
-var asset_params
+var jack_params
 var runtime_child_gui = null
 
 onready var is_ready = false
 
-func set_asset(new_asset):
-    if asset_resource != null and new_asset != null:
-        # We're replacing this asset with another one. Clear any overriden params to avoid conflicts
+func set_jack(new_jack):
+    if jack_resource != null and new_jack != null:
+        # We're replacing this jack with another one. Clear any overriden params to avoid conflicts
         overriden_params = {}
 
-    asset_resource = new_asset
-    if is_ready and asset_resource != null:
-        on_reload_asset_resource()
+    jack_resource = new_jack
+    if is_ready and jack_resource != null:
+        on_reload_jack_resource()
 
-func get_asset():
-    return asset_resource
+func get_jack():
+    return jack_resource
 
 func set_show_gui(new_show_gui):
     show_gui = new_show_gui
     if not Engine.editor_hint:
         if new_show_gui != null and new_show_gui == true:
-            if new_show_gui and asset_resource != null and asset_id != null and asset_params != null:
+            if new_show_gui and jack_resource != null and jack_id != null and jack_params != null:
                 if runtime_child_gui != null:
                     remove_child(runtime_child_gui)
                 runtime_child_gui = make_tweaker_gui()
@@ -52,11 +52,11 @@ func set_show_gui(new_show_gui):
                 remove_child(runtime_child_gui)
     
 
-func on_reload_asset_resource():
-    if asset_resource != null and asset_resource.get("contents") != null:
-        # Set the asset
-        var err = BlackjackApi.set_asset(asset_id, asset_resource)
-        asset_params = BlackjackApi.get_params(asset_id)
+func on_reload_jack_resource():
+    if jack_resource != null and jack_resource.get("contents") != null:
+        # Set the jack
+        var err = BlackjackApi.set_jack(jack_id, jack_resource)
+        jack_params = BlackjackApi.get_params(jack_id)
         needs_update = true
         for k in overriden_params.keys():
             on_property_changed(k, overriden_params[k])
@@ -66,9 +66,9 @@ func on_reload_asset_resource():
     property_list_changed_notify()
 
 func make_tweaker_gui():
-    if asset_params != null:
+    if jack_params != null:
         var gui = BlackjackPropertiesTweaker.instance() 
-        gui.initialize(asset_params)
+        gui.initialize(jack_params)
         gui.connect("property_changed", self, "on_property_changed")
         self.connect("error_occurred", gui, "set_error")
         self.connect("clear_error", gui, "clear_error")
@@ -81,9 +81,9 @@ func sync_gui_to_props(gui):
         gui.call_deferred("set_value_externally", prop_addr, overriden_params[prop_addr])
 
 func on_property_changed(prop_addr, new_val):
-    if asset_id != null:
+    if jack_id != null:
         overriden_params[prop_addr] = new_val
-        BlackjackApi.set_param(asset_id, prop_addr, new_val)
+        BlackjackApi.set_param(jack_id, prop_addr, new_val)
         needs_update = true
 
 func _ready():
@@ -94,15 +94,15 @@ func _ready():
     
 func start():
     is_ready = true
-    asset_id = BlackjackApi.make_asset()
-    on_reload_asset_resource()
+    jack_id = BlackjackApi.make_jack()
+    on_reload_jack_resource()
     child_mesh = MeshInstance.new()
     add_child(child_mesh)
 
 func _process(delta):
     if needs_update:
         needs_update = false
-        var results = BlackjackApi.update_asset(asset_id, materials)
+        var results = BlackjackApi.update_jack(jack_id, materials)
         if results != null and results.has("Ok"):
             child_mesh.mesh = results.Ok
             emit_signal("clear_error")
@@ -112,13 +112,13 @@ func _process(delta):
             push_error("Blackjack encountered an unexpected error")
             emit_signal("error_occurred", "Blackjack encountered an unexpected error")
 
-func is_class(other): return other == "BlackjackAsset" or .is_class(other)
-func get_class(): return "BlackjackAsset"
+func is_class(other): return other == "BlackjackJack" or .is_class(other)
+func get_class(): return "BlackjackJack"
 
 func _get_property_list():
     var properties = [
         {
-            name = "asset_resource",
+            name = "jack_resource",
             type = TYPE_OBJECT
         },
         {

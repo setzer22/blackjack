@@ -70,7 +70,7 @@ pub struct CompiledProgram {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct BlackjackGameAsset {
+pub struct BlackjackJackAsset {
     pub program: CompiledProgram,
     pub params: ExternalParameterValues,
 }

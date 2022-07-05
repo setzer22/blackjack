@@ -6,7 +6,7 @@ use std::sync::atomic::AtomicBool;
 
 use blackjack_engine::graph::BlackjackValue;
 use blackjack_engine::graph::InputValueConfig;
-use blackjack_engine::graph_compiler::BlackjackGameAsset;
+use blackjack_engine::graph_compiler::BlackjackJackAsset;
 use blackjack_engine::graph_compiler::ExternalParamAddr;
 use blackjack_engine::lua_engine::LuaRuntime;
 use blackjack_engine::mesh::halfedge::HalfEdgeMesh;
@@ -19,23 +19,23 @@ use anyhow::Result;
 
 mod godot_lua_io;
 
-slotmap::new_key_type! { pub struct AssetId; }
+slotmap::new_key_type! { pub struct JackId; }
 
-impl FromVariant for AssetId {
+impl FromVariant for JackId {
     fn from_variant(variant: &Variant) -> Result<Self, FromVariantError> {
         match variant.dispatch() {
-            VariantDispatch::I64(id_data) => Ok(AssetId(KeyData::from_ffi(id_data as u64))),
-            _ => Err(FromVariantError::Custom("Invalid AssetId value".into())),
+            VariantDispatch::I64(id_data) => Ok(JackId(KeyData::from_ffi(id_data as u64))),
+            _ => Err(FromVariantError::Custom("Invalid JackId value".into())),
         }
     }
 }
-impl ToVariant for AssetId {
+impl ToVariant for JackId {
     fn to_variant(&self) -> Variant {
         self.0.as_ffi().to_variant()
     }
 }
 
-/// A singleton node that manages the lifetime for all the loaded assets. This
+/// A singleton node that manages the lifetime for all the loaded jacks. This
 /// node is never directly used by GDscript, which instead accesses it via the
 /// [`BlackjackApi`].
 ///
@@ -46,7 +46,7 @@ impl ToVariant for AssetId {
 #[inherit(Node)]
 pub struct BlackjackGodotRuntime {
     lua_runtime: LuaRuntime,
-    assets: SlotMap<AssetId, Option<BlackjackGameAsset>>,
+    jacks: SlotMap<JackId, Option<BlackjackJackAsset>>,
 }
 
 static LUA_NEEDS_INIT: AtomicBool = AtomicBool::new(true);
@@ -70,7 +70,7 @@ impl BlackjackGodotRuntime {
 
         Ok(Self {
             lua_runtime,
-            assets: SlotMap::with_key(),
+            jacks: SlotMap::with_key(),
         })
     }
 
@@ -117,7 +117,7 @@ impl BlackjackGodotRuntime {
 }
 
 #[derive(ToVariant)]
-pub enum UpdateAssetResult {
+pub enum UpdateJackResult {
     Ok(Ref<gd::ArrayMesh>),
     Err(String),
 }
@@ -145,28 +145,28 @@ impl BlackjackApi {
     }
 
     #[export]
-    fn make_asset(&self, _owner: &gd::Resource) -> Option<AssetId> {
-        Self::with_runtime(|runtime| Some(runtime.assets.insert(None)))
+    fn make_jack(&self, _owner: &gd::Resource) -> Option<JackId> {
+        Self::with_runtime(|runtime| Some(runtime.jacks.insert(None)))
     }
 
     #[export]
-    fn set_asset(
+    fn set_jack(
         &mut self,
         _owner: &gd::Resource,
-        asset_id: AssetId,
-        asset: Ref<gd::Resource>,
+        jack_id: JackId,
+        jack: Ref<gd::Resource>,
     ) -> Option<bool> {
         Self::with_runtime(|runtime| {
-            let asset = unsafe { asset.assume_safe() };
-            let contents = match asset.get("contents").dispatch() {
+            let jack = unsafe { jack.assume_safe() };
+            let contents = match jack.get("contents").dispatch() {
                 VariantDispatch::GodotString(contents) => contents,
                 _ => {
-                    godot_error!("Could not load asset. Empty contents?");
+                    godot_error!("Could not load jack. Empty contents?");
                     return None;
                 }
             };
-            let loaded: BlackjackGameAsset = ron::from_str(&contents.to_string()).ok()?;
-            *runtime.assets.get_mut(asset_id)? = Some(loaded);
+            let loaded: BlackjackJackAsset = ron::from_str(&contents.to_string()).ok()?;
+            *runtime.jacks.get_mut(jack_id)? = Some(loaded);
             Some(true)
         })
     }
@@ -175,13 +175,13 @@ impl BlackjackApi {
     fn set_param(
         &mut self,
         _owner: &gd::Resource,
-        asset_id: AssetId,
+        jack_id: JackId,
         param_name: String,
         new_value: Variant,
     ) -> Option<bool> {
         Self::with_runtime(|runtime| {
-            let asset = runtime.assets.get_mut(asset_id)?.as_mut()?;
-            let value = asset.params.get_mut(&ExternalParamAddr(param_name))?;
+            let jack = runtime.jacks.get_mut(jack_id)?.as_mut()?;
+            let value = jack.params.get_mut(&ExternalParamAddr(param_name))?;
             match &mut value.value {
                 blackjack_engine::graph::BlackjackValue::Vector(v) => {
                     let new_v = new_value.try_to::<Vector3>().ok()?;
@@ -212,7 +212,7 @@ impl BlackjackApi {
     }
 
     #[export]
-    fn get_params(&mut self, _owner: &gd::Resource, asset_id: AssetId) -> Option<Variant> {
+    fn get_params(&mut self, _owner: &gd::Resource, jack_id: JackId) -> Option<Variant> {
         #[derive(FromVariant, ToVariant)]
         struct ScalarDef {
             label: String,
@@ -232,12 +232,12 @@ impl BlackjackApi {
         }
 
         Self::with_runtime(|runtime| {
-            let asset = runtime.assets.get(asset_id)?.as_ref()?;
+            let jack = runtime.jacks.get(jack_id)?.as_ref()?;
 
             #[allow(unused_mut)]
             let mut params = VariantArray::new();
 
-            for (param_addr, value) in asset.params.iter() {
+            for (param_addr, value) in jack.params.iter() {
                 if let Some(param_name) = &value.promoted_name {
                     let label = param_name.clone();
                     let addr = param_addr.0.clone();
@@ -287,24 +287,24 @@ impl BlackjackApi {
     }
 
     #[export]
-    fn update_asset(
+    fn update_jack(
         &mut self,
         _owner: &gd::Resource,
-        asset_id: AssetId,
+        jack_id: JackId,
         materials: Vec<Ref<Material>>,
-    ) -> Option<UpdateAssetResult> {
+    ) -> Option<UpdateJackResult> {
         Self::with_runtime(|runtime| {
-            let asset = runtime.assets.get(asset_id)?.as_ref()?;
+            let jack = runtime.jacks.get(jack_id)?.as_ref()?;
             match blackjack_engine::lua_engine::run_program(
                 &runtime.lua_runtime.lua,
-                &asset.program.lua_program,
-                &asset.params,
+                &jack.program.lua_program,
+                &jack.params,
             ) {
                 Ok(mesh) => {
                     let godot_mesh = halfedge_to_godot_mesh(&mesh, materials).unwrap();
-                    Some(UpdateAssetResult::Ok(godot_mesh))
+                    Some(UpdateJackResult::Ok(godot_mesh))
                 }
-                Err(err) => Some(UpdateAssetResult::Err(err.to_string())),
+                Err(err) => Some(UpdateJackResult::Err(err.to_string())),
             }
         })
     }

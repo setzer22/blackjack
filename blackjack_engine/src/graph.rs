@@ -92,8 +92,9 @@ impl BjkNodeId {
 }
 
 /// The blackjack graph data structure. This is the main data model describing a
-/// blackjack procedural asset. Graphs describe a computation to be performed by
-/// applying transformations (nodes) over data (input/output parameters).
+/// blackjack procedural asset, or 'Jack'. Graphs describe a computation to be
+/// performed by applying transformations (nodes) over data (input/output
+/// parameters).
 #[derive(Default)]
 pub struct BjkGraph {
     pub nodes: SlotMap<BjkNodeId, BjkNode>,

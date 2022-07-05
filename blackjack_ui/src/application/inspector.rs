@@ -168,7 +168,7 @@ impl PropertiesTab {
                                 .button("⤴")
                                 .on_hover_text(
                                     "Click to promote parameter. \
-                            Promoted parameters will be tweakable in exported assets.",
+                            Promoted parameters will be tweakable in exported jacks.",
                                 )
                                 .clicked()
                             {

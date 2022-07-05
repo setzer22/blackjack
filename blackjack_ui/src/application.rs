@@ -7,7 +7,7 @@ use crate::{
         point_cloud_routine::PointCloudRoutine, wireframe_routine::WireframeRoutine,
     },
 };
-use blackjack_engine::{graph_compiler::BlackjackGameAsset, lua_engine::LuaRuntime};
+use blackjack_engine::{graph_compiler::BlackjackJackAsset, lua_engine::LuaRuntime};
 use egui::{FontDefinitions, Style};
 use egui_wgpu_backend::{RenderPass, ScreenDescriptor};
 use egui_winit_platform::{Platform, PlatformDescriptor};
@@ -234,12 +234,12 @@ impl RootViewport {
                 self.graph_editor.state = serialization::load(path)?;
                 Ok(())
             }
-            AppRootAction::ExportGameAsset(path) => {
+            AppRootAction::ExportJack(path) => {
                 if let Some(active_node) = self.graph_editor.state.user_state.active_node {
                     let (program, params) = self
                         .app_context
                         .compile_program(&self.graph_editor.state, active_node)?;
-                    let bga = BlackjackGameAsset { program, params };
+                    let bga = BlackjackJackAsset { program, params };
                     let writer = std::io::BufWriter::new(std::fs::File::create(path)?);
                     ron::ser::to_writer(writer, &bga)?;
                 }

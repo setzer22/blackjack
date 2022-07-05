@@ -4,7 +4,7 @@ use std::path::PathBuf;
 pub enum AppRootAction {
     Save(PathBuf),
     Load(PathBuf),
-    ExportGameAsset(PathBuf),
+    ExportJack(PathBuf),
     SetCodeViewerCode(String),
 }
 
@@ -32,12 +32,12 @@ impl RootViewport {
                         action = Some(AppRootAction::Load(path))
                     }
                 }
-                if ui.button("Export game asset").clicked() {
+                if ui.button("Export 'Jack'").clicked() {
                     let file_location = rfd::FileDialog::new()
-                        .add_filter("Blackjack Game Assets", &["bga"])
+                        .add_filter("Blackjack 'Jacks'", &["jack"])
                         .save_file();
                     if let Some(path) = file_location {
-                        action = Some(AppRootAction::ExportGameAsset(path))
+                        action = Some(AppRootAction::ExportJack(path))
                     }
                 }
             });

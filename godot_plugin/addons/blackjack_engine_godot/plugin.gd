@@ -9,19 +9,19 @@ func _enter_tree():
         ProjectSettings.set_setting("Blackjack/library_path", "res://node_libraries")
         
     add_custom_type(
-        "BlackjackAsset",
+        "BlackjackJack",
         "Spatial",
-        preload("BlackjackAsset.gd"),
+        preload("BlackjackJack.gd"),
         preload("icon.png")
     )
     
     inspector_plugin = preload("BlackjackInspectorPlugin.gd").new()
     add_inspector_plugin(inspector_plugin)
     
-    import_plugin = preload("BgaImportPlugin.gd").new()
+    import_plugin = preload("JackImportPlugin.gd").new()
     add_import_plugin(import_plugin)
 
 func _exit_tree():
     remove_inspector_plugin(inspector_plugin)
     remove_import_plugin(import_plugin)
-    remove_custom_type("BlackjackAsset")
+    remove_custom_type("BlackjackJack")

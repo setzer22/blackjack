@@ -3,13 +3,13 @@ extends EditorImportPlugin
 enum Presets { DEFAULT }
 
 func get_importer_name():
-    return "blackjack.gameasset"
+    return "blackjack.jack"
 
 func get_visible_name():
-    return "Blackjack Game Asset"
+    return "Blackjack Jack Asset"
 
 func get_recognized_extensions():
-    return ["bga"]
+    return ["jack"]
 
 func get_save_extension():
     return "res"
