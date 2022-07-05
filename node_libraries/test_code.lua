@@ -211,26 +211,6 @@ local test_channel_nodes = {
         outputs = {mesh("out_mesh")},
         returns = "out_mesh"
     },
-    CopyToPoints = {
-        label = "Copy to points",
-        op = function(inputs)
-            local points = inputs.points:get_channel(Types.VertexId, Types.Vec3,
-                                                     "position")
-            local sizes = inputs.points:get_channel(Types.VertexId, Types.f32,
-                                                     "size")
-            local acc = Blackjack.mesh()
-            for i, pos in ipairs(points) do
-                local size = sizes[i]
-                local new_mesh = inputs.mesh:clone()
-                Ops.transform(new_mesh, pos, vector(0,0,0), vector(size, size, size))
-                Ops.merge(acc, new_mesh)
-            end
-            return {out_mesh = acc}
-        end,
-        inputs = {mesh("points"), mesh("mesh")},
-        outputs = {mesh("out_mesh")},
-        returns = "out_mesh"
-    },
     CircleNoise = {
         label = "Circle Noise",
         op = function(inputs)
@@ -272,14 +252,14 @@ local test_channel_nodes = {
             end
 
             for ring=0,rings-1 do
-                Ops.bridge_loops(m, Blackjack.selection("@ring"..ring), Blackjack.selection("@ring"..ring+1), 1)
+                Ops.bridge_chains(m, Blackjack.selection("@ring"..ring), Blackjack.selection("@ring"..ring+1), 1)
             end
 
             for ring=0,rings-1 do
-                Ops.bridge_loops(m, Blackjack.selection("@bot_ring"..ring), Blackjack.selection("@bot_ring"..ring+1), 2)
+                Ops.bridge_chains(m, Blackjack.selection("@bot_ring"..ring), Blackjack.selection("@bot_ring"..ring+1), 2)
             end
 
-            Ops.bridge_loops(m, Blackjack.selection("@ring0"), Blackjack.selection("@bot_ring0"), 2)
+            Ops.bridge_chains(m, Blackjack.selection("@ring0"), Blackjack.selection("@bot_ring0"), 2)
 
             return { out_mesh = m }
         end,
@@ -324,7 +304,7 @@ local test_channel_nodes = {
         label = "Make trunk",
         op = function(inputs)
             local edge_distances  = inputs.l_system:get_assoc_channel(Types.HalfEdgeId, Types.f32, "distance")
-            local result = inputs.l_system:reduce_single_edges(
+            local result = inputs.l_system:reduce_halfedges(
                 Blackjack.mesh(),
                 function (acc, h_id)
                     local scale_damp : number = inputs.scale_damp
@@ -345,7 +325,7 @@ local test_channel_nodes = {
                         Ops.make_group(dst_ring, Types.HalfEdgeId, Blackjack.selection("*"), "dst_ring")
 
                         Ops.merge(src_ring, dst_ring)
-                        Ops.bridge_loops(src_ring, Blackjack.selection("@src_ring"), Blackjack.selection("@dst_ring"), 1)
+                        Ops.bridge_chains(src_ring, Blackjack.selection("@src_ring"), Blackjack.selection("@dst_ring"), 1)
 
                         Ops.merge(acc, src_ring)
                         return acc

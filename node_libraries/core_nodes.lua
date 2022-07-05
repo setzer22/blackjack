@@ -15,6 +15,9 @@ local function selection(name) return {name = name, type = "selection"} end
 local function strparam(name, default, multiline)
     return {name = name, default = default, type = "string", multiline = multiline}
 end
+local function lua_str(name)
+    return {name = name, type = "lua_string"}
+end
 local function enum(name, values, selected)
     return {
         name = name,
@@ -69,7 +72,33 @@ local primitives = {
         outputs = {mesh("out_mesh")},
         returns = "out_mesh"
     },
+    MakeLine = {
+         label = "Line",
+        op = function(inputs)
+            return {out_mesh = Primitives.line(inputs.start_point, inputs.end_point, inputs.segments)}
+        end,
+        inputs = {v3("start_point", vector(0,0,0)), v3("end_point", vector(0.0, 1.0, 0.0)), scalar("segments", 1, 1, 32)},
+        outputs = {mesh("out_mesh")},
+        returns = "out_mesh"
+    },
 }
+
+local function parse_ch_key(s)
+    if s == "Vertex" then
+        return Types.VertexId
+    elseif s == "Face" then
+        return Types.FaceId
+    elseif s == "Halfedge" then
+        return Types.HalfEdgeId
+    end
+end
+local function parse_ch_val(s)
+    if s == "f32" then
+        return Types.F32
+    elseif s == "Vec3" then
+        return Types.Vec3
+    end
+end
 
 -- Edit ops: Nodes to edit existing meshes
 local edit_ops = {
@@ -122,7 +151,7 @@ local edit_ops = {
         returns = "out_mesh",
         op = function(inputs)
             local out_mesh = inputs.in_mesh:clone()
-            Ops.bridge_loops(out_mesh, inputs.loop_1, inputs.loop_2, inputs.flip)
+            Ops.bridge_chains(out_mesh, inputs.loop_1, inputs.loop_2, inputs.flip)
             return {out_mesh = out_mesh}
         end
     },
@@ -221,7 +250,104 @@ local edit_ops = {
             Ops.set_full_range_uvs(out_mesh);
             return {out_mesh = out_mesh}
         end
-    }
+    },
+    SetMaterial = {
+        label = "Set material",
+        inputs = {mesh("mesh"), selection("faces"), scalar("material_index", 0.0, 0.0, 5.0)},
+        outputs = {mesh("out_mesh")},
+        returns = "out_mesh",
+        op = function(inputs)
+            local out_mesh = inputs.mesh:clone()
+            Ops.set_material(out_mesh, inputs.faces, inputs.material_index);
+            return {out_mesh = out_mesh}
+        end
+    },
+    MakeGroup = {
+        label = "Make group",
+        inputs = {mesh("mesh"), enum("type", {"Vertex", "Face", "Halfedge"}, 0), strparam("name", ""), selection("selection")},
+        outputs = {mesh("out_mesh")},
+        returns = "out_mesh",
+        op = function(inputs)
+            local out_mesh = inputs.mesh:clone()
+            local typ = parse_ch_key(inputs.type)
+            Ops.make_group(out_mesh, typ, inputs.selection, inputs.name);
+            return {out_mesh = out_mesh}
+        end
+    },
+    EditChannels = {
+        label = "Edit channels",
+        inputs = { 
+            mesh("mesh"),
+            enum("channel_key", {"Vertex", "Face", "Halfedge"}, 0),
+            enum("channel_val", {"f32", "Vec3"}, 0),
+            strparam("channels", ""),
+            lua_str("code"),
+        },
+
+        outputs = { mesh("out_mesh") },
+        returns = "out_mesh",
+        op = function(inputs)
+            local out_mesh = inputs.mesh:clone()
+            local typ = parse_ch_key(inputs.channel_key) 
+            local val = parse_ch_val(inputs.channel_val) 
+
+            local func, err = loadstring(inputs.code)
+            if err ~= nil then
+                error(err)
+                return
+            end
+            if typeof(func) ~= 'function' then
+                error('Code should be a single lua function')
+            end
+
+            local ch_size = 0
+            local ch_by_name = {}
+            for ch_name in inputs.channels:gmatch("[^, ]+") do
+                -- TODO: The `val` in get_channel could be inferred.
+                local ch = out_mesh:ensure_channel(typ, val, ch_name)
+                ch_size = #ch
+                ch_by_name[ch_name] = ch
+            end
+
+            for i = 1,ch_size do
+                local ch_i_map = { index = i }
+                for ch_name, ch in ch_by_name do
+                    ch_i_map[ch_name] = ch[i]
+                end
+                local ch_i_out = func(ch_i_map)
+                for ch_name, val in ch_i_out do
+                    local ch = ch_by_name[ch_name]
+                    if ch ~= nil then
+                        ch_by_name[ch_name][i] = val
+                    end
+                end
+            end
+
+            for ch_name, ch in ch_by_name do
+                out_mesh:set_channel(typ, val, ch_name, ch)
+            end
+            
+            return { out_mesh = out_mesh }
+        end
+    },
+    CopyToPoints = {
+        label = "Copy to points",
+        op = function(inputs)
+            return {out_mesh = Ops.copy_to_points(inputs.points, inputs.mesh)}
+        end,
+        inputs = {mesh("points"), mesh("mesh")},
+        outputs = {mesh("out_mesh")},
+        returns = "out_mesh"
+    },
+    ExtrudeAlongCurve = {
+        label = "Extrude along curve",
+        op = function(inputs)
+            return {out_mesh = Ops.extrude_along_curve(inputs.backbone, inputs.cross_section, inputs.flip)}
+        end,
+        inputs = {mesh("backbone"), mesh("cross_section"), scalar("flip", 0.0, 0.0, 10.0)},
+        outputs = {mesh("out_mesh")},
+        returns = "out_mesh"
+    },
 }
 
 -- Math: Nodes to perform vector or scalar math operations
