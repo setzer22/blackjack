@@ -16,8 +16,6 @@ use blackjack_engine::{
 
 use egui_node_graph::{InputParamKind, NodeTemplateTrait};
 
-pub mod value_widget;
-
 /// A generic egui_node_graph graph, with blackjack-specific parameters
 pub type Graph = egui_node_graph::Graph<NodeData, DataTypeUi, ValueTypeUi>;
 /// The graph editor state, with blackjack-specific parameters
