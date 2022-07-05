@@ -8,10 +8,11 @@
 **Blackjack** is a procedural modelling application, following the steps of great tools like [Houdini](https://www.sidefx.com/) or [Blender's geometry nodes project](https://docs.blender.org/manual/en/latest/modeling/geometry_nodes/index.html). At its core, Blackjack is a simple node-driven interface where you can compose operations to create a 3d mesh in a non-destructive way.
 
 
-![Main interaface of Blackjack](./doc/resources/showcase2.png)
+![Main interaface of Blackjack](./doc/resources/showcase3.png)
 
-![Gif showcasing procedural modelling in Blackjack](./doc/resources/blackjack.gif)
-![Another gif showcasing procedural modelling in Blackjack](./doc/resources/blackjack_gif2.gif)
+![Gif showcasing procedural modelling in Blackjack](./doc/resources/blackjack_gif3.gif)
+![Another gif showcasing procedural modelling in Blackjack](./doc/resources/blackjack_gif4.gif)
+![A third gif showcasing procedural modelling in Blackjack](./doc/resources/blackjack_gif5.gif)
 
 ## Features and goals
 Blackjack **does not aim to replace an industry powerhouse such as Houdini**. Instead, it aims to provide a less cluttered, more robust and user-friendly experience for a small subset of the features that make these tools a great fit in the world of game development and real-time simulations.
@@ -52,6 +53,7 @@ Blackjack is built using Rust 🦀 and stands on the shoulders of giants. Here's
 - [rend3](https://github.com/BVE-Reborn/rend3) is used for all rendering purposes.
 - [egui](https://github.com/emilk/egui) is used as the UI toolkit powering all 2d interaction.
 - [wgpu](https://github.com/gfx-rs/wgpu), as the base of `rend3`, is used for all custom visual effects.
+- [mlua](https://github.com/khvzak/mlua) is used to integrate [Luau](https://github.com/Roblox/luau) as an extension language.
 
 ## Tool Maturity
 Blackjack is still under active development. Many features are missing and are bound to change. For now, **no promises are made with regards to stability**, but API breakage will be considered only when absolutely necessary.
