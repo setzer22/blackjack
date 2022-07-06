@@ -59,7 +59,8 @@ impl AppWindow {
         // Record the frame time at the start of the frame.
         let frame_start_time = Instant::now();
 
-        self.root_viewport.update(&mut self.render_ctx, &self.window);
+        self.root_viewport
+            .update(&mut self.render_ctx, &self.window);
         self.root_viewport.render(&mut self.render_ctx);
 
         // Sleep for the remaining time to cap at 60Hz

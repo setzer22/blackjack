@@ -21,11 +21,7 @@ impl GraphEditor {
     pub const ZOOM_LEVEL_MIN: f32 = 0.5;
     pub const ZOOM_LEVEL_MAX: f32 = 10.0;
 
-    pub fn new(
-        renderer: &r3::Renderer,
-        format: r3::TextureFormat,
-        parent_scale: f32,
-    ) -> Self {
+    pub fn new(renderer: &r3::Renderer, format: r3::TextureFormat, parent_scale: f32) -> Self {
         Self {
             // Set default zoom to the inverse of ui scale to preserve dpi
             state: graph::GraphEditorState::new(

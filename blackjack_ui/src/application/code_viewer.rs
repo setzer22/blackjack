@@ -57,7 +57,6 @@ pub fn code_view_ui(ui: &mut egui::Ui, mut code: &str) {
     );
 }
 
-
 #[allow(clippy::ptr_arg)] // clippy is wrong here. You can't grow a &mut str.
 pub fn code_edit_ui(ui: &mut egui::Ui, code: &mut String) {
     let language = "lua";
@@ -96,8 +95,7 @@ pub fn highlight(ctx: &egui::Context, theme: &CodeTheme, code: &str, language: &
 
 // ----------------------------------------------------------------------------
 
-#[derive(Clone, Copy, Hash, PartialEq, Eq)]
-#[derive(serde::Deserialize, serde::Serialize)]
+#[derive(Clone, Copy, Hash, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
 enum SyntectTheme {
     Base16EightiesDark,
     Base16MochaDark,
@@ -159,8 +157,7 @@ impl SyntectTheme {
     }
 }
 
-#[derive(Clone, Hash, PartialEq, Eq)]
-#[derive(serde::Deserialize, serde::Serialize)]
+#[derive(Clone, Hash, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
 #[serde(default)]
 pub struct CodeTheme {
     dark_mode: bool,
@@ -321,7 +318,7 @@ fn as_byte_range(whole: &str, range: &str) -> std::ops::Range<usize> {
 
 // ----------------------------------------------------------------------------
 
-/* 
+/*
 use egui::text::LayoutJob;
 
 /// View some code with syntax highlighing and selection.
