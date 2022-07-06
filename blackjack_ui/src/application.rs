@@ -14,7 +14,6 @@ use crate::{
     },
 };
 use blackjack_engine::{graph_compiler::BlackjackJackAsset, lua_engine::LuaRuntime};
-use egui::{FontDefinitions, Style};
 use egui_wgpu::renderer::{RenderPass, ScreenDescriptor};
 
 use self::{
@@ -109,8 +108,7 @@ impl RootViewport {
             renderpass: RenderPass::new(&renderer.device, screen_format, 1),
             app_context: ApplicationContext::new(),
             graph_editor: GraphEditor::new(
-                &renderer,
-                window_size,
+                renderer,
                 screen_format,
                 scale_factor as f32,
             ),

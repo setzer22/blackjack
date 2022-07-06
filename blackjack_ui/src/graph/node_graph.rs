@@ -57,7 +57,7 @@ pub struct CustomGraphState {
 #[derive(Copy, Clone, PartialEq, Eq, Serialize, Deserialize, Debug)]
 pub struct DataTypeUi(pub DataType); // Prevents orphan rules
 impl DataTypeTrait<CustomGraphState> for DataTypeUi {
-    fn data_type_color(&self, user_state: &CustomGraphState) -> egui::Color32 {
+    fn data_type_color(&self, _user_state: &CustomGraphState) -> egui::Color32 {
         match self.0 {
             DataType::Mesh => color_from_hex("#266dd3").unwrap(),
             DataType::Vector => color_from_hex("#eecf6d").unwrap(),
@@ -210,7 +210,7 @@ impl NodeTemplateTrait for NodeDefinitionUi {
     fn build_node(
         &self,
         graph: &mut egui_node_graph::Graph<Self::NodeData, Self::DataType, Self::ValueType>,
-        user_state: &Self::UserState,
+        _user_state: &Self::UserState,
         node_id: egui_node_graph::NodeId,
     ) {
         for input in &self.0.inputs {

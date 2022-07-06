@@ -19,7 +19,6 @@ impl RootViewport {
         let Self {
             ref mut renderpass,
             ref mut screen_descriptor,
-            ref mut egui_winit_state,
             ref mut egui_context,
             ref mut graph_editor,
             ref mut offscreen_viewports,
@@ -57,8 +56,6 @@ impl RootViewport {
 
         let renderpass_pt = builder.passthrough_ref_mut(renderpass);
         let screen_descriptor_pt = builder.passthrough_ref_mut(screen_descriptor);
-        let platform_pt = builder.passthrough_ref_mut(egui_winit_state);
-        let context_pt = builder.passthrough_ref_mut(egui_context);
         let offscreen_pt = builder.passthrough_ref_mut(offscreen_viewports);
 
         let textures_to_free =
@@ -68,8 +65,6 @@ impl RootViewport {
             move |pt, renderer, encoder_or_pass, _temps, _ready, graph_data| {
                 let renderpass = pt.get_mut(renderpass_pt);
                 let screen_descriptor = pt.get_mut(screen_descriptor_pt);
-                let platform = pt.get_mut(platform_pt);
-                let context = pt.get_mut(context_pt);
                 let offscreen_viewports = pt.get_mut(offscreen_pt);
 
                 let rpass = encoder_or_pass.get_rpass(rpass_handle);

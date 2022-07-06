@@ -23,7 +23,6 @@ impl GraphEditor {
 
     pub fn new(
         renderer: &r3::Renderer,
-        window_size: UVec2,
         format: r3::TextureFormat,
         parent_scale: f32,
     ) -> Self {
