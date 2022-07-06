@@ -33,16 +33,7 @@ impl GraphEditor {
                 renderer.limits.max_texture_dimension_2d as usize,
                 1.0,
                 None,
-            ), /* ::new(PlatformDescriptor {
-                   // The width here is not really relevant, and will be reset on
-                   // the next resize event.
-                   physical_width: window_size.x,
-                   physical_height: window_size.y,
-                   // There is no scaling on child egui instances
-                   scale_factor: 1.0,
-                   font_definitions: egui::FontDefinitions::default(),
-                   style: egui::Style::default(),
-               })*/
+            ),
             renderpass: RenderPass::new(&renderer.device, format, 1),
             // The mouse position, in window coordinates. Stored to hide other
             // window events from egui when the cursor is not over the viewport
