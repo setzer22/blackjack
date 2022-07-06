@@ -1,9 +1,8 @@
 # Blackjack
 > Your Rusty 🦀 procedural 3d modeler
 
-[![Latest version](https://img.shields.io/crates/v/blackjack_nodes.svg)](https://crates.io/crates/blackjack_nodes)
-[![Documentation](https://docs.rs/blackjack_nodes/badge.svg)](https://docs.rs/blackjack_nodes)
-![MIT](https://img.shields.io/badge/license-MIT-blue.svg)
+![GitHub CI](https://github.com/setzer22/blackjack/actions/workflows/ci.yml/badge.svg)
+![MPL](https://img.shields.io/badge/license-MPL%202%2E0-blue.svg)
 
 **Blackjack** is a procedural modelling application, following the steps of great tools like [Houdini](https://www.sidefx.com/) or [Blender's geometry nodes project](https://docs.blender.org/manual/en/latest/modeling/geometry_nodes/index.html). At its core, Blackjack is a simple node-driven interface where you can compose operations to create a 3d mesh in a non-destructive way.
 
