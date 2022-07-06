@@ -76,10 +76,8 @@ impl ViewportSplit {
                         width: 2.0,
                         color: if resp.hovered() {
                             Color32::WHITE
-                        } else if resp.dragged() {
-                            Color32::RED
                         } else {
-                            Color32::DARK_GREEN
+                            Color32::DARK_GRAY
                         },
                     },
                 );
@@ -116,10 +114,8 @@ impl ViewportSplit {
                         width: 2.0,
                         color: if resp.hovered() {
                             Color32::WHITE
-                        } else if resp.dragged() {
-                            Color32::RED
                         } else {
-                            Color32::DARK_GREEN
+                            Color32::DARK_GRAY
                         },
                     },
                 );
