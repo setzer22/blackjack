@@ -116,13 +116,13 @@ impl RootViewport {
                         vwp.texture_id = Some(viewport_3d_texture_egui);
                     });
 
-                todo!("Need to fork egui_wgpu to add custom zoom support");
-                renderpass
-                    .execute_with_renderpass(
-                        rpass,
-                        &paint_jobs,
-                        screen_descriptor, /* , 1.0, None*/
-                    );
+                renderpass.execute_with_renderpass(
+                    rpass,
+                    &paint_jobs,
+                    screen_descriptor,
+                    1.0,
+                    None,
+                );
             },
         );
     }

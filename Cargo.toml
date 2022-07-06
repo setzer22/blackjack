@@ -16,9 +16,12 @@ opt-level = 3
 # These patches are necessary until either of these is fixed:
 # - https://github.com/BVE-Reborn/rend3/pull/400
 # - https://github.com/emilk/egui/issues/1805
-egui = { git = "https://github.com/setzer22/egui", branch = "blackjack", features = ["persistence"] }
-egui-wgpu = { git = "https://github.com/setzer22/egui", branch = "blackjack", features = ["persistence"] }
-egui-winit = { git = "https://github.com/setzer22/egui", branch = "blackjack", features = ["persistence"] }
+# egui = { git = "https://github.com/setzer22/egui", branch = "blackjack", features = ["persistence"] }
+# egui-wgpu = { git = "https://github.com/setzer22/egui", branch = "blackjack", features = ["persistence"] }
+# egui-winit = { git = "https://github.com/setzer22/egui", branch = "blackjack", features = ["persistence"] }
+egui = { path = "../egui/egui", features = ["persistence"] }
+egui-wgpu = { path = "../egui/egui-wgpu", features = ["persistence"] }
+egui-winit = { path = "../egui/egui-winit", features = ["persistence"] }
 
 # NOTE: These patches are only used for development, and should be left
 # commented out in any commits to the 'main' branch

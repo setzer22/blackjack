@@ -181,7 +181,7 @@ impl RootViewport {
         }
     }
 
-    pub fn update(&mut self, render_ctx: &mut RenderContext) {
+    pub fn update(&mut self, render_ctx: &mut RenderContext, window: &winit::window::Window) {
         let mut actions = vec![];
 
         if let Err(err) = self.lua_runtime.watch_for_changes() {
@@ -199,25 +199,22 @@ impl RootViewport {
             render_ctx,
         );
 
-        self.egui_context.begin_frame(
-            self.egui_winit_state
-                .take_egui_input(todo!("Where the fuck is the window?")),
-        );
+        self.egui_context
+            .begin_frame(self.egui_winit_state.take_egui_input(Some(window)));
 
-        egui::TopBottomPanel::top("top_menubar").show(&self.egui_context, |ui| {
-            if let Some(menubar_action) = self.top_menubar(ui) {
-                actions.push(menubar_action);
-            }
-        });
 
-        egui::CentralPanel::default().show(&self.egui_context, |ui| {
+        if let Some(menubar_action) = self.top_menubar() {
+            actions.push(menubar_action);
+        }
+
+        egui::CentralPanel::default().show(&self.egui_context.clone(), |ui| {
             let mut split_tree = self.app_context.split_tree.clone();
             split_tree.show(ui, self, Self::show_leaf);
             self.app_context.split_tree = split_tree;
         });
 
-        self.diagnostics_ui(&self.egui_context);
-        self.code_viewer_ui(&self.egui_context);
+        self.diagnostics_ui();
+        self.code_viewer_ui();
 
         actions.extend(self.app_context.update(
             &self.egui_context,

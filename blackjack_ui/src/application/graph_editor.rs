@@ -147,9 +147,7 @@ impl GraphEditor {
         self.resize_platform(parent_scale, viewport_rect);
         self.egui_context.input_mut().pixels_per_point = 1.0 / self.zoom_level();
         self.egui_context
-            .begin_frame(self.egui_winit_state.take_egui_input(todo!(
-                "Need to fork this so that it doesn't take a Winit window, since we don't have one"
-            )));
+            .begin_frame(self.egui_winit_state.take_egui_input(None));
 
         graph::draw_node_graph(&self.egui_context, &mut self.state, node_definitions);
 
@@ -238,13 +236,12 @@ impl GraphEditor {
                     &screen_descriptor,
                 );
 
-                todo!("We need to fork egui_wgpu to add the zoom level patch");
                 this.renderpass.execute_with_renderpass(
                     rpass,
                     &paint_jobs,
                     &screen_descriptor,
-                    //this.zoom_level(),
-                    //Some(resolution.to_array()),
+                    this.zoom_level(),
+                    Some(resolution.to_array()),
                 );
             },
         );
