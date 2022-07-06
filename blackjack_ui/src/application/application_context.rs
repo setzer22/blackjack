@@ -51,7 +51,7 @@ impl ApplicationContext {
 
     pub fn update(
         &mut self,
-        egui_ctx: &egui::CtxRef,
+        egui_ctx: &egui::Context,
         editor_state: &mut graph::GraphEditorState,
         render_ctx: &mut RenderContext,
         viewport_settings: &Viewport3dSettings,
@@ -158,14 +158,14 @@ impl ApplicationContext {
         Ok(())
     }
 
-    pub fn paint_errors(&mut self, egui_ctx: &egui::CtxRef, err: Error) {
+    pub fn paint_errors(&mut self, egui_ctx: &egui::Context, err: Error) {
         let painter = egui_ctx.debug_painter();
         let width = egui_ctx.available_rect().width();
         painter.text(
             egui::pos2(width - 10.0, 30.0),
             egui::Align2::RIGHT_TOP,
             format!("{}", err),
-            egui::TextStyle::Body,
+            egui::FontId::default(),
             egui::Color32::RED,
         );
     }

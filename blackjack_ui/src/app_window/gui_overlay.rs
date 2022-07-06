@@ -20,7 +20,7 @@ pub fn project_point(view_proj: &Mat4, viewport_rect: Rect, point: Vec3) -> Pos2
 pub fn draw_gui_overlays(
     view_proj: &Mat4,
     viewport_rect: egui::Rect,
-    egui_ctx: &CtxRef,
+    egui_ctx: &egui::Context,
     mesh: &HalfEdgeMesh,
     overlay_type: TextOverlayMode,
 ) {
@@ -34,7 +34,7 @@ pub fn draw_gui_overlays(
             point,
             egui::Align2::CENTER_BOTTOM,
             text,
-            egui::TextStyle::Body,
+            egui::FontId::default(),
             egui::Color32::WHITE,
         );
     };

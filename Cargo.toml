@@ -13,6 +13,13 @@ resolver = "2"
 opt-level = 3
 
 [patch.crates-io]
+# These patches are necessary until either of these is fixed:
+# - https://github.com/BVE-Reborn/rend3/pull/400
+# - https://github.com/emilk/egui/issues/1805
+egui = { git = "https://github.com/setzer22/egui", branch = "blackjack", features = ["persistence"] }
+egui-wgpu = { git = "https://github.com/setzer22/egui", branch = "blackjack", features = ["persistence"] }
+egui-winit = { git = "https://github.com/setzer22/egui", branch = "blackjack", features = ["persistence"] }
+
 # NOTE: These patches are only used for development, and should be left
 # commented out in any commits to the 'main' branch
 # egui_wgpu_backend = { path = "../egui_wgpu_backend" }

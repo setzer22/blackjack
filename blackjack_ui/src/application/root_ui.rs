@@ -59,7 +59,7 @@ impl RootViewport {
         action
     }
 
-    pub fn diagnostics_ui(&mut self, ctx: &egui::CtxRef) {
+    pub fn diagnostics_ui(&mut self, ctx: &egui::Context) {
         egui::Window::new("Diagnostics")
             .open(&mut self.diagnostics_open)
             .show(ctx, |ui| {
@@ -67,7 +67,7 @@ impl RootViewport {
             });
     }
 
-    pub fn code_viewer_ui(&mut self, ctx: &egui::CtxRef) {
+    pub fn code_viewer_ui(&mut self, ctx: &egui::Context) {
         egui::Window::new("Code viewer")
             .open(&mut self.code_viewer_open)
             .show(ctx, |ui| {
