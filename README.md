@@ -7,15 +7,17 @@
 ![GitHub CI](https://github.com/setzer22/blackjack/actions/workflows/ci.yml/badge.svg)
 ![MPL](https://img.shields.io/badge/license-MPL%202%2E0-blue.svg)
 
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/F1F8DNO5D)
+
 **Blackjack** is a procedural modelling application, following the steps of great tools like [Houdini](https://www.sidefx.com/) or [Blender's geometry nodes project](https://docs.blender.org/manual/en/latest/modeling/geometry_nodes/index.html). At its core, Blackjack is a simple node-driven interface where you can compose operations to create a 3d mesh in a non-destructive way.
 
 
 ![Main interaface of Blackjack](https://user-images.githubusercontent.com/7241990/178053206-94f4e976-984c-4611-9d63-d591d231b014.png)
 
-
-![Gif showcasing procedural modelling in Blackjack](./doc/resources/blackjack_gif3.gif)
-![Another gif showcasing procedural modelling in Blackjack](./doc/resources/blackjack_gif4.gif)
+![Another gif showcasing procedural modelling in Blackjack](https://user-images.githubusercontent.com/7241990/178054513-75232c00-7bd0-4e26-9474-ab2b71960c6e.gif)
 ![A third gif showcasing procedural modelling in Blackjack](https://user-images.githubusercontent.com/7241990/178053667-9e72131c-bb2b-4ffa-aab9-afdf5c51033e.gif)
+![Gif showcasing procedural modelling in Blackjack](./doc/resources/blackjack_gif3.gif)
+
 
 
 ## Features and goals
