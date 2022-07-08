@@ -10,11 +10,13 @@
 **Blackjack** is a procedural modelling application, following the steps of great tools like [Houdini](https://www.sidefx.com/) or [Blender's geometry nodes project](https://docs.blender.org/manual/en/latest/modeling/geometry_nodes/index.html). At its core, Blackjack is a simple node-driven interface where you can compose operations to create a 3d mesh in a non-destructive way.
 
 
-![Main interaface of Blackjack](./doc/resources/showcase3.png)
+![Main interaface of Blackjack](https://user-images.githubusercontent.com/7241990/178053206-94f4e976-984c-4611-9d63-d591d231b014.png)
+
 
 ![Gif showcasing procedural modelling in Blackjack](./doc/resources/blackjack_gif3.gif)
 ![Another gif showcasing procedural modelling in Blackjack](./doc/resources/blackjack_gif4.gif)
-![A third gif showcasing procedural modelling in Blackjack](./doc/resources/blackjack_gif5.gif)
+![A third gif showcasing procedural modelling in Blackjack](https://user-images.githubusercontent.com/7241990/178053667-9e72131c-bb2b-4ffa-aab9-afdf5c51033e.gif)
+
 
 ## Features and goals
 Blackjack **does not aim to replace an industry powerhouse such as Houdini**. Instead, it aims to provide a less cluttered, more robust and user-friendly experience for a small subset of the features that make these tools a great fit in the world of game development and real-time simulations.
