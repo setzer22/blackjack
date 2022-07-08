@@ -290,7 +290,7 @@ impl WidgetValueTrait for ValueTypeUi {
             (BlackjackValue::Scalar(value), InputValueConfig::Scalar { min, max, .. }) => {
                 ui.horizontal(|ui| {
                     ui.label(param_name);
-                    ui.add(egui::Slider::new(value, *min..=*max));
+                    ui.add(egui::DragValue::new(value).speed(0.1).clamp_range(*min..=*max));
                 });
             }
             (BlackjackValue::String(string), InputValueConfig::Enum { values, .. }) => {

@@ -30,7 +30,7 @@ num-traits = "0.2.14"
 atomic_float = "0.1"
 profiling = { version = "1.0" }
 nom = "7.1"
-mlua = { version = "0.8.0-beta.3", features = ["luau"] }
+mlua = { version = "0.8.1", features = ["luau"] }
 notify = "4.0"
 walkdir = "2"
 bimap = "0.6.2"

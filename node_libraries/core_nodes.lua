@@ -100,7 +100,7 @@ local function parse_ch_key(s)
 end
 local function parse_ch_val(s)
     if s == "f32" then
-        return Types.F32
+        return Types.f32
     elseif s == "Vec3" then
         return Types.Vec3
     end
@@ -285,7 +285,6 @@ local edit_ops = {
         inputs = { 
             mesh("mesh"),
             enum("channel_key", {"Vertex", "Face", "Halfedge"}, 0),
-            enum("channel_val", {"f32", "Vec3"}, 0),
             strparam("channels", ""),
             lua_str("code"),
         },
@@ -294,8 +293,7 @@ local edit_ops = {
         returns = "out_mesh",
         op = function(inputs)
             local out_mesh = inputs.mesh:clone()
-            local typ = parse_ch_key(inputs.channel_key) 
-            local val = parse_ch_val(inputs.channel_val) 
+            local k_typ = parse_ch_key(inputs.channel_key) 
 
             local func, err = loadstring(inputs.code)
             if err ~= nil then
@@ -308,29 +306,30 @@ local edit_ops = {
 
             local ch_size = 0
             local ch_by_name = {}
-            for ch_name in inputs.channels:gmatch("[^, ]+") do
-                -- TODO: The `val` in get_channel could be inferred.
-                local ch = out_mesh:ensure_channel(typ, val, ch_name)
-                ch_size = #ch
-                ch_by_name[ch_name] = ch
+            for ch_descr in inputs.channels:gmatch("[^,]+") do
+                local _, _, ch_name, ch_val_str = ch_descr:find("(%w+)%s*:%s*(%w+)")
+                local val_typ = parse_ch_val(ch_val_str) 
+                local ch_data = out_mesh:ensure_channel(k_typ, val_typ, ch_name)
+                ch_size = #ch_data
+                ch_by_name[ch_name] = { data = ch_data, value_type = val_typ }
             end
 
             for i = 1,ch_size do
                 local ch_i_map = { index = i }
                 for ch_name, ch in ch_by_name do
-                    ch_i_map[ch_name] = ch[i]
+                    ch_i_map[ch_name] = ch.data[i]
                 end
                 local ch_i_out = func(ch_i_map)
                 for ch_name, val in ch_i_out do
                     local ch = ch_by_name[ch_name]
                     if ch ~= nil then
-                        ch_by_name[ch_name][i] = val
+                        ch.data[i] = val
                     end
                 end
             end
 
             for ch_name, ch in ch_by_name do
-                out_mesh:set_channel(typ, val, ch_name, ch)
+                out_mesh:set_channel(k_typ, ch.value_type, ch_name, ch.data)
             end
             
             return { out_mesh = out_mesh }
@@ -394,6 +393,26 @@ local math = {
                 out = inputs.vec_a - inputs.vec_b
             elseif inputs.op == "Mul" then
                 out = inputs.vec_a * inputs.vec_b
+            end
+            return {out = out}
+        end
+    },
+    ScalarMath = {
+        label = "Scalar math",
+        inputs = {
+            enum("op", {"Add", "Sub", "Mul"}, 0), 
+            scalar("x", 0, -100.0, 100.0),
+            scalar("y", 0, -100.0, 100.0),
+        },
+        outputs = {scalar("out")},
+        op = function(inputs)
+            local out
+            if inputs.op == "Add" then
+                out = inputs.x + inputs.y
+            elseif inputs.op == "Sub" then
+                out = inputs.x - inputs.y
+            elseif inputs.op == "Mul" then
+                out = inputs.x * inputs.y
             end
             return {out = out}
         end
