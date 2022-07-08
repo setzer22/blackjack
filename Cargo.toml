@@ -25,6 +25,9 @@ egui-winit = { git = "https://github.com/setzer22/egui", branch = "blackjack" }
 # egui_wgpu_backend = { path = "../egui_wgpu_backend" }
 # egui_winit_platform = { path = "../egui_winit_platform" }
 # egui_node_graph = { path = "../egui_node_graph/egui_node_graph", features = ["persistence"] }
+# egui = { path = "../egui/egui" }
+# egui-winit = { path = "../egui/egui-winit" }
+# egui-wgpu = { path = "../egui/egui-wgpu" }
 # rend3 = { path = "../rend3/rend3" }
 # rend3-routine = { path = "../rend3/rend3-routine" }
 # wavefront_rs = { path = "../wavefront_rs" }

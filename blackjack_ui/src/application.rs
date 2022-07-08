@@ -193,8 +193,10 @@ impl RootViewport {
             render_ctx,
         );
 
-        self.egui_context
-            .begin_frame(self.egui_winit_state.take_egui_input(Some(window)));
+        self.egui_context.begin_frame(
+            self.egui_winit_state
+                .take_egui_input(egui_winit::WindowOrSize::Window(window)),
+        );
 
         if let Some(menubar_action) = self.top_menubar() {
             actions.push(menubar_action);

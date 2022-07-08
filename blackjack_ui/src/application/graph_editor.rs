@@ -79,6 +79,10 @@ impl GraphEditor {
                     self.zoom_level(),
                 );
             }
+            // Ignore mouse events when clicking outside the editor area. This
+            // prevents a bug where clicking on the inspector window while a
+            // node is selected disables the current selection.
+            winit::event::WindowEvent::MouseInput { .. } if !mouse_in_viewport => return,
             winit::event::WindowEvent::MouseWheel { delta, .. } if mouse_in_viewport => {
                 let mouse_pos = if let Some(raw_pos) = self.raw_mouse_position {
                     viewport_relative_position(raw_pos.to_winit(), parent_scale, viewport_rect, 1.0)
@@ -113,7 +117,7 @@ impl GraphEditor {
     }
 
     pub fn resize_platform(&mut self, parent_scale: f32, viewport_rect: egui::Rect) {
-        // We craft a fake resize event so that the code in egui_winit_platform
+        // We craft a fake resize event so that the code in egui_winit
         // remains unchanged, thinking it lives in a real window. The poor thing!
         let fake_resize_event = winit::event::WindowEvent::Resized(winit::dpi::PhysicalSize::new(
             (viewport_rect.width() * self.zoom_level() * parent_scale) as u32,
@@ -133,7 +137,13 @@ impl GraphEditor {
         self.resize_platform(parent_scale, viewport_rect);
         self.egui_context.input_mut().pixels_per_point = 1.0 / self.zoom_level();
         self.egui_context
-            .begin_frame(self.egui_winit_state.take_egui_input(None));
+            .begin_frame(
+                self.egui_winit_state
+                    .take_egui_input(egui_winit::WindowOrSize::Size(egui::vec2(
+                        viewport_rect.width(),
+                        viewport_rect.height(),
+                    ))),
+            );
 
         graph::draw_node_graph(&self.egui_context, &mut self.state, node_definitions);
 
