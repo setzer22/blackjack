@@ -4,6 +4,8 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+use std::borrow::Cow;
+
 use crate::{application::code_viewer::code_edit_ui, prelude::*};
 use egui::RichText;
 use egui_node_graph::{
@@ -54,8 +56,8 @@ pub struct CustomGraphState {
 
 #[derive(Copy, Clone, PartialEq, Eq, Serialize, Deserialize, Debug)]
 pub struct DataTypeUi(pub DataType); // Prevents orphan rules
-impl DataTypeTrait for DataTypeUi {
-    fn data_type_color(&self) -> egui::Color32 {
+impl DataTypeTrait<CustomGraphState> for DataTypeUi {
+    fn data_type_color(&self, _user_state: &CustomGraphState) -> egui::Color32 {
         match self.0 {
             DataType::Mesh => color_from_hex("#266dd3").unwrap(),
             DataType::Vector => color_from_hex("#eecf6d").unwrap(),
@@ -65,14 +67,14 @@ impl DataTypeTrait for DataTypeUi {
         }
     }
 
-    fn name(&self) -> &str {
-        match self.0 {
+    fn name(&self) -> Cow<str> {
+        Cow::Borrowed(match self.0 {
             DataType::Vector => "vector",
             DataType::Scalar => "scalar",
             DataType::Selection => "selection",
             DataType::Mesh => "mesh",
             DataType::String => "string",
-        }
+        })
     }
 }
 
@@ -97,7 +99,7 @@ impl NodeDataTrait for NodeData {
         node_id: NodeId,
         graph: &egui_node_graph::Graph<Self, DataTypeUi, ValueTypeUi>,
         user_state: &Self::UserState,
-    ) -> Vec<egui_node_graph::NodeResponse<Self::Response>>
+    ) -> Vec<egui_node_graph::NodeResponse<Self::Response, NodeData>>
     where
         Self::Response: egui_node_graph::UserResponseTrait,
     {
@@ -151,30 +153,34 @@ impl<'a> NodeTemplateIter for NodeDefinitionsUi<'a> {
 /// Blackjack's custom draw node graph function. It defers to egui_node_graph to
 /// draw the graph itself, then interprets any responses it got and applies the
 /// required side effects.
-pub fn draw_node_graph(ctx: &egui::CtxRef, state: &mut GraphEditorState, defs: &NodeDefinitions) {
-    let responses = state.draw_graph_editor(ctx, NodeDefinitionsUi(defs));
-    for response in responses.node_responses {
-        match response {
-            NodeResponse::DeleteNode(node_id) => {
-                if state.user_state.active_node == Some(node_id) {
-                    state.user_state.active_node = None;
+pub fn draw_node_graph(ctx: &egui::Context, state: &mut GraphEditorState, defs: &NodeDefinitions) {
+    egui::CentralPanel::default().show(ctx, |ui| {
+        let responses = state.draw_graph_editor(ui, NodeDefinitionsUi(defs));
+        for response in responses.node_responses {
+            match response {
+                NodeResponse::DeleteNodeFull { node_id, .. } => {
+                    if state.user_state.active_node == Some(node_id) {
+                        state.user_state.active_node = None;
+                    }
+                    if state.user_state.run_side_effect == Some(node_id) {
+                        state.user_state.run_side_effect = None;
+                    }
                 }
-                if state.user_state.run_side_effect == Some(node_id) {
-                    state.user_state.run_side_effect = None;
-                }
+                NodeResponse::User(response) => match response {
+                    graph::CustomNodeResponse::SetActiveNode(n) => {
+                        state.user_state.active_node = Some(n)
+                    }
+                    graph::CustomNodeResponse::ClearActiveNode => {
+                        state.user_state.active_node = None
+                    }
+                    graph::CustomNodeResponse::RunNodeSideEffect(n) => {
+                        state.user_state.run_side_effect = Some(n)
+                    }
+                },
+                _ => {}
             }
-            NodeResponse::User(response) => match response {
-                graph::CustomNodeResponse::SetActiveNode(n) => {
-                    state.user_state.active_node = Some(n)
-                }
-                graph::CustomNodeResponse::ClearActiveNode => state.user_state.active_node = None,
-                graph::CustomNodeResponse::RunNodeSideEffect(n) => {
-                    state.user_state.run_side_effect = Some(n)
-                }
-            },
-            _ => {}
         }
-    }
+    });
 }
 
 #[derive(Clone, Debug)]
@@ -183,6 +189,7 @@ impl NodeTemplateTrait for NodeDefinitionUi {
     type NodeData = NodeData;
     type DataType = DataTypeUi;
     type ValueType = ValueTypeUi;
+    type UserState = CustomGraphState;
 
     fn node_finder_label(&self) -> &str {
         &self.0.label
@@ -203,6 +210,7 @@ impl NodeTemplateTrait for NodeDefinitionUi {
     fn build_node(
         &self,
         graph: &mut egui_node_graph::Graph<Self::NodeData, Self::DataType, Self::ValueType>,
+        _user_state: &Self::UserState,
         node_id: egui_node_graph::NodeId,
     ) {
         for input in &self.0.inputs {
@@ -264,7 +272,9 @@ impl NodeTemplateTrait for NodeDefinitionUi {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ValueTypeUi(pub BlackjackParameter);
 impl WidgetValueTrait for ValueTypeUi {
-    fn value_widget(&mut self, param_name: &str, ui: &mut egui::Ui) {
+    type Response = CustomNodeResponse;
+
+    fn value_widget(&mut self, param_name: &str, ui: &mut egui::Ui) -> Vec<Self::Response> {
         match (&mut self.0.value, &self.0.config) {
             (BlackjackValue::Vector(vector), InputValueConfig::Vector { .. }) => {
                 ui.label(param_name);
@@ -337,5 +347,7 @@ impl WidgetValueTrait for ValueTypeUi {
                 panic!("Invalid combination {a:?} {b:?}")
             }
         }
+
+        Vec::new()
     }
 }

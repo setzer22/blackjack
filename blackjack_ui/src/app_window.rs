@@ -21,8 +21,7 @@ use crate::render_context::RenderContext;
 pub struct AppWindow {
     render_ctx: RenderContext,
     root_viewport: RootViewport,
-    // Not used, but needs to be kept alive
-    _window: Window,
+    window: Window,
 }
 
 impl AppWindow {
@@ -46,7 +45,7 @@ impl AppWindow {
 
         (
             AppWindow {
-                _window: window,
+                window,
                 render_ctx,
                 root_viewport,
             },
@@ -60,7 +59,8 @@ impl AppWindow {
         // Record the frame time at the start of the frame.
         let frame_start_time = Instant::now();
 
-        self.root_viewport.update(&mut self.render_ctx);
+        self.root_viewport
+            .update(&mut self.render_ctx, &self.window);
         self.root_viewport.render(&mut self.render_ctx);
 
         // Sleep for the remaining time to cap at 60Hz

@@ -102,16 +102,10 @@ impl Viewport3d {
         &mut self,
         parent_scale: f32,
         viewport_rect: egui::Rect,
-        event: winit::event::Event<'static, ()>,
+        event: winit::event::WindowEvent,
     ) {
-        #[allow(clippy::single_match)]
-        match event {
-            winit::event::Event::WindowEvent { event, .. } => {
-                self.input
-                    .on_window_event(&event, parent_scale, viewport_rect);
-            }
-            _ => {}
-        }
+        self.input
+            .on_window_event(&event, parent_scale, viewport_rect);
     }
 
     fn update_camera(&mut self, render_ctx: &mut RenderContext) {

@@ -19,7 +19,7 @@ impl RootViewport {
         let Self {
             ref mut renderpass,
             ref mut screen_descriptor,
-            ref mut platform,
+            ref mut egui_context,
             ref mut graph_editor,
             ref mut offscreen_viewports,
             ref mut viewport_3d,
@@ -27,7 +27,7 @@ impl RootViewport {
         } = self;
 
         // --- Draw child UIs ---
-        let parent_scale = platform.context().pixels_per_point();
+        let parent_scale = egui_context.pixels_per_point();
         let graph_texture = graph_editor.add_draw_to_graph(
             graph,
             offscreen_viewports[&OffscreenViewport::GraphEditor].rect,
@@ -36,8 +36,8 @@ impl RootViewport {
         let viewport_3d_texture = viewport_3d.add_to_graph(graph, ready, viewport_routines);
 
         // --- Draw parent UI ---
-        let (_output, paint_commands) = platform.end_frame(None);
-        let paint_jobs = platform.context().tessellate(paint_commands);
+        let full_output = egui_context.end_frame();
+        let paint_jobs = egui_context.tessellate(full_output.shapes);
 
         let mut builder = graph.add_node("RootViewport");
 
@@ -56,24 +56,26 @@ impl RootViewport {
 
         let renderpass_pt = builder.passthrough_ref_mut(renderpass);
         let screen_descriptor_pt = builder.passthrough_ref_mut(screen_descriptor);
-        let platform_pt = builder.passthrough_ref_mut(platform);
         let offscreen_pt = builder.passthrough_ref_mut(offscreen_viewports);
+
+        let textures_to_free =
+            std::mem::replace(&mut self.textures_to_free, full_output.textures_delta.free);
 
         builder.build(
             move |pt, renderer, encoder_or_pass, _temps, _ready, graph_data| {
                 let renderpass = pt.get_mut(renderpass_pt);
                 let screen_descriptor = pt.get_mut(screen_descriptor_pt);
-                let platform = pt.get_mut(platform_pt);
                 let offscreen_viewports = pt.get_mut(offscreen_pt);
 
                 let rpass = encoder_or_pass.get_rpass(rpass_handle);
 
-                renderpass.update_texture(
-                    &renderer.device,
-                    &renderer.queue,
-                    &platform.context().font_image(),
-                );
-                renderpass.update_user_textures(&renderer.device, &renderer.queue);
+                for tex in textures_to_free {
+                    renderpass.free_texture(&tex);
+                }
+                for (id, image_delta) in full_output.textures_delta.set {
+                    renderpass.update_texture(&renderer.device, &renderer.queue, id, &image_delta);
+                }
+
                 renderpass.update_buffers(
                     &renderer.device,
                     &renderer.queue,
@@ -85,7 +87,7 @@ impl RootViewport {
 
                 // Graph editor
                 let graph_texture = graph_data.get_render_target(graph_handle);
-                let graph_texture_egui = renderpass.egui_texture_from_wgpu_texture(
+                let graph_texture_egui = renderpass.register_native_texture(
                     &renderer.device,
                     graph_texture,
                     wgpu::FilterMode::Linear,
@@ -98,7 +100,7 @@ impl RootViewport {
 
                 // Viewport 3d
                 let viewport_3d_texture = graph_data.get_render_target(viewport_3d_handle);
-                let viewport_3d_texture_egui = renderpass.egui_texture_from_wgpu_texture(
+                let viewport_3d_texture_egui = renderpass.register_native_texture(
                     &renderer.device,
                     viewport_3d_texture,
                     wgpu::FilterMode::Linear,
@@ -109,9 +111,13 @@ impl RootViewport {
                         vwp.texture_id = Some(viewport_3d_texture_egui);
                     });
 
-                renderpass
-                    .execute_with_renderpass(rpass, &paint_jobs, screen_descriptor, 1.0, None)
-                    .unwrap();
+                renderpass.execute_with_renderpass(
+                    rpass,
+                    &paint_jobs,
+                    screen_descriptor,
+                    1.0,
+                    None,
+                );
             },
         );
     }

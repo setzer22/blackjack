@@ -4,6 +4,10 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+// NOTE: This code was taken from the egui demo with minimal modifications. All
+// credit goes to original contributors.
+// https://github.com/emilk/egui/blob/66d80e25195a233a427fc4c5e5c1c3177863df44/egui_demo_lib/src/syntax_highlighting.rs
+
 // Copyright (c) 2018-2021 Emil Ernerfeldt <emil.ernerfeldt@gmail.com>
 //
 // Permission is hereby granted, free of charge, to any
@@ -30,26 +34,22 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-// NOTE: This code was taken from the egui demo with minimal modifications. All
-// credit goes to original contributors.
-// https://github.com/emilk/egui/blob/66d80e25195a233a427fc4c5e5c1c3177863df44/egui_demo_lib/src/syntax_highlighting.rs
-
 use egui::text::LayoutJob;
 
-/// View some code with syntax highlighing and selection.
+/// View some code with syntax highlighting and selection.
 pub fn code_view_ui(ui: &mut egui::Ui, mut code: &str) {
-    let language = "lua";
+    let language = "rs";
     let theme = CodeTheme::from_memory(ui.ctx());
 
     let mut layouter = |ui: &egui::Ui, string: &str, _wrap_width: f32| {
         let layout_job = highlight(ui.ctx(), &theme, string, language);
-        // layout_job.wrap_width = wrap_width; // no wrapping
+        // layout_job.wrap.max_width = wrap_width; // no wrapping
         ui.fonts().layout_job(layout_job)
     };
 
     ui.add(
         egui::TextEdit::multiline(&mut code)
-            .text_style(egui::TextStyle::Monospace) // for cursor height
+            .font(egui::TextStyle::Monospace) // for cursor height
             .code_editor()
             .desired_rows(1)
             .lock_focus(true)
@@ -70,7 +70,7 @@ pub fn code_edit_ui(ui: &mut egui::Ui, code: &mut String) {
 
     ui.add(
         egui::TextEdit::multiline(code)
-            .text_style(egui::TextStyle::Monospace) // for cursor height
+            .font(egui::TextStyle::Monospace) // for cursor height
             .code_editor()
             .desired_rows(1)
             .lock_focus(true)
@@ -80,13 +80,13 @@ pub fn code_edit_ui(ui: &mut egui::Ui, code: &mut String) {
 
 /// Memoized Code highlighting
 pub fn highlight(ctx: &egui::Context, theme: &CodeTheme, code: &str, language: &str) -> LayoutJob {
-    impl egui::util::cache::ComputerMut<(&CodeTheme, &str, &str), LayoutJob> for Highligher {
+    impl egui::util::cache::ComputerMut<(&CodeTheme, &str, &str), LayoutJob> for Highlighter {
         fn compute(&mut self, (theme, code, lang): (&CodeTheme, &str, &str)) -> LayoutJob {
             self.highlight(theme, code, lang)
         }
     }
 
-    type HighlightCache<'a> = egui::util::cache::FrameCache<LayoutJob, Highligher>;
+    type HighlightCache<'a> = egui::util::cache::FrameCache<LayoutJob, Highlighter>;
 
     let mut memory = ctx.memory();
     let highlight_cache = memory.caches.cache::<HighlightCache<'_>>();
@@ -95,7 +95,7 @@ pub fn highlight(ctx: &egui::Context, theme: &CodeTheme, code: &str, language: &
 
 // ----------------------------------------------------------------------------
 
-#[derive(Clone, Copy, Hash, PartialEq, Eq)]
+#[derive(Clone, Copy, Hash, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
 enum SyntectTheme {
     Base16EightiesDark,
     Base16MochaDark,
@@ -157,7 +157,8 @@ impl SyntectTheme {
     }
 }
 
-#[derive(Clone, Copy, Hash, PartialEq, Eq)]
+#[derive(Clone, Hash, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
+#[serde(default)]
 pub struct CodeTheme {
     dark_mode: bool,
     syntect_theme: SyntectTheme,
@@ -180,23 +181,21 @@ impl CodeTheme {
 
     pub fn from_memory(ctx: &egui::Context) -> Self {
         if ctx.style().visuals.dark_mode {
-            ctx.memory()
-                .data
-                .get_temp(egui::Id::new("dark"))
+            ctx.data()
+                .get_persisted(egui::Id::new("dark"))
                 .unwrap_or_else(CodeTheme::dark)
         } else {
-            ctx.memory()
-                .data
-                .get_temp(egui::Id::new("light"))
+            ctx.data()
+                .get_persisted(egui::Id::new("light"))
                 .unwrap_or_else(CodeTheme::light)
         }
     }
 
-    pub fn store_in_memory(&self, ctx: &egui::Context) {
+    pub fn store_in_memory(self, ctx: &egui::Context) {
         if self.dark_mode {
-            ctx.memory().data.insert_temp(egui::Id::new("dark"), *self);
+            ctx.data().insert_persisted(egui::Id::new("dark"), self);
         } else {
-            ctx.memory().data.insert_temp(egui::Id::new("light"), *self);
+            ctx.data().insert_persisted(egui::Id::new("light"), self);
         }
     }
 }
@@ -227,12 +226,12 @@ impl CodeTheme {
     }
 }
 
-struct Highligher {
+struct Highlighter {
     ps: syntect::parsing::SyntaxSet,
     ts: syntect::highlighting::ThemeSet,
 }
 
-impl Default for Highligher {
+impl Default for Highlighter {
     fn default() -> Self {
         Self {
             ps: syntect::parsing::SyntaxSet::load_defaults_newlines(),
@@ -241,14 +240,14 @@ impl Default for Highligher {
     }
 }
 
-impl Highligher {
+impl Highlighter {
     #[allow(clippy::unused_self, clippy::unnecessary_wraps)]
     fn highlight(&self, theme: &CodeTheme, code: &str, lang: &str) -> LayoutJob {
         self.highlight_impl(theme, code, lang).unwrap_or_else(|| {
             // Fallback:
             LayoutJob::simple(
                 code.into(),
-                egui::TextStyle::Monospace,
+                egui::FontId::monospace(14.0),
                 if theme.dark_mode {
                     egui::Color32::LIGHT_GRAY
                 } else {
@@ -294,7 +293,7 @@ impl Highligher {
                     leading_space: 0.0,
                     byte_range: as_byte_range(text, range),
                     format: TextFormat {
-                        style: egui::TextStyle::Monospace,
+                        font_id: egui::FontId::monospace(14.0),
                         color: text_color,
                         italics,
                         underline,

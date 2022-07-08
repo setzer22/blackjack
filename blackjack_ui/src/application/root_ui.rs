@@ -15,62 +15,63 @@ pub enum AppRootAction {
 }
 
 impl RootViewport {
-    pub fn top_menubar(&mut self, ui: &mut egui::Ui) -> Option<AppRootAction> {
+    pub fn top_menubar(&mut self) -> Option<AppRootAction> {
         let mut action = None;
-
-        // When set, will load a new editor state at the end of this function
-        egui::menu::bar(ui, |ui| {
-            ui.menu_button("File", |ui| {
-                if ui.button("Save As...").clicked() {
-                    let file_location = rfd::FileDialog::new()
-                        .set_file_name("Untitled.blj")
-                        .add_filter("Blackjack Models", &["blj"])
-                        .save_file();
-                    if let Some(path) = file_location {
-                        action = Some(AppRootAction::Save(path))
+        egui::TopBottomPanel::top("top_menubar").show(&self.egui_context, |ui| {
+            // When set, will load a new editor state at the end of this function
+            egui::menu::bar(ui, |ui| {
+                ui.menu_button("File", |ui| {
+                    if ui.button("Save As...").clicked() {
+                        let file_location = rfd::FileDialog::new()
+                            .set_file_name("Untitled.blj")
+                            .add_filter("Blackjack Models", &["blj"])
+                            .save_file();
+                        if let Some(path) = file_location {
+                            action = Some(AppRootAction::Save(path))
+                        }
                     }
-                }
-                if ui.button("Load").clicked() {
-                    let file_location = rfd::FileDialog::new()
-                        .add_filter("Blackjack Models", &["blj"])
-                        .pick_file();
-                    if let Some(path) = file_location {
-                        action = Some(AppRootAction::Load(path))
+                    if ui.button("Load").clicked() {
+                        let file_location = rfd::FileDialog::new()
+                            .add_filter("Blackjack Models", &["blj"])
+                            .pick_file();
+                        if let Some(path) = file_location {
+                            action = Some(AppRootAction::Load(path))
+                        }
                     }
-                }
-                if ui.button("Export 'Jack'").clicked() {
-                    let file_location = rfd::FileDialog::new()
-                        .add_filter("Blackjack 'Jacks'", &["jack"])
-                        .save_file();
-                    if let Some(path) = file_location {
-                        action = Some(AppRootAction::ExportJack(path))
+                    if ui.button("Export 'Jack'").clicked() {
+                        let file_location = rfd::FileDialog::new()
+                            .add_filter("Blackjack 'Jacks'", &["jack"])
+                            .save_file();
+                        if let Some(path) = file_location {
+                            action = Some(AppRootAction::ExportJack(path))
+                        }
                     }
-                }
-            });
-            ui.menu_button("Help", |ui| {
-                if ui.button("Diagnosics").clicked() {
-                    self.diagnostics_open = true;
-                } else if ui.button("View graph source").clicked() {
-                    self.code_viewer_open = true;
-                }
+                });
+                ui.menu_button("Help", |ui| {
+                    if ui.button("Diagnosics").clicked() {
+                        self.diagnostics_open = true;
+                    } else if ui.button("View graph source").clicked() {
+                        self.code_viewer_open = true;
+                    }
+                });
             });
         });
 
         action
     }
 
-    pub fn diagnostics_ui(&mut self, ctx: &egui::CtxRef) {
+    pub fn diagnostics_ui(&mut self) {
         egui::Window::new("Diagnostics")
             .open(&mut self.diagnostics_open)
-            .show(ctx, |ui| {
+            .show(&self.egui_context, |ui| {
                 ui.label(format!("HiDPI scale: {}", ui.ctx().pixels_per_point()));
             });
     }
 
-    pub fn code_viewer_ui(&mut self, ctx: &egui::CtxRef) {
+    pub fn code_viewer_ui(&mut self) {
         egui::Window::new("Code viewer")
             .open(&mut self.code_viewer_open)
-            .show(ctx, |ui| {
+            .show(&self.egui_context, |ui| {
                 egui::ScrollArea::vertical().show(ui, |ui| {
                     code_viewer::code_view_ui(ui, self.code_viewer_code.as_deref().unwrap_or(""));
                 });

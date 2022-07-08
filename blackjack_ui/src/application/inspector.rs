@@ -118,7 +118,7 @@ pub fn tiny_checkbox(ui: &mut Ui, value: &mut bool) {
 impl PropertiesTab {
     fn maybe_show_new_promoted_modal(
         &mut self,
-        ctx: &CtxRef,
+        ctx: &egui::Context,
         editor_state: &mut graph::GraphEditorState,
     ) {
         let mut should_clear_popup = false;
@@ -360,7 +360,7 @@ impl DebugTab {
                             }
                         }
                     },
-                })
+                });
         }
     }
 }

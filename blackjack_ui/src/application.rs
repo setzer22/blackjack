@@ -14,9 +14,7 @@ use crate::{
     },
 };
 use blackjack_engine::{graph_compiler::BlackjackJackAsset, lua_engine::LuaRuntime};
-use egui::{FontDefinitions, Style};
-use egui_wgpu_backend::{RenderPass, ScreenDescriptor};
-use egui_winit_platform::{Platform, PlatformDescriptor};
+use egui_wgpu::renderer::{RenderPass, ScreenDescriptor};
 
 use self::{
     app_viewport::AppViewport, application_context::ApplicationContext, graph_editor::GraphEditor,
@@ -24,7 +22,9 @@ use self::{
 };
 
 pub struct RootViewport {
-    platform: Platform,
+    egui_winit_state: egui_winit::State,
+    egui_context: egui::Context,
+    textures_to_free: Vec<egui::TextureId>,
     screen_descriptor: ScreenDescriptor,
     renderpass: RenderPass,
     app_context: application_context::ApplicationContext,
@@ -94,26 +94,20 @@ impl RootViewport {
         offscreen_viewports.insert(OffscreenViewport::Viewport3d, AppViewport::new());
 
         RootViewport {
-            platform: Platform::new(PlatformDescriptor {
-                physical_width: window_size.x,
-                physical_height: window_size.y,
-                scale_factor,
-                font_definitions: FontDefinitions::default(),
-                style: Style::default(),
-            }),
+            egui_winit_state: egui_winit::State::from_pixels_per_point(
+                renderer.limits.max_texture_dimension_2d as usize,
+                scale_factor as f32,
+                None,
+            ),
+            egui_context: egui::Context::default(),
+            textures_to_free: Vec::new(),
             screen_descriptor: ScreenDescriptor {
-                physical_width: window_size.x,
-                physical_height: window_size.y,
-                scale_factor: scale_factor as f32,
+                size_in_pixels: window_size.to_array(),
+                pixels_per_point: scale_factor as f32,
             },
             renderpass: RenderPass::new(&renderer.device, screen_format, 1),
             app_context: ApplicationContext::new(),
-            graph_editor: GraphEditor::new(
-                &renderer.device,
-                window_size,
-                screen_format,
-                scale_factor as f32,
-            ),
+            graph_editor: GraphEditor::new(renderer, screen_format, scale_factor as f32),
             viewport_3d: Viewport3d::new(),
             offscreen_viewports,
             inspector_tabs: InspectorTabs::new(),
@@ -142,31 +136,32 @@ impl RootViewport {
         match event {
             winit::event::Event::WindowEvent { ref event, .. } => match event {
                 winit::event::WindowEvent::Resized(new_size) => {
-                    self.screen_descriptor.physical_width = new_size.width;
-                    self.screen_descriptor.physical_height = new_size.height;
+                    self.screen_descriptor.size_in_pixels[0] = new_size.width;
+                    self.screen_descriptor.size_in_pixels[1] = new_size.height;
                 }
                 winit::event::WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
-                    self.screen_descriptor.scale_factor = *scale_factor as f32;
+                    self.screen_descriptor.pixels_per_point = *scale_factor as f32;
                 }
                 _ => {}
             },
             _ => {}
         }
 
-        self.platform.handle_event(&event);
-        if let Some(event_static) = event.to_static() {
-            // event_static here will never be a ScaleFactorChanged
-            let parent_scale = self.screen_descriptor.scale_factor;
-            self.graph_editor.on_winit_event(
-                parent_scale,
-                self.offscreen_viewports[&OffscreenViewport::GraphEditor].rect,
-                event_static.clone(),
-            );
-            self.viewport_3d.on_winit_event(
-                parent_scale,
-                self.offscreen_viewports[&OffscreenViewport::Viewport3d].rect,
-                event_static.clone(),
-            )
+        if let winit::event::Event::WindowEvent { event, .. } = event {
+            self.egui_winit_state.on_event(&self.egui_context, &event);
+            let parent_scale = self.screen_descriptor.pixels_per_point;
+            if let Some(event) = event.to_static() {
+                self.graph_editor.on_winit_event(
+                    parent_scale,
+                    self.offscreen_viewports[&OffscreenViewport::GraphEditor].rect,
+                    event.clone(),
+                );
+                self.viewport_3d.on_winit_event(
+                    parent_scale,
+                    self.offscreen_viewports[&OffscreenViewport::Viewport3d].rect,
+                    event.clone(),
+                )
+            }
         }
     }
 
@@ -180,7 +175,7 @@ impl RootViewport {
         }
     }
 
-    pub fn update(&mut self, render_ctx: &mut RenderContext) {
+    pub fn update(&mut self, render_ctx: &mut RenderContext, window: &winit::window::Window) {
         let mut actions = vec![];
 
         if let Err(err) = self.lua_runtime.watch_for_changes() {
@@ -188,35 +183,36 @@ impl RootViewport {
         }
 
         self.graph_editor.update(
-            self.screen_descriptor.scale_factor,
+            self.screen_descriptor.pixels_per_point,
             self.offscreen_viewports[&OffscreenViewport::GraphEditor].rect,
             &self.lua_runtime.node_definitions,
         );
         self.viewport_3d.update(
-            self.screen_descriptor.scale_factor,
+            self.screen_descriptor.pixels_per_point,
             self.offscreen_viewports[&OffscreenViewport::Viewport3d].rect,
             render_ctx,
         );
 
-        self.platform.begin_frame();
+        self.egui_context.begin_frame(
+            self.egui_winit_state
+                .take_egui_input(egui_winit::WindowOrSize::Window(window)),
+        );
 
-        egui::TopBottomPanel::top("top_menubar").show(&self.platform.context(), |ui| {
-            if let Some(menubar_action) = self.top_menubar(ui) {
-                actions.push(menubar_action);
-            }
-        });
+        if let Some(menubar_action) = self.top_menubar() {
+            actions.push(menubar_action);
+        }
 
-        egui::CentralPanel::default().show(&self.platform.context(), |ui| {
+        egui::CentralPanel::default().show(&self.egui_context.clone(), |ui| {
             let mut split_tree = self.app_context.split_tree.clone();
             split_tree.show(ui, self, Self::show_leaf);
             self.app_context.split_tree = split_tree;
         });
 
-        self.diagnostics_ui(&self.platform.context());
-        self.code_viewer_ui(&self.platform.context());
+        self.diagnostics_ui();
+        self.code_viewer_ui();
 
         actions.extend(self.app_context.update(
-            &self.platform.context(),
+            &self.egui_context,
             &mut self.graph_editor.state,
             render_ctx,
             &self.viewport_3d.settings,
