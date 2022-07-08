@@ -1,6 +1,5 @@
 .idea/
 gen/
 target/
-Cargo.lock
 .cargo/
 .vscode

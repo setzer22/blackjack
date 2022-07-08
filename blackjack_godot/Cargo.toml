@@ -7,7 +7,7 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
-mlua = { version = "0.8.0-beta.3", features = ["luau"] }
+mlua = { version = "0.8.1", features = ["luau"] }
 glam = { version = "0.20", features = ["serde", "bytemuck"] }
 blackjack_engine = { path = "../blackjack_engine" }
 gdnative = "0.10.0"
