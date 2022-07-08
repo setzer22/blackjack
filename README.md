@@ -1,4 +1,7 @@
-# Blackjack
+<p align="center">
+  <img src="https://user-images.githubusercontent.com/7241990/178050668-b4e6fbba-dde2-4688-800a-e1a8458520a0.svg">
+</p>
+
 > Your Rusty 🦀 procedural 3d modeler
 
 ![GitHub CI](https://github.com/setzer22/blackjack/actions/workflows/ci.yml/badge.svg)
