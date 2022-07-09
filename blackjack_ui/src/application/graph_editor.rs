@@ -8,6 +8,8 @@ use crate::{app_window::input::viewport_relative_position, prelude::*};
 use blackjack_engine::graph::NodeDefinitions;
 use egui_wgpu::renderer::{RenderPass, ScreenDescriptor};
 
+use super::blackjack_theme;
+
 pub struct GraphEditor {
     pub state: graph::GraphEditorState,
     pub egui_context: egui::Context,
@@ -17,18 +19,26 @@ pub struct GraphEditor {
     pub textures_to_free: Vec<egui::TextureId>,
 }
 
+pub fn blackjack_graph_theme() -> egui::Visuals {
+    let mut visuals = blackjack_theme();
+    visuals.widgets.noninteractive.bg_fill = color_from_hex("#212121").unwrap();
+    visuals
+}
+
 impl GraphEditor {
     pub const ZOOM_LEVEL_MIN: f32 = 0.5;
     pub const ZOOM_LEVEL_MAX: f32 = 10.0;
 
     pub fn new(renderer: &r3::Renderer, format: r3::TextureFormat, parent_scale: f32) -> Self {
+        let egui_context = egui::Context::default();
+        egui_context.set_visuals(blackjack_graph_theme());
         Self {
             // Set default zoom to the inverse of ui scale to preserve dpi
             state: graph::GraphEditorState::new(
                 1.0 / parent_scale,
                 graph::CustomGraphState::default(),
             ),
-            egui_context: egui::Context::default(),
+            egui_context,
             egui_winit_state: egui_winit::State::from_pixels_per_point(
                 renderer.limits.max_texture_dimension_2d as usize,
                 1.0,
@@ -170,27 +180,18 @@ impl GraphEditor {
         }
     }
 
-    pub fn add_draw_to_graph<'node>(
+    pub fn add_graph_egui_to_graph<'node>(
         &'node mut self,
         graph: &mut r3::RenderGraph<'node>,
         viewport_rect: egui::Rect,
         parent_scale: f32,
-    ) -> r3::RenderTargetHandle {
-        let resolution = viewport_rect.size() * parent_scale;
-        let resolution = UVec2::new(resolution.x as u32, resolution.y as u32);
-
-        let render_target = graph.add_render_target(r3::RenderTargetDescriptor {
-            label: None,
-            resolution,
-            samples: r3::SampleCount::One,
-            format: r3::TextureFormat::Bgra8UnormSrgb,
-            usage: r3::TextureUsages::RENDER_ATTACHMENT | r3::TextureUsages::TEXTURE_BINDING,
-        });
-
+        resolution: UVec2,
+        render_target: r3::RenderTargetHandle,
+    ) {
         let full_output = self.egui_context.end_frame();
         let paint_jobs = self.egui_context.tessellate(full_output.shapes);
 
-        let mut builder = graph.add_node("RootViewport");
+        let mut builder = graph.add_node("GraphEditorEgui");
 
         let output_handle = builder.add_render_target_output(render_target);
         let rpass_handle = builder.add_renderpass(r3::RenderPassTargets {
@@ -240,6 +241,34 @@ impl GraphEditor {
                     Some(resolution.to_array()),
                 );
             },
+        );
+    }
+
+    pub fn add_draw_to_graph<'node>(
+        &'node mut self,
+        graph: &mut r3::RenderGraph<'node>,
+        viewport_rect: egui::Rect,
+        parent_scale: f32,
+    ) -> r3::RenderTargetHandle {
+        let resolution = viewport_rect.size() * parent_scale;
+        let resolution = UVec2::new(resolution.x as u32, resolution.y as u32);
+
+        let render_target = graph.add_render_target(r3::RenderTargetDescriptor {
+            label: None,
+            resolution,
+            samples: r3::SampleCount::One,
+            format: r3::TextureFormat::Bgra8UnormSrgb,
+            usage: r3::TextureUsages::RENDER_ATTACHMENT | r3::TextureUsages::TEXTURE_BINDING,
+        });
+
+        // TODO: Add graph background
+
+        self.add_graph_egui_to_graph(
+            graph,
+            viewport_rect,
+            parent_scale,
+            resolution,
+            render_target,
         );
 
         render_target

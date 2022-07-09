@@ -78,6 +78,16 @@ enum OffscreenViewport {
     Viewport3d,
 }
 
+pub fn blackjack_theme() -> egui::Visuals {
+    let mut visuals = egui::Visuals::dark();
+    visuals.widgets.noninteractive.bg_fill = color_from_hex("#303030").unwrap();
+    visuals.widgets.noninteractive.fg_stroke.color = color_from_hex("#C0C0C0").unwrap();
+    visuals.extreme_bg_color = color_from_hex("#1d1d1d").unwrap();
+    visuals.selection.bg_fill = color_from_hex("#b43e3e").unwrap();
+    visuals.selection.stroke.color = color_from_hex("#fdfdfd").unwrap();
+    visuals
+}
+
 impl RootViewport {
     pub fn new(
         renderer: &r3::Renderer,
@@ -93,13 +103,16 @@ impl RootViewport {
         offscreen_viewports.insert(OffscreenViewport::GraphEditor, AppViewport::new());
         offscreen_viewports.insert(OffscreenViewport::Viewport3d, AppViewport::new());
 
+        let egui_context = egui::Context::default();
+        egui_context.set_visuals(blackjack_theme());
+
         RootViewport {
             egui_winit_state: egui_winit::State::from_pixels_per_point(
                 renderer.limits.max_texture_dimension_2d as usize,
                 scale_factor as f32,
                 None,
             ),
-            egui_context: egui::Context::default(),
+            egui_context,
             textures_to_free: Vec::new(),
             screen_descriptor: ScreenDescriptor {
                 size_in_pixels: window_size.to_array(),

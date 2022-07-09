@@ -43,6 +43,8 @@ pub fn blackjack_viewport_rendergraph<'node>(
 ) -> r3::RenderTargetHandle {
     // Create intermediate storage
     let state = r3::BaseRenderGraphIntermediateState::new(graph, ready, resolution, samples);
+    
+    state.clear(graph, Vec4::new(0.027851, 0.027851, 0.027851, 1.0));
 
     // Preparing and uploading data
     state.pbr_pre_culling(graph);

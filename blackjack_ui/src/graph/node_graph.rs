@@ -59,11 +59,11 @@ pub struct DataTypeUi(pub DataType); // Prevents orphan rules
 impl DataTypeTrait<CustomGraphState> for DataTypeUi {
     fn data_type_color(&self, _user_state: &CustomGraphState) -> egui::Color32 {
         match self.0 {
-            DataType::Mesh => color_from_hex("#266dd3").unwrap(),
-            DataType::Vector => color_from_hex("#eecf6d").unwrap(),
-            DataType::Scalar => color_from_hex("#eb9fef").unwrap(),
-            DataType::Selection => color_from_hex("#4b7f52").unwrap(),
-            DataType::String => color_from_hex("#904056").unwrap(),
+            DataType::Mesh => color_from_hex("#b43e3e").unwrap(),
+            DataType::Vector => color_from_hex("#1A535C").unwrap(),
+            DataType::Scalar => color_from_hex("#4ecdc4").unwrap(),
+            DataType::Selection => color_from_hex("#f7fff7").unwrap(),
+            DataType::String => color_from_hex("#ffe66d").unwrap(),
         }
     }
 
