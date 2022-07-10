@@ -14,6 +14,7 @@ tracy = ["profiling/profile-with-tracy"]
 
 [dependencies]
 # Workspace dependencies
+blackjack_macros = { path = "../blackjack_macros/" }
 blackjack_commons = { path = "../blackjack_commons" }
 
 # Crates.io crates

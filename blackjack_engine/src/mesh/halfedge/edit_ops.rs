@@ -1372,3 +1372,55 @@ pub fn extrude_along_curve(
 
     Ok(result_mesh)
 }
+
+
+/*
+#[blackjack_macros::blackjack_lua_module]
+mod lua_fns {
+    use super::*;
+    use crate::prelude::{ChannelValueType, HalfEdgeMesh};
+
+    #[lua(under = "Ops")]
+    pub fn add_channel_test(mesh: &mut HalfEdgeMesh, kt: ChannelKeyType, vt: ChannelValueType) -> Result<HalfEdgeMesh> {
+        todo!()
+        
+    }
+}*/
+
+// TODO
+// - [ ] Remove the #[lua] annotation after parsing
+// - [ ] The thing after borrow_mut is wrong: It's name, should be the type
+// - [ ] Inner should return a mlua::Result
+// - [ ] Wrapped fn should return an anyhow::Result
+// - [ ] At the end of the wrapped fn, there should be a mapping to a lua error
+//   for the anyhow error
+// - [ ] Optional: Allow non-`Result` return types
+// - [ ] When one arg is a reference, it needs to be borrowed on the invoke args
+// - [ ] When an arg is a mut reference, its borrowed line needs to use `let mut`
+// - [ ] The call to .get for the "ops" table should be like .get::<_, mlua::Table>
+ 
+/*
+mod lua_fns {
+    use super::*;
+    use crate::{prelude::{ChannelValueType, HalfEdgeMesh}, lua_engine::ToLuaError};
+    pub fn add_channel_test(
+        mesh: &mut HalfEdgeMesh,
+        kt: ChannelKeyType,
+        vt: ChannelValueType,
+    ) -> Result<HalfEdgeMesh> {
+        todo!()
+    }
+    fn export_add_channel_test_to_lua(lua: &mlua::Lua) {
+        fn __inner(
+            lua: &mlua::Lua,
+            (mesh, kt, vt): (mlua::AnyUserData, ChannelKeyType, ChannelValueType),
+        ) -> mlua::Result<HalfEdgeMesh> {
+            let mesh = mesh.borrow_mut::<HalfEdgeMesh>()?;
+            add_channel_test(&mut mesh, kt, vt).map_lua_err()
+        }
+        let table = lua.globals().get::<_, mlua::Table>("Ops").unwrap();
+        table
+            .set("add_channel_test", lua.create_function(__inner).unwrap())
+            .unwrap()
+    }
+}*/

@@ -391,6 +391,7 @@ dependencies = [
  "atomic_float",
  "bimap",
  "blackjack_commons",
+ "blackjack_macros",
  "derive_more",
  "dyn-clone",
  "float-ord",
@@ -427,6 +428,15 @@ dependencies = [
  "ron",
  "serde",
  "slotmap",
+]
+
+[[package]]
+name = "blackjack_macros"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]

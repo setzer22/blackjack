@@ -4,6 +4,7 @@ members = [
     "blackjack_engine",
     "blackjack_ui",
     "blackjack_godot",
+    "blackjack_macros",
 ]
 
 resolver = "2"
