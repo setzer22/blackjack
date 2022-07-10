@@ -331,7 +331,7 @@ local test_channel_nodes = {
                         Ops.make_group(dst_ring, Types.HalfEdgeId, Blackjack.selection("*"), "dst_ring")
 
                         Ops.merge(src_ring, dst_ring)
-                        Ops.bridge_chains(src_ring, Blackjack.selection("@src_ring"), Blackjack.selection("@dst_ring"), 1)
+                        Ops.bridge_chains(src_ring, Blackjack.selection("@src_ring"), Blackjack.selection("@dst_ring"), 0)
 
                         Ops.merge(acc, src_ring)
                         return acc

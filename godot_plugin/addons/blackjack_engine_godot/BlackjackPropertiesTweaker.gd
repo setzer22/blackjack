@@ -22,23 +22,15 @@ func on_property_changed(new_val, prop_addr):
 # the inspector, for instance).
 func set_value_externally(prop_addr, new_val):
 
-    print("controls",property_controls)
-    print("props", properties)
-
-    print("set_val_ext")
     var idx = 0
     for prop in properties:
-        print(prop_addr)
-        print(prop)
         if prop.addr == prop_addr:
             break
         idx = idx + 1
-    print("idx", idx)
 
     
     if idx < len(property_controls):
         var control = property_controls[idx]
-        print("control", control)
         control.set_value_externally(new_val)
 
 func set_error(err_str):
