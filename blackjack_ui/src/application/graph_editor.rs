@@ -150,8 +150,8 @@ impl GraphEditor {
             .begin_frame(
                 self.egui_winit_state
                     .take_egui_input(egui_winit::WindowOrSize::Size(egui::vec2(
-                        viewport_rect.width() * self.zoom_level(),
-                        viewport_rect.height() * self.zoom_level(),
+                        viewport_rect.width() * parent_scale * self.zoom_level(),
+                        viewport_rect.height() * parent_scale * self.zoom_level(),
                     ))),
             );
 
