@@ -2,7 +2,8 @@ use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote, ToTokens};
 use syn::{
     parse::{Parse, ParseStream},
-    Expr, ItemFn, Token,
+    punctuated::Punctuated,
+    Attribute, Expr, ItemFn, Path, PathArguments, PathSegment, ReturnType, Token, Type, TypePath,
 };
 
 use crate::utils::{ExprUtils, SynParseBufferExt};
@@ -40,6 +41,23 @@ struct LuaFnDef {
     register_fn_item: TokenStream,
 }
 
+fn unwrap_result(typ: &Type) -> Option<&Type> {
+    if let Type::Path(typepath) = typ {
+        if let Some(seg) = typepath.path.segments.first() {
+            if seg.ident == "Result" {
+                if let PathArguments::AngleBracketed(bracketed) = seg.arguments {
+                    if let Some(first_arg) = bracketed.args.iter().next() {
+                        if let syn::GenericArgument::Type(t) = first_arg {
+                            return Some(t);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
 fn analyze_lua_fn(item_fn: &ItemFn, attrs: &LuaFnAttrs) -> syn::Result<LuaFnDef> {
     if item_fn.sig.generics.params.iter().count() > 0 {
         return Err(syn::Error::new(
@@ -61,7 +79,7 @@ fn analyze_lua_fn(item_fn: &ItemFn, attrs: &LuaFnAttrs) -> syn::Result<LuaFnDef>
 
     struct WrapperArg {
         kind: ArgKind,
-        typ: syn::Type,
+        typ: Type,
         name: Ident,
     }
 
@@ -81,7 +99,7 @@ fn analyze_lua_fn(item_fn: &ItemFn, attrs: &LuaFnAttrs) -> syn::Result<LuaFnDef>
                     _ => todo!(),
                 };
                 match &*t.ty {
-                    syn::Type::Reference(inner) => {
+                    Type::Reference(inner) => {
                         wrapper_fn_args.push(WrapperArg {
                             kind: if inner.mutability.is_some() {
                                 ArgKind::RefMut
@@ -120,29 +138,65 @@ fn analyze_lua_fn(item_fn: &ItemFn, attrs: &LuaFnAttrs) -> syn::Result<LuaFnDef>
 
     let borrows = wrapper_fn_args.iter().filter_map(|arg| {
         let name = &arg.name;
-        let typ = &arg.name;
+        let typ = &arg.typ;
         match arg.kind {
             ArgKind::Owned => None,
             ArgKind::Ref => Some(quote! {
                 let #name = #name.borrow::<#typ>()?;
             }),
             ArgKind::RefMut => Some(quote! {
-                let #name = #name.borrow_mut::<#typ>()?;
+                let mut #name = #name.borrow_mut::<#typ>()?;
             }),
         }
     });
 
-    let invoke_args = wrapper_fn_args.iter().map(|arg| &arg.name);
+    let invoke_args = wrapper_fn_args
+        .iter()
+        .map(|WrapperArg { kind, name, .. }| match kind {
+            ArgKind::Owned => quote! { #name },
+            ArgKind::Ref => quote! { &#name},
+            ArgKind::RefMut => quote! { &mut #name },
+        });
+
+    let (ret_typ, ret_is_result) = match &item_fn.sig.output {
+        ReturnType::Default => (quote! { () }, false),
+        ReturnType::Type(_, t) => match unwrap_result(&*t) {
+            Some(inner) => (quote! { #inner }, true),
+            None => {
+                let ret_typ = &item_fn.sig.output;
+                (quote! { #ret_typ }, false)
+            }
+        },
+    };
+
+    // TODO: Handle this differently when the return type is a result, wrap as
+    // necessary.
+
+    let call_fn_and_map_result = if ret_typ.to_string().starts_with("Result") {
+        quote! {
+            match #original_fn_ident(#(#invoke_args),*) {
+                Ok(val) => { mlua::Result::Ok(val) },
+                Err(err) => {
+                    mlua::Result::Err(mlua::Error::RuntimeError(format!("{:?}", err)))
+                }
+            }
+        }
+    } else {
+        quote! {
+            mlua::Result::Ok(#original_fn_ident(#(#invoke_args),*))
+        }
+    };
 
     Ok(LuaFnDef {
         register_fn_item: quote! {
             fn #register_fn_ident(lua: &mlua::Lua) {
-                fn __inner(lua: &mlua::Lua, #signature) {
+                fn __inner(lua: &mlua::Lua, #signature) -> mlua::Result<#ret_typ> {
                     #(#borrows)*
-                    #original_fn_ident(#(#invoke_args),*)
+                    #call_fn_and_map_result
                 }
 
-                let table = lua.globals.get("Ops");
+                // TODO: This unwrap is not correct. If the table is not there it should be created.
+                let table = lua.globals().get::<_, mlua::Table>("Ops").unwrap();
                 table.set(
                     #original_fn_name,
                     lua.create_function(__inner).unwrap()
@@ -154,6 +208,29 @@ fn analyze_lua_fn(item_fn: &ItemFn, attrs: &LuaFnAttrs) -> syn::Result<LuaFnDef>
     })
 }
 
+fn collect_lua_attr(attrs: &mut Vec<Attribute>) -> Option<LuaFnAttrs> {
+    let mut lua_attrs = vec![];
+    let mut to_remove = vec![];
+    for (i, attr) in attrs.iter().enumerate() {
+        if let Some(ident) = attr.path.get_ident() {
+            if ident == "lua" {
+                let lua_attr: LuaFnAttrs = attr.parse_args().unwrap();
+                lua_attrs.push(lua_attr);
+                to_remove.push(i);
+            }
+        }
+    }
+
+    for i in to_remove.into_iter() {
+        attrs.remove(i);
+    }
+
+    if lua_attrs.len() > 1 {
+        panic!("Only one #[lua(...)] annotation is supported per function.")
+    }
+    lua_attrs.into_iter().next()
+}
+
 pub(crate) fn blackjack_lua_module2(
     mut module: syn::ItemMod,
 ) -> Result<TokenStream, Box<dyn std::error::Error>> {
@@ -161,20 +238,10 @@ pub(crate) fn blackjack_lua_module2(
     let mut new_items = vec![];
 
     if let Some((_, items)) = module.content.as_mut() {
-        for item in items.iter() {
+        for item in items.iter_mut() {
             match item {
                 syn::Item::Fn(item_fn) => {
-                    let lua_attr = item_fn.attrs.iter().find_map(|attr| {
-                        attr.path.get_ident().and_then(|ident| {
-                            if ident == "lua" {
-                                let lua_attr: LuaFnAttrs = attr.parse_args().unwrap();
-                                Some(lua_attr)
-                            } else {
-                                None
-                            }
-                        })
-                    });
-
+                    let lua_attr = collect_lua_attr(&mut item_fn.attrs);
                     if let Some(lua_attr) = lua_attr {
                         new_items.push(analyze_lua_fn(item_fn, &lua_attr)?);
                     }
@@ -202,8 +269,8 @@ pub(crate) fn blackjack_lua_module2(
 #[cfg(test)]
 mod test {
 
-    use crate::utils::write_and_fmt;
     use super::*;
+    use crate::utils::write_and_fmt;
 
     #[test]
     fn test() {
@@ -212,7 +279,7 @@ mod test {
                 /// Modifies the given `mesh`, beveling all selected `edges` in
                 /// a given distance `amount`.
                 #[lua(under = "Ops")]
-                fn bevel(mesh: &mut HalfEdgeMesh, edges: SelectionExpression, amount: f32) {
+                fn bevel(mesh: &mut HalfEdgeMesh, edges: SelectionExpression, amount: f32) -> Vec<i32> {
 
                 }
             }
