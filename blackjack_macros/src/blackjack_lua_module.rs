@@ -45,11 +45,9 @@ fn unwrap_result(typ: &Type) -> Option<&Type> {
     if let Type::Path(typepath) = typ {
         if let Some(seg) = typepath.path.segments.first() {
             if seg.ident == "Result" {
-                if let PathArguments::AngleBracketed(bracketed) = seg.arguments {
-                    if let Some(first_arg) = bracketed.args.iter().next() {
-                        if let syn::GenericArgument::Type(t) = first_arg {
-                            return Some(t);
-                        }
+                if let PathArguments::AngleBracketed(bracketed) = &seg.arguments {
+                    if let Some(syn::GenericArgument::Type(t)) = bracketed.args.iter().next() {
+                        return Some(t);
                     }
                 }
             }
@@ -122,7 +120,7 @@ fn analyze_lua_fn(item_fn: &ItemFn, attrs: &LuaFnAttrs) -> syn::Result<LuaFnDef>
         }
     }
 
-    let register_fn_ident = format_ident!("export_{}_to_lua", &item_fn.sig.ident);
+    let register_fn_ident = format_ident!("__blackjack_export_{}_to_lua", &item_fn.sig.ident);
     let original_fn_name = item_fn.sig.ident.to_string();
     let original_fn_ident = &item_fn.sig.ident;
 
@@ -160,19 +158,13 @@ fn analyze_lua_fn(item_fn: &ItemFn, attrs: &LuaFnAttrs) -> syn::Result<LuaFnDef>
 
     let (ret_typ, ret_is_result) = match &item_fn.sig.output {
         ReturnType::Default => (quote! { () }, false),
-        ReturnType::Type(_, t) => match unwrap_result(&*t) {
+        ReturnType::Type(_, t) => match unwrap_result(t) {
             Some(inner) => (quote! { #inner }, true),
-            None => {
-                let ret_typ = &item_fn.sig.output;
-                (quote! { #ret_typ }, false)
-            }
+            None => (quote! { #t }, false),
         },
     };
 
-    // TODO: Handle this differently when the return type is a result, wrap as
-    // necessary.
-
-    let call_fn_and_map_result = if ret_typ.to_string().starts_with("Result") {
+    let call_fn_and_map_result = if ret_is_result {
         quote! {
             match #original_fn_ident(#(#invoke_args),*) {
                 Ok(val) => { mlua::Result::Ok(val) },
@@ -189,7 +181,7 @@ fn analyze_lua_fn(item_fn: &ItemFn, attrs: &LuaFnAttrs) -> syn::Result<LuaFnDef>
 
     Ok(LuaFnDef {
         register_fn_item: quote! {
-            fn #register_fn_ident(lua: &mlua::Lua) {
+            pub fn #register_fn_ident(lua: &mlua::Lua) {
                 fn __inner(lua: &mlua::Lua, #signature) -> mlua::Result<#ret_typ> {
                     #(#borrows)*
                     #call_fn_and_map_result
@@ -254,14 +246,25 @@ pub(crate) fn blackjack_lua_module2(
         panic!("This macro only supports inline modules")
     }
 
+    let global_register_fn_calls = new_items.iter().map(|LuaFnDef { register_fn_ident, .. }| {
+        quote! { #register_fn_ident(lua); }
+    });
+
+
     let original_items = module.content.as_ref().unwrap().1.iter();
     let new_items = new_items.iter().map(|n| &n.register_fn_item);
     let mod_name = module.ident;
+    let visibility = module.vis;
 
     Ok(quote! {
-        mod #mod_name {
+        // TODO: This adds `pub` to mod that may not
+        #visibility mod #mod_name {
             #(#original_items)*
             #(#new_items)*
+
+            pub fn __blackjack_register_lua_fns(lua: &mlua::Lua) {
+                #(#global_register_fn_calls)*
+            }
         }
     })
 }

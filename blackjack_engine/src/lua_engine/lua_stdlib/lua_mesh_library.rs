@@ -9,7 +9,7 @@ use std::{cell::RefCell, rc::Rc};
 use mlua::{Function, Value};
 
 use crate::prelude::halfedge::{
-    AnyTraversal, DynChannel, HalfEdgeTraversal, HalfedgeTraversalHelpers, RawChannelId,
+    edit_ops, AnyTraversal, DynChannel, HalfEdgeTraversal, HalfedgeTraversalHelpers, RawChannelId,
 };
 
 use super::*;
@@ -242,6 +242,8 @@ pub fn load(lua: &Lua) -> anyhow::Result<()> {
                 .map_lua_err()
         }
     );
+
+    crate::prelude::halfedge::edit_ops::lua_fns::__blackjack_register_lua_fns(lua);
 
     let types = lua.create_table()?;
     types.set("VertexId", ChannelKeyType::VertexId)?;
