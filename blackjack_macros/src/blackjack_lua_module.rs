@@ -278,12 +278,17 @@ mod test {
     #[test]
     fn test() {
         let input = quote! {
-            mod lua_functions {
-                /// Modifies the given `mesh`, beveling all selected `edges` in
-                /// a given distance `amount`.
-                #[lua(under = "Ops")]
-                fn bevel(mesh: &mut HalfEdgeMesh, edges: SelectionExpression, amount: f32) -> Vec<i32> {
+            pub mod lua_fns {
+                use super::*;
 
+                #[lua(under = "Ops")]
+                pub fn test_exported_fn(
+                    mesh: &mut HalfEdgeMesh,
+                ) -> Result<i32> {
+                    let mut conn = mesh.write_connectivity();
+                    let f = conn.iter_faces().next().unwrap().0;
+                    conn.remove_face(f);
+                    Ok(42)
                 }
             }
         };

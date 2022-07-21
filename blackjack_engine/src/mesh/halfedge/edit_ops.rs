@@ -1375,16 +1375,69 @@ pub fn extrude_along_curve(
 
 #[blackjack_macros::blackjack_lua_module]
 pub mod lua_fns {
+
+    use halfedge::compact_mesh::CompactMesh;
+
     use super::*;
-    use crate::prelude::{ChannelValueType, HalfEdgeMesh};
 
     #[lua(under = "Ops")]
-    pub fn test_exported_fn(
+    pub fn chamfer(
+        vertices: SelectionExpression,
+        amount: f32,
         mesh: &mut HalfEdgeMesh,
-    ) -> Result<i32> {
-        let mut conn = mesh.write_connectivity();
-        let f = conn.iter_faces().next().unwrap().0;
-        conn.remove_face(f);
-        Ok(42)
+    ) -> Result<()> {
+        mesh.write_connectivity().clear_debug();
+        let verts = mesh.resolve_vertex_selection_full(&vertices)?;
+        for v in verts {
+            crate::mesh::halfedge::edit_ops::chamfer_vertex(
+                &mut mesh.write_connectivity(),
+                &mut mesh.write_positions(),
+                v,
+                amount,
+            )?;
+        }
+        Ok(())
+    }
+
+    #[lua(under = "Ops")]
+    pub fn bevel(edges: SelectionExpression, amount: f32, mesh: &HalfEdgeMesh) -> Result<()> {
+        let edges = mesh.resolve_halfedge_selection_full(&edges)?;
+        crate::mesh::halfedge::edit_ops::bevel_edges(
+            &mut mesh.write_connectivity(),
+            &mut mesh.write_positions(),
+            &edges,
+            amount,
+        )?;
+        Ok(())
+    }
+
+    #[lua(under = "Ops")]
+    pub fn extrude(faces: SelectionExpression, amount: f32, mesh: &HalfEdgeMesh) -> Result<()> {
+        let faces = mesh.resolve_face_selection_full(&faces)?;
+        crate::mesh::halfedge::edit_ops::extrude_faces(
+            &mut mesh.write_connectivity(),
+            &mut mesh.write_positions(),
+            &faces,
+            amount,
+        )?;
+        Ok(())
+    }
+
+    #[lua(under = "Ops")]
+    pub fn merge(a: &mut HalfEdgeMesh, b: &HalfEdgeMesh) -> Result<()> {
+        a.merge_with(b);
+        Ok(())
+    }
+
+    #[lua(under = "Ops")]
+    pub fn subdivide(
+        mesh: &HalfEdgeMesh,
+        iterations: usize,
+        catmull_clark: bool,
+    ) -> Result<HalfEdgeMesh> {
+        let new_mesh = CompactMesh::<false>::from_halfedge(mesh)?;
+        Ok(new_mesh
+            .subdivide_multi(iterations, catmull_clark)
+            .to_halfedge())
     }
 }
