@@ -19,18 +19,6 @@ pub fn load(lua: &Lua) -> anyhow::Result<()> {
     let ops = lua.create_table()?;
     globals.set("Ops", ops.clone())?;
 
-    lua_fn!(lua, ops, "set_smooth_normals", |mesh: AnyUserData| -> () {
-        let mut mesh = mesh.borrow_mut::<HalfEdgeMesh>()?;
-        crate::mesh::halfedge::edit_ops::set_smooth_normals(&mut mesh).map_lua_err()?;
-        Ok(())
-    });
-
-    lua_fn!(lua, ops, "set_flat_normals", |mesh: AnyUserData| -> () {
-        let mut mesh = mesh.borrow_mut::<HalfEdgeMesh>()?;
-        crate::mesh::halfedge::edit_ops::set_flat_normals(&mut mesh).map_lua_err()?;
-        Ok(())
-    });
-
     lua_fn!(lua, ops, "bridge_chains", |mesh: AnyUserData,
                                         loop_1: SelectionExpression,
                                         loop_2: SelectionExpression,

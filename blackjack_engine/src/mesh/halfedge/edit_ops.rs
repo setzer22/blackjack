@@ -1450,4 +1450,20 @@ pub mod lua_fns {
             .subdivide_multi(iterations, catmull_clark)
             .to_halfedge())
     }
+
+    /// Computes the smooth normals channel for the given `mesh` and sets the
+    /// mesh export settings to use smooth normals.
+    #[lua(under = "Ops")]
+    pub fn set_smooth_normals(mesh: &mut HalfEdgeMesh) -> Result<()> {
+        super::set_smooth_normals(mesh)?;
+        Ok(())
+    }
+
+    /// Computes the flat normals channel for the given `mesh` and sets the
+    /// mesh export settings to use flat normals.
+    #[lua(under = "Ops")]
+    pub fn set_flat_normals(mesh: &mut HalfEdgeMesh) -> Result<()> {
+        super::set_flat_normals(mesh)?;
+        Ok(())
+    }
 }
