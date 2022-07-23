@@ -1,62 +1,32 @@
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote, ToTokens};
-use syn::{
-    parse::{Parse, ParseStream},
-    punctuated::Punctuated,
-    Attribute, Expr, ItemFn, Path, PathArguments, PathSegment, ReturnType, Token, Type, TypePath,
-};
+use syn::{Attribute, ItemFn, ReturnType, Type};
 
-use crate::utils::{ExprUtils, SynParseBufferExt};
+/// The mini-language inside #[lua] annotations
+mod fn_attr;
+use fn_attr::*;
 
-#[derive(Default, Debug)]
-struct LuaFnAttrs {
-    under: Option<String>,
-}
-
-impl Parse for LuaFnAttrs {
-    fn parse(input: ParseStream) -> syn::Result<Self> {
-        let properties = input.comma_separated_fn(|input| {
-            let lhs: Ident = input.parse()?;
-            let _eq_sign = input.expect_token::<Token![=]>();
-            let rhs: Expr = input.parse()?;
-            Ok((lhs, rhs))
-        })?;
-
-        let mut lua_attr = LuaFnAttrs::default();
-
-        for (key, val) in properties.iter() {
-            if key == "under" {
-                lua_attr.under =
-                    Some(val.assume_string_literal("Value for 'under' must be a string")?);
-            }
-        }
-
-        Ok(lua_attr)
-    }
-}
+use crate::utils::{parse_doc_attr, unwrap_result};
 
 #[derive(Debug)]
 struct LuaFnDef {
-    register_fn_ident: Ident,
+    /// An item (fn definition) of a function that will register the annotated
+    /// function into the lua bindings. The function can be called using the
+    /// `register_fn_ident`.
     register_fn_item: TokenStream,
+    /// The name of the function in the `register_fn_item`.
+    register_fn_ident: Ident,
+    /// A syntactically valid Lua string of a function definition compatible
+    /// with the annotated function. This is used to generate automatic
+    /// documentation for the Lua API, the code is not meant to be called by the
+    /// Lua interpreter.
+    lua_docstr: String,
 }
 
-fn unwrap_result(typ: &Type) -> Option<&Type> {
-    if let Type::Path(typepath) = typ {
-        if let Some(seg) = typepath.path.segments.first() {
-            if seg.ident == "Result" {
-                if let PathArguments::AngleBracketed(bracketed) = &seg.arguments {
-                    if let Some(syn::GenericArgument::Type(t)) = bracketed.args.iter().next() {
-                        return Some(t);
-                    }
-                }
-            }
-        }
-    }
-    None
-}
-
-fn analyze_lua_fn(item_fn: &ItemFn, attrs: &LuaFnAttrs) -> syn::Result<LuaFnDef> {
+/// Given a function annotated with a #[lua] mark, performs the analysis for
+/// that function and returns the collected metadata.
+fn analyze_lua_fn(item_fn: &ItemFn, attrs: &FunctionAttributes) -> syn::Result<LuaFnDef> {
+    // Some sanity checks
     if item_fn.sig.generics.params.iter().count() > 0 {
         return Err(syn::Error::new(
             item_fn.sig.ident.span(),
@@ -69,12 +39,8 @@ fn analyze_lua_fn(item_fn: &ItemFn, attrs: &LuaFnAttrs) -> syn::Result<LuaFnDef>
         ));
     }
 
-    enum ArgKind {
-        Owned,
-        Ref,
-        RefMut,
-    }
-
+    #[rustfmt::skip]
+    enum ArgKind { Owned, Ref, RefMut }
     struct WrapperArg {
         kind: ArgKind,
         typ: Type,
@@ -179,6 +145,22 @@ fn analyze_lua_fn(item_fn: &ItemFn, attrs: &LuaFnAttrs) -> syn::Result<LuaFnDef>
         }
     };
 
+    use std::fmt::Write;
+    let lua_docstr = (|| -> Result<String, Box<dyn std::error::Error>> {
+        let mut docstr = String::new();
+
+        // Look for docstring comments
+        for line in &attrs.docstring_lines {
+            writeln!(docstr, "-- {line}")?;
+        }
+        writeln!(docstr, "function {original_fn_name}(TODO PARAMS)")?;
+        writeln!(docstr, "    error('Documentation stub only')")?;
+        writeln!(docstr, "end")?;
+
+        Ok(docstr)
+    })()
+    .unwrap();
+
     Ok(LuaFnDef {
         register_fn_item: quote! {
             pub fn #register_fn_ident(lua: &mlua::Lua) {
@@ -197,18 +179,27 @@ fn analyze_lua_fn(item_fn: &ItemFn, attrs: &LuaFnAttrs) -> syn::Result<LuaFnDef>
             }
         },
         register_fn_ident,
+        lua_docstr,
     })
 }
 
-fn collect_lua_attr(attrs: &mut Vec<Attribute>) -> Option<LuaFnAttrs> {
+/// Collects the #[lua] attribute in a function and any other relevant metadata.
+/// Also strips out any annotations that rustc cannot interpret.
+fn collect_lua_attr(attrs: &mut Vec<Attribute>) -> Option<FunctionAttributes> {
     let mut lua_attrs = vec![];
     let mut to_remove = vec![];
+    let mut docstring_lines = vec![];
     for (i, attr) in attrs.iter().enumerate() {
         if let Some(ident) = attr.path.get_ident() {
+            // A #[lua] special annotation
             if ident == "lua" {
-                let lua_attr: LuaFnAttrs = attr.parse_args().unwrap();
+                let lua_attr: LuaFnAttr = attr.parse_args().unwrap();
                 lua_attrs.push(lua_attr);
                 to_remove.push(i);
+            }
+            // A docstring
+            else if ident == "doc" {
+                docstring_lines.push(parse_doc_attr(attr));
             }
         }
     }
@@ -220,14 +211,21 @@ fn collect_lua_attr(attrs: &mut Vec<Attribute>) -> Option<LuaFnAttrs> {
     if lua_attrs.len() > 1 {
         panic!("Only one #[lua(...)] annotation is supported per function.")
     }
-    lua_attrs.into_iter().next()
+
+    lua_attrs
+        .into_iter()
+        .next()
+        .map(|lua_attr| FunctionAttributes {
+            lua_attr,
+            docstring_lines,
+        })
 }
 
 pub(crate) fn blackjack_lua_module2(
     mut module: syn::ItemMod,
 ) -> Result<TokenStream, Box<dyn std::error::Error>> {
     // Any new items that will be appended at the end of the module are stored here.
-    let mut new_items = vec![];
+    let mut fn_defs = vec![];
 
     if let Some((_, items)) = module.content.as_mut() {
         for item in items.iter_mut() {
@@ -235,7 +233,7 @@ pub(crate) fn blackjack_lua_module2(
                 syn::Item::Fn(item_fn) => {
                     let lua_attr = collect_lua_attr(&mut item_fn.attrs);
                     if let Some(lua_attr) = lua_attr {
-                        new_items.push(analyze_lua_fn(item_fn, &lua_attr)?);
+                        fn_defs.push(analyze_lua_fn(item_fn, &lua_attr)?);
                     }
                 }
                 syn::Item::Impl(_) => todo!(),
@@ -246,24 +244,34 @@ pub(crate) fn blackjack_lua_module2(
         panic!("This macro only supports inline modules")
     }
 
-    let global_register_fn_calls = new_items.iter().map(|LuaFnDef { register_fn_ident, .. }| {
-        quote! { #register_fn_ident(lua); }
-    });
+    let global_register_fn_calls = fn_defs.iter().map(
+        |LuaFnDef {
+             register_fn_ident, ..
+         }| {
+            quote! { #register_fn_ident(lua); }
+        },
+    );
 
+    let print_docstrings = fn_defs
+        .iter()
+        .map(|LuaFnDef { lua_docstr, .. }| quote! { println!(#lua_docstr); });
 
     let original_items = module.content.as_ref().unwrap().1.iter();
-    let new_items = new_items.iter().map(|n| &n.register_fn_item);
+    let register_fns = fn_defs.iter().map(|n| &n.register_fn_item);
     let mod_name = module.ident;
     let visibility = module.vis;
 
     Ok(quote! {
-        // TODO: This adds `pub` to mod that may not
         #visibility mod #mod_name {
             #(#original_items)*
-            #(#new_items)*
+            #(#register_fns)*
 
             pub fn __blackjack_register_lua_fns(lua: &mlua::Lua) {
                 #(#global_register_fn_calls)*
+            }
+
+            pub fn __blackjack_print_lua_docstrings(lua: &mlua::Lua) {
+                #(#print_docstrings)*
             }
         }
     })
@@ -294,5 +302,22 @@ mod test {
         };
         let module = syn::parse2(input).unwrap();
         write_and_fmt("/tmp/test.rs", blackjack_lua_module2(module).unwrap()).unwrap();
+    }
+
+    #[test]
+    fn repl() {
+        let attr: syn::ItemMod = syn::parse_quote! {
+            #[doc = r" Single line doc comments"]
+            #[doc = r" We write so many!"]
+            #[doc = r"* Multi-line comments...
+                      * May span many lines
+            "]
+            mod example {
+                #![doc = r" Of course, they can be inner too"]
+                #![doc = r" And fit in a single line "]
+            }
+        };
+
+        dbg!(attr.attrs);
     }
 }

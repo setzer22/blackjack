@@ -1,7 +1,7 @@
 use proc_macro2::Span;
 use syn::parse::ParseBuffer;
 use syn::token::Token;
-use syn::{Ident, Token};
+use syn::{Ident, PathArguments, Token, Type, Attribute};
 
 #[cfg(test)]
 use std::{fs, io, path::Path, process::Command};
@@ -69,4 +69,34 @@ pub fn write_and_fmt<P: AsRef<Path>, S: ToString>(path: P, code: S) -> io::Resul
     fs::write(&path, code.to_string())?;
     Command::new("rustfmt").arg(path.as_ref()).spawn()?.wait()?;
     Ok(())
+}
+
+/// When `typ` is of the form `Result<Something>`, returns the inner `Something`.
+pub fn unwrap_result(typ: &Type) -> Option<&Type> {
+    if let Type::Path(typepath) = typ {
+        if let Some(seg) = typepath.path.segments.first() {
+            if seg.ident == "Result" {
+                if let PathArguments::AngleBracketed(bracketed) = &seg.arguments {
+                    if let Some(syn::GenericArgument::Type(t)) = bracketed.args.iter().next() {
+                        return Some(t);
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Assuming `attr` is of the form `#[doc = r"Some docstring line"]`, returns
+/// the inner string. Panics otherwise
+pub fn parse_doc_attr(attr: &Attribute) -> String {
+    let meta = attr.parse_meta().unwrap();
+
+    match meta {
+        syn::Meta::NameValue(nameval) => match nameval.lit {
+            syn::Lit::Str(s) => s.value(),
+            _ => panic!("Unexpected docstring attribute form"),
+        },
+        _ => panic!("Unexpected docstring attribute form"),
+    }
 }

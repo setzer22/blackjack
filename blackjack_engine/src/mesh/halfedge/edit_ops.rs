@@ -1380,6 +1380,8 @@ pub mod lua_fns {
 
     use super::*;
 
+    /// Replaces each vertex in the `vertices` selection with a face, and moves
+    /// that face along the incident edges by a given `amount` distance.
     #[lua(under = "Ops")]
     pub fn chamfer(
         vertices: SelectionExpression,
