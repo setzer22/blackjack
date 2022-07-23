@@ -1401,6 +1401,8 @@ pub mod lua_fns {
         Ok(())
     }
 
+    /// Bevels the given `edges`, replacing each edge with a face and indenting
+    /// it by a given `amount` distance.
     #[lua(under = "Ops")]
     pub fn bevel(edges: SelectionExpression, amount: f32, mesh: &HalfEdgeMesh) -> Result<()> {
         let edges = mesh.resolve_halfedge_selection_full(&edges)?;
@@ -1413,6 +1415,7 @@ pub mod lua_fns {
         Ok(())
     }
 
+    /// Extrudes the given `faces` by a given `amount` distance.
     #[lua(under = "Ops")]
     pub fn extrude(faces: SelectionExpression, amount: f32, mesh: &HalfEdgeMesh) -> Result<()> {
         let faces = mesh.resolve_face_selection_full(&faces)?;
@@ -1425,12 +1428,17 @@ pub mod lua_fns {
         Ok(())
     }
 
+    /// Modifies the given mesh `a` by merging `b` into it. The `b` mesh remains
+    /// unmodified.
     #[lua(under = "Ops")]
     pub fn merge(a: &mut HalfEdgeMesh, b: &HalfEdgeMesh) -> Result<()> {
         a.merge_with(b);
         Ok(())
     }
 
+    /// Subdivides the given mesh, applying as many `iterations` as given. If
+    /// `catmull_clark` is true, will use catmull clark subdivision, else linear
+    /// (i.e. vertex positions remain unchanged).
     #[lua(under = "Ops")]
     pub fn subdivide(
         mesh: &HalfEdgeMesh,

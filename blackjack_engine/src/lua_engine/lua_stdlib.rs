@@ -10,7 +10,6 @@ use crate::{
     graph::NodeDefinitions,
     lua_engine::ToLuaError,
     prelude::{
-        compact_mesh::CompactMesh,
         halfedge::{
             id_types::{FaceId, HalfEdgeId, VertexId},
             ChannelKeyType, ChannelValueType, HalfEdgeMesh,
@@ -48,6 +47,8 @@ mod lua_export_library;
 mod lua_mesh_library;
 mod lua_node_libraries;
 mod lua_primitives_library;
+
+pub mod lua_documentation;
 
 /// Loads pure Lua libraries that are part of the blackjack core APIs
 pub fn load_lua_libraries(lua: &Lua) -> anyhow::Result<()> {

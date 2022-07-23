@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote, ToTokens};
 use syn::{Attribute, ItemFn, ReturnType, Type};
@@ -6,7 +8,17 @@ use syn::{Attribute, ItemFn, ReturnType, Type};
 mod fn_attr;
 use fn_attr::*;
 
-use crate::utils::{parse_doc_attr, unwrap_result};
+use crate::utils::{join_str, parse_doc_attr, unwrap_result};
+
+/// Metadata to generate automatic Lua documentation
+#[derive(Debug)]
+struct LuaDocstring {
+    /// Name of the module where this docstring will be placed
+    module: String,
+    /// A syntactically valid Lua string of a function definition plus any
+    /// available comments.
+    doc: String,
+}
 
 #[derive(Debug)]
 struct LuaFnDef {
@@ -16,11 +28,61 @@ struct LuaFnDef {
     register_fn_item: TokenStream,
     /// The name of the function in the `register_fn_item`.
     register_fn_ident: Ident,
-    /// A syntactically valid Lua string of a function definition compatible
-    /// with the annotated function. This is used to generate automatic
-    /// documentation for the Lua API, the code is not meant to be called by the
-    /// Lua interpreter.
-    lua_docstr: String,
+    /// Lua docstring metadata
+    lua_docstr: LuaDocstring,
+}
+
+/// Generates the automatic Lua documentation for this `item_fn`, using LuaDoc
+/// format. The generated function will have no body, only signature.
+fn generate_lua_fn_documentation(item_fn: &ItemFn, attrs: &FunctionAttributes) -> LuaDocstring {
+    use std::fmt::Write;
+    let doc = (|| -> Result<String, Box<dyn std::error::Error>> {
+        let mut docstr = String::new();
+        let mut first = true;
+        for line in &attrs.docstring_lines {
+            if first {
+                first = false;
+                writeln!(docstr, "--- {line}")?;
+            } else {
+                writeln!(docstr, "-- {line}")?;
+            }
+        }
+        writeln!(docstr, "--")?;
+
+        let mut param_idents = vec![];
+        for param in item_fn.sig.inputs.iter() {
+            match param {
+                syn::FnArg::Receiver(_) => {
+                    writeln!(docstr, "-- @param self The current object")?;
+                }
+                syn::FnArg::Typed(tpd) => {
+                    let name = tpd.pat.to_token_stream().to_string();
+                    let typ = tpd.ty.to_token_stream().to_string();
+                    writeln!(docstr, "-- @param {name} {typ}")?;
+                    param_idents.push(name);
+                }
+            }
+        }
+
+        let fn_name = &item_fn.sig.ident;
+        let param_list = join_str(param_idents.iter(), ", ");
+        writeln!(docstr, "function {fn_name}({param_list})")?;
+        writeln!(docstr, "    error('Documentation stub only')")?;
+        writeln!(docstr, "end\n")?;
+
+        Ok(docstr)
+    })()
+    .unwrap();
+
+    LuaDocstring {
+        module: attrs
+            .lua_attr
+            .under
+            .as_ref()
+            .cloned()
+            .unwrap_or_else(|| "Default".into()),
+        doc,
+    }
 }
 
 /// Given a function annotated with a #[lua] mark, performs the analysis for
@@ -145,22 +207,6 @@ fn analyze_lua_fn(item_fn: &ItemFn, attrs: &FunctionAttributes) -> syn::Result<L
         }
     };
 
-    use std::fmt::Write;
-    let lua_docstr = (|| -> Result<String, Box<dyn std::error::Error>> {
-        let mut docstr = String::new();
-
-        // Look for docstring comments
-        for line in &attrs.docstring_lines {
-            writeln!(docstr, "-- {line}")?;
-        }
-        writeln!(docstr, "function {original_fn_name}(TODO PARAMS)")?;
-        writeln!(docstr, "    error('Documentation stub only')")?;
-        writeln!(docstr, "end")?;
-
-        Ok(docstr)
-    })()
-    .unwrap();
-
     Ok(LuaFnDef {
         register_fn_item: quote! {
             pub fn #register_fn_ident(lua: &mlua::Lua) {
@@ -179,7 +225,7 @@ fn analyze_lua_fn(item_fn: &ItemFn, attrs: &FunctionAttributes) -> syn::Result<L
             }
         },
         register_fn_ident,
-        lua_docstr,
+        lua_docstr: generate_lua_fn_documentation(item_fn, attrs),
     })
 }
 
@@ -252,9 +298,17 @@ pub(crate) fn blackjack_lua_module2(
         },
     );
 
-    let print_docstrings = fn_defs
+    let mut docstrs_by_module = BTreeMap::new();
+    for LuaFnDef { lua_docstr, .. } in fn_defs.iter() {
+        let module = docstrs_by_module
+            .entry(&lua_docstr.module)
+            .or_insert_with(Vec::new);
+        module.push(lua_docstr.doc.clone());
+    }
+
+    let static_docstrings = docstrs_by_module
         .iter()
-        .map(|LuaFnDef { lua_docstr, .. }| quote! { println!(#lua_docstr); });
+        .flat_map(|(module, docstrs)| docstrs.iter().map(move |d| quote! { (#module, #d) }));
 
     let original_items = module.content.as_ref().unwrap().1.iter();
     let register_fns = fn_defs.iter().map(|n| &n.register_fn_item);
@@ -270,9 +324,9 @@ pub(crate) fn blackjack_lua_module2(
                 #(#global_register_fn_calls)*
             }
 
-            pub fn __blackjack_print_lua_docstrings(lua: &mlua::Lua) {
-                #(#print_docstrings)*
-            }
+            pub static __blackjack_lua_docstrings : &'static [(&'static str, &'static str)] = &[
+                #(#static_docstrings),*
+            ];
         }
     })
 }

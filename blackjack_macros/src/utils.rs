@@ -1,7 +1,7 @@
 use proc_macro2::Span;
 use syn::parse::ParseBuffer;
 use syn::token::Token;
-use syn::{Ident, PathArguments, Token, Type, Attribute};
+use syn::{Attribute, Ident, PathArguments, Token, Type};
 
 #[cfg(test)]
 use std::{fs, io, path::Path, process::Command};
@@ -99,4 +99,20 @@ pub fn parse_doc_attr(attr: &Attribute) -> String {
         },
         _ => panic!("Unexpected docstring attribute form"),
     }
+}
+
+pub fn join_str<S>(it: impl Iterator<Item = S>, sep: &str) -> String
+where
+    S: AsRef<str>,
+{
+    let mut s = String::new();
+    let mut first = true;
+    for i in it {
+        if !first {
+            s += sep;
+        }
+        first = false;
+        s += i.as_ref();
+    }
+    s
 }
