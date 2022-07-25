@@ -324,6 +324,12 @@ pub(crate) fn blackjack_lua_module2(
                 #(#global_register_fn_calls)*
             }
 
+            inventory::submit! {
+                blackjack_engine::lua_engine::lua_stdlib::LuaRegisterFn {
+                    f: __blackjack_register_lua_fns,
+                }
+            }
+
             pub static __blackjack_lua_docstrings : &'static [(&'static str, &'static str)] = &[
                 #(#static_docstrings),*
             ];

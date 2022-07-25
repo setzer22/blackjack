@@ -50,6 +50,13 @@ mod lua_primitives_library;
 
 pub mod lua_documentation;
 
+/// A function pointer to register global lua functions. Stored globally using
+/// the `inventory` crate.
+pub struct LuaRegisterFn {
+    pub f: fn(&mlua::Lua),
+}
+inventory::collect!(LuaRegisterFn);
+
 /// Loads pure Lua libraries that are part of the blackjack core APIs
 pub fn load_lua_libraries(lua: &Lua) -> anyhow::Result<()> {
     macro_rules! def_library {

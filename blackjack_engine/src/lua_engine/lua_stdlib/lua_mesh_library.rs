@@ -154,7 +154,9 @@ pub fn load(lua: &Lua) -> anyhow::Result<()> {
         }
     );
 
-    crate::prelude::halfedge::edit_ops::lua_fns::__blackjack_register_lua_fns(lua);
+    for register_fn in inventory::iter::<super::LuaRegisterFn>() {
+        (register_fn.f)(lua);
+    }
 
     let types = lua.create_table()?;
     types.set("VertexId", ChannelKeyType::VertexId)?;
