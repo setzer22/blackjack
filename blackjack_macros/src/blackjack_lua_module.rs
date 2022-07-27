@@ -229,30 +229,62 @@ fn analyze_lua_fn(item_fn: &ItemFn, attrs: &FunctionAttributes) -> syn::Result<L
     })
 }
 
-/// Collects the #[lua] attribute in a function and any other relevant metadata.
-/// Also strips out any annotations that rustc cannot interpret.
-fn collect_lua_attr(attrs: &mut Vec<Attribute>) -> Option<FunctionAttributes> {
-    let mut lua_attrs = vec![];
+/// Scans an attribute list, looking for attributes for which `parser_fn`
+/// succeeds. Returns any values that matched. If `remove_matches` is true, the
+/// matching values are removed from the attribute list.
+fn collect_attrs<T>(
+    attrs: &mut Vec<Attribute>,
+    mut parser_fn: impl FnMut(&Attribute) -> Option<T>,
+    remove_matches: bool,
+) -> Vec<T> {
+    let mut matches = vec![];
     let mut to_remove = vec![];
-    let mut docstring_lines = vec![];
+
     for (i, attr) in attrs.iter().enumerate() {
-        if let Some(ident) = attr.path.get_ident() {
-            // A #[lua] special annotation
-            if ident == "lua" {
-                let lua_attr: LuaFnAttr = attr.parse_args().unwrap();
-                lua_attrs.push(lua_attr);
+        if let Some(m) = parser_fn(attr) {
+            matches.push(m);
+            if remove_matches {
                 to_remove.push(i);
-            }
-            // A docstring
-            else if ident == "doc" {
-                docstring_lines.push(parse_doc_attr(attr));
             }
         }
     }
 
-    for i in to_remove.into_iter() {
-        attrs.remove(i);
+    for tr in to_remove {
+        attrs.remove(tr);
     }
+
+    matches
+}
+
+/// If the attribute has a single ident (e.g. #[lua], #[doc]), returns Some(())
+/// when the ident is equal to the given `name`, else None.
+fn path_ident_is<'a>(attr: &'a Attribute, name: &str) -> Option<&'a Attribute> {
+    if let Some(ident) = attr.path.get_ident() {
+        if ident == name {
+            Some(attr)
+        } else {
+            None
+        }
+    } else {
+        None
+    }
+}
+
+/// Collects the #[lua] attribute in a function and any other relevant metadata.
+/// Also strips out any annotations that rustc cannot interpret.
+fn collect_function_attributes(attrs: &mut Vec<Attribute>) -> Option<FunctionAttributes> {
+    // #[lua] special annotations
+    let lua_attrs = collect_attrs(
+        attrs,
+        |attr| path_ident_is(attr, "lua").map(|attr| attr.parse_args::<LuaFnAttr>().unwrap()),
+        true,
+    );
+    // Each docstring line, function documentation
+    let docstring_lines = collect_attrs(
+        attrs,
+        |attr| path_ident_is(attr, "doc").map(parse_doc_attr),
+        false,
+    );
 
     if lua_attrs.len() > 1 {
         panic!("Only one #[lua(...)] annotation is supported per function.")
@@ -267,6 +299,20 @@ fn collect_lua_attr(attrs: &mut Vec<Attribute>) -> Option<FunctionAttributes> {
         })
 }
 
+fn collect_lua_impl_attrs(attrs: &mut Vec<Attribute>) -> bool {
+    let lua_impl_attrs = collect_attrs(
+        attrs,
+        |attr| path_ident_is(attr, "lua_impl").map(|_| ()),
+        true,
+    );
+
+    if lua_impl_attrs.len() > 1 {
+        panic!("Only one #[lua_impl] annotation is supported per impl block.")
+    }
+
+    lua_impl_attrs.len() > 0
+}
+
 pub(crate) fn blackjack_lua_module2(
     mut module: syn::ItemMod,
 ) -> Result<TokenStream, Box<dyn std::error::Error>> {
@@ -277,12 +323,26 @@ pub(crate) fn blackjack_lua_module2(
         for item in items.iter_mut() {
             match item {
                 syn::Item::Fn(item_fn) => {
-                    let lua_attr = collect_lua_attr(&mut item_fn.attrs);
-                    if let Some(lua_attr) = lua_attr {
+                    let function_attributes = collect_function_attributes(&mut item_fn.attrs);
+                    if let Some(lua_attr) = function_attributes {
                         fn_defs.push(analyze_lua_fn(item_fn, &lua_attr)?);
                     }
                 }
-                syn::Item::Impl(_) => todo!(),
+                syn::Item::Impl(item_impl) => {
+                    if collect_lua_impl_attrs(&mut item_impl.attrs) {
+                        for impl_item in &mut item_impl.items {
+                            match impl_item {
+                                syn::ImplItem::Method(item_method) => {
+                                    let method_attributes = collect_function_attributes(&mut item_method.attrs);
+                                    if let Some(method_attrs) = method_attributes {
+                                        dbg!(method_attrs);
+                                    }
+                                },
+                                _ => { /* Ignore */},
+                            }
+                        }
+                    }
+                }
                 _ => { /* Ignore */ }
             }
         }
@@ -358,26 +418,49 @@ mod test {
                     conn.remove_face(f);
                     Ok(42)
                 }
+
+
+                #[lua_impl]
+                impl HalfEdgeMesh {
+                    // WIP:
+
+                    // - [ ] No need for `under` in methods, but the parser fn
+                    // currently panics on empty args
+                    //
+                    // - [ ] Need to abstract the analyze_fn function so that it
+                    // can take both a method and a plain fn (or, at least,
+                    // figure out how to extract the common logic.)
+                    //
+                    #[lua(under = "Potato")]
+                    fn set_channel(
+                        &mut self,
+                        lua: &mlua::Lua,
+                        kty: ChannelKeyType,
+                        vty: ChannelValueType,
+                        name: String,
+                        table: mlua::Table,
+                    ) -> Result<()> {
+                        use slotmap::Key;
+                        let conn = self.read_connectivity();
+                        let keys: Box<dyn Iterator<Item = u64>> = match kty {
+                            ChannelKeyType::VertexId => {
+                                Box::new(conn.iter_vertices().map(|(v_id, _)| v_id.data().as_ffi()))
+                            }
+                            ChannelKeyType::FaceId => {
+                                Box::new(conn.iter_faces().map(|(f_id, _)| f_id.data().as_ffi()))
+                            }
+                            ChannelKeyType::HalfEdgeId => {
+                                Box::new(conn.iter_halfedges().map(|(h_id, _)| h_id.data().as_ffi()))
+                            }
+                        };
+                        self.channels
+                            .dyn_write_channel_by_name(kty, vty, &name)?
+                            .set_from_seq_table(keys, lua, table)
+                    }
+                }
             }
         };
         let module = syn::parse2(input).unwrap();
         write_and_fmt("/tmp/test.rs", blackjack_lua_module2(module).unwrap()).unwrap();
-    }
-
-    #[test]
-    fn repl() {
-        let attr: syn::ItemMod = syn::parse_quote! {
-            #[doc = r" Single line doc comments"]
-            #[doc = r" We write so many!"]
-            #[doc = r"* Multi-line comments...
-                      * May span many lines
-            "]
-            mod example {
-                #![doc = r" Of course, they can be inner too"]
-                #![doc = r" And fit in a single line "]
-            }
-        };
-
-        dbg!(attr.attrs);
     }
 }
