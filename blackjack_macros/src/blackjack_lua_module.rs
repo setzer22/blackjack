@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote, ToTokens};
-use syn::{Attribute, ItemFn, ReturnType, Type};
+use syn::{parse_quote, Attribute, ItemFn, ReturnType, Type};
 
 /// The mini-language inside #[lua] annotations
 mod fn_attr;
@@ -21,7 +21,14 @@ struct LuaDocstring {
 }
 
 #[derive(Debug)]
+enum LuaFnDefKind {
+    Method { class: String },
+    Global { table: String },
+}
+
+#[derive(Debug)]
 struct LuaFnDef {
+    kind: LuaFnDefKind,
     /// An item (fn definition) of a function that will register the annotated
     /// function into the lua bindings. The function can be called using the
     /// `register_fn_ident`.
@@ -85,10 +92,8 @@ fn generate_lua_fn_documentation(item_fn: &ItemFn, attrs: &FunctionAttributes) -
     }
 }
 
-/// Given a function annotated with a #[lua] mark, performs the analysis for
-/// that function and returns the collected metadata.
-fn analyze_lua_fn(item_fn: &ItemFn, attrs: &FunctionAttributes) -> syn::Result<LuaFnDef> {
-    // Some sanity checks
+/// Some sanity checks for a function annotated as #[lua]
+fn lua_fn_sanity_checks(item_fn: &ItemFn) -> syn::Result<()> {
     if item_fn.sig.generics.params.iter().count() > 0 {
         return Err(syn::Error::new(
             item_fn.sig.ident.span(),
@@ -100,25 +105,56 @@ fn analyze_lua_fn(item_fn: &ItemFn, attrs: &FunctionAttributes) -> syn::Result<L
             "Functions exported to lua can't be marked async.",
         ));
     }
+    Ok(())
+}
 
-    #[rustfmt::skip]
-    enum ArgKind { Owned, Ref, RefMut }
-    struct WrapperArg {
-        kind: ArgKind,
-        typ: Type,
-        name: Ident,
-    }
+enum LuaFnArgKind {
+    Owned,
+    Ref,
+    RefMut,
+    SelfRef,
+    SelfRefMut,
+}
 
-    let mut wrapper_fn_args = vec![];
+struct LuaFnArg {
+    kind: LuaFnArgKind,
+    typ: Type,
+    name: Ident,
+}
+
+fn analyze_lua_fn_args(
+    item_fn: &ItemFn,
+    fn_def_kind: &LuaFnDefKind,
+    attrs: &FunctionAttributes,
+) -> syn::Result<Vec<LuaFnArg>> {
+    let mut lua_fn_args = vec![];
 
     for arg in item_fn.sig.inputs.iter() {
         match arg {
-            syn::FnArg::Receiver(_) => {
-                return Err(syn::Error::new(
-                    item_fn.sig.ident.span(),
-                    "Can't use self here.",
-                ));
-            }
+            syn::FnArg::Receiver(r) => match fn_def_kind {
+                LuaFnDefKind::Method { class } => {
+                    let is_mut = r.mutability.is_some();
+                    let maybe_mut = if is_mut {
+                        quote! { mut }
+                    } else {
+                        quote! {}
+                    };
+                    lua_fn_args.push(LuaFnArg {
+                        kind: match r.mutability {
+                            Some(_mut) => LuaFnArgKind::SelfRefMut,
+                            None => LuaFnArgKind::SelfRef,
+                        },
+                        typ: parse_quote!(& #maybe_mut #class),
+                        name: format_ident!("self_ref"),
+                    });
+                }
+                LuaFnDefKind::Global { table } => {
+                    return Err(syn::Error::new(
+                        item_fn.sig.ident.span(),
+                        "Can't use self here.",
+                    ));
+                }
+            },
             syn::FnArg::Typed(t) => {
                 let arg_name = match &*t.pat {
                     syn::Pat::Ident(id) => id.clone(),
@@ -126,19 +162,19 @@ fn analyze_lua_fn(item_fn: &ItemFn, attrs: &FunctionAttributes) -> syn::Result<L
                 };
                 match &*t.ty {
                     Type::Reference(inner) => {
-                        wrapper_fn_args.push(WrapperArg {
+                        lua_fn_args.push(LuaFnArg {
                             kind: if inner.mutability.is_some() {
-                                ArgKind::RefMut
+                                LuaFnArgKind::RefMut
                             } else {
-                                ArgKind::Ref
+                                LuaFnArgKind::Ref
                             },
                             typ: *inner.elem.clone(),
                             name: arg_name.ident,
                         });
                     }
                     t => {
-                        wrapper_fn_args.push(WrapperArg {
-                            kind: ArgKind::Owned,
+                        lua_fn_args.push(LuaFnArg {
+                            kind: LuaFnArgKind::Owned,
                             typ: t.clone(),
                             name: arg_name.ident,
                         });
@@ -148,41 +184,64 @@ fn analyze_lua_fn(item_fn: &ItemFn, attrs: &FunctionAttributes) -> syn::Result<L
         }
     }
 
+    Ok(lua_fn_args)
+}
+
+/// Given a global function (i.e. not a method) annotated with a #[lua] mark,
+/// performs the analysis for that function and returns the collected metadata.
+fn analyze_lua_global_fn(
+    item_fn: &ItemFn,
+    under_table: String,
+    attrs: &FunctionAttributes,
+) -> syn::Result<LuaFnDef> {
+    lua_fn_sanity_checks(item_fn)?;
+
     let register_fn_ident = format_ident!("__blackjack_export_{}_to_lua", &item_fn.sig.ident);
     let original_fn_name = item_fn.sig.ident.to_string();
     let original_fn_ident = &item_fn.sig.ident;
+    let fn_def_kind = LuaFnDefKind::Global {
+        table: under_table.clone(),
+    };
+    let args = analyze_lua_fn_args(item_fn, &fn_def_kind, attrs)?;
 
     let signature = {
-        let types = wrapper_fn_args.iter().map(|arg| match &arg.kind {
-            ArgKind::Owned => arg.typ.to_token_stream(),
-            ArgKind::Ref | ArgKind::RefMut => quote! { mlua::AnyUserData },
+        let types = args.iter().map(|arg| match &arg.kind {
+            LuaFnArgKind::Owned => arg.typ.to_token_stream(),
+            LuaFnArgKind::Ref | LuaFnArgKind::RefMut => quote! { mlua::AnyUserData },
+            LuaFnArgKind::SelfRef | LuaFnArgKind::SelfRefMut => {
+                panic!("self is not allowed here.")
+            }
         });
-        let names = wrapper_fn_args.iter().map(|arg| &arg.name);
+        let names = args.iter().map(|arg| &arg.name);
 
         quote! { (#(#names),*) : (#(#types),*) }
     };
 
-    let borrows = wrapper_fn_args.iter().filter_map(|arg| {
+    let borrows = args.iter().filter_map(|arg| {
         let name = &arg.name;
         let typ = &arg.typ;
         match arg.kind {
-            ArgKind::Owned => None,
-            ArgKind::Ref => Some(quote! {
+            LuaFnArgKind::Owned => None,
+            LuaFnArgKind::Ref => Some(quote! {
                 let #name = #name.borrow::<#typ>()?;
             }),
-            ArgKind::RefMut => Some(quote! {
+            LuaFnArgKind::RefMut => Some(quote! {
                 let mut #name = #name.borrow_mut::<#typ>()?;
             }),
+            LuaFnArgKind::SelfRef | LuaFnArgKind::SelfRefMut => {
+                panic!("self is not allowed here.")
+            }
         }
     });
 
-    let invoke_args = wrapper_fn_args
-        .iter()
-        .map(|WrapperArg { kind, name, .. }| match kind {
-            ArgKind::Owned => quote! { #name },
-            ArgKind::Ref => quote! { &#name},
-            ArgKind::RefMut => quote! { &mut #name },
-        });
+    let invoke_args = args.iter().map(|LuaFnArg { kind, name, .. }| match kind {
+        LuaFnArgKind::Owned => quote! { #name },
+        LuaFnArgKind::Ref => quote! { &#name},
+        LuaFnArgKind::RefMut => quote! { &mut #name },
+        LuaFnArgKind::SelfRef | LuaFnArgKind::SelfRefMut => {
+            panic!("self is not allowed here.")
+        }
+    });
 
     let (ret_typ, ret_is_result) = match &item_fn.sig.output {
         ReturnType::Default => (quote! { () }, false),
@@ -208,6 +267,7 @@ fn analyze_lua_fn(item_fn: &ItemFn, attrs: &FunctionAttributes) -> syn::Result<L
     };
 
     Ok(LuaFnDef {
+        kind: fn_def_kind,
         register_fn_item: quote! {
             pub fn #register_fn_ident(lua: &mlua::Lua) {
                 fn __inner(lua: &mlua::Lua, #signature) -> mlua::Result<#ret_typ> {
@@ -216,7 +276,7 @@ fn analyze_lua_fn(item_fn: &ItemFn, attrs: &FunctionAttributes) -> syn::Result<L
                 }
 
                 // TODO: This unwrap is not correct. If the table is not there it should be created.
-                let table = lua.globals().get::<_, mlua::Table>("Ops").unwrap();
+                let table = lua.globals().get::<_, mlua::Table>(#under_table).unwrap();
                 table.set(
                     #original_fn_name,
                     lua.create_function(__inner).unwrap()
@@ -227,6 +287,34 @@ fn analyze_lua_fn(item_fn: &ItemFn, attrs: &FunctionAttributes) -> syn::Result<L
         register_fn_ident,
         lua_docstr: generate_lua_fn_documentation(item_fn, attrs),
     })
+}
+
+/// Given a global function (i.e. not a method) annotated with a #[lua] mark,
+/// performs the analysis for that function and returns the collected metadata.
+fn analyze_lua_method_fn(
+    item_fn: &ItemFn,
+    class_name: String,
+    attrs: &FunctionAttributes,
+) -> syn::Result<LuaFnDef> {
+    lua_fn_sanity_checks(item_fn)?;
+
+    let register_fn_ident = format_ident!("__blackjack_export_{}_to_lua", &item_fn.sig.ident);
+    let original_fn_name = item_fn.sig.ident.to_string();
+    let original_fn_ident = &item_fn.sig.ident;
+    let class_ident = format_ident!("{class_name}");
+    let fn_def_kind = LuaFnDefKind::Method { class: class_name };
+    let args = analyze_lua_fn_args(item_fn, &fn_def_kind, attrs)?;
+
+    let register_fn_item = quote! {
+        pub fn #register_fn_ident<'lua, M: mlua::UserDataMethods<'lua, #class_ident>>(methods: &mut M) {
+            methods.add_method(#original_fn_name, |lua, __this, (..args here..) : (..types here..)| {
+                // WIP: Need to use call_fn_and_map_result here
+                #original_fn_ident(..invoke args here..)
+            })
+        }
+    };
+
+    todo!()
 }
 
 /// Scans an attribute list, looking for attributes for which `parser_fn`
@@ -276,7 +364,15 @@ fn collect_function_attributes(attrs: &mut Vec<Attribute>) -> Option<FunctionAtt
     // #[lua] special annotations
     let lua_attrs = collect_attrs(
         attrs,
-        |attr| path_ident_is(attr, "lua").map(|attr| attr.parse_args::<LuaFnAttr>().unwrap()),
+        |attr| {
+            path_ident_is(attr, "lua").map(|attr| {
+                if attr.tokens.is_empty() {
+                    LuaFnAttr::default()
+                } else {
+                    attr.parse_args::<LuaFnAttr>().unwrap()
+                }
+            })
+        },
         true,
     );
     // Each docstring line, function documentation
@@ -325,7 +421,9 @@ pub(crate) fn blackjack_lua_module2(
                 syn::Item::Fn(item_fn) => {
                     let function_attributes = collect_function_attributes(&mut item_fn.attrs);
                     if let Some(lua_attr) = function_attributes {
-                        fn_defs.push(analyze_lua_fn(item_fn, &lua_attr)?);
+                        if let Some(under) = lua_attr.lua_attr.under.as_ref().cloned() {
+                            fn_defs.push(analyze_lua_global_fn(item_fn, under, &lua_attr)?);
+                        }
                     }
                 }
                 syn::Item::Impl(item_impl) => {
@@ -333,12 +431,13 @@ pub(crate) fn blackjack_lua_module2(
                         for impl_item in &mut item_impl.items {
                             match impl_item {
                                 syn::ImplItem::Method(item_method) => {
-                                    let method_attributes = collect_function_attributes(&mut item_method.attrs);
+                                    let method_attributes =
+                                        collect_function_attributes(&mut item_method.attrs);
                                     if let Some(method_attrs) = method_attributes {
                                         dbg!(method_attrs);
                                     }
-                                },
-                                _ => { /* Ignore */},
+                                }
+                                _ => { /* Ignore */ }
                             }
                         }
                     }
@@ -423,15 +522,11 @@ mod test {
                 #[lua_impl]
                 impl HalfEdgeMesh {
                     // WIP:
-
-                    // - [ ] No need for `under` in methods, but the parser fn
-                    // currently panics on empty args
-                    //
                     // - [ ] Need to abstract the analyze_fn function so that it
                     // can take both a method and a plain fn (or, at least,
                     // figure out how to extract the common logic.)
                     //
-                    #[lua(under = "Potato")]
+                    #[lua]
                     fn set_channel(
                         &mut self,
                         lua: &mlua::Lua,

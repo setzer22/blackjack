@@ -35,6 +35,17 @@ pub enum DataType {
     Selection,
     Mesh,
     String,
+    HeightMap,
+}
+
+impl DataType {
+    /// Returns whether this datatype can be rendered into a final artifact
+    pub fn can_be_enabled(&self) -> bool {
+        match self {
+            DataType::Mesh | DataType::HeightMap => true,
+            DataType::Vector | DataType::Scalar | DataType::Selection | DataType::String => false,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -86,6 +97,9 @@ pub struct Output {
 /// A node in the blackjack graph
 pub struct BjkNode {
     pub op_name: String,
+    /// When this node is the target of a graph, this stores the name of the
+    /// output parameter that should be displayed (typically, a mesh).
+    pub return_value: Option<String>,
     pub inputs: Vec<InputParameter>,
     pub outputs: Vec<Output>,
 }
@@ -191,6 +205,7 @@ fn data_type_from_str(s: &str) -> Result<DataType> {
         "scalar" => Ok(DataType::Scalar),
         "selection" => Ok(DataType::Selection),
         "mesh" => Ok(DataType::Mesh),
+        "heightmap" => Ok(DataType::HeightMap),
         "enum" => Ok(DataType::String),
         "file" => Ok(DataType::String),
         "string" => Ok(DataType::String),
@@ -217,6 +232,7 @@ impl InputDefinition {
                 default_selection: SelectionExpression::None,
             },
             DataType::Mesh => InputValueConfig::None,
+            DataType::HeightMap => InputValueConfig::None,
             DataType::String if type_str == "enum" => InputValueConfig::Enum {
                 values: table
                     .get::<_, Table>("values")?
@@ -298,9 +314,10 @@ impl BjkGraph {
         }
     }
     /// Adds a new empty node to the graph
-    pub fn add_node(&mut self, op_name: impl ToString) -> BjkNodeId {
+    pub fn add_node(&mut self, op_name: impl ToString, return_value: Option<String>) -> BjkNodeId {
         self.nodes.insert(BjkNode {
             op_name: op_name.to_string(),
+            return_value,
             inputs: vec![],
             outputs: vec![],
         })

@@ -76,6 +76,11 @@ pub fn load_host_libraries(lua: &Lua) -> anyhow::Result<()> {
     lua_primitives_library::load(lua)?;
     lua_export_library::load(lua)?;
     lua_constructors_library::load(lua)?;
+
+    for register_fn in inventory::iter::<LuaRegisterFn>() {
+        (register_fn.f)(lua);
+    }
+
     Ok(())
 }
 

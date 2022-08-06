@@ -191,11 +191,12 @@ impl ApplicationContext {
     ) -> Result<String> {
         if let Some(active) = editor_state.user_state.active_node {
             let (program, params) = self.compile_program(editor_state, active)?;
-            let mesh = blackjack_engine::lua_engine::run_program(
+            let renderable = blackjack_engine::lua_engine::run_program(
                 &lua_runtime.lua,
                 &program.lua_program,
                 &params,
             )?;
+            // WIP: Renderable...
             self.mesh = Some(mesh);
             Ok(program.lua_program)
         } else {

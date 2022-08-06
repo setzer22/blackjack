@@ -60,6 +60,7 @@ impl DataTypeTrait<CustomGraphState> for DataTypeUi {
     fn data_type_color(&self, _user_state: &CustomGraphState) -> egui::Color32 {
         match self.0 {
             DataType::Mesh => color_from_hex("#b43e3e").unwrap(),
+            DataType::HeightMap => color_from_hex("#33673b").unwrap(),
             DataType::Vector => color_from_hex("#1A535C").unwrap(),
             DataType::Scalar => color_from_hex("#4ecdc4").unwrap(),
             DataType::Selection => color_from_hex("#f7fff7").unwrap(),
@@ -73,6 +74,7 @@ impl DataTypeTrait<CustomGraphState> for DataTypeUi {
             DataType::Scalar => "scalar",
             DataType::Selection => "selection",
             DataType::Mesh => "mesh",
+            DataType::HeightMap => "heightmap",
             DataType::String => "string",
         })
     }
@@ -108,7 +110,7 @@ impl NodeDataTrait for NodeData {
             // Show 'Enable' button for nodes that output a mesh
             let can_be_enabled = graph[node_id]
                 .outputs(graph)
-                .any(|output| output.typ.0 == DataType::Mesh);
+                .any(|output| output.typ.0.can_be_enabled());
             let is_active = user_state.active_node == Some(node_id);
 
             if can_be_enabled {
@@ -219,6 +221,7 @@ impl NodeTemplateTrait for NodeDefinitionUi {
                 DataType::Scalar => InputParamKind::ConnectionOrConstant,
                 DataType::Selection => InputParamKind::ConnectionOrConstant,
                 DataType::Mesh => InputParamKind::ConnectionOnly,
+                DataType::HeightMap => InputParamKind::ConnectionOnly,
                 DataType::String => InputParamKind::ConnectionOrConstant,
             };
 

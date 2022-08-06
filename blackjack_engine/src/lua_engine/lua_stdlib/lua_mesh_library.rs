@@ -154,10 +154,6 @@ pub fn load(lua: &Lua) -> anyhow::Result<()> {
         }
     );
 
-    for register_fn in inventory::iter::<super::LuaRegisterFn>() {
-        (register_fn.f)(lua);
-    }
-
     let types = lua.create_table()?;
     types.set("VertexId", ChannelKeyType::VertexId)?;
     types.set("FaceId", ChannelKeyType::FaceId)?;

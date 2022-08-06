@@ -138,9 +138,7 @@ fn codegen_node(
     }
     macro_rules! emit_return {
         ($name:expr) => {
-            if target {
-                emit_line!("return {};", $name);
-            }
+            emit_line!("return {};", $name);
         };
     }
 
@@ -206,26 +204,32 @@ fn codegen_node(
 
     emit_line!("local {output_addr} = NodeLibrary:callNode('{node_name}', {args})");
 
-    // TODO: The return value is not always out_mesh. This should be stored
-    // somehow in the node definition.
-    emit_return!(format!("{output_addr}.out_mesh"));
+    if target {
+        let return_val = node
+            .return_value
+            .as_ref()
+            .ok_or_else(|| anyhow!("The target node should return something"))?;
+        emit_return!(format!("{output_addr}.{return_val}"));
+    }
 
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
+
     use super::*;
     #[test]
     pub fn compile_simple_graph_test() {
         let mut graph = BjkGraph::new();
 
-        let cube = graph.add_node("Box");
+        let cube = graph.add_node("Box", Some("out_mesh".into()));
         graph.add_input(cube, "origin", DataType::Vector).unwrap();
         graph.add_input(cube, "size", DataType::Scalar).unwrap();
         graph.add_output(cube, "out_mesh", DataType::Mesh).unwrap();
 
-        let transform = graph.add_node("Translate");
+        let transform = graph.add_node("Translate", Some("out_mesh".into()));
         graph.add_input(transform, "mesh", DataType::Mesh).unwrap();
         graph
             .add_input(transform, "translate", DataType::Vector)

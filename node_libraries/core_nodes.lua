@@ -33,6 +33,7 @@ local function enum(name, values, selected)
     }
 end
 local function file(name) return {name = name, type = "file"} end
+local function heightmap(name) return {name = name, type = "heightmap"} end
 
 -- Primitives: Construct new meshes based on common patterns
 local primitives = {
@@ -87,6 +88,29 @@ local primitives = {
         outputs = {mesh("out_mesh")},
         returns = "out_mesh"
     },
+    MakeTerrain = {
+        label = "Terrain",
+        op = function(inputs)
+            return {
+                out_heightmap = Blackjack.heightmap_perlin(
+                    inputs.width,
+                    inputs.height,
+                    inputs.frequency,
+                    inputs.offset,
+                    inputs.amplitude
+                )
+            }
+        end,
+        inputs = {
+            scalar("width", 100.0, 0.0, 1000.0),
+            scalar("height", 100.0, 0.0, 1000.0),
+            scalar("frequency", 1.0, 0.0, 5.0),
+            v3("offset", vector(0,0,0)),
+            scalar("amplitude", 1.0, 0.00, 10.0),
+        },
+        outputs = {heightmap("out_heightmap")},
+        returns = "out_heightmap"
+    }
 }
 
 local function parse_ch_key(s)

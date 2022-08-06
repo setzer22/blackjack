@@ -6,3 +6,7 @@
 
 /// The HalfEdge data structure, with different kinds of topological and geometric operations.
 pub mod halfedge;
+
+/// A heightmap data structure. A different mesh representation based on
+/// heightmaps. Supports different operations.
+pub mod heightmap;

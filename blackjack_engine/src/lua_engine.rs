@@ -9,8 +9,11 @@ use std::{
     time::Duration,
 };
 
-use crate::{graph::NodeDefinitions, graph_compiler::ExternalParameterValues, prelude::*};
-use mlua::{Function, Lua};
+use crate::{
+    graph::NodeDefinitions, graph_compiler::ExternalParameterValues, mesh::heightmap::HeightMap,
+    prelude::*,
+};
+use mlua::{FromLua, Function, Lua};
 use notify::{DebouncedEvent, Watcher};
 
 pub mod lua_stdlib;
@@ -31,18 +34,32 @@ impl<T> ToLuaError<T> for Result<T, TraversalError> {
     }
 }
 
+pub enum RenderableThing {
+    HalfEdgeMesh(HalfEdgeMesh),
+    HeightMap(HeightMap),
+}
+
 pub fn run_program<'lua>(
     lua: &'lua Lua,
     lua_program: &str,
     input: &ExternalParameterValues,
-) -> Result<HalfEdgeMesh> {
+) -> Result<RenderableThing> {
     lua.load(lua_program).exec()?;
     let values = input.make_input_table(lua)?;
     let entry_point: Function = lua.globals().get("main")?;
-    let mesh = entry_point
-        .call::<_, HalfEdgeMesh>(values)
+    let result = entry_point
+        .call::<_, mlua::AnyUserData>(values)
         .map_err(|err| anyhow!("{}", err))?;
-    Ok(mesh)
+
+    if result.is::<HalfEdgeMesh>() {
+        Ok(RenderableThing::HalfEdgeMesh(result.take()?))
+    } else if result.is::<HeightMap>() {
+        Ok(RenderableThing::HalfEdgeMesh(result.take()?))
+    } else {
+        Err(anyhow::anyhow!(
+            "Object {result:?} is not a renderable thing"
+        ))
+    }
 }
 
 pub struct LuaRuntime {
