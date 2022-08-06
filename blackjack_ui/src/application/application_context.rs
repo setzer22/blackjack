@@ -9,7 +9,7 @@ use crate::prelude::*;
 use anyhow::Error;
 use blackjack_engine::{
     graph_compiler::{compile_graph, CompiledProgram, ExternalParameterValues},
-    lua_engine::LuaRuntime,
+    lua_engine::{LuaRuntime, RenderableThing},
     prelude::{FaceOverlayBuffers, HalfEdgeMesh, LineBuffers, PointBuffers, VertexIndexBuffers},
 };
 use egui_node_graph::NodeId;
@@ -21,10 +21,11 @@ use super::{
 };
 
 pub struct ApplicationContext {
-    /// The mesh is at the center of the application
-    /// - The graph generates a program that produces this mesh.
-    /// - The 3d viewport renders this mesh.
-    pub mesh: Option<HalfEdgeMesh>,
+    /// The 'renderable thing' is at the center of the application, it is
+    /// typically a kind of mesh.
+    /// - The graph generates a program that produces it.
+    /// - The 3d viewport renders it.
+    pub renderable_thing: Option<RenderableThing>,
     /// The tree of splits at the center of application. Splits recursively
     /// partition the state either horizontally or vertically. This separation
     /// is dynamic, very similar to Blender's UI model
@@ -34,7 +35,7 @@ pub struct ApplicationContext {
 impl ApplicationContext {
     pub fn new() -> ApplicationContext {
         ApplicationContext {
-            mesh: None,
+            renderable_thing: None,
             split_tree: SplitTree::default_tree(),
         }
     }
@@ -86,74 +87,98 @@ impl ApplicationContext {
         render_ctx: &mut RenderContext,
         viewport_settings: &Viewport3dSettings,
     ) -> Result<()> {
-        if let Some(mesh) = self.mesh.as_mut() {
-            // Base mesh
-            {
-                if let Some(VertexIndexBuffers {
-                    positions,
-                    normals,
-                    indices,
-                }) = match viewport_settings.face_mode {
-                    FaceDrawMode::Real => {
-                        if mesh.gen_config.smooth_normals {
-                            Some(mesh.generate_triangle_buffers_smooth(false)?)
-                        } else {
-                            Some(mesh.generate_triangle_buffers_flat(false)?)
+        match self.renderable_thing.as_mut() {
+            Some(RenderableThing::HalfEdgeMesh(mesh)) => {
+                // Base mesh
+                {
+                    if let Some(VertexIndexBuffers {
+                        positions,
+                        normals,
+                        indices,
+                    }) = match viewport_settings.face_mode {
+                        FaceDrawMode::Real => {
+                            if mesh.gen_config.smooth_normals {
+                                Some(mesh.generate_triangle_buffers_smooth(false)?)
+                            } else {
+                                Some(mesh.generate_triangle_buffers_flat(false)?)
+                            }
+                        }
+                        FaceDrawMode::Flat => Some(mesh.generate_triangle_buffers_flat(true)?),
+                        FaceDrawMode::Smooth => Some(mesh.generate_triangle_buffers_smooth(true)?),
+                        FaceDrawMode::None => None,
+                    } {
+                        if !positions.is_empty() {
+                            render_ctx.face_routine.add_base_mesh(
+                                &render_ctx.renderer,
+                                &positions,
+                                &normals,
+                                &indices,
+                            );
                         }
                     }
-                    FaceDrawMode::Flat => Some(mesh.generate_triangle_buffers_flat(true)?),
-                    FaceDrawMode::Smooth => Some(mesh.generate_triangle_buffers_smooth(true)?),
-                    FaceDrawMode::None => None,
-                } {
+                }
+
+                // Face overlays
+                {
+                    let FaceOverlayBuffers { positions, colors } =
+                        mesh.generate_face_overlay_buffers();
                     if !positions.is_empty() {
-                        render_ctx.face_routine.add_base_mesh(
+                        render_ctx.face_routine.add_overlay_mesh(
                             &render_ctx.renderer,
                             &positions,
-                            &normals,
-                            &indices,
+                            &colors,
                         );
                     }
                 }
-            }
 
-            // Face overlays
-            {
-                let FaceOverlayBuffers { positions, colors } = mesh.generate_face_overlay_buffers();
-                if !positions.is_empty() {
-                    render_ctx.face_routine.add_overlay_mesh(
-                        &render_ctx.renderer,
-                        &positions,
-                        &colors,
-                    );
+                // Edges
+                {
+                    if let Some(LineBuffers { positions, colors }) =
+                        match viewport_settings.edge_mode {
+                            EdgeDrawMode::HalfEdge => Some(mesh.generate_halfedge_arrow_buffers()?),
+                            EdgeDrawMode::FullEdge => Some(mesh.generate_line_buffers()?),
+                            EdgeDrawMode::None => None,
+                        }
+                    {
+                        if !positions.is_empty() {
+                            render_ctx.wireframe_routine.add_wireframe(
+                                &render_ctx.renderer.device,
+                                &positions,
+                                &colors,
+                            )
+                        }
+                    }
                 }
-            }
 
-            // Edges
-            {
-                if let Some(LineBuffers { positions, colors }) = match viewport_settings.edge_mode {
-                    EdgeDrawMode::HalfEdge => Some(mesh.generate_halfedge_arrow_buffers()?),
-                    EdgeDrawMode::FullEdge => Some(mesh.generate_line_buffers()?),
-                    EdgeDrawMode::None => None,
-                } {
+                // Vertices
+                {
+                    let PointBuffers { positions } = mesh.generate_point_buffers();
                     if !positions.is_empty() {
-                        render_ctx.wireframe_routine.add_wireframe(
-                            &render_ctx.renderer.device,
-                            &positions,
-                            &colors,
-                        )
+                        render_ctx
+                            .point_cloud_routine
+                            .add_point_cloud(&render_ctx.renderer.device, &positions);
                     }
                 }
             }
+            Some(RenderableThing::HeightMap(heightmap)) => {
+                let VertexIndexBuffers {
+                    positions,
+                    normals,
+                    indices,
+                } = heightmap.generate_triangle_buffers();
 
-            // Vertices
-            {
-                let PointBuffers { positions } = mesh.generate_point_buffers();
                 if !positions.is_empty() {
-                    render_ctx
-                        .point_cloud_routine
-                        .add_point_cloud(&render_ctx.renderer.device, &positions);
+                    render_ctx.face_routine.add_base_mesh(
+                        &render_ctx.renderer,
+                        &positions,
+                        &normals,
+                        &indices,
+                    );
                 }
+
+                // TODO @Heightmap
             }
+            None => { /* Ignore */ }
         }
         Ok(())
     }
@@ -197,10 +222,10 @@ impl ApplicationContext {
                 &params,
             )?;
             // WIP: Renderable...
-            self.mesh = Some(mesh);
+            self.renderable_thing = Some(renderable);
             Ok(program.lua_program)
         } else {
-            self.mesh = None;
+            self.renderable_thing = None;
             Ok("".into())
         }
     }

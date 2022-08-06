@@ -4,6 +4,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+use blackjack_engine::lua_engine::RenderableThing;
 use blackjack_engine::prelude::HalfEdgeMesh;
 use winit::event::MouseButton;
 
@@ -190,7 +191,7 @@ impl Viewport3d {
         &mut self,
         ui: &mut egui::Ui,
         offscreen_viewport: &mut AppViewport,
-        mesh: Option<&HalfEdgeMesh>,
+        renderable_thing: Option<&RenderableThing>,
     ) {
         ui.vertical(|ui| {
             ui.horizontal(|ui| {
@@ -279,12 +280,12 @@ impl Viewport3d {
             });
             offscreen_viewport.show(ui, ui.available_size());
         });
-        if let Some(mesh) = mesh {
+        if let Some(renderable_thing) = renderable_thing {
             crate::app_window::gui_overlay::draw_gui_overlays(
                 &self.view_proj,
                 offscreen_viewport.rect,
                 ui.ctx(),
-                mesh,
+                renderable_thing,
                 self.settings.overlay_mode,
             );
         }

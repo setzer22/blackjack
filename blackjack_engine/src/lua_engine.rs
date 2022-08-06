@@ -54,7 +54,7 @@ pub fn run_program<'lua>(
     if result.is::<HalfEdgeMesh>() {
         Ok(RenderableThing::HalfEdgeMesh(result.take()?))
     } else if result.is::<HeightMap>() {
-        Ok(RenderableThing::HalfEdgeMesh(result.take()?))
+        Ok(RenderableThing::HeightMap(result.take()?))
     } else {
         Err(anyhow::anyhow!(
             "Object {result:?} is not a renderable thing"

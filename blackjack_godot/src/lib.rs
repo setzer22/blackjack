@@ -4,6 +4,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+use blackjack_engine::lua_engine::RenderableThing;
 use gdnative::api::Material;
 use slotmap::KeyData;
 use slotmap::SlotMap;
@@ -306,9 +307,12 @@ impl BlackjackApi {
                 &jack.program.lua_program,
                 &jack.params,
             ) {
-                Ok(mesh) => {
+                Ok(RenderableThing::HalfEdgeMesh(mesh)) => {
                     let godot_mesh = halfedge_to_godot_mesh(&mesh, materials).unwrap();
                     Some(UpdateJackResult::Ok(godot_mesh))
+                }
+                Ok(_) => {
+                    Some(UpdateJackResult::Err("This renderable type is not supported. @Heightmap".into()))
                 }
                 Err(err) => Some(UpdateJackResult::Err(err.to_string())),
             }
