@@ -327,7 +327,7 @@ impl BjkGraph {
         Ok(())
     }
 
-    /// Registers a new input for `node_id`
+    /// Registers a new output for `node_id`
     pub fn add_output(
         &mut self,
         node_id: BjkNodeId,
