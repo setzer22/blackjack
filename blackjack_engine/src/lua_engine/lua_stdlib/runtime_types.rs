@@ -5,6 +5,7 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 use noise::NoiseFn;
+use num_traits::Float;
 
 use super::*;
 
@@ -85,7 +86,25 @@ pub struct PerlinNoise(pub noise::Perlin);
 impl UserData for PerlinNoise {
     fn add_methods<'lua, M: mlua::UserDataMethods<'lua, Self>>(methods: &mut M) {
         methods.add_method("get_3d", |_lua, this, (x, y, z): (f64, f64, f64)| {
-            Ok(this.0.get([x, y, z]))
+            // NOTE: Noise crate crashes when given weird numbers. We can't
+            // afford to crash when weird numbers are sent from Lua, so we need
+            // to add this guard here.
+            if x.is_finite() && y.is_finite() && z.is_finite() {
+                Ok(this.0.get([x, y, z]))
+            } else {
+                Ok(f64::NAN)
+            }
         });
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use noise::NoiseFn;
+
+    #[test]
+    pub fn test() {
+        let perlin = noise::Perlin::new();
+        dbg!(perlin.get([0.0, 0.0, 0.0]));
     }
 }

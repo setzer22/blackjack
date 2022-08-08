@@ -71,7 +71,7 @@ pub struct LuaRuntime {
     pub load_libraries_fn: Box<dyn Fn(&Lua, &str) -> Result<NodeDefinitions>>,
 }
 
-const NODE_LIBRARIES_PATH: &str = "node_libraries";
+const NODE_LIBRARIES_PATH: &str = "blackjack_lua/run";
 
 impl LuaRuntime {
     /// Initializes and returns the Blackjack Lua runtime. This function will

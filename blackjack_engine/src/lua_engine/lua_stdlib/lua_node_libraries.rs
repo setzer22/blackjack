@@ -11,8 +11,8 @@ use crate::graph::NodeDefinition;
 use super::*;
 
 pub struct LuaSourceFile {
-    contents: String,
-    name: String,
+    pub contents: String,
+    pub name: String,
 }
 impl<'lua> AsChunk<'lua> for LuaSourceFile {
     fn source(&self) -> std::result::Result<Cow<'_, [u8]>, std::io::Error> {
@@ -43,7 +43,6 @@ pub fn load_node_libraries_with_std(
             let path = entry.path();
 
             let path_display = format!("{}", path.display());
-
             println!("Loading Lua file {}", path_display);
 
             lua.load(&LuaSourceFile {

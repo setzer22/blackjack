@@ -12,7 +12,7 @@ var import_plugin
 
 func _enter_tree():
     if !ProjectSettings.has_setting("Blackjack/library_path"):
-        ProjectSettings.set_setting("Blackjack/library_path", "res://node_libraries")
+        ProjectSettings.set_setting("Blackjack/library_path", "res://blackjack_lua/run")
         
     add_custom_type(
         "BlackjackJack",

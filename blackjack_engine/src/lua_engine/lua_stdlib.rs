@@ -42,6 +42,9 @@ macro_rules! lua_fn {
 
 mod runtime_types;
 pub use runtime_types::*;
+
+mod lua_require_io;
+mod lua_core_library;
 mod lua_constructors_library;
 mod lua_export_library;
 mod lua_mesh_library;
@@ -72,6 +75,7 @@ pub fn load_lua_libraries(lua: &Lua) -> anyhow::Result<()> {
 
 /// Loads all blackjack Rust function wrappers to the Lua API
 pub fn load_host_libraries(lua: &Lua) -> anyhow::Result<()> {
+    lua_core_library::load(lua)?;
     lua_mesh_library::load(lua)?;
     lua_primitives_library::load(lua)?;
     lua_export_library::load(lua)?;

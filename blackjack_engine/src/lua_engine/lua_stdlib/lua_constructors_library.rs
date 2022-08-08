@@ -45,18 +45,5 @@ pub fn load(lua: &Lua) -> anyhow::Result<()> {
         Ok(HalfEdgeMesh::new())
     });
 
-    lua.globals().set(
-        "loadstring",
-        lua.create_function(|lua, s: String| -> Result<mlua::MultiValue, _> {
-            match lua.load(&s).eval::<mlua::Value>() {
-                Ok(v) => Ok(mlua::MultiValue::from_vec(vec![v])),
-                Err(err) => Ok(mlua::MultiValue::from_vec(vec![
-                    mlua::Nil,
-                    format!("{err}").to_lua(lua)?,
-                ])),
-            }
-        })?,
-    )?;
-
     Ok(())
 }

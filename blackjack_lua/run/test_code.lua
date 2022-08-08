@@ -4,23 +4,7 @@
 -- License, v. 2.0. If a copy of the MPL was not distributed with this
 -- file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-local function mesh(name) return {name = name, type = "mesh"} end
-local function v3(name, default)
-    return {name = name, default = default, type = "vec3"}
-end
-local function selection(name) return {name = name, type = "selection"} end
-local function scalar(name, default, min, max)
-    return {
-        name = name,
-        default = default,
-        min = min,
-        max = max,
-        type = "scalar"
-    }
-end
-local function strparam(name, default, multiline)
-    return {name = name, default = default, type = "string", multiline = multiline}
-end
+local P = require("params")
 
 local perlin = Blackjack.perlin()
 
@@ -29,11 +13,22 @@ local function normalize(v: Vec3)
     return vector(v.x / len, v.y / len, v.z / len)
 end
 
+local function load_function(code)
+    local func, err = loadstring(code)
+    if err ~= nil then
+        error(err)
+    end
+    if typeof(func) ~= "function" then
+        error("Code should be a single lua function")
+    end
+    return func
+end
+
 local function circle_noise(pos, radius, seed, strength, noise_scale, points)
     local m = Primitives.circle(pos, radius, points)
     local position_ch = m:get_channel(Types.VertexId, Types.Vec3, "position")
     for i, pos in ipairs(position_ch) do
-        local noise_pos = pos * noise_scale + vector(seed, seed, seed);
+        local noise_pos = pos * noise_scale + vector(seed, seed, seed)
         local noise = perlin:get_3d(noise_pos.x, noise_pos.y, noise_pos.z)
         local dir = normalize(pos)
         position_ch[i] = position_ch[i] + dir * noise * strength
@@ -43,23 +38,23 @@ local function circle_noise(pos, radius, seed, strength, noise_scale, points)
 end
 
 local function parse_l_system_def(input: string): LSystemDef
-    local axiom : string = ""
+    local axiom: string = ""
     local rules = {}
     for line in input:gmatch("[^\r\n]+") do
         if axiom == "" then
             local m = line:match("(%a+)")
-            if m ~= nil then 
-                axiom = m 
-            else 
-                print("Invalid axiom definition"..line)
+            if m ~= nil then
+                axiom = m
+            else
+                print("Invalid axiom definition" .. line)
                 axiom = "NONE"
             end
         else
-            local lhs : string?, rhs : string? = line:match("(%a+)%s+%->%s+([%a%[%]%+%-]+)")
+            local lhs: string?, rhs: string? = line:match("(%a+)%s+%->%s+([%a%[%]%+%-]+)")
             if lhs ~= nil and rhs ~= nil then
                 table.insert(rules, { lhs = lhs, rhs = rhs })
             else
-                print("Error parsing line of L-System: "..line)
+                print("Error parsing line of L-System: " .. line)
             end
         end
     end
@@ -71,7 +66,7 @@ type Rule = {
     rhs: string,
 }
 type LSystemDef = {
-    rules: {Rule},
+    rules: { Rule },
     axiom: string,
 }
 
@@ -95,26 +90,26 @@ type LSystemParams = {
     initial_forward: number,
 }
 
-local function l_system_substitution(sentence: string, l_system: LSystemDef) : string
+local function l_system_substitution(sentence: string, l_system: LSystemDef): string
     local new_sentence = ""
     for c in sentence:gmatch(".") do
         local some_matched = false
-        for _,rule in l_system.rules do
+        for _, rule in l_system.rules do
             if c == rule.lhs then
-                new_sentence = new_sentence..rule.rhs
+                new_sentence = new_sentence .. rule.rhs
                 some_matched = true
             end
         end
         if not some_matched then
-            new_sentence = new_sentence..c
+            new_sentence = new_sentence .. c
         end
     end
     return new_sentence
 end
 
-local function l_system_iterate(l_system: LSystemDef, iterations: number) : string
+local function l_system_iterate(l_system: LSystemDef, iterations: number): string
     local sentence = l_system.axiom
-    for i = 1,iterations do
+    for i = 1, iterations do
         sentence = l_system_substitution(sentence, l_system)
     end
     return sentence
@@ -129,7 +124,7 @@ local function mk_turtle(facing: Vec3, position: Vec3, distance: number): Turtle
     }
 end
 
-local function rotate_vec(v: Vec3, angle: number) : Vec3
+local function rotate_vec(v: Vec3, angle: number): Vec3
     local x = math.cos(angle) * v.x - math.sin(angle) * v.y
     local y = math.sin(angle) * v.x + math.cos(angle) * v.y
     return vector(x, y, v.z)
@@ -137,8 +132,8 @@ end
 
 local PI = 3.1415926535
 
-local function l_system_interpreter(sentence: string, params: LSystemParams) : {Edge}
-    local turtle_stack : {Turtle} = {mk_turtle(vector(0,1,0), vector(0,0,0), 1.0)}
+local function l_system_interpreter(sentence: string, params: LSystemParams): { Edge }
+    local turtle_stack: { Turtle } = { mk_turtle(vector(0, 1, 0), vector(0, 0, 0), 1.0) }
     local edges = {}
 
     for c in sentence:gmatch(".") do
@@ -161,10 +156,10 @@ local function l_system_interpreter(sentence: string, params: LSystemParams) : {
             local forward = params.initial_forward * params.forward_damp ^ turtle.distance
             local end_point = turtle.position + turtle.facing * forward
             table.insert(edges, {
-                start_point = turtle.position, 
-                end_point = end_point, 
+                start_point = turtle.position,
+                end_point = end_point,
                 distance = turtle.distance,
-                final = false -- set later by the ] branch
+                final = false, -- set later by the ] branch
             })
             turtle.position = end_point
             turtle.distance += 1
@@ -174,7 +169,7 @@ local function l_system_interpreter(sentence: string, params: LSystemParams) : {
     return edges
 end
 
-local function make_l_system_mesh(edges: {Edge}) : any
+local function make_l_system_mesh(edges: { Edge }): any
     local mesh = Blackjack.mesh()
     local edge_distances = mesh:ensure_assoc_channel(Types.HalfEdgeId, Types.f32, "distance")
     local final_verts = mesh:ensure_assoc_channel(Types.VertexId, Types.bool, "final")
@@ -195,74 +190,92 @@ local test_channel_nodes = {
         op = function(inputs)
             local m = inputs.mesh:clone()
 
-            local position_ch : {Vec3} = m:get_channel(Types.VertexId, Types.Vec3, "position")
-            local normal_ch : {Vec3} = m:get_channel(Types.VertexId, Types.Vec3, "vertex_normal")
+            local position_ch: { Vec3 } = m:get_channel(Types.VertexId, Types.Vec3, "position")
+            local normal_ch: { Vec3 } = m:get_channel(Types.VertexId, Types.Vec3, "vertex_normal")
 
             for i, pos in ipairs(position_ch) do
-                local noise_pos = pos * inputs.scale + inputs.offset;
+                local noise_pos = pos * inputs.scale + inputs.offset
                 local noise = perlin:get_3d(noise_pos.x, noise_pos.y, noise_pos.z)
                 position_ch[i] = pos + normal_ch[i] * noise * inputs.strength
             end
 
             m:set_channel(Types.VertexId, Types.Vec3, "position", position_ch)
 
-            return {out_mesh = m}
+            return { out_mesh = m }
         end,
         inputs = {
-            mesh("mesh"),
-            scalar("scale", 3.0, 0.0, 10.0),
-            v3("offset", vector(0, 0, 0)),
-            scalar("strength", 0.1, 0.0, 1.0),
+            P.mesh("mesh"),
+            P.scalar("scale", 3.0, 0.0, 10.0),
+            P.v3("offset", vector(0, 0, 0)),
+            P.scalar("strength", 0.1, 0.0, 1.0),
         },
-        outputs = {mesh("out_mesh")},
-        returns = "out_mesh"
+        outputs = {
+            P.mesh("out_mesh")
+        },
+        returns = "out_mesh",
     },
     CircleNoise = {
         label = "Circle Noise",
         op = function(inputs)
-            return {out_mesh = circle_noise(vector(0,0,0), 1.0, inputs.seed, inputs.strength, inputs.noise_scale, inputs.points)}
+            return {
+                out_mesh = circle_noise(
+                    vector(0, 0, 0),
+                    1.0,
+                    inputs.seed,
+                    inputs.strength,
+                    inputs.noise_scale,
+                    inputs.points
+                ),
+            }
         end,
         inputs = {
-            scalar("strength", 0.1, 0.0, 1.0), 
-            scalar("noise_scale", 0.1, 0.01, 1.0),
-            scalar("seed", 0.0, 0.0, 100.0),
-            scalar("points", 8.0, 3.0, 16.0)
+            P.scalar("strength", 0.1, 0.0, 1.0),
+            P.scalar("noise_scale", 0.1, 0.01, 1.0),
+            P.scalar("seed", 0.0, 0.0, 100.0),
+            P.scalar("points", 8.0, 3.0, 16.0),
         },
-        outputs = {mesh("out_mesh")},
-        returns = "out_mesh"
+        outputs = {
+            P.mesh("out_mesh"),
+        },
+        returns = "out_mesh",
     },
     Capsule = {
         label = "Capsule",
-        op = function (inputs)
+        op = function(inputs)
             local m = Blackjack.mesh()
-            local r : number = inputs.radius
-            local height : number = inputs.height
+            local r: number = inputs.radius
+            local height: number = inputs.height
             local rings = inputs.rings
 
-            for ring=0,rings do
+            for ring = 0, rings do
                 local ring_height = r * (ring / rings)
-                local inner_radius = math.sqrt(r*r - ring_height * ring_height)
+                local inner_radius = math.sqrt(r * r - ring_height * ring_height)
 
-                local circle = Primitives.circle(vector(0,ring_height + height / 2,0), inner_radius, 12.0) 
-                Ops.make_group(circle, Types.HalfEdgeId, Blackjack.selection("*"), "ring"..ring)
+                local circle = Primitives.circle(vector(0, ring_height + height / 2, 0), inner_radius, 12.0)
+                Ops.make_group(circle, Types.HalfEdgeId, Blackjack.selection("*"), "ring" .. ring)
                 Ops.merge(m, circle)
             end
 
-            for ring=0,rings do
+            for ring = 0, rings do
                 local ring_height = r * (ring / rings)
-                local inner_radius = math.sqrt(r*r - ring_height * ring_height)
+                local inner_radius = math.sqrt(r * r - ring_height * ring_height)
 
-                local circle = Primitives.circle(vector(0,-ring_height - height / 2,0), inner_radius, 12.0)
-                Ops.make_group(circle, Types.HalfEdgeId, Blackjack.selection("*"), "bot_ring"..ring)
+                local circle = Primitives.circle(vector(0, -ring_height - height / 2, 0), inner_radius, 12.0)
+                Ops.make_group(circle, Types.HalfEdgeId, Blackjack.selection("*"), "bot_ring" .. ring)
                 Ops.merge(m, circle)
             end
 
-            for ring=0,rings-1 do
-                Ops.bridge_chains(m, Blackjack.selection("@ring"..ring), Blackjack.selection("@ring"..ring+1), 1)
+            for ring = 0, rings - 1 do
+                Ops.bridge_chains(m, Blackjack.selection("@ring" .. ring), Blackjack.selection("@ring" .. ring + 1), 1)
             end
 
-            for ring=0,rings-1 do
-                Ops.bridge_chains(m, Blackjack.selection("@bot_ring"..ring), Blackjack.selection("@bot_ring"..ring+1), 2)
+            for ring = 0, rings - 1 do
+                Ops.bridge_chains(
+                    m,
+                    Blackjack.selection("@bot_ring" .. ring),
+                    Blackjack.selection("@bot_ring" .. ring + 1),
+                    2
+                )
             end
 
             Ops.bridge_chains(m, Blackjack.selection("@ring0"), Blackjack.selection("@bot_ring0"), 2)
@@ -270,19 +283,21 @@ local test_channel_nodes = {
             return { out_mesh = m }
         end,
         inputs = {
-            scalar("radius", 1.0, 0.0, 10.0),
-            scalar("rings", 5.0, 1.0, 10.0),
-            scalar("height", 2.0, 0.0, 5.0),
+            P.scalar("radius", 1.0, 0.0, 10.0),
+            P.scalar("rings", 5.0, 1.0, 10.0),
+            P.scalar("height", 2.0, 0.0, 5.0),
         },
-        outputs = {mesh("out_mesh")},
+        outputs = {
+            P.mesh("out_mesh"),
+        },
     },
     LSystem = {
         label = "L-System",
         op = function(inputs)
-            local rule : string = inputs.rule
-            local l_system_def = parse_l_system_def(rule);
+            local rule: string = inputs.rule
+            local l_system_def = parse_l_system_def(rule)
 
-            local params : LSystemParams = {
+            local params: LSystemParams = {
                 forward_damp = inputs.forward_damp,
                 angle_damp = inputs.angle_damp,
                 initial_angle = inputs.initial_angle,
@@ -293,59 +308,60 @@ local test_channel_nodes = {
             local edges = l_system_interpreter(sentence, params)
             local mesh = make_l_system_mesh(edges)
 
-            return {out_mesh = mesh}
+            return { out_mesh = mesh }
         end,
         inputs = {
-            strparam("rule", "F+[F--F]", true), 
-            scalar("iterations", 1, 1, 10),
-            scalar("initial_forward", 1, 0, 5),
-            scalar("forward_damp", 0.1, 0, 1),
-            scalar("initial_angle", PI / 6, 0, 2 * PI),
-            scalar("angle_damp", 0.1, 0, 1)
-        } :: {any},
-        outputs = {mesh("out_mesh")},
-        returns = "out_mesh"
+            P.strparam("rule", "F+[F--F]", true),
+            P.scalar("iterations", 1, 1, 10),
+            P.scalar("initial_forward", 1, 0, 5),
+            P.scalar("forward_damp", 0.1, 0, 1),
+            P.scalar("initial_angle", PI / 6, 0, 2 * PI),
+            P.scalar("angle_damp", 0.1, 0, 1),
+        } :: { any },
+        outputs = {
+            P.mesh("out_mesh"),
+        },
+        returns = "out_mesh",
     },
     MakeTrunk = {
         label = "Make trunk",
         op = function(inputs)
-            local edge_distances  = inputs.l_system:get_assoc_channel(Types.HalfEdgeId, Types.f32, "distance")
-            local result = inputs.l_system:reduce_halfedges(
-                Blackjack.mesh(),
-                function (acc, h_id)
-                    local scale_damp : number = inputs.scale_damp
-                    if edge_distances[h_id] < 0 then
-                        return acc
-                    else
-                        local src_pos, dst_pos = inputs.l_system:halfedge_endpoints(h_id)
+            local edge_distances = inputs.l_system:get_assoc_channel(Types.HalfEdgeId, Types.f32, "distance")
+            local result = inputs.l_system:reduce_halfedges(Blackjack.mesh(), function(acc, h_id)
+                local scale_damp: number = inputs.scale_damp
+                if edge_distances[h_id] < 0 then
+                    return acc
+                else
+                    local src_pos, dst_pos = inputs.l_system:halfedge_endpoints(h_id)
 
-                        local src_scale = 1.0 * scale_damp ^ edge_distances[h_id]
-                        local dst_scale = 1.0 * scale_damp ^ (edge_distances[h_id] + 1)
+                    local src_scale = 1.0 * scale_damp ^ edge_distances[h_id]
+                    local dst_scale = 1.0 * scale_damp ^ (edge_distances[h_id] + 1)
 
-                        local src_ring = inputs.ring:clone()
-                        Ops.transform(src_ring, src_pos, vector(0,0,0), vector(src_scale,src_scale,src_scale))
-                        Ops.make_group(src_ring, Types.HalfEdgeId, Blackjack.selection("*"), "src_ring")
-                        
-                        local dst_ring = inputs.ring:clone()
-                        Ops.transform(dst_ring, dst_pos, vector(0,0,0), vector(dst_scale,dst_scale,dst_scale))
-                        Ops.make_group(dst_ring, Types.HalfEdgeId, Blackjack.selection("*"), "dst_ring")
+                    local src_ring = inputs.ring:clone()
+                    Ops.transform(src_ring, src_pos, vector(0, 0, 0), vector(src_scale, src_scale, src_scale))
+                    Ops.make_group(src_ring, Types.HalfEdgeId, Blackjack.selection("*"), "src_ring")
 
-                        Ops.merge(src_ring, dst_ring)
-                        Ops.bridge_chains(src_ring, Blackjack.selection("@src_ring"), Blackjack.selection("@dst_ring"), 0)
+                    local dst_ring = inputs.ring:clone()
+                    Ops.transform(dst_ring, dst_pos, vector(0, 0, 0), vector(dst_scale, dst_scale, dst_scale))
+                    Ops.make_group(dst_ring, Types.HalfEdgeId, Blackjack.selection("*"), "dst_ring")
 
-                        Ops.merge(acc, src_ring)
-                        return acc
-                    end
-                end 
-            )
+                    Ops.merge(src_ring, dst_ring)
+                    Ops.bridge_chains(src_ring, Blackjack.selection("@src_ring"), Blackjack.selection("@dst_ring"), 0)
+
+                    Ops.merge(acc, src_ring)
+                    return acc
+                end
+            end)
             return { out_mesh = result }
         end,
         inputs = {
-            mesh("l_system"),
-            mesh("ring"),
-            scalar("scale_damp", 0.95, 0.0, 1.0),
-        } :: {any},
-        outputs = { mesh("out_mesh") } :: {any},
+            P.mesh("l_system"),
+            P.mesh("ring"),
+            P.scalar("scale_damp", 0.95, 0.0, 1.0),
+        },
+        outputs = {
+            P.mesh("out_mesh"),
+        },
         returns = "out_mesh",
     },
     MakeLeaves = {
@@ -353,7 +369,7 @@ local test_channel_nodes = {
         op = function(inputs)
             local result = Blackjack.mesh()
             local final_verts = inputs.l_system:get_assoc_channel(Types.VertexId, Types.bool, "final")
-            for v,is_final in final_verts do
+            for v, is_final in final_verts do
                 if is_final then
                     result:add_vertex(inputs.l_system:vertex_position(v))
                 end
@@ -362,9 +378,11 @@ local test_channel_nodes = {
             return { out_mesh = result }
         end,
         inputs = {
-            mesh("l_system"),
-        } :: {any},
-        outputs = { mesh("out_mesh") } :: {any},
+            P.mesh("l_system"),
+        },
+        outputs = {
+            P.mesh("out_mesh"),
+        },
         returns = "out_mesh",
     },
     PointCloud = {
@@ -373,10 +391,12 @@ local test_channel_nodes = {
             return { out_mesh = inputs.mesh:point_cloud(inputs.points) }
         end,
         inputs = {
-            mesh("mesh"),
-            selection("points")
-        } :: {any},
-        outputs = { mesh("out_mesh") } :: {any},
+            P.mesh("mesh"),
+            P.selection("points"),
+        },
+        outputs = {
+            P.mesh("out_mesh"),
+        },
         returns = "out_mesh",
     },
     RandomizeSize = {
@@ -385,18 +405,20 @@ local test_channel_nodes = {
             local mesh = inputs.mesh:clone()
             local size_ch = mesh:ensure_channel(Types.VertexId, Types.f32, "size")
             math.randomseed(inputs.seed)
-            for i = 0,#size_ch do
+            for i = 0, #size_ch do
                 size_ch[i] = math.random() * inputs.scale
             end
             mesh:set_channel(Types.VertexId, Types.f32, "size", size_ch)
             return { out_mesh = mesh }
         end,
         inputs = {
-            mesh("mesh"),
-            scalar("scale", 1.0, 0.0, 2.0),
-            scalar("seed", 0.0, 0.0, 100.0),
-        } :: {any},
-        outputs = { mesh("out_mesh") } :: {any},
+            P.mesh("mesh"),
+            P.scalar("scale", 1.0, 0.0, 2.0),
+            P.scalar("seed", 0.0, 0.0, 100.0),
+        },
+        outputs = {
+            P.mesh("out_mesh"),
+        },
         returns = "out_mesh",
     },
 }
