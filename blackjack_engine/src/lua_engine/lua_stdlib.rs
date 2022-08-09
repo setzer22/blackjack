@@ -59,7 +59,7 @@ pub mod lua_documentation;
 /// A function pointer to register global lua functions. Stored globally using
 /// the `inventory` crate.
 pub struct LuaRegisterFn {
-    pub f: fn(&mlua::Lua),
+    pub f: fn(&mlua::Lua) -> mlua::Result<()>,
 }
 inventory::collect!(LuaRegisterFn);
 

@@ -60,8 +60,12 @@ end
 
 --- A file parameter. Internally handled as a string, but shows a file picker
 --- widget on the UI.
-Params.file = function(name)
-    return {name = name, type = "file"}
+---
+--- The `mode` specifies whether the file picker is used to create a new file
+--- with `"save"` or open an existing one with `"open"`
+Params.file = function(name, mode)
+    mode = mode or "save" -- keep backwards compatibility
+    return {name = name, type = "file", mode = mode}
 end
 
 --- A heightmap mesh parameter. Like a regular mesh, it can't be set by the user

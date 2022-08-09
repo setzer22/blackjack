@@ -120,6 +120,21 @@ pub struct BjkGraph {
     pub nodes: SlotMap<BjkNodeId, BjkNode>,
 }
 
+/// Specifies the ways in which the file picker dialog for an
+/// `InputValueConfig::FilePath` can work.
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
+pub enum FilePathMode {
+    /// The file picker will only let the user select an existing file
+    Open,
+    /// The file picker will let the user choose a new file or an existing one,
+    /// with an overwrite warning.
+    Save,
+}
+
+fn default_file_path_mode() -> FilePathMode {
+    FilePathMode::Save // Kept for backwards compatibility
+}
+
 /// The settings to describe an input value in a node template. This information
 /// is used by the UI, or engine integrations, to know which default values
 /// should be displayed in widgets when no other value is provided.
@@ -148,6 +163,8 @@ pub enum InputValueConfig {
     },
     FilePath {
         default_path: Option<String>,
+        #[serde(default = "default_file_path_mode")]
+        file_path_mode: FilePathMode,
     },
     String {
         multiline: bool,
@@ -241,7 +258,17 @@ impl InputDefinition {
                 default_selection: table.get::<_, Option<u32>>("selected")?,
             },
             DataType::String if type_str == "file" => {
-                InputValueConfig::FilePath { default_path: None }
+                let mode = table.get::<_, String>("mode")?;
+                InputValueConfig::FilePath {
+                    default_path: None,
+                    file_path_mode: if mode == "open" {
+                        FilePathMode::Open
+                    } else if mode == "save" {
+                        FilePathMode::Save
+                    } else {
+                        bail!("Undefined mode {mode}")
+                    },
+                }
             }
             DataType::String if type_str == "lua_string" => InputValueConfig::LuaString {},
             DataType::String => InputValueConfig::String {

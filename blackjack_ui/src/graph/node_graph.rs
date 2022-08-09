@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 use blackjack_engine::{
     graph::{
         BlackjackParameter, BlackjackValue, DataType, InputValueConfig, NodeDefinition,
-        NodeDefinitions,
+        NodeDefinitions, FilePathMode,
     },
     prelude::selection::SelectionExpression,
 };
@@ -249,7 +249,7 @@ impl NodeTemplateTrait for NodeDefinitionUi {
                             default_selection.unparse(),
                             Some(default_selection.clone()),
                         ),
-                        InputValueConfig::FilePath { ref default_path } => BlackjackValue::String(
+                        InputValueConfig::FilePath { ref default_path, .. } => BlackjackValue::String(
                             default_path.as_ref().cloned().unwrap_or_else(|| "".into()),
                         ),
                         InputValueConfig::String {
@@ -309,11 +309,17 @@ impl WidgetValueTrait for ValueTypeUi {
                         }
                     });
             }
-            (BlackjackValue::String(path), InputValueConfig::FilePath { .. }) => {
+            (BlackjackValue::String(path), InputValueConfig::FilePath { file_path_mode, .. }) => {
                 ui.label(param_name);
                 ui.horizontal(|ui| {
                     if ui.button("Select").clicked() {
-                        if let Some(new_path) = rfd::FileDialog::new().save_file() {
+
+                        let new_path = match file_path_mode {
+                            FilePathMode::Open => rfd::FileDialog::new().pick_file(),
+                            FilePathMode::Save => rfd::FileDialog::new().save_file(),
+                        };
+
+                        if let Some(new_path) = new_path {
                             *path = new_path
                                 .into_os_string()
                                 .into_string()

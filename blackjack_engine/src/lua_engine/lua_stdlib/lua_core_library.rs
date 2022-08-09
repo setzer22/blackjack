@@ -57,5 +57,22 @@ pub fn load(lua: &Lua, lua_io: Arc<dyn LuaFileIo + 'static>) -> anyhow::Result<(
         })?,
     )?;
 
+
     Ok(())
+}
+
+#[blackjack_macros::blackjack_lua_module]
+mod lua_module {
+    use anyhow::Result;
+
+    #[lua(under="Io")]
+    pub fn read_to_string(path: String) -> Result<String> {
+        Ok(std::fs::read_to_string(&path)?)
+    }
+
+    #[lua(under="Io")]
+    pub fn write(path: String, contents: String) -> Result<()> {
+        std::fs::write(&path, &contents)?;
+        Ok(())
+    }
 }

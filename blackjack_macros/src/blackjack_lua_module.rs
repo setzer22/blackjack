@@ -269,19 +269,25 @@ fn analyze_lua_global_fn(
     Ok(LuaFnDef {
         kind: fn_def_kind,
         register_fn_item: quote! {
-            pub fn #register_fn_ident(lua: &mlua::Lua) {
+            pub fn #register_fn_ident(lua: &mlua::Lua) -> mlua::Result<()> {
                 fn __inner(lua: &mlua::Lua, #signature) -> mlua::Result<#ret_typ> {
                     #(#borrows)*
                     #call_fn_and_map_result
                 }
 
-                // TODO: This unwrap is not correct. If the table is not there it should be created.
+                // Ensure the table exists before accessing
+                if !lua.globals().contains_key(#under_table)? {
+                    lua.globals().set(#under_table, lua.create_table()?)?;
+                }
                 let table = lua.globals().get::<_, mlua::Table>(#under_table).unwrap();
+
+
                 table.set(
                     #original_fn_name,
-                    lua.create_function(__inner).unwrap()
-                ).unwrap()
+                    lua.create_function(__inner)?
+                )?;
 
+                Ok(())
             }
         },
         register_fn_ident,
@@ -453,7 +459,7 @@ pub(crate) fn blackjack_lua_module2(
         |LuaFnDef {
              register_fn_ident, ..
          }| {
-            quote! { #register_fn_ident(lua); }
+            quote! { #register_fn_ident(lua)?; }
         },
     );
 
@@ -479,8 +485,9 @@ pub(crate) fn blackjack_lua_module2(
             #(#original_items)*
             #(#register_fns)*
 
-            pub fn __blackjack_register_lua_fns(lua: &mlua::Lua) {
+            pub fn __blackjack_register_lua_fns(lua: &mlua::Lua) -> mlua::Result<()> {
                 #(#global_register_fn_calls)*
+                Ok(())
             }
 
             inventory::submit! {
