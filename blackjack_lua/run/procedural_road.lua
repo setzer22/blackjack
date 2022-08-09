@@ -5,6 +5,9 @@
 -- file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 local P = require("params")
+local PriorityQueue = require("priority_queue")
+local V = require("vector_math")
+local T = require("table_helpers")
 
 local function load_function(code)
     local func, err = loadstring(code)
@@ -17,38 +20,109 @@ local function load_function(code)
     return func
 end
 
--- WIP: I need a priority queue library, but that means we have to implement
--- require. I think a good way to do require might be to split `node_libraries`
--- in two subfolders: One for the actual node libraries and the other for
--- additional user libraries (basically, things they can require)
---
--- The way this would work is that require('foo') looks for foo.lua in
--- lua/libraries, while node definitions are inside lua/node_libraries and
--- executed on any file change.
---
--- Since users also may want to get hot-reloading for libraries, once we detect
--- changes we will clear the _LOADED table and any requires from
--- lua/node_libraries will transitively get reloaded again.
---
--- WIP 2: I have the LuaFileIo trait and a StdLuaFileIo implementation, now I
--- need to replace the old Box<dyn Fn() -> NodeLibraries> with this trait
---
--- - [ ] Replace the box dyn fn field
--- - [ ] Change the load_node_libraries_with_std function for a platform-independent
---       function that uses the trait for the platform-specific bits
--- - [ ] Use the new parts of the function during `require`, this may
---       require storing the dyn LuaFileIo inside an Arc, so it can be moved
---       inside the closure
--- - [ ] Implement LuaFileIo for the godot platform
+local function search_road_astar(noise_fn, scale, start, goal)
+    --- The start and goal points are snapped to a grid, and represented as
+    --- whole numbers. This prevents A* from treating two equal positions as
+    --- different due to numerical precision issues.
+    local start = V.floor(start / scale)
+    start = vector(start.x, 0, start.z)
+    local goal = V.floor(goal / scale)
+    goal = vector(goal.x, 0, goal.z)
 
+    --- Given a position, returns the list of grid-aligned neighbors
+    --- in 8-directions.
+    local function neighbors(current)
+        return {
+            current + vector(0, 0, 1),
+            current + vector(1, 0, 1),
+            current + vector(1, 0, 0),
+            current + vector(1, 0, -1),
+            current + vector(0, 0, -1),
+            current + vector(-1, 0, -1),
+            current + vector(-1, 0, 0),
+            current + vector(-1, 0, 1),
+        }
+    end
+
+    --- Returns the height of the noise function at a given position. Handles
+    --- the scale transformation.
+    local function height_at(position)
+        return noise_fn(position * scale).y
+    end
+
+    --- The heuristic function. Since we need the distance function to be overly
+    --- optimistic, we only take the distance factor into account, assuming
+    --- there is no elevation difference between the two points.
+    ---
+    --- This is actually a pretty bad heuristic, but it's optimistic, so it
+    --- guarantees optimality.
+    local function heuristic(goal, n)
+        local n_floor = vector(n.x, 0, n.z)
+        local goal_floor = vector(goal.x, 0, goal.z)
+        local dist = V.distance(n_floor * scale, goal_floor * scale)
+        return dist
+    end
+
+    --- The cost of going from position prv to nxt in the graph. That is the
+    --- distance, as seen from the top, plus the elevation difference squared.
+    ---
+    --- This cost function puts more weight into the elevation, which means
+    --- results will tend to minimize elevation before distance, creating
+    --- sinuous roads with lots of curves.
+    local function cost(prv, nxt)
+        local prv_floor = vector(prv.x, 0, prv.z)
+        local nxt_floor = vector(nxt.x, 0, nxt.z)
+        local dist = V.distance(prv_floor * scale, nxt_floor * scale)
+
+        local elevation_delta = height_at(nxt) - height_at(prv)
+
+        return dist + (elevation_delta * elevation_delta) / (0.05 * scale)
+    end
+
+    local frontier = PriorityQueue()
+    frontier:put(start, 0)
+
+    local came_from = {}
+    came_from[start] = "__end__" -- special sigil to mark end of path
+
+    local cost_so_far = {}
+    cost_so_far[start] = 0
+
+    while not frontier:empty() do
+        local current = frontier:pop()
+        if current == goal then
+            break
+        end
+
+        for _, n in neighbors(current) do
+            local new_cost = cost_so_far[current] + cost(current, n)
+
+            if came_from[n] == nil or cost_so_far[n] == nil or new_cost < cost_so_far[n] then
+                cost_so_far[n] = new_cost
+                local priority = new_cost + heuristic(goal, n)
+                frontier:put(n, priority)
+                came_from[n] = current
+            end
+        end
+    end
+
+    local path = {}
+    local path_marker = goal
+    while path_marker ~= "__end__" do
+        table.insert(path, path_marker * scale)
+        path_marker = came_from[path_marker]
+    end
+
+    return T.reverse(path)
+end
 
 local test_channel_nodes = {
     ProceduralRoad = {
         label = "Procedural road",
         op = function(inputs)
+            local scale = 0.05 -- TODO @Hardcoded @Heightmap
             local noise = load_function(inputs.noise_fn)
             local noise_fn = function(pos)
-                local scale = 0.05 -- TODO @Hardcoded @Heightmap
                 local j = pos.x / scale
                 local i = pos.z / scale
                 return vector(pos.x, noise(i, j), pos.z)
@@ -58,11 +132,11 @@ local test_channel_nodes = {
 
             local src = inputs.src
             local dst = inputs.dst
-            local resolution = 30.0
 
-            for i = 1, resolution do
-                local p = noise_fn(src + (dst - src) * ((i - 1) / resolution))
-                local p2 = noise_fn(src + (dst - src) * (i / resolution))
+            local path = search_road_astar(noise_fn, 0.125, src, dst)
+            for i = 1,#path-1 do
+                local p = noise_fn(path[i])
+                local p2 = noise_fn(path[i+1])
                 mesh:add_edge(p, p2)
             end
 

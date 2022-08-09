@@ -24,6 +24,8 @@ use gdnative::prelude::*;
 
 use anyhow::Result;
 
+use crate::godot_lua_io::GodotLuaIo;
+
 mod godot_lua_io;
 
 slotmap::new_key_type! { pub struct JackId; }
@@ -71,8 +73,7 @@ impl BlackjackGodotRuntime {
                 "".into()
             });
         let lua_runtime = LuaRuntime::initialize_custom(
-            library_path,
-            godot_lua_io::load_node_libraries_with_godot,
+            GodotLuaIo { base_folder: library_path },
         )?;
 
         Ok(Self {

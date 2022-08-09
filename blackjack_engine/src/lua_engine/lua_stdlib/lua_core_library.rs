@@ -4,11 +4,13 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+use std::sync::Arc;
+
 use mlua::Value;
 
 use super::*;
 
-pub fn load(lua: &Lua) -> anyhow::Result<()> {
+pub fn load(lua: &Lua, lua_io: Arc<dyn LuaFileIo + 'static>) -> anyhow::Result<()> {
     let globals = lua.globals();
 
     // The _LOADED table stores things loaded by the `require` function
@@ -16,12 +18,12 @@ pub fn load(lua: &Lua) -> anyhow::Result<()> {
 
     globals.set(
         "require",
-        lua.create_function(|lua, file: String| -> Result<mlua::Value, _> {
+        lua.create_function(move |lua, file: String| -> Result<mlua::Value, _> {
             let loaded: Table = lua
                 .globals()
                 .get("_LOADED")
                 .expect("The _LOADED table must always exist");
-            match dbg!(loaded.get::<_, Value>(file.clone())?) {
+            match loaded.get::<_, Value>(file.clone())? {
                 Value::Nil => {
                     // Standard blackjack libraries. These are hardcoded
                     if file == "params" {
@@ -31,7 +33,10 @@ pub fn load(lua: &Lua) -> anyhow::Result<()> {
                         loaded.set(file.clone(), value.clone())?;
                         Ok(value)
                     } else {
-                        todo!("Loading custom files is not yet implemented")
+                        let file_chunk = lua_io.load_file_require(&file).map_lua_err()?;
+                        let value = lua.load(&file_chunk).eval::<mlua::Value>()?;
+                        loaded.set(file.clone(), value.clone())?;
+                        Ok(value)
                     }
                 }
                 other => Ok(other),

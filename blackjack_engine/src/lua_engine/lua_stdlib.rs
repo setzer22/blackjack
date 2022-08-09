@@ -4,6 +4,8 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+use std::sync::Arc;
+
 use mlua::{AnyUserData, AsChunk, FromLua, Lua, Table, ToLua, UserData};
 
 use crate::{
@@ -43,12 +45,13 @@ macro_rules! lua_fn {
 mod runtime_types;
 pub use runtime_types::*;
 
-mod lua_require_io;
+pub mod lua_require_io;
+pub use lua_require_io::*;
+
 mod lua_core_library;
 mod lua_constructors_library;
 mod lua_export_library;
 mod lua_mesh_library;
-mod lua_node_libraries;
 mod lua_primitives_library;
 
 pub mod lua_documentation;
@@ -74,8 +77,8 @@ pub fn load_lua_libraries(lua: &Lua) -> anyhow::Result<()> {
 }
 
 /// Loads all blackjack Rust function wrappers to the Lua API
-pub fn load_host_libraries(lua: &Lua) -> anyhow::Result<()> {
-    lua_core_library::load(lua)?;
+pub fn load_host_libraries(lua: &Lua, lua_io: Arc<dyn LuaFileIo + 'static>) -> anyhow::Result<()> {
+    lua_core_library::load(lua, lua_io)?;
     lua_mesh_library::load(lua)?;
     lua_primitives_library::load(lua)?;
     lua_export_library::load(lua)?;
@@ -86,11 +89,4 @@ pub fn load_host_libraries(lua: &Lua) -> anyhow::Result<()> {
     }
 
     Ok(())
-}
-
-pub fn load_node_libraries_with_std(
-    lua: &Lua,
-    node_libs_path: &str,
-) -> anyhow::Result<NodeDefinitions> {
-    lua_node_libraries::load_node_libraries_with_std(lua, node_libs_path)
 }

@@ -1,7 +1,6 @@
 use anyhow::Result;
 use glam::{Vec2, Vec3};
 use mlua::UserData;
-use ndarray::IndexLonger;
 use noise::NoiseFn;
 
 use crate::prelude::VertexIndexBuffers;

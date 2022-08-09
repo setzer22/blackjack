@@ -128,7 +128,7 @@ impl RootViewport {
             code_viewer_open: false,
             code_viewer_code: None,
             // TODO: Hardcoded node libraries path. Read from cmd line?
-            lua_runtime: LuaRuntime::initialize_with_std("./node_libraries/".into())
+            lua_runtime: LuaRuntime::initialize_with_std("./blackjack_lua/".into())
                 .expect("Init lua should not fail"),
         }
     }

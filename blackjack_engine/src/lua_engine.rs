@@ -5,7 +5,10 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 use std::{
-    sync::mpsc::{self, Receiver},
+    sync::{
+        mpsc::{self, Receiver},
+        Arc,
+    },
     time::Duration,
 };
 
@@ -13,8 +16,10 @@ use crate::{
     graph::NodeDefinitions, graph_compiler::ExternalParameterValues, mesh::heightmap::HeightMap,
     prelude::*,
 };
-use mlua::{FromLua, Function, Lua};
+use mlua::{Function, Lua};
 use notify::{DebouncedEvent, Watcher};
+
+use self::lua_stdlib::{load_node_definitions, LuaFileIo, StdLuaFileIo};
 
 pub mod lua_stdlib;
 
@@ -67,36 +72,30 @@ pub struct LuaRuntime {
     pub node_definitions: NodeDefinitions,
     pub watcher: notify::RecommendedWatcher,
     pub watcher_channel: Receiver<notify::DebouncedEvent>,
-    pub node_libraries_path: String,
-    pub load_libraries_fn: Box<dyn Fn(&Lua, &str) -> Result<NodeDefinitions>>,
+    pub lua_io: Arc<dyn LuaFileIo + 'static>,
 }
-
-const NODE_LIBRARIES_PATH: &str = "blackjack_lua/run";
 
 impl LuaRuntime {
     /// Initializes and returns the Blackjack Lua runtime. This function will
     /// use the `std::fs` API to load Lua source files. Some integrations may
     /// prefer to use other file reading methods with `initialize_custom`.
     pub fn initialize_with_std(node_libraries_path: String) -> anyhow::Result<LuaRuntime> {
-        Self::initialize_custom(
-            node_libraries_path,
-            lua_stdlib::load_node_libraries_with_std,
-        )
+        Self::initialize_custom(StdLuaFileIo {
+            base_folder: node_libraries_path,
+        })
     }
 
-    pub fn initialize_custom(
-        node_libraries_path: String,
-        load_libraries_fn: impl Fn(&Lua, &str) -> Result<NodeDefinitions> + 'static,
-    ) -> anyhow::Result<LuaRuntime> {
+    pub fn initialize_custom(lua_io: impl LuaFileIo + 'static) -> anyhow::Result<LuaRuntime> {
         let lua = Lua::new();
-        lua_stdlib::load_host_libraries(&lua)?;
+        let lua_io = Arc::new(lua_io);
+        lua_stdlib::load_host_libraries(&lua, lua_io.clone())?;
         lua_stdlib::load_lua_libraries(&lua)?;
-        let node_definitions = load_libraries_fn(&lua, &node_libraries_path)?;
+        let node_definitions = load_node_definitions(&lua, lua_io.as_ref())?;
         let (watcher, watcher_channel) = {
             let (tx, rx) = mpsc::channel();
             let mut watcher = notify::watcher(tx, Duration::from_secs(1))?;
             watcher
-                .watch(NODE_LIBRARIES_PATH, notify::RecursiveMode::Recursive)
+                .watch(lua_io.base_folder(), notify::RecursiveMode::Recursive)
                 .unwrap();
             (watcher, rx)
         };
@@ -106,8 +105,7 @@ impl LuaRuntime {
             node_definitions,
             watcher,
             watcher_channel,
-            node_libraries_path,
-            load_libraries_fn: Box::new(load_libraries_fn),
+            lua_io,
         })
     }
 
@@ -119,8 +117,18 @@ impl LuaRuntime {
                 | DebouncedEvent::Remove(_)
                 | DebouncedEvent::Rename(_, _) => {
                     println!("Reloading Lua scripts...");
-                    self.node_definitions =
-                        (self.load_libraries_fn)(&self.lua, &self.node_libraries_path)?;
+                    // Reset the _LOADED table to clear any required libraries
+                    // from the cache. This will trigger reloading of libraries
+                    // when the hot reloaded code first requires them,
+                    // effectively picking up changes in transitively required
+                    // libraries as well.
+                    self.lua
+                        .globals()
+                        .set("_LOADED", self.lua.create_table()?)?;
+
+                    // By calling this, all code under $BLACKJACK_LUA/run will
+                    // be executed and the node definitions will be reloaded.
+                    self.node_definitions = load_node_definitions(&self.lua, self.lua_io.as_ref())?;
                 }
                 _ => {}
             }
