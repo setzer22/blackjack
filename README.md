@@ -35,13 +35,16 @@ Here are the main goals and philosophy behind blackjack, but note that this show
 
 Here are the steps in order to try out the early development version of Blackjack. Binaries and easier installation methods will be provided in the future. The steps below require a complete Rust toolchain using `cargo`:
 
-1. Clone this repository, and make sure to download LFS files. In some systems, this may require separately installing a `git-lfs` package:
+1. Clone this repository, and make sure to download LFS files. In some systems, this may require separately installing a `git-lfs`[^1] package:
 ```bash
 git clone https://github.com/setzer22/blackjack
 git lfs install
 git lfs fetch --all
 git lfs pull
 ```
+
+[^1]: Linux users can install `git-lfs` with their distro's package manager (`apt install git-lfs` / `yum install git-lfs` / `pacman -S git-lfs`). MacOS users using homebrew can use `brew install git-lfs`. Other users should follow the [git-lfs install instructions](https://git-lfs.github.com/).
+
 2. From the same folder, run `cargo run` to launch Blackjack.
 
 ### Usage
