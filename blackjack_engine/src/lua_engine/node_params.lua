@@ -74,6 +74,4 @@ Params.heightmap = function(name)
     return {name = name, type = "heightmap"}
 end
 
-print("TODO DEBUG LOADING PARAMS THIS SHOULD HAPPEN ONLY ONCE")
-
 return Params
