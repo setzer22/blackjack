@@ -12,10 +12,10 @@ pub fn load(lua: &Lua) -> anyhow::Result<()> {
     globals.set("Export", export.clone())?;
 
     lua_fn!(lua, export, "wavefront_obj", |mesh: AnyUserData,
-                                           path: Path|
+                                           path: String|
      -> () {
         let mesh = mesh.borrow::<HalfEdgeMesh>()?;
-        mesh.to_wavefront_obj(path.0).map_lua_err()?;
+        mesh.to_wavefront_obj(&path).map_lua_err()?;
         Ok(())
     });
 

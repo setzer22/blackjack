@@ -73,7 +73,10 @@ impl ApplicationContext {
             }
         };
         if let Err(err) = self.run_side_effects(editor_state, lua_runtime) {
-            eprintln!("There was an errror executing side effect: {}", err);
+            eprintln!(
+                "There was an errror executing side effect: {err}\nBacktrace:\n-----------\n{}",
+                err.backtrace()
+            );
         }
         if let Err(err) = self.build_and_render_mesh(render_ctx, viewport_settings) {
             self.paint_errors(egui_ctx, err);
@@ -199,10 +202,11 @@ impl ApplicationContext {
         &'lua self,
         editor_state: &'lua graph::GraphEditorState,
         node: NodeId,
+        is_side_effect: bool,
     ) -> Result<(CompiledProgram, ExternalParameterValues)> {
         let (bjk_graph, mapping) = graph_interop::ui_graph_to_blackjack_graph(&editor_state.graph)?;
         let final_node = mapping[node];
-        let program = compile_graph(&bjk_graph, final_node)?;
+        let program = compile_graph(&bjk_graph, final_node, is_side_effect)?;
         let params = graph_interop::extract_graph_params(&editor_state.graph, &mapping, &program)?;
 
         Ok((program, params))
@@ -215,7 +219,7 @@ impl ApplicationContext {
         lua_runtime: &LuaRuntime,
     ) -> Result<String> {
         if let Some(active) = editor_state.user_state.active_node {
-            let (program, params) = self.compile_program(editor_state, active)?;
+            let (program, params) = self.compile_program(editor_state, active, false)?;
             let renderable = blackjack_engine::lua_engine::run_program(
                 &lua_runtime.lua,
                 &program.lua_program,
@@ -236,10 +240,10 @@ impl ApplicationContext {
         lua_runtime: &LuaRuntime,
     ) -> Result<()> {
         if let Some(side_effect) = editor_state.user_state.run_side_effect.take() {
-            let (program, params) = self.compile_program(editor_state, side_effect)?;
+            let (program, params) = self.compile_program(editor_state, side_effect, true)?;
             // We ignore the result. The program is only executed to produce a
             // side effect (e.g. exporting a mesh as OBJ)
-            let _ = blackjack_engine::lua_engine::run_program(
+            blackjack_engine::lua_engine::run_program_side_effects(
                 &lua_runtime.lua,
                 &program.lua_program,
                 &params,

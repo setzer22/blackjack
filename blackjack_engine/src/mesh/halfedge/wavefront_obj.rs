@@ -18,8 +18,8 @@ use wavefront_rs::obj::{
 use crate::prelude::*;
 
 impl HalfEdgeMesh {
-    pub fn to_wavefront_obj(&self, path: PathBuf) -> Result<()> {
-        let mut writer = BufWriter::new(File::create(path)?);
+    pub fn to_wavefront_obj(&self, path: impl Into<PathBuf>) -> Result<()> {
+        let mut writer = BufWriter::new(File::create(path.into())?);
 
         // We need to store the mapping between vertex ids and indices in the
         // generated OBJ
@@ -153,7 +153,7 @@ mod tests {
     pub fn test_load_obj() {
         HalfEdgeMesh::from_wavefront_obj("./assets/debug/arrow.obj".into())
             .unwrap()
-            .to_wavefront_obj("/tmp/wat.obj".into())
+            .to_wavefront_obj("/tmp/wat.obj")
             .unwrap();
     }
 }

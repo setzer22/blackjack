@@ -98,9 +98,15 @@ struct CodegenContext {
     external_parameters: Vec<ExternalParameterDef>,
     /// The length of an indent, in spaces.
     indent_length: usize,
+    /// Is the graph being compiled for a node side effect (i.e. a "⛭ Run" button)
+    is_side_effect: bool,
 }
 
-pub fn compile_graph(graph: &BjkGraph, final_node: BjkNodeId) -> Result<CompiledProgram> {
+pub fn compile_graph(
+    graph: &BjkGraph,
+    final_node: BjkNodeId,
+    is_side_effect: bool,
+) -> Result<CompiledProgram> {
     let input_params_ident = "input_params";
     let mut ctx = CodegenContext {
         indent_length: 4,
@@ -108,6 +114,7 @@ pub fn compile_graph(graph: &BjkGraph, final_node: BjkNodeId) -> Result<Compiled
         lua_program: String::new(),
         outputs_cache: Default::default(),
         external_parameters: Default::default(),
+        is_side_effect,
     };
 
     writeln!(ctx.lua_program, "function main({input_params_ident})")?;
@@ -204,7 +211,8 @@ fn codegen_node(
 
     emit_line!("local {output_addr} = NodeLibrary:callNode('{node_name}', {args})");
 
-    if target {
+    if target && !ctx.is_side_effect {
+        // NOTE: Return is ignored if the current compiled graph is a side effect invovation.
         let return_val = node
             .return_value
             .as_ref()
@@ -242,7 +250,7 @@ mod tests {
             .add_connection(cube, "out_mesh", transform, "mesh")
             .unwrap();
 
-        let program = compile_graph(&graph, transform).unwrap();
+        let program = compile_graph(&graph, transform, false).unwrap();
 
         let expected_output = r#"function main(input_params)
     local Box_1v1_out = NodeLibrary:callNode('Box', {

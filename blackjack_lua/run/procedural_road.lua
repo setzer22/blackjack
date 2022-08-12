@@ -76,7 +76,7 @@ local function search_road_astar(noise_fn, scale, start, goal)
 
         local elevation_delta = height_at(nxt) - height_at(prv)
 
-        return dist + (elevation_delta * elevation_delta) / (0.05 * scale)
+        return dist + (elevation_delta * elevation_delta) / (0.0125 * scale)
     end
 
     local frontier = PriorityQueue()
@@ -127,25 +127,77 @@ local test_channel_nodes = {
                 local i = pos.z / scale
                 return vector(pos.x, noise(i, j), pos.z)
             end
-            local mesh = Primitives.cube(noise_fn(inputs.src), vector(0.1, 0.1, 0.1))
-            Ops.merge(mesh, Primitives.cube(noise_fn(inputs.dst), vector(0.1, 0.1, 0.1)))
 
             local src = inputs.src
             local dst = inputs.dst
 
-            local path = search_road_astar(noise_fn, 0.125, src, dst)
-            for i = 1,#path-1 do
-                local p = noise_fn(path[i])
-                local p2 = noise_fn(path[i+1])
-                mesh:add_edge(p, p2)
+            local path = search_road_astar(noise_fn, 0.075, src, dst)
+            local file_contents = ""
+            for _, pos in path do
+                local real_pos = noise_fn(pos)
+                file_contents = file_contents .. V.display(real_pos) .. "\n"
             end
+            Io.write(inputs.cached_path, file_contents)
+            print("Successfully cached road waypoints to " .. inputs.cached_path)
 
-            return { out_mesh = mesh }
+            return {}
         end,
         inputs = {
             P.lua_str("noise_fn"),
             P.v3("src", vector(0.1, 0.1, 0.1)),
             P.v3("dst", vector(0.9, 0.9, 0.9)),
+            P.file("cached_path", "save"),
+        },
+        outputs = {},
+        executable = true,
+    },
+    ProceduralRoad2 = {
+        label = "Procedural road (2)",
+        op = function(inputs)
+            local path = Io.read_to_string(inputs.cached_path)
+            local waypoints = {}
+            for line in path:gmatch("[^\r\n]+") do
+                table.insert(waypoints, V.from_string(line))
+            end
+
+            local curve = Primitives.line_from_points(waypoints)
+
+            return {
+                out_mesh = Ops.resample_curve(curve, inputs.resolution / 100.0, inputs.tension, inputs.alpha),
+            }
+        end,
+        inputs = {
+            P.file("cached_path", "open"),
+            P.scalar("resolution", 0.5, 0.5, 20.0),
+            P.scalar("tension", 0.5, 0.0, 1.0),
+            P.scalar("alpha", 0.5, 0.0, 1.0),
+        },
+        outputs = {
+            P.mesh("out_mesh"),
+        },
+        returns = "out_mesh",
+    },
+    ShowTangents = {
+        label = "Show tangents (debug)",
+        op = function(inputs)
+            local mesh = inputs.mesh:clone()
+            local pos = mesh:get_channel(Types.VertexId, Types.Vec3, "position")
+            local tangent = mesh:get_channel(Types.VertexId, Types.Vec3, "tangent")
+            local normal = mesh:get_channel(Types.VertexId, Types.Vec3, "normal")
+
+            for i = 1,#pos do
+                --mesh:add_edge(pos[i], pos[i] + V.normalize(tangent[i]) * inputs.width)
+                mesh:add_edge(pos[i], pos[i] + V.normalize(normal[i]) * inputs.width)
+                mesh:add_edge(pos[i], pos[i] - V.normalize(normal[i]) * inputs.width)
+            end
+
+            return {
+                out_mesh = mesh
+            }
+        end,
+        inputs = {
+            P.mesh("mesh"),
+            P.scalar("width", 0.05, 0.0, 0.1),
         },
         outputs = {
             P.mesh("out_mesh"),

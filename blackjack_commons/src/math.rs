@@ -31,3 +31,8 @@ impl ToVec<glam::Vec3> for Vec3Ord {
         glam::Vec3::new(self.0[0].0, self.0[1].0, self.0[2].0)
     }
 }
+
+
+pub fn lerpf(start: f32, end: f32, t: f32) -> f32 {
+    start + (end - start) * t
+}

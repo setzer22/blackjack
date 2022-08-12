@@ -4,11 +4,13 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+use blackjack_commons::utils::transmute_vec;
 use noise::NoiseFn;
 
 use super::*;
 
 #[derive(Debug)]
+#[repr(transparent)]
 pub struct LVec3(pub glam::Vec3);
 impl<'lua> ToLua<'lua> for LVec3 {
     fn to_lua(self, _lua: &'lua Lua) -> mlua::Result<mlua::Value<'lua>> {
@@ -25,6 +27,14 @@ impl<'lua> FromLua<'lua> for LVec3 {
                 message: None,
             }),
         }
+    }
+}
+impl LVec3 {
+    /// Unwraps all the internal Vec<LVec3> values.
+    pub fn cast_vector(this: Vec<LVec3>) -> Vec<glam::Vec3> {
+        // SAFETY: LVec3 is marked as #[repr(transparent)] and contains a
+        // single glam::Vec3. Both types are copy and have no Drop logic.
+        unsafe { transmute_vec(this) }
     }
 }
 

@@ -295,7 +295,7 @@ impl WidgetValueTrait for ValueTypeUi {
                     ui.label(param_name);
                     ui.add(
                         egui::DragValue::new(value)
-                            .speed(0.1)
+                            .speed((*max - *min) / 100.0)
                             .clamp_range(*min..=*max),
                     );
                 });

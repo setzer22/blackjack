@@ -56,7 +56,7 @@ pub use channels::*;
 /// number of iterations will be performed before giving an error. This error
 /// should be large enough, as faces with a very large number of vertices may
 /// trigger it.
-pub const MAX_LOOP_ITERATIONS: usize = 512;
+pub const MAX_LOOP_ITERATIONS: usize = 8196;
 
 #[derive(Debug, Default, Clone)]
 pub struct HalfEdge {

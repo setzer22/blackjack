@@ -161,7 +161,7 @@ impl UVSphere {
 
 pub struct Line;
 impl Line {
-    pub fn build(start: Vec3, end: Vec3, segments: u32) -> HalfEdgeMesh {
+    pub fn build(position: impl Fn(u32) -> Vec3, segments: u32) -> HalfEdgeMesh {
         let mesh = HalfEdgeMesh::new();
         let mut conn = mesh.write_connectivity();
         let mut pos = mesh.write_positions();
@@ -169,11 +169,13 @@ impl Line {
         let mut forward_halfedges = SVec::new();
         let mut backward_halfedges = SVec::new();
 
-        let mut v = conn.alloc_vertex(&mut pos, start, None);
-        for i in 0..segments {
+        //let mut v = conn.alloc_vertex(&mut pos, start, None);
+        let mut v = conn.alloc_vertex(&mut pos, position(0), None);
+        for i in 1..=segments {
             let w = conn.alloc_vertex(
                 &mut pos,
-                start.lerp(end, (i + 1) as f32 / segments as f32),
+                //start.lerp(end, (i + 1) as f32 / segments as f32),
+                position(i),
                 None,
             );
 
@@ -235,5 +237,19 @@ impl Line {
         drop(pos);
 
         mesh
+    }
+
+    pub fn build_straight_line(start: Vec3, end: Vec3, segments: u32) -> HalfEdgeMesh {
+        Self::build(
+            |i| start.lerp(end, i as f32 / segments as f32),
+            segments,
+        )
+    }
+
+    pub fn build_from_points(points: Vec<Vec3>) -> HalfEdgeMesh {
+        Self::build(
+            |i| { points[i as usize] },
+            points.len() as u32 - 1,
+        )
     }
 }

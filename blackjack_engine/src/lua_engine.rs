@@ -67,6 +67,22 @@ pub fn run_program<'lua>(
     }
 }
 
+/// Like `run_program`, but does not return anything and only runs the code for
+/// its side effects
+pub fn run_program_side_effects<'lua>(
+    lua: &'lua Lua,
+    lua_program: &str,
+    input: &ExternalParameterValues,
+) -> Result<()> {
+    lua.load(lua_program).exec()?;
+    let values = input.make_input_table(lua)?;
+    let entry_point: Function = lua.globals().get("main")?;
+    entry_point
+        .call::<_, mlua::Value>(values)
+        .map_err(|err| anyhow!("{}", err))?;
+    Ok(())
+}
+
 pub struct LuaRuntime {
     pub lua: Lua,
     pub node_definitions: NodeDefinitions,

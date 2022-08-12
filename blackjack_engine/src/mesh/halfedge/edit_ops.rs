@@ -1119,11 +1119,7 @@ pub fn make_group(
 }
 
 /// Adds a disconnected edge to the mesh
-pub fn add_edge(
-    mesh: &mut HalfEdgeMesh,
-    start: Vec3,
-    end: Vec3,
-) -> Result<(HalfEdgeId, HalfEdgeId)> {
+pub fn add_edge(mesh: &HalfEdgeMesh, start: Vec3, end: Vec3) -> Result<(HalfEdgeId, HalfEdgeId)> {
     let mut conn = mesh.write_connectivity();
     let mut positions = mesh.write_positions();
 
@@ -1147,6 +1143,50 @@ pub fn add_edge(
     conn[h_dst].face = None;
 
     Ok((h_src, h_dst))
+}
+
+/// Creates a new edge from an existing edge and a new edge, that will be placed
+/// at the given position. The VertexId for the new edge is returned.
+///
+/// This is an internal operations and assumes the given vertex is at the tip of
+/// a curve. It is used to incrementally construct polylines.
+fn add_edge_chain(mesh: &HalfEdgeMesh, start: VertexId, end: Vec3) -> Result<VertexId> {
+    let mut conn = mesh.write_connectivity();
+    let outgoing = conn.at_vertex(start).outgoing_halfedges()?;
+    let incoming = conn.at_vertex(start).incoming_halfedges()?;
+
+    if incoming.len() != 1 {
+        bail!("start should have exactly one incoming halfedge")
+    }
+    if outgoing.len() != 1 {
+        bail!("start should have exactly one outgoing halfedge")
+    }
+
+    let e_inc = incoming[0];
+    let e_out = outgoing[0];
+
+    let end_v = conn.alloc_vertex(&mut mesh.write_positions(), end, None);
+
+    let h_start_end = conn.alloc_halfedge(HalfEdge {
+        vertex: Some(start),
+        ..Default::default()
+    });
+    let h_end_start = conn.alloc_halfedge(HalfEdge {
+        vertex: Some(end_v),
+        ..Default::default()
+    });
+
+    conn[h_start_end].twin = Some(h_end_start);
+    conn[h_start_end].next = Some(h_end_start);
+
+    conn[h_end_start].twin = Some(h_start_end);
+    conn[h_end_start].next = Some(e_out);
+
+    conn[e_inc].next = Some(h_start_end);
+
+    conn[end_v].halfedge = Some(h_end_start);
+
+    Ok(end_v)
 }
 
 /// Adds an empty vertex to the mesh. Useful when the mesh is representing a
@@ -1373,6 +1413,197 @@ pub fn extrude_along_curve(
     Ok(result_mesh)
 }
 
+pub fn resample_curve(
+    mesh: &HalfEdgeMesh,
+    resolution: f32,
+    tension: f32,
+    alpha: f32,
+) -> Result<HalfEdgeMesh> {
+    /// Can be used to interpolate over a catmull rom segment in the polynomial
+    /// form `p(t) = at³ + bt² + ct + d`
+    pub struct CatmullRomSegment<const LUT_LEN: usize = 8> {
+        a: Vec3,
+        b: Vec3,
+        c: Vec3,
+        d: Vec3,
+        // Lookup table for arc-length distances of evenly-spaced t values
+        // ranging from 0 to 1.
+        arc_length_lut: [f32; LUT_LEN],
+    }
+
+    impl<const LUT_LEN: usize> CatmullRomSegment<LUT_LEN> {
+        pub fn position_at_t(&self, t: f32) -> Vec3 {
+            self.a * (t * t * t) + self.b * (t * t) + self.c * t + self.d
+        }
+
+        pub fn tangent_at_t(&self, t: f32) -> Vec3 {
+            self.a * (3.0 * t * t) + self.b * (2.0 * t) + self.c
+        }
+
+        pub fn arc_length(&self) -> f32 {
+            self.arc_length_lut[LUT_LEN - 1]
+        }
+
+        pub fn t_for_arc_length(&self, length: f32) -> f32 {
+            if length == 0.0 {
+                return 0.0;
+            } else {
+                let first_over = self
+                    .arc_length_lut
+                    .iter()
+                    .position(|x| *x >= length)
+                    .unwrap_or(1);
+                assert!(first_over > 0, "Invariant");
+                let last_under = first_over - 1;
+
+                let l_first_over = self.arc_length_lut[first_over];
+                let l_last_under = self.arc_length_lut[last_under];
+
+                let t = (length - l_last_under) / (l_first_over - l_last_under);
+
+                lerpf(
+                    last_under as f32 / (LUT_LEN - 1) as f32,
+                    first_over as f32 / (LUT_LEN - 1) as f32,
+                    t,
+                )
+            }
+        }
+
+        /// Creates a new Catmull-Rom curve segment using control points p0..p4.
+        /// The curve will go from p1 to p2. The p0 and p3 control points are
+        /// chosen as the previous and next points in the curve respectively.
+        pub fn new(p0: Vec3, p1: Vec3, p2: Vec3, p3: Vec3, tension: f32, alpha: f32) -> Self {
+            // NOTE: This code was adapted from:
+            // https://qroph.github.io/2018/07/30/smooth-paths-using-catmull-rom-splines.html
+            let t0 = 0.0;
+            let t1 = t0 + p0.distance(p1).powf(alpha);
+            let t2 = t1 + p1.distance(p2).powf(alpha);
+            let t3 = t2 + p2.distance(p3).powf(alpha);
+
+            let m1 = (1.0 - tension)
+                * (t2 - t1)
+                * ((p1 - p0) / (t1 - t0) - (p2 - p0) / (t2 - t0) + (p2 - p1) / (t2 - t1));
+            let m2 = (1.0 - tension)
+                * (t2 - t1)
+                * ((p2 - p1) / (t2 - t1) - (p3 - p1) / (t3 - t1) + (p3 - p2) / (t3 - t2));
+
+            let a = 2.0 * (p1 - p2) + m1 + m2;
+            let b = -3.0 * (p1 - p2) - m1 - m1 - m2;
+            let c = m1;
+            let d = p1;
+
+            let f = |t| a * (t * t * t) + b * (t * t) + c * t + d;
+
+            // The formula for the arc length is not easy to compute, so we
+            // approximate it by storing a lookup table
+            let mut arc_length_lut = [0.0; LUT_LEN]; // NOTE: First value is correct at 0.0
+            for i in 1..LUT_LEN {
+                let t_i_prev = (i - 1) as f32 / (LUT_LEN - 1) as f32;
+                let t_i = i as f32 / (LUT_LEN - 1) as f32;
+                arc_length_lut[i] = arc_length_lut[i - 1] + f(t_i_prev).distance(f(t_i));
+            }
+
+            CatmullRomSegment {
+                a,
+                b,
+                c,
+                d,
+                arc_length_lut,
+            }
+        }
+    }
+
+    if resolution <= 0.0 {
+        bail!("Resolution must be greater than zero");
+    }
+
+    // Make sure the input mesh is a curve and find its endpoints.
+    let edges = mesh.resolve_halfedge_selection_full(&SelectionExpression::All)?;
+    let (curve, is_closed) = sort_bag_of_edges(&mesh.read_connectivity(), &edges)?;
+    let np = curve.len();
+
+    if curve.len() < 2 {
+        bail!("A curve can only be resampled if it has 2 or more points")
+    }
+
+    if is_closed {
+        bail!("TODO: Resampling closed curves is currently unimplemented.")
+    }
+
+    let positions = mesh.write_positions();
+    let p_first = positions[curve[0]] + (positions[curve[1]] - positions[curve[0]]);
+    let p_last = positions[curve[np - 1]] + (positions[curve[np - 1]] - positions[curve[np - 2]]);
+
+    let control_points = std::iter::once(p_first)
+        .chain(curve.iter().map(|x| positions[*x]))
+        .chain(std::iter::once(p_last));
+
+    let mut points = vec![];
+    let mut tangents = vec![];
+    let mut offset = 0.0;
+    for (p0, p1, p2, p3) in control_points.tuple_windows() {
+        let segment = CatmullRomSegment::<8>::new(p0, p1, p2, p3, tension, alpha);
+
+        // Could be that previous iteration produced an offset that is too long
+        // for this segment. In that case we simply don't use any points from
+        // this segment.
+        if offset > segment.arc_length() {
+            offset = (offset + segment.arc_length()) % resolution;
+            continue;
+        }
+
+        let total_dist = segment.arc_length() - offset;
+        let nsegments = (total_dist / resolution).floor();
+
+        // ..= because there's n+1 points inside n segments.
+        for i in 0..=nsegments as u32 {
+            let t = segment.t_for_arc_length(resolution * i as f32 + offset);
+            points.push(segment.position_at_t(t));
+            tangents.push(segment.tangent_at_t(t));
+        }
+
+        offset = resolution - (total_dist - (nsegments * resolution));
+    }
+
+    if points.len() < 2 {
+        bail!("Resolution is too low, curve has less than two points.");
+    }
+
+    // Manually drop to avoid double borrow inside add_edge
+    drop(positions);
+
+    let mut result_mesh = HalfEdgeMesh::new();
+    let tangent_ch_id = result_mesh.channels.ensure_channel("tangent");
+    let normal_ch_id = result_mesh.channels.ensure_channel("normal");
+    let mut tangent_ch = result_mesh.channels.write_channel(tangent_ch_id).unwrap();
+    let mut normal_ch = result_mesh.channels.write_channel(normal_ch_id).unwrap();
+
+    // Add the first edge
+    let (h_src, h_dst) = add_edge(&result_mesh, points[0], points[1])?;
+    {
+        // And the tangents and normals for the first edge
+        let v0 = mesh.read_connectivity().at_halfedge(h_src).vertex().end();
+        let v1 = mesh.read_connectivity().at_halfedge(h_dst).vertex().end();
+        tangent_ch[v0] = tangents[0];
+        tangent_ch[v1] = tangents[1];
+
+        normal_ch[v0] = tangents[0].cross(Vec3::Y);
+        normal_ch[v1] = tangents[1].cross(Vec3::Y);
+    }
+
+    // Add the remaining edges
+    let mut v = mesh.read_connectivity().at_halfedge(h_dst).vertex().end();
+    for (dst, dst_tg) in points.iter_cpy().zip(tangents.iter_cpy()).dropping(2) {
+        v = add_edge_chain(&result_mesh, v, dst)?;
+        tangent_ch[v] = dst_tg;
+        normal_ch[v] = dst_tg.cross(Vec3::Y);
+    }
+
+    drop(tangent_ch);
+    drop(normal_ch);
+    Ok(result_mesh)
+}
+
 #[blackjack_macros::blackjack_lua_module]
 pub mod lua_fns {
 
@@ -1465,5 +1696,32 @@ pub mod lua_fns {
     pub fn set_flat_normals(mesh: &mut HalfEdgeMesh) -> Result<()> {
         super::set_flat_normals(mesh)?;
         Ok(())
+    }
+
+    /// Given a mesh representing a polyline, resamples it using Catmull-Rom
+    /// interpolation to create a smooth path that passes through all the points
+    /// of the original curve.
+    ///
+    /// The `resolution` will be used to determine the distance between each
+    /// pair of points in the final curve. Depending on the input curve and this
+    /// value, the actual waypoints may not be part of the final resampled
+    /// curve, but given a small enough segment length, the final curve will be
+    /// a good approximation of the input waypoints.
+    ///
+    /// The `alpha` value can be set to 0 for a uniform, 0.5 for a centripetal
+    /// and 1.0 for a chordal Catmull-Rom spline. If in doubt, pick 0.5 for good
+    /// results.
+    ///
+    /// Increasing the `tension` from 0 to 1 value will make the curves more
+    /// pronounced, as if it were increasing the tension of a rope that goes
+    /// through all the points. A good value for tension is 0.5
+    #[lua(under = "Ops")]
+    pub fn resample_curve(
+        mesh: &HalfEdgeMesh,
+        resolution: f32,
+        tension: f32,
+        alpha: f32,
+    ) -> Result<HalfEdgeMesh> {
+        super::resample_curve(mesh, resolution, tension, alpha)
     }
 }

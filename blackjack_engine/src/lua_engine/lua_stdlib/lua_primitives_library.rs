@@ -57,9 +57,13 @@ pub fn load(lua: &Lua) -> anyhow::Result<()> {
                                       end: LVec3,
                                       segments: u32|
      -> HalfEdgeMesh {
-        Ok(crate::mesh::halfedge::primitives::Line::build(
-            start.0, end.0, segments,
-        ))
+        Ok(crate::mesh::halfedge::primitives::Line::build_straight_line(start.0, end.0, segments))
+    });
+
+
+    lua_fn!(lua, primitives, "line_from_points", |points: Vec<LVec3>|
+     -> HalfEdgeMesh {
+        Ok(crate::mesh::halfedge::primitives::Line::build_from_points(LVec3::cast_vector(points)))
     });
 
     Ok(())
