@@ -1413,9 +1413,18 @@ pub fn extrude_along_curve(
     Ok(result_mesh)
 }
 
+pub enum ResampleCurveDensity {
+    /// The curve will be sampled as uniform-length segments, taking the real
+    /// (estimated) length of the curve into account.
+    Uniform { segment_length: f32 },
+    /// For each segment in the original curve, the resampled curve will have
+    /// more segments the more curved the corresponding spline segment has.
+    Curvature { multiplier: f32 },
+}
+
 pub fn resample_curve(
     mesh: &HalfEdgeMesh,
-    resolution: f32,
+    density_mode: ResampleCurveDensity,
     tension: f32,
     alpha: f32,
 ) -> Result<HalfEdgeMesh> {
@@ -1429,6 +1438,7 @@ pub fn resample_curve(
         // Lookup table for arc-length distances of evenly-spaced t values
         // ranging from 0 to 1.
         arc_length_lut: [f32; LUT_LEN],
+        avg_curvature: f32,
     }
 
     impl<const LUT_LEN: usize> CatmullRomSegment<LUT_LEN> {
@@ -1438,6 +1448,22 @@ pub fn resample_curve(
 
         pub fn tangent_at_t(&self, t: f32) -> Vec3 {
             self.a * (3.0 * t * t) + self.b * (2.0 * t) + self.c
+        }
+
+        pub fn acceleration_at_t(&self, t: f32) -> Vec3 {
+            self.a * (6.0 * t) + self.b * 2.0
+        }
+
+        pub fn curvature_at_t(&self, t: f32) -> f32 {
+            let d = self.tangent_at_t(t);
+            let d_len = d.length();
+            let d2 = self.acceleration_at_t(t);
+            let result = (d.cross(d2)).length() / (d_len * d_len * d_len);
+            if result.is_nan() {
+                0.0
+            } else {
+                result
+            }
         }
 
         pub fn arc_length(&self) -> f32 {
@@ -1467,6 +1493,23 @@ pub fn resample_curve(
                     t,
                 )
             }
+        }
+
+        /// Computes the average curvature, by computing the curvature at
+        /// uniform T intervals from 0 to LUT_LEN. The higher this value, the
+        /// more "bent" this segment is.
+        pub fn compute_average_curvature(&mut self) {
+            self.avg_curvature = (0..LUT_LEN)
+                .map(|i| {
+                    let t = i as f32 / (LUT_LEN - 1) as f32;
+                    self.curvature_at_t(t)
+                })
+                .sum::<f32>()
+                / LUT_LEN as f32
+        }
+
+        fn average_curvature(&self) -> f32 {
+            self.avg_curvature
         }
 
         /// Creates a new Catmull-Rom curve segment using control points p0..p4.
@@ -1503,18 +1546,31 @@ pub fn resample_curve(
                 arc_length_lut[i] = arc_length_lut[i - 1] + f(t_i_prev).distance(f(t_i));
             }
 
-            CatmullRomSegment {
+            let mut segment = CatmullRomSegment {
                 a,
                 b,
                 c,
                 d,
                 arc_length_lut,
-            }
+                avg_curvature: 0.0, // Filled in later
+            };
+
+            segment.compute_average_curvature();
+            segment
         }
     }
 
-    if resolution <= 0.0 {
-        bail!("Resolution must be greater than zero");
+    match density_mode {
+        ResampleCurveDensity::Uniform { segment_length } => {
+            if segment_length <= 0.0 {
+                bail!("Resolution must be greater than zero");
+            }
+        }
+        ResampleCurveDensity::Curvature { multiplier } => {
+            if multiplier <= 0.0 {
+                bail!("Curvature multiplier must be greater than zero");
+            }
+        }
     }
 
     // Make sure the input mesh is a curve and find its endpoints.
@@ -1540,9 +1596,19 @@ pub fn resample_curve(
 
     let mut points = vec![];
     let mut tangents = vec![];
+    let mut curvatures = vec![];
+    let mut accelerations = vec![];
     let mut offset = 0.0;
     for (p0, p1, p2, p3) in control_points.tuple_windows() {
         let segment = CatmullRomSegment::<8>::new(p0, p1, p2, p3, tension, alpha);
+
+        let resolution = match density_mode {
+            ResampleCurveDensity::Uniform { segment_length } => segment_length,
+            ResampleCurveDensity::Curvature { multiplier } => {
+                let avg_curvature = segment.average_curvature().max(1.0); // Prevent division by 0
+                (1.0 / avg_curvature) * multiplier
+            }
+        };
 
         // Could be that previous iteration produced an offset that is too long
         // for this segment. In that case we simply don't use any points from
@@ -1560,6 +1626,8 @@ pub fn resample_curve(
             let t = segment.t_for_arc_length(resolution * i as f32 + offset);
             points.push(segment.position_at_t(t));
             tangents.push(segment.tangent_at_t(t));
+            curvatures.push(segment.curvature_at_t(t));
+            accelerations.push(segment.acceleration_at_t(t));
         }
 
         offset = resolution - (total_dist - (nsegments * resolution));
@@ -1575,8 +1643,12 @@ pub fn resample_curve(
     let mut result_mesh = HalfEdgeMesh::new();
     let tangent_ch_id = result_mesh.channels.ensure_channel("tangent");
     let normal_ch_id = result_mesh.channels.ensure_channel("normal");
+    let curvature_ch_id = result_mesh.channels.ensure_channel("curvature");
+    let acc_ch_id = result_mesh.channels.ensure_channel("acceleration");
     let mut tangent_ch = result_mesh.channels.write_channel(tangent_ch_id).unwrap();
     let mut normal_ch = result_mesh.channels.write_channel(normal_ch_id).unwrap();
+    let mut curvature_ch = result_mesh.channels.write_channel(curvature_ch_id).unwrap();
+    let mut acc_ch = result_mesh.channels.write_channel(acc_ch_id).unwrap();
 
     // Add the first edge
     let (h_src, h_dst) = add_edge(&result_mesh, points[0], points[1])?;
@@ -1589,18 +1661,34 @@ pub fn resample_curve(
 
         normal_ch[v0] = tangents[0].cross(Vec3::Y);
         normal_ch[v1] = tangents[1].cross(Vec3::Y);
+
+        curvature_ch[v0] = curvatures[0];
+        curvature_ch[v1] = curvatures[1];
+
+        acc_ch[v0] = accelerations[0];
+        acc_ch[v1] = accelerations[1];
     }
 
     // Add the remaining edges
     let mut v = mesh.read_connectivity().at_halfedge(h_dst).vertex().end();
-    for (dst, dst_tg) in points.iter_cpy().zip(tangents.iter_cpy()).dropping(2) {
+    for (((dst, dst_tg), dst_crv), dst_jrk) in points
+        .iter_cpy()
+        .zip(tangents.iter_cpy())
+        .zip(curvatures.iter_cpy())
+        .zip(accelerations.iter_cpy())
+        .dropping(2)
+    {
         v = add_edge_chain(&result_mesh, v, dst)?;
         tangent_ch[v] = dst_tg;
         normal_ch[v] = dst_tg.cross(Vec3::Y);
+        curvature_ch[v] = dst_crv;
+        acc_ch[v] = dst_jrk;
     }
 
     drop(tangent_ch);
     drop(normal_ch);
+    drop(curvature_ch);
+    drop(acc_ch);
     Ok(result_mesh)
 }
 
@@ -1702,6 +1790,7 @@ pub mod lua_fns {
     /// interpolation to create a smooth path that passes through all the points
     /// of the original curve.
     ///
+    /// TODO: Obsolete docs!!!!!
     /// The `resolution` will be used to determine the distance between each
     /// pair of points in the final curve. Depending on the input curve and this
     /// value, the actual waypoints may not be part of the final resampled
@@ -1718,10 +1807,23 @@ pub mod lua_fns {
     #[lua(under = "Ops")]
     pub fn resample_curve(
         mesh: &HalfEdgeMesh,
-        resolution: f32,
+        density_mode: String,
+        density: f32,
         tension: f32,
         alpha: f32,
     ) -> Result<HalfEdgeMesh> {
-        super::resample_curve(mesh, resolution, tension, alpha)
+        let density_mode = if density_mode == "Uniform" {
+            ResampleCurveDensity::Uniform {
+                segment_length: density,
+            }
+        } else if density_mode == "Curvature" {
+            ResampleCurveDensity::Curvature {
+                multiplier: density,
+            }
+        } else {
+            bail!("Invalid density mode: {density_mode}")
+        };
+
+        super::resample_curve(mesh, density_mode, tension, alpha)
     }
 }

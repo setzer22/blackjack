@@ -463,6 +463,31 @@ local edit_ops = {
         },
         returns = "out_mesh",
     },
+    ResampleCurve = {
+        label = "Resample curve",
+        op = function(inputs)
+            return {
+                out_mesh = Ops.resample_curve(
+                    inputs.curve,
+                    inputs.density_mode,
+                    inputs.density,
+                    inputs.tension,
+                    inputs.alpha
+                ),
+            }
+        end,
+        inputs = {
+            P.mesh("curve"),
+            P.enum("density_mode", { "Uniform", "Curvature" }, 0),
+            P.scalar("density", 1.0, 0.0005, 10.0),
+            P.scalar("tension", 0.0, 0.0, 1.0),
+            P.scalar("alpha", 0.5, 0.0, 1.0),
+        },
+        outputs = {
+            P.mesh("out_mesh"),
+        },
+        returns = "out_mesh",
+    },
 }
 
 -- Math: Nodes to perform vector or scalar math operations

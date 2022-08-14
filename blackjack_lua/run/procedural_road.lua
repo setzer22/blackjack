@@ -163,14 +163,11 @@ local test_channel_nodes = {
             local curve = Primitives.line_from_points(waypoints)
 
             return {
-                out_mesh = Ops.resample_curve(curve, inputs.resolution / 100.0, inputs.tension, inputs.alpha),
+                out_mesh = curve
             }
         end,
         inputs = {
             P.file("cached_path", "open"),
-            P.scalar("resolution", 0.5, 0.5, 20.0),
-            P.scalar("tension", 0.5, 0.0, 1.0),
-            P.scalar("alpha", 0.5, 0.0, 1.0),
         },
         outputs = {
             P.mesh("out_mesh"),
@@ -186,9 +183,8 @@ local test_channel_nodes = {
             local normal = mesh:get_channel(Types.VertexId, Types.Vec3, "normal")
 
             for i = 1,#pos do
-                --mesh:add_edge(pos[i], pos[i] + V.normalize(tangent[i]) * inputs.width)
-                mesh:add_edge(pos[i], pos[i] + V.normalize(normal[i]) * inputs.width)
-                mesh:add_edge(pos[i], pos[i] - V.normalize(normal[i]) * inputs.width)
+                mesh:add_edge(pos[i], pos[i] + V.normalize(tangent[i]) * inputs.width)
+                --mesh:add_edge(pos[i], pos[i] - V.normalize(normal[i]) * inputs.width)
             end
 
             return {
@@ -198,6 +194,53 @@ local test_channel_nodes = {
         inputs = {
             P.mesh("mesh"),
             P.scalar("width", 0.05, 0.0, 0.1),
+        },
+        outputs = {
+            P.mesh("out_mesh"),
+        },
+        returns = "out_mesh",
+    },
+    ComputeRoadCant = {
+        label = "Compute road cant",
+        op = function(inputs)
+            local mesh = inputs.mesh:clone()
+            local pos = mesh:get_channel(Types.VertexId, Types.Vec3, "position")
+            local tangent = mesh:get_channel(Types.VertexId, Types.Vec3, "tangent")
+            local curvature = mesh:get_channel(Types.VertexId, Types.f32, "curvature")
+            local acceleration = mesh:get_channel(Types.VertexId, Types.Vec3, "acceleration")
+
+            local normal = {}
+            for i = 1,#pos do
+                local acc = vector(acceleration[i].x, 0, acceleration[i].z)
+                local tgt = vector(tangent[i].x, 0, tangent[i].z)
+
+
+                -- WIP: Trying to figure out how to rotate the side vector to
+                -- make it work. What I figured out so far:
+                --
+                -- - The UP vector is rotated using the tangent as the axis of rotation
+                --
+                -- - The angle should be proportional to the curvature
+                --
+                -- - The sign of the rotation should change depending on which
+                --   direction the curve is turning. The acceleration gives us
+                --   that direction but it's not enough?
+
+                -- mesh:add_edge(pos[i], pos[i] + vector(0, 1, 0) * V.dot(acc, tgt))
+                -- mesh:add_edge(pos[i], pos[i] + acceleration[i])
+                mesh:add_edge(pos[i], pos[i] + vector(0, 1, 0) * curvature[i])
+                normal[i] = tangent[i]
+            end
+
+            mesh:set_channel(Types.VertexId, Types.Vec3, "normal", normal)
+
+            return {
+                out_mesh = mesh
+            }
+        end,
+        inputs = {
+            P.mesh("mesh"),
+            P.scalar("strength", 0.05, 0.0, 0.1),
         },
         outputs = {
             P.mesh("out_mesh"),
