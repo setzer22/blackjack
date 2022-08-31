@@ -226,9 +226,9 @@ local test_channel_nodes = {
                 --   direction the curve is turning. The acceleration gives us
                 --   that direction but it's not enough?
 
-                -- mesh:add_edge(pos[i], pos[i] + vector(0, 1, 0) * V.dot(acc, tgt))
-                -- mesh:add_edge(pos[i], pos[i] + acceleration[i])
-                mesh:add_edge(pos[i], pos[i] + vector(0, 1, 0) * curvature[i])
+                mesh:add_edge(pos[i], pos[i] + V.normalize(acc) * 0.05)
+                --mesh:add_edge(pos[i], pos[i] + acceleration[i])
+                --mesh:add_edge(pos[i], pos[i] + vector(0, 1, 0) * curvature[i])
                 normal[i] = tangent[i]
             end
 
