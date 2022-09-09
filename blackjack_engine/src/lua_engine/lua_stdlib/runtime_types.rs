@@ -107,6 +107,24 @@ impl UserData for PerlinNoise {
     }
 }
 
+#[blackjack_macros::blackjack_lua_module]
+mod vector_math {
+    use super::*;
+    use glam::Quat;
+
+    #[lua(under="NativeMath")]
+    pub fn rotate_around_axis(v: LVec3, axis: LVec3, angle: f32) -> LVec3 {
+        let q = Quat::from_axis_angle(axis.0.normalize(), angle);
+        LVec3(q * v.0)
+    }
+
+    #[lua(under="NativeMath")]
+    pub fn cross(v: LVec3, v2: LVec3) -> LVec3 {
+        LVec3(v.0.cross(v2.0))
+    }
+
+}
+
 #[cfg(test)]
 mod test {
     use noise::NoiseFn;

@@ -206,30 +206,29 @@ local test_channel_nodes = {
             local mesh = inputs.mesh:clone()
             local pos = mesh:get_channel(Types.VertexId, Types.Vec3, "position")
             local tangent = mesh:get_channel(Types.VertexId, Types.Vec3, "tangent")
+            local normal = mesh:get_channel(Types.VertexId, Types.Vec3, "normal")
             local curvature = mesh:get_channel(Types.VertexId, Types.f32, "curvature")
             local acceleration = mesh:get_channel(Types.VertexId, Types.Vec3, "acceleration")
 
-            local normal = {}
             for i = 1,#pos do
-                local acc = vector(acceleration[i].x, 0, acceleration[i].z)
-                local tgt = vector(tangent[i].x, 0, tangent[i].z)
+                local function sign(num)
+                    return num > 0 and 1 or (num == 0 and 0 or -1)
+                end
 
+                local d1 = V.normalize(tangent[i])
+                local d2 = V.normalize(acceleration[i])
 
-                -- WIP: Trying to figure out how to rotate the side vector to
-                -- make it work. What I figured out so far:
-                --
-                -- - The UP vector is rotated using the tangent as the axis of rotation
-                --
-                -- - The angle should be proportional to the curvature
-                --
-                -- - The sign of the rotation should change depending on which
-                --   direction the curve is turning. The acceleration gives us
-                --   that direction but it's not enough?
+                local s = sign(V.dot(V.cross(d1, d2), vector(0, 1, 0) * 0.1));
 
-                mesh:add_edge(pos[i], pos[i] + V.normalize(acc) * 0.05)
-                --mesh:add_edge(pos[i], pos[i] + acceleration[i])
-                --mesh:add_edge(pos[i], pos[i] + vector(0, 1, 0) * curvature[i])
-                normal[i] = tangent[i]
+                -- Debug: s
+                -- mesh:add_edge(pos[i], pos[i] + vector(0, s * 0.05, 0))
+
+                local nrm = V.rotate_around_axis(normal[i], tangent[i], math.sqrt(curvature[i]) * inputs.strength * s);
+
+                -- Debug: nrm
+                -- mesh:add_edge(pos[i], pos[i] + nrm * 0.1)
+
+                normal[i] = nrm
             end
 
             mesh:set_channel(Types.VertexId, Types.Vec3, "normal", normal)
@@ -240,7 +239,8 @@ local test_channel_nodes = {
         end,
         inputs = {
             P.mesh("mesh"),
-            P.scalar("strength", 0.05, 0.0, 0.1),
+            P.scalar("strength", 0.0, -0.2, 0.2),
+            P.scalar("angle", 0.00, 0.0, 2 * 3.141592),
         },
         outputs = {
             P.mesh("out_mesh"),

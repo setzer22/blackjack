@@ -1402,7 +1402,7 @@ pub fn extrude_along_curve(
     let csect_pos = cross_section.read_positions();
     let csect_conn = cross_section.read_connectivity();
     let bag = cross_section.resolve_halfedge_selection_full(&SelectionExpression::All)?;
-    let (csect_chain, _) = sort_bag_of_edges(&csect_conn, &bag)?;
+    let (csect_chain, is_closed) = sort_bag_of_edges(&csect_conn, &bag)?;
 
     let mut positions = vec![];
 
@@ -1444,7 +1444,11 @@ pub fn extrude_along_curve(
 
     for seg in 0..num_segments - 1 {
         let offset = seg * segment_length;
-        for (i, j) in (0..segment_length as u32).circular_tuple_windows() {
+        for (i, j) in (0..segment_length as u32).branch(
+            is_closed,
+            |x| x.circular_tuple_windows(),
+            |x| x.tuple_windows(),
+        ) {
             let polygon = if flip % 2 == 0 {
                 [i, j, j + segment_length as u32, i + segment_length as u32]
             } else {

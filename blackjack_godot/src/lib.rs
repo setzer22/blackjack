@@ -431,9 +431,23 @@ fn halfedge_to_godot_mesh(
     Ok(mesh.into_shared())
 }
 
+
+#[cfg(not(feature="library"))]
 fn init(handle: InitHandle) {
     handle.add_tool_class::<BlackjackApi>();
     handle.add_tool_class::<BlackjackGodotRuntime>();
 }
 
+#[cfg(not(feature="library"))]
 godot_init!(init);
+
+/// NOTE: Registering a tool class in GDNative breaks hot reloading, so for
+/// advanced users that wish to use Blackjack as a library, the `library`
+/// feature is provided. This feature disables automatic registration of
+/// classes, and instead provides this function that lets you use
+/// blackjack_godot as a library.
+#[cfg(feature="library")]
+pub fn register_classes(handle: InitHandle) {
+    handle.add_class::<BlackjackApi>();
+    handle.add_class::<BlackjackGodotRuntime>();
+}

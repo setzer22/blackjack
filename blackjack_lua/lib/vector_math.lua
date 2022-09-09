@@ -39,4 +39,12 @@ VectorMath.dot = function(v1, v2)
     return v1.x * v2.x + v1.y * v2.y + v1.z * v2.z
 end
 
+VectorMath.cross = function(v, v2)
+    return NativeMath.cross(v, v2)
+end
+
+VectorMath.rotate_around_axis = function(v, axis, angle)
+    return NativeMath.rotate_around_axis(v, axis, angle)
+end
+
 return VectorMath
