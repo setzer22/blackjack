@@ -12,12 +12,13 @@ use egui_node_graph::{
     DataTypeTrait, NodeDataTrait, NodeId, NodeResponse, NodeTemplateIter, UserResponseTrait,
     WidgetValueTrait,
 };
+use egui_smart_dragvalue::SmartDragValue;
 use serde::{Deserialize, Serialize};
 
 use blackjack_engine::{
     graph::{
-        BlackjackParameter, BlackjackValue, DataType, InputValueConfig, NodeDefinition,
-        NodeDefinitions, FilePathMode,
+        BlackjackParameter, BlackjackValue, DataType, FilePathMode, InputValueConfig,
+        NodeDefinition, NodeDefinitions,
     },
     prelude::selection::SelectionExpression,
 };
@@ -249,7 +250,9 @@ impl NodeTemplateTrait for NodeDefinitionUi {
                             default_selection.unparse(),
                             Some(default_selection.clone()),
                         ),
-                        InputValueConfig::FilePath { ref default_path, .. } => BlackjackValue::String(
+                        InputValueConfig::FilePath {
+                            ref default_path, ..
+                        } => BlackjackValue::String(
                             default_path.as_ref().cloned().unwrap_or_else(|| "".into()),
                         ),
                         InputValueConfig::String {
@@ -278,6 +281,10 @@ impl WidgetValueTrait for ValueTypeUi {
     type Response = CustomNodeResponse;
 
     fn value_widget(&mut self, param_name: &str, ui: &mut egui::Ui) -> Vec<Self::Response> {
+        const DRAG_SPEEDS: &'static [f64] = &[100.0, 10.0, 1.0, 0.1, 0.01, 0.001, 0.0001];
+        const DRAG_LABELS: &'static [&'static str] =
+            &["100", "10", "1", ".1", ".01", ".001", ".0001"];
+
         match (&mut self.0.value, &self.0.config) {
             (BlackjackValue::Vector(vector), InputValueConfig::Vector { .. }) => {
                 ui.label(param_name);
@@ -290,14 +297,31 @@ impl WidgetValueTrait for ValueTypeUi {
                     ui.add(egui::DragValue::new(&mut vector.z).speed(0.1));
                 });
             }
-            (BlackjackValue::Scalar(value), InputValueConfig::Scalar { min, max, .. }) => {
+            (
+                BlackjackValue::Scalar(value),
+                InputValueConfig::Scalar {
+                    min,
+                    max,
+                    soft_min,
+                    soft_max,
+                    num_decimals,
+                    ..
+                },
+            ) => {
                 ui.horizontal(|ui| {
                     ui.label(param_name);
                     ui.add(
-                        egui::DragValue::new(value)
-                            .speed((*max - *min) / 100.0)
-                            .clamp_range(*min..=*max),
-                    );
+                        SmartDragValue::new(value, DRAG_SPEEDS, DRAG_LABELS)
+                            .speed(1.0)
+                            .clamp_range_hard(
+                                min.unwrap_or(f32::NEG_INFINITY)..=max.unwrap_or(f32::INFINITY),
+                            )
+                            .clamp_range_soft(
+                                soft_min.unwrap_or(f32::NEG_INFINITY)
+                                    ..=soft_max.unwrap_or(f32::INFINITY),
+                            )
+                            .decimals(num_decimals.unwrap_or(5) as usize),
+                    )
                 });
             }
             (BlackjackValue::String(string), InputValueConfig::Enum { values, .. }) => {
@@ -313,7 +337,6 @@ impl WidgetValueTrait for ValueTypeUi {
                 ui.label(param_name);
                 ui.horizontal(|ui| {
                     if ui.button("Select").clicked() {
-
                         let new_path = match file_path_mode {
                             FilePathMode::Open => rfd::FileDialog::new().pick_file(),
                             FilePathMode::Save => rfd::FileDialog::new().save_file(),

@@ -163,7 +163,7 @@ local test_channel_nodes = {
             local curve = Primitives.line_from_points(waypoints)
 
             return {
-                out_mesh = curve
+                out_mesh = curve,
             }
         end,
         inputs = {
@@ -182,18 +182,18 @@ local test_channel_nodes = {
             local tangent = mesh:get_channel(Types.VertexId, Types.Vec3, "tangent")
             local normal = mesh:get_channel(Types.VertexId, Types.Vec3, "normal")
 
-            for i = 1,#pos do
+            for i = 1, #pos do
                 mesh:add_edge(pos[i], pos[i] + V.normalize(tangent[i]) * inputs.width)
                 --mesh:add_edge(pos[i], pos[i] - V.normalize(normal[i]) * inputs.width)
             end
 
             return {
-                out_mesh = mesh
+                out_mesh = mesh,
             }
         end,
         inputs = {
             P.mesh("mesh"),
-            P.scalar("width", 0.05, 0.0, 0.1),
+            P.scalar("width", { default = 0.05, soft_min = 0.0, soft_max = 0.1}),
         },
         outputs = {
             P.mesh("out_mesh"),
@@ -210,7 +210,7 @@ local test_channel_nodes = {
             local curvature = mesh:get_channel(Types.VertexId, Types.f32, "curvature")
             local acceleration = mesh:get_channel(Types.VertexId, Types.Vec3, "acceleration")
 
-            for i = 1,#pos do
+            for i = 1, #pos do
                 local function sign(num)
                     return num > 0 and 1 or (num == 0 and 0 or -1)
                 end
@@ -218,12 +218,12 @@ local test_channel_nodes = {
                 local d1 = V.normalize(tangent[i])
                 local d2 = V.normalize(acceleration[i])
 
-                local s = sign(V.dot(V.cross(d1, d2), vector(0, 1, 0) * 0.1));
+                local s = sign(V.dot(V.cross(d1, d2), vector(0, 1, 0) * 0.1))
 
                 -- Debug: s
                 -- mesh:add_edge(pos[i], pos[i] + vector(0, s * 0.05, 0))
 
-                local nrm = V.rotate_around_axis(normal[i], tangent[i], math.sqrt(curvature[i]) * inputs.strength * s);
+                local nrm = V.rotate_around_axis(normal[i], tangent[i], math.sqrt(curvature[i]) * inputs.strength * s)
 
                 -- Debug: nrm
                 -- mesh:add_edge(pos[i], pos[i] + nrm * 0.1)
@@ -234,13 +234,13 @@ local test_channel_nodes = {
             mesh:set_channel(Types.VertexId, Types.Vec3, "normal", normal)
 
             return {
-                out_mesh = mesh
+                out_mesh = mesh,
             }
         end,
         inputs = {
             P.mesh("mesh"),
-            P.scalar("strength", 0.0, -0.2, 0.2),
-            P.scalar("angle", 0.00, 0.0, 2 * 3.141592),
+            P.scalar("strength", { default = 0.0, soft_min = -0.2, soft_max = 0.2 }),
+            P.scalar("angle", { default = 0.00, min = 0.0, max = 2 * 3.141592 }),
         },
         outputs = {
             P.mesh("out_mesh"),

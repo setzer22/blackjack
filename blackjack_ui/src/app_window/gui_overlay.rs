@@ -46,29 +46,48 @@ pub fn draw_gui_overlays(
 
             match overlay_type {
                 TextOverlayMode::None => {}
-                TextOverlayMode::MeshInfo => {
-                    for (i, (v, _)) in conn.iter_vertices().enumerate() {
-                        text(
-                            project_point(view_proj, viewport_rect, positions[v]),
-                            &format!("v{i}"),
-                        )
+                TextOverlayMode::MeshInfoVertices
+                | TextOverlayMode::MeshInfoFaces
+                | TextOverlayMode::MeshInfoHalfedges
+                | TextOverlayMode::MeshInfoAll => {
+                    if matches!(
+                        overlay_type,
+                        TextOverlayMode::MeshInfoAll | TextOverlayMode::MeshInfoVertices
+                    ) {
+                        for (i, (v, _)) in conn.iter_vertices().enumerate() {
+                            text(
+                                project_point(view_proj, viewport_rect, positions[v]),
+                                &format!("v{i}"),
+                            )
+                        }
                     }
-                    for (i, (h, _)) in conn.iter_halfedges().enumerate() {
-                        let (src, dst) = conn.at_halfedge(h).src_dst_pair().unwrap();
-                        let src_point = positions[src];
-                        let dst_point = positions[dst];
-                        let point = src_point * 0.333 + dst_point * 0.666;
-                        text(
-                            project_point(view_proj, viewport_rect, point),
-                            &format!("h{i}"),
-                        )
+                    if matches!(
+                        overlay_type,
+                        TextOverlayMode::MeshInfoAll | TextOverlayMode::MeshInfoHalfedges
+                    ) {
+                        for (i, (h, _)) in conn.iter_halfedges().enumerate() {
+                            let (src, dst) = conn.at_halfedge(h).src_dst_pair().unwrap();
+                            let src_point = positions[src];
+                            let dst_point = positions[dst];
+                            let point = src_point * 0.333 + dst_point * 0.666;
+                            text(
+                                project_point(view_proj, viewport_rect, point),
+                                &format!("h{i}"),
+                            )
+                        }
                     }
-                    for (i, (f, _)) in conn.iter_faces().enumerate() {
-                        let point = conn.face_vertex_average(&positions, f);
-                        text(
-                            project_point(view_proj, viewport_rect, point),
-                            &format!("f{i}"),
-                        )
+
+                    if matches!(
+                        overlay_type,
+                        TextOverlayMode::MeshInfoAll | TextOverlayMode::MeshInfoFaces
+                    ) {
+                        for (i, (f, _)) in conn.iter_faces().enumerate() {
+                            let point = conn.face_vertex_average(&positions, f);
+                            text(
+                                project_point(view_proj, viewport_rect, point),
+                                &format!("f{i}"),
+                            )
+                        }
                     }
                 }
                 TextOverlayMode::DevDebug => {

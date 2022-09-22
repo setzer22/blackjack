@@ -58,8 +58,8 @@ local primitives = {
         end,
         inputs = {
             P.v3("center", vector(0, 0, 0)),
-            P.scalar("radius", 1.0, 0.0, 10.0),
-            P.scalar("num_vertices", 8.0, 3.0, 32.0),
+            P.scalar("radius", { default = 1.0, min = 0.0 }),
+            P.scalar_int("num_vertices", { default = 8, min = 3, soft_max = 32 }),
         },
         outputs = {
             P.mesh("out_mesh"),
@@ -73,9 +73,9 @@ local primitives = {
         end,
         inputs = {
             P.v3("center", vector(0, 0, 0)),
-            P.scalar("radius", 1.0, 0.0, 10.0),
-            P.scalar("segments", 12, 3, 64),
-            P.scalar("rings", 6, 3, 64),
+            P.scalar("radius", { default = 1.0, min = 0.0 }),
+            P.scalar_int("segments", { default = 12, min = 3, soft_max = 64 }),
+            P.scalar_int("rings", { default = 6, min = 3, soft_max = 64 }),
         },
         outputs = {
             P.mesh("out_mesh"),
@@ -90,7 +90,7 @@ local primitives = {
         inputs = {
             P.v3("start_point", vector(0, 0, 0)),
             P.v3("end_point", vector(0.0, 1.0, 0.0)),
-            P.scalar("segments", 1, 1, 32),
+            P.scalar_int("segments", { default = 1, min = 1, soft_max = 32 }),
         },
         outputs = {
             P.mesh("out_mesh"),
@@ -106,8 +106,8 @@ local primitives = {
             }
         end,
         inputs = {
-            P.scalar("width", 100.0, 0.0, 1000.0),
-            P.scalar("height", 100.0, 0.0, 1000.0),
+            P.scalar("width", { default = 100.0, min = 0.0, soft_max = 1000.0 }),
+            P.scalar("height", { default = 100.0, min = 0.0, soft_max = 1000.0 }),
             P.lua_str("code"),
         },
         outputs = {
@@ -155,7 +155,7 @@ local edit_ops = {
         inputs = {
             P.mesh("in_mesh"),
             P.selection("edges"),
-            P.scalar("amount", 0.0, 0.0, 1.0),
+            P.scalar("amount", { default = 0.0, min = 0.0, soft_max = 1.0 }),
         },
         outputs = {
             P.mesh("out_mesh"),
@@ -172,7 +172,7 @@ local edit_ops = {
         inputs = {
             P.mesh("in_mesh"),
             P.selection("vertices"),
-            P.scalar("amount", 0.0, 0.0, 1.0),
+            P.scalar("amount", { default = 0.0, min = 0.0, soft_max = 1.0 }),
         },
         outputs = {
             P.mesh("out_mesh"),
@@ -189,7 +189,7 @@ local edit_ops = {
         inputs = {
             P.mesh("in_mesh"),
             P.selection("faces"),
-            P.scalar("amount", 0.0, 0.0, 1.0),
+            P.scalar("amount", { default = 0.0, min = 0.0, soft_max = 1.0 }),
         },
         outputs = {
             P.mesh("out_mesh"),
@@ -207,7 +207,7 @@ local edit_ops = {
             P.mesh("in_mesh"),
             P.selection("loop_1"),
             P.selection("loop_2"),
-            P.scalar("flip", 0.0, 0.0, 10.0),
+            P.scalar_int("flip", { default = 0.0, min = 0.0, soft_max = 4.0 }),
         },
         outputs = {
             P.mesh("out_mesh"),
@@ -259,16 +259,20 @@ local edit_ops = {
         inputs = {
             P.mesh("mesh"),
             P.enum("technique", { "linear", "catmull-clark" }, 0),
-            P.scalar("iterations", 1, 1, 7),
+            P.scalar_int("iterations", { default = 1, min = 0, soft_max = 7 }),
         },
         outputs = {
             P.mesh("out_mesh"),
         },
         returns = "out_mesh",
         op = function(inputs)
-            return {
-                out_mesh = Ops.subdivide(inputs.mesh, inputs.iterations, inputs.technique == "catmull-clark"),
-            }
+            if inputs.iterations < 1 then
+                return { out_mesh = inputs.mesh:clone() }
+            else
+                return {
+                    out_mesh = Ops.subdivide(inputs.mesh, inputs.iterations, inputs.technique == "catmull-clark"),
+                }
+            end
         end,
     },
     SetNormals = {
@@ -346,7 +350,7 @@ local edit_ops = {
         inputs = {
             P.mesh("mesh"),
             P.selection("faces"),
-            P.scalar("material_index", 0.0, 0.0, 5.0),
+            P.scalar_int("material_index", { default = 0, min = 0 }),
         },
         outputs = {
             P.mesh("out_mesh"),
@@ -456,7 +460,7 @@ local edit_ops = {
         inputs = {
             P.mesh("backbone"),
             P.mesh("cross_section"),
-            P.scalar("flip", 0.0, 0.0, 10.0),
+            P.scalar_int("flip", { default = 0.0, min = 0.0, soft_max = 4.0 }),
         },
         outputs = {
             P.mesh("out_mesh"),
@@ -479,9 +483,9 @@ local edit_ops = {
         inputs = {
             P.mesh("curve"),
             P.enum("density_mode", { "Uniform", "Curvature" }, 0),
-            P.scalar("density", 1.0, 0.0005, 10.0),
-            P.scalar("tension", 0.0, 0.0, 1.0),
-            P.scalar("alpha", 0.5, 0.0, 1.0),
+            P.scalar("density", { default = 1.0, min = 0.05, soft_max = 10.0 }),
+            P.scalar("tension", { default = 0.0, min = 0.0, max = 1.0 }),
+            P.scalar("alpha", { default = 0.5, min = 0.0, max = 1.0 }),
         },
         outputs = {
             P.mesh("out_mesh"),
@@ -495,7 +499,7 @@ local math_nodes = {
     MakeScalar = {
         label = "Scalar",
         inputs = {
-            P.scalar("x", 0.0, 0.0, 2.0),
+            P.scalar("x", { default = 0.0 }),
         },
         outputs = {
             P.scalar("x"),
@@ -507,9 +511,9 @@ local math_nodes = {
     MakeVector = {
         label = "MakeVector",
         inputs = {
-            P.scalar("x", 0.0, -100.0, 100.0),
-            P.scalar("y", 0.0, -100.0, 100.0),
-            P.scalar("z", 0.0, -100.0, 100.0),
+            P.scalar("x", { default = 0.0 }),
+            P.scalar("y", { default = 0.0 }),
+            P.scalar("z", { default = 0.0 }),
         },
         outputs = {
             P.v3("v"),
@@ -544,8 +548,8 @@ local math_nodes = {
         label = "Scalar math",
         inputs = {
             P.enum("op", { "Add", "Sub", "Mul" }, 0),
-            P.scalar("x", 0, -100.0, 100.0),
-            P.scalar("y", 0, -100.0, 100.0),
+            P.scalar("x", { default = 0 }),
+            P.scalar("y", { default = 0 }),
         },
         outputs = {
             P.scalar("out"),

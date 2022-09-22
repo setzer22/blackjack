@@ -205,9 +205,9 @@ local test_channel_nodes = {
         end,
         inputs = {
             P.mesh("mesh"),
-            P.scalar("scale", 3.0, 0.0, 10.0),
+            P.scalar("scale", { default = 3.0, min = 0.0, max = 10.0}),
             P.v3("offset", vector(0, 0, 0)),
-            P.scalar("strength", 0.1, 0.0, 1.0),
+            P.scalar("strength", { default = 0.1, min = 0.0, max = 1.0}),
         },
         outputs = {
             P.mesh("out_mesh")
@@ -229,10 +229,10 @@ local test_channel_nodes = {
             }
         end,
         inputs = {
-            P.scalar("strength", 0.1, 0.0, 1.0),
-            P.scalar("noise_scale", 0.1, 0.01, 1.0),
-            P.scalar("seed", 0.0, 0.0, 100.0),
-            P.scalar("points", 8.0, 3.0, 16.0),
+            P.scalar("strength", { default = 0.1, min = 0.0, max = 1.0}),
+            P.scalar("noise_scale", { default = 0.1, min = 0.01, max = 1.0}),
+            P.scalar("seed", { default = 0.0, min = 0.0, max = 100.0}),
+            P.scalar("points", { default = 8.0, min = 3.0, max = 16.0}),
         },
         outputs = {
             P.mesh("out_mesh"),
@@ -251,7 +251,7 @@ local test_channel_nodes = {
                 local ring_height = r * (ring / rings)
                 local inner_radius = math.sqrt(r * r - ring_height * ring_height)
 
-                local circle = Primitives.circle(vector(0, ring_height + height / 2, 0), inner_radius, 12.0)
+                local circle = Primitives.circle(vector(0, ring_height + height / 2, 0), inner_radius, inputs.sections)
                 Ops.make_group(circle, Types.HalfEdgeId, Blackjack.selection("*"), "ring" .. ring)
                 Ops.merge(m, circle)
             end
@@ -260,13 +260,13 @@ local test_channel_nodes = {
                 local ring_height = r * (ring / rings)
                 local inner_radius = math.sqrt(r * r - ring_height * ring_height)
 
-                local circle = Primitives.circle(vector(0, -ring_height - height / 2, 0), inner_radius, 12.0)
+                local circle = Primitives.circle(vector(0, -ring_height - height / 2, 0), inner_radius, inputs.sections)
                 Ops.make_group(circle, Types.HalfEdgeId, Blackjack.selection("*"), "bot_ring" .. ring)
                 Ops.merge(m, circle)
             end
 
             for ring = 0, rings - 1 do
-                Ops.bridge_chains(m, Blackjack.selection("@ring" .. ring), Blackjack.selection("@ring" .. ring + 1), 1)
+                Ops.bridge_chains(m, Blackjack.selection("@ring" .. ring), Blackjack.selection("@ring" .. ring + 1), 0)
             end
 
             for ring = 0, rings - 1 do
@@ -274,22 +274,24 @@ local test_channel_nodes = {
                     m,
                     Blackjack.selection("@bot_ring" .. ring),
                     Blackjack.selection("@bot_ring" .. ring + 1),
-                    2
+                    1
                 )
             end
 
-            Ops.bridge_chains(m, Blackjack.selection("@ring0"), Blackjack.selection("@bot_ring0"), 2)
+            Ops.bridge_chains(m, Blackjack.selection("@ring0"), Blackjack.selection("@bot_ring0"), 1)
 
             return { out_mesh = m }
         end,
         inputs = {
-            P.scalar("radius", 1.0, 0.0, 10.0),
-            P.scalar("rings", 5.0, 1.0, 10.0),
-            P.scalar("height", 2.0, 0.0, 5.0),
+            P.scalar("radius", { default = 1.0, min = 0.0, max = 10.0}),
+            P.scalar_int("rings", { default = 5, min = 1, soft_max = 10}),
+            P.scalar_int("sections", { default = 12, min = 1, soft_max = 32}),
+            P.scalar("height", { default = 2.0, min = 0.0, max = 5.0}),
         },
         outputs = {
             P.mesh("out_mesh"),
         },
+        returns = "out_mesh",
     },
     LSystem = {
         label = "L-System",
@@ -312,11 +314,11 @@ local test_channel_nodes = {
         end,
         inputs = {
             P.strparam("rule", "F+[F--F]", true),
-            P.scalar("iterations", 1, 1, 10),
-            P.scalar("initial_forward", 1, 0, 5),
-            P.scalar("forward_damp", 0.1, 0, 1),
-            P.scalar("initial_angle", PI / 6, 0, 2 * PI),
-            P.scalar("angle_damp", 0.1, 0, 1),
+            P.scalar_int("iterations", { default = 1, min = 1, max = 10}),
+            P.scalar_int("initial_forward", { default = 1, min = 0, max = 5}),
+            P.scalar("forward_damp", { default = 0.1, min = 0, max = 1}),
+            P.scalar("initial_angle", { default = PI / 6, min = 0, max = 2 * PI}),
+            P.scalar("angle_damp", { default = 0.1, min = 0, max = 1}),
         } :: { any },
         outputs = {
             P.mesh("out_mesh"),
@@ -357,7 +359,7 @@ local test_channel_nodes = {
         inputs = {
             P.mesh("l_system"),
             P.mesh("ring"),
-            P.scalar("scale_damp", 0.95, 0.0, 1.0),
+            P.scalar("scale_damp", { default = 0.95, min = 0.0, max = 1.0}),
         },
         outputs = {
             P.mesh("out_mesh"),
@@ -413,8 +415,8 @@ local test_channel_nodes = {
         end,
         inputs = {
             P.mesh("mesh"),
-            P.scalar("scale", 1.0, 0.0, 2.0),
-            P.scalar("seed", 0.0, 0.0, 100.0),
+            P.scalar("scale", { default = 1.0, min = 0.0, max = 2.0}),
+            P.scalar("seed", { default = 0.0, min = 0.0, max = 100.0}),
         },
         outputs = {
             P.mesh("out_mesh"),

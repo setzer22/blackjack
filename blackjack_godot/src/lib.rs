@@ -263,8 +263,8 @@ impl BlackjackApi {
                                 addr,
                                 typ: "Scalar".into(),
                                 val: *s,
-                                min: *min,
-                                max: *max,
+                                min: min.unwrap_or(-f32::INFINITY),
+                                max: max.unwrap_or(f32::INFINITY),
                             })
                         }
                         (_, BlackjackValue::String(s)) => params.push(GenericDef {

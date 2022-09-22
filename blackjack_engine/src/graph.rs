@@ -13,6 +13,10 @@ use mlua::{Table, ToLua};
 use serde::{Deserialize, Serialize};
 use slotmap::SlotMap;
 
+/// Defines helper functions to load old file formats with serde. This allows
+/// some variation in the structs types without breaking the `blj` file format.
+mod serde_compat;
+
 pub struct LuaExpression(pub String);
 
 /// A node has inputs (dependencies) that need to be met. A dependency can be
@@ -151,8 +155,16 @@ pub enum InputValueConfig {
     },
     Scalar {
         default: f32,
-        min: f32,
-        max: f32,
+        #[serde(deserialize_with = "serde_compat::de_option_or_f32")]
+        min: Option<f32>,
+        #[serde(deserialize_with = "serde_compat::de_option_or_f32")]
+        max: Option<f32>,
+        #[serde(default)]
+        soft_min: Option<f32>,
+        #[serde(default)]
+        soft_max: Option<f32>,
+        #[serde(default)]
+        num_decimals: Option<u32>,
     },
     Selection {
         default_selection: SelectionExpression,
@@ -242,8 +254,11 @@ impl InputDefinition {
             },
             DataType::Scalar => InputValueConfig::Scalar {
                 default: table.get::<_, f32>("default")?,
-                min: table.get::<_, f32>("min")?,
-                max: table.get::<_, f32>("max")?,
+                min: table.get::<_, Option<f32>>("min")?,
+                max: table.get::<_, Option<f32>>("max")?,
+                soft_min: table.get::<_, Option<f32>>("soft_min")?,
+                soft_max: table.get::<_, Option<f32>>("soft_max")?,
+                num_decimals: table.get::<_, Option<u32>>("num_decimals")?,
             },
             DataType::Selection => InputValueConfig::Selection {
                 default_selection: SelectionExpression::None,

@@ -7,43 +7,56 @@
 local Params = {}
 
 --- A scalar parameter, with given `default`, `min` and `max` value
-Params.scalar = function (name, default, min, max)
-    return {
-        name = name,
-        default = default,
-        min = min,
-        max = max,
-        type = "scalar"
-    }
+Params.scalar = function(name, config)
+    if config ~= nil then
+        assert(type(config) == 'table', "config should be table")
+        return {
+            name = name,
+            default = config.default,
+            min = config.min,
+            max = config.max,
+            soft_min = config.soft_min,
+            soft_max = config.soft_max,
+            type = "scalar",
+        }
+    else
+        return { name = name, type = "scalar" }
+    end
+end
+
+Params.scalar_int = function(name, config)
+    local s = Params.scalar(name, config)
+    s.num_decimals = 0
+    return s
 end
 
 --- A vector parameter, with given `default` value
-Params.v3 = function (name, default)
-    return {name = name, default = default, type = "vec3"}
+Params.v3 = function(name, default)
+    return { name = name, default = default, type = "vec3" }
 end
 
 --- A mesh parameter. Meshes can't be set by the user directly via widget, so
 --- this has no additional settings.
 Params.mesh = function(name)
-    return {name = name, type = "mesh"}
+    return { name = name, type = "mesh" }
 end
 
 --- A selection parameter. Lets user specify a group of vertices, halfedges or
 --- faces. The selected element is context-dependent.
 Params.selection = function(name)
-    return {name = name, type = "selection"}
+    return { name = name, type = "selection" }
 end
 
 --- A string parameter, with a given `default` value. If `multiline` is set, the
 --- widget for this parameter will allow inserting newlines.
 Params.strparam = function(name, default, multiline)
-    return {name = name, default = default, type = "string", multiline = multiline}
+    return { name = name, default = default, type = "string", multiline = multiline }
 end
 
 --- A special string parameter made to contain lua source code. The widget for
 --- this parameter supports syntax highlighting.
 Params.lua_str = function(name)
-    return {name = name, type = "lua_string"}
+    return { name = name, type = "lua_string" }
 end
 
 --- Another special string parameter, which lets the user select among a given
@@ -54,7 +67,7 @@ Params.enum = function(name, values, selected)
         name = name,
         type = "enum",
         values = values or {},
-        selected = selected
+        selected = selected,
     }
 end
 
@@ -65,13 +78,13 @@ end
 --- with `"save"` or open an existing one with `"open"`
 Params.file = function(name, mode)
     mode = mode or "save" -- keep backwards compatibility
-    return {name = name, type = "file", mode = mode}
+    return { name = name, type = "file", mode = mode }
 end
 
 --- A heightmap mesh parameter. Like a regular mesh, it can't be set by the user
 --- so it has no widget.
 Params.heightmap = function(name)
-    return {name = name, type = "heightmap"}
+    return { name = name, type = "heightmap" }
 end
 
 return Params

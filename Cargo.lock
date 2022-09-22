@@ -457,6 +457,7 @@ dependencies = [
  "egui-wgpu",
  "egui-winit",
  "egui_node_graph",
+ "egui_smart_dragvalue",
  "env_logger",
  "float-ord",
  "glam",
@@ -1017,7 +1018,7 @@ checksum = "6907e25393cdcc1f4f3f513d9aac1e840eb1cc341a0fccb01171f7d14d10b946"
 [[package]]
 name = "egui"
 version = "0.18.1"
-source = "git+https://github.com/setzer22/egui?branch=blackjack#f532e4baf9768b6feb350807a85403d4d20a5191"
+source = "git+https://github.com/setzer22/egui?branch=blackjack#3aab26986a0c7080371b1ba2329619f201c527cd"
 dependencies = [
  "ahash",
  "epaint",
@@ -1030,7 +1031,7 @@ dependencies = [
 [[package]]
 name = "egui-wgpu"
 version = "0.18.0"
-source = "git+https://github.com/setzer22/egui?branch=blackjack#f532e4baf9768b6feb350807a85403d4d20a5191"
+source = "git+https://github.com/setzer22/egui?branch=blackjack#3aab26986a0c7080371b1ba2329619f201c527cd"
 dependencies = [
  "bytemuck",
  "egui",
@@ -1041,7 +1042,7 @@ dependencies = [
 [[package]]
 name = "egui-winit"
 version = "0.18.0"
-source = "git+https://github.com/setzer22/egui?branch=blackjack#f532e4baf9768b6feb350807a85403d4d20a5191"
+source = "git+https://github.com/setzer22/egui?branch=blackjack#3aab26986a0c7080371b1ba2329619f201c527cd"
 dependencies = [
  "arboard",
  "egui",
@@ -1065,6 +1066,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "egui_smart_dragvalue"
+version = "0.2.0"
+dependencies = [
+ "egui",
+]
+
+[[package]]
 name = "either"
 version = "1.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1073,7 +1081,7 @@ checksum = "e78d4f1cc4ae33bbfc157ed5d5a5ef3bc29227303d595861deb238fcec4e9457"
 [[package]]
 name = "emath"
 version = "0.18.0"
-source = "git+https://github.com/setzer22/egui?branch=blackjack#f532e4baf9768b6feb350807a85403d4d20a5191"
+source = "git+https://github.com/setzer22/egui?branch=blackjack#3aab26986a0c7080371b1ba2329619f201c527cd"
 dependencies = [
  "bytemuck",
  "serde",
@@ -1137,7 +1145,7 @@ dependencies = [
 [[package]]
 name = "epaint"
 version = "0.18.1"
-source = "git+https://github.com/setzer22/egui?branch=blackjack#f532e4baf9768b6feb350807a85403d4d20a5191"
+source = "git+https://github.com/setzer22/egui?branch=blackjack#3aab26986a0c7080371b1ba2329619f201c527cd"
 dependencies = [
  "ab_glyph",
  "ahash",

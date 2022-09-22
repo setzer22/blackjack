@@ -37,8 +37,14 @@ pub enum FaceDrawMode {
 pub enum TextOverlayMode {
     /// No text overlay
     None,
-    /// Display mesh information
-    MeshInfo,
+    /// Display face ids
+    MeshInfoFaces,
+    /// Display vertex ids
+    MeshInfoVertices,
+    /// Display halfedge ids
+    MeshInfoHalfedges,
+    /// Display all edge ids
+    MeshInfoAll,
     /// Display mesh debug information set by the developers when debugging a
     /// problem. This is not intended to be used by regular users.
     DevDebug,
@@ -267,8 +273,23 @@ impl Viewport3d {
                         );
                         ui.selectable_value(
                             &mut self.settings.overlay_mode,
-                            TextOverlayMode::MeshInfo,
-                            "Info",
+                            TextOverlayMode::MeshInfoVertices,
+                            "V",
+                        );
+                        ui.selectable_value(
+                            &mut self.settings.overlay_mode,
+                            TextOverlayMode::MeshInfoFaces,
+                            "F",
+                        );
+                        ui.selectable_value(
+                            &mut self.settings.overlay_mode,
+                            TextOverlayMode::MeshInfoHalfedges,
+                            "H",
+                        );
+                        ui.selectable_value(
+                            &mut self.settings.overlay_mode,
+                            TextOverlayMode::MeshInfoAll,
+                            "A",
                         );
                         ui.selectable_value(
                             &mut self.settings.overlay_mode,

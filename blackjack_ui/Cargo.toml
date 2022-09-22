@@ -23,6 +23,7 @@ egui-wgpu = { version = "0.18" } # This is a patch.crates-io fork on main Cargo.
 egui = { version = "0.18", features = ["persistence"] } # This is a patch.crates-io fork on main Cargo.toml
 
 # Git dependencies
+egui_smart_dragvalue = { path = "../../egui_smart_dragvalue/egui_smart_dragvalue" }
 egui_node_graph = { git = "https://github.com/setzer22/egui_node_graph", rev = "54ae2dc45fb8882563ca98e2b8910af1ea1413dd", features = [
     "persistence",
 ] }
