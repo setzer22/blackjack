@@ -12,6 +12,10 @@ use crate::{prelude::*, rendergraph};
 
 use super::app_viewport::AppViewport;
 
+/// A generic lerper
+mod lerp;
+use lerp::*;
+
 #[derive(PartialEq, Eq)]
 pub enum EdgeDrawMode {
     HalfEdge,
@@ -67,19 +71,31 @@ pub struct Viewport3d {
 }
 
 struct OrbitCamera {
-    yaw: f32,
-    pitch: f32,
-    distance: f32,
-    focus_point: Vec3,
+    yaw: Lerp<f32>,
+    pitch: Lerp<f32>,
+    distance: Lerp<f32>,
+    fov: Lerp<f32>,
+    focus_point: Lerp<Vec3>,
+}
+
+impl OrbitCamera {
+    pub fn update(&mut self, delta: f32) {
+        self.yaw.update(delta);
+        self.pitch.update(delta);
+        self.distance.update(delta);
+        self.fov.update(delta * 2.0);
+        self.focus_point.update(delta);
+    }
 }
 
 impl Default for OrbitCamera {
     fn default() -> Self {
         Self {
-            yaw: -30.0,
-            pitch: 30.0,
-            distance: 8.0,
-            focus_point: Vec3::ZERO,
+            yaw: Lerp::new(-30.0),
+            pitch: Lerp::new(30.0),
+            distance: Lerp::new(8.0),
+            fov: Lerp::new(60.0),
+            focus_point: Lerp::new(Vec3::ZERO),
         }
     }
 }
@@ -115,28 +131,38 @@ impl Viewport3d {
     }
 
     fn update_camera(&mut self, render_ctx: &mut RenderContext) {
+        const MIN_FOV: f32 = 1.0;
+        const MAX_FOV: f32 = 120.0;
+
+        self.camera.update(10.0 / 60.0);
+
         // Update status
         if self.input.mouse.buttons().pressed(MouseButton::Left) {
             if self.input.shift_down {
-                let cam_rotation = Mat4::from_rotation_y(self.camera.yaw.to_radians())
-                    * Mat4::from_rotation_x(self.camera.pitch.to_radians());
+                let cam_rotation = Mat4::from_rotation_y(self.camera.yaw.get().to_radians())
+                    * Mat4::from_rotation_x(self.camera.pitch.get().to_radians());
                 let camera_right = cam_rotation.transform_point3(Vec3::X);
                 let camera_up = cam_rotation.transform_vector3(Vec3::Y);
-                self.camera.focus_point += self.input.mouse.cursor_delta().x * camera_right * 0.1
-                    + self.input.mouse.cursor_delta().y * -camera_up * 0.1;
+                let move_speed = 0.25 * self.camera.fov.get() / MAX_FOV;
+                self.camera.focus_point +=
+                    self.input.mouse.cursor_delta().x * camera_right * move_speed
+                        + self.input.mouse.cursor_delta().y * -camera_up * move_speed;
             } else {
                 self.camera.yaw += self.input.mouse.cursor_delta().x * 2.0;
                 self.camera.pitch += self.input.mouse.cursor_delta().y * 2.0;
             }
         }
-        self.camera.distance += self.input.mouse.wheel_delta() * 0.25;
+        // self.camera.distance += self.input.mouse.wheel_delta() * 0.25;
+        self.camera
+            .fov
+            .set(|fov| (fov - self.input.mouse.wheel_delta() * 4.0).clamp(MIN_FOV, MAX_FOV));
 
         // Compute view matrix
-        let view = Mat4::from_translation(Vec3::Z * self.camera.distance)
-            * Mat4::from_rotation_x(-self.camera.pitch.to_radians())
-            * Mat4::from_rotation_y(-self.camera.yaw.to_radians())
-            * Mat4::from_translation(self.camera.focus_point);
-        render_ctx.set_camera(view);
+        let view = Mat4::from_translation(Vec3::Z * self.camera.distance.get())
+            * Mat4::from_rotation_x(-self.camera.pitch.get().to_radians())
+            * Mat4::from_rotation_y(-self.camera.yaw.get().to_radians())
+            * Mat4::from_translation(self.camera.focus_point.get());
+        render_ctx.set_camera(view, self.camera.fov.get());
     }
 
     pub fn update(
