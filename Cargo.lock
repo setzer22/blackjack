@@ -457,7 +457,6 @@ dependencies = [
  "egui-wgpu",
  "egui-winit",
  "egui_node_graph",
- "egui_smart_dragvalue",
  "env_logger",
  "float-ord",
  "glam",
@@ -1063,13 +1062,6 @@ dependencies = [
  "slotmap",
  "smallvec",
  "thiserror",
-]
-
-[[package]]
-name = "egui_smart_dragvalue"
-version = "0.2.0"
-dependencies = [
- "egui",
 ]
 
 [[package]]

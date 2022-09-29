@@ -28,6 +28,9 @@ pub mod graph;
 /// Conversion from hexadecimal string to egui colors and vice-versa.
 pub mod color_hex_utils;
 
+/// Custom egui widgets.
+pub mod custom_widgets;
+
 fn main() {
     #[cfg(feature = "tracy")]
     let _client = profiling::tracy_client::Client::start();

@@ -6,13 +6,13 @@
 
 use std::borrow::Cow;
 
+use crate::custom_widgets::smart_dragvalue::SmartDragValue;
 use crate::{application::code_viewer::code_edit_ui, prelude::*};
 use egui::RichText;
 use egui_node_graph::{
     DataTypeTrait, NodeDataTrait, NodeId, NodeResponse, NodeTemplateIter, UserResponseTrait,
     WidgetValueTrait,
 };
-use egui_smart_dragvalue::SmartDragValue;
 use serde::{Deserialize, Serialize};
 
 use blackjack_engine::{
@@ -290,11 +290,23 @@ impl WidgetValueTrait for ValueTypeUi {
                 ui.label(param_name);
                 ui.horizontal(|ui| {
                     ui.label("x");
-                    ui.add(egui::DragValue::new(&mut vector.x).speed(0.1));
+                    ui.add(
+                        SmartDragValue::new(&mut vector.x, DRAG_SPEEDS, DRAG_LABELS)
+                            .speed(1.0)
+                            .decimals(5),
+                    );
                     ui.label("y");
-                    ui.add(egui::DragValue::new(&mut vector.y).speed(0.1));
+                    ui.add(
+                        SmartDragValue::new(&mut vector.y, DRAG_SPEEDS, DRAG_LABELS)
+                            .speed(1.0)
+                            .decimals(5),
+                    );
                     ui.label("z");
-                    ui.add(egui::DragValue::new(&mut vector.z).speed(0.1));
+                    ui.add(
+                        SmartDragValue::new(&mut vector.z, DRAG_SPEEDS, DRAG_LABELS)
+                            .speed(1.0)
+                            .decimals(5),
+                    );
                 });
             }
             (
