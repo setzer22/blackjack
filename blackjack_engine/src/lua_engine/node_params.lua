@@ -12,7 +12,7 @@ Params.scalar = function(name, config)
         assert(type(config) == 'table', "config should be table")
         return {
             name = name,
-            default = config.default,
+            default = config.default or 0.0,
             min = config.min,
             max = config.max,
             soft_min = config.soft_min,

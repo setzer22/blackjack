@@ -417,7 +417,7 @@ impl<'a, 'b> Widget for SmartDragValue<'a, 'b> {
                 const MOUSE_AIM_PRECISION: f32 = 20.0;
                 const SCROLL_WHEEL_PRECISION: f32 = 50.0;
 
-                let should_increment = mdelta.x.abs() > mdelta.y.abs();
+                let should_increment = mdelta.x.abs() * 3.0 > mdelta.y.abs();
                 let delta_value = {
                     let LocalState {
                         ref mut drag_amount,
