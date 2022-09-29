@@ -132,7 +132,7 @@ impl RenderContext {
         self.renderer.set_camera_data(rend3::types::Camera {
             projection: rend3::types::CameraProjection::Perspective {
                 vfov: 60.0,
-                near: 0.1,
+                near: 0.01,
             },
             view: view_matrix,
         });
