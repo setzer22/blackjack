@@ -225,8 +225,6 @@ fn codegen_node(
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeMap;
-
     use super::*;
     #[test]
     pub fn compile_simple_graph_test() {

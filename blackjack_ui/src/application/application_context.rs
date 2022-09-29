@@ -10,7 +10,7 @@ use anyhow::Error;
 use blackjack_engine::{
     graph_compiler::{compile_graph, CompiledProgram, ExternalParameterValues},
     lua_engine::{LuaRuntime, RenderableThing},
-    prelude::{FaceOverlayBuffers, HalfEdgeMesh, LineBuffers, PointBuffers, VertexIndexBuffers},
+    prelude::{FaceOverlayBuffers, LineBuffers, PointBuffers, VertexIndexBuffers},
 };
 use egui_node_graph::NodeId;
 

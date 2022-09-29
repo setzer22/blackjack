@@ -6,10 +6,9 @@
 
 use std::sync::Arc;
 
-use mlua::{AnyUserData, AsChunk, FromLua, Lua, Table, ToLua, UserData};
+use mlua::{AnyUserData, FromLua, Lua, Table, ToLua, UserData};
 
 use crate::{
-    graph::NodeDefinitions,
     lua_engine::ToLuaError,
     prelude::{
         halfedge::{
@@ -85,7 +84,7 @@ pub fn load_host_libraries(lua: &Lua, lua_io: Arc<dyn LuaFileIo + 'static>) -> a
     lua_constructors_library::load(lua)?;
 
     for register_fn in inventory::iter::<LuaRegisterFn>() {
-        (register_fn.f)(lua);
+        (register_fn.f)(lua).expect("Failed to register Lua API");
     }
 
     Ok(())

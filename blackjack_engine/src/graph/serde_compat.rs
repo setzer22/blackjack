@@ -1,4 +1,4 @@
-use serde::{Serialize, Deserialize};
+use serde::Deserialize;
 
 /// For fields that used to be a required f32 and now are optional
 pub fn de_option_or_f32<'de, D>(de: D) -> Result<Option<f32>, D::Error>

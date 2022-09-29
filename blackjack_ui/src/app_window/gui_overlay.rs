@@ -5,10 +5,7 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 use crate::{application::viewport_3d::TextOverlayMode, prelude::*};
-use blackjack_engine::{
-    lua_engine::RenderableThing,
-    prelude::{HalfEdgeMesh, HalfedgeTraversalHelpers},
-};
+use blackjack_engine::{lua_engine::RenderableThing, prelude::HalfedgeTraversalHelpers};
 use egui::*;
 
 // Need to divide by the pixels per point to accurately position on the

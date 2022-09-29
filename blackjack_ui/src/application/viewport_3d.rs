@@ -5,7 +5,6 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 use blackjack_engine::lua_engine::RenderableThing;
-use blackjack_engine::prelude::HalfEdgeMesh;
 use winit::event::MouseButton;
 
 use crate::app_window::input::InputSystem;
