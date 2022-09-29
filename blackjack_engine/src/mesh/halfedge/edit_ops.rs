@@ -835,9 +835,6 @@ pub fn bridge_chains(
         .chain(chain_2.iter().rev().tuple_windows())
     {
         if !conn.at_vertex(*v).halfedge_to(*w).is_boundary()? {
-            let vm = conn.vertex_mapping();
-            dbg!(vm[*v]);
-            dbg!(vm[*w]);
             bail!("Cannot bridge loops with edges that are not in a boundary. This would lead to a non-manifold mesh.");
         }
     }
@@ -1047,7 +1044,6 @@ pub fn bridge_chains_ui(
     }
     let is_closed = is_closed_1;
 
-    dbg!((flip + 1) % 4);
     match (flip + 1) % 4 {
         // That +1 is experimentally determined to give nice results
         0 => {}
@@ -1064,13 +1060,7 @@ pub fn bridge_chains_ui(
         _ => unreachable!(),
     }
 
-    let vm = mesh.read_connectivity().vertex_mapping();
-
-    bridge_chains(mesh, &chain_1, &chain_2, is_closed).map_err(|err| {
-        dbg!(chain_1.iter().map(|v| vm[*v]).collect::<Vec<_>>(), is_closed_1);
-        dbg!(chain_2.iter().map(|v| vm[*v]).collect::<Vec<_>>(), is_closed_2);
-        err
-    })?;
+    bridge_chains(mesh, &chain_1, &chain_2, is_closed)?;
 
     Ok(())
 }
