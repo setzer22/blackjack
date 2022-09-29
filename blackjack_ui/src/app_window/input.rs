@@ -6,7 +6,7 @@
 
 use winit::{
     dpi::PhysicalPosition,
-    event::{ElementState, ModifiersState, MouseButton, WindowEvent},
+    event::{ElementState, ModifiersState, MouseButton, VirtualKeyCode, WindowEvent},
 };
 
 use crate::{egui_ext::RectUtils, prelude::*};
@@ -15,6 +15,8 @@ use crate::{egui_ext::RectUtils, prelude::*};
 pub struct InputSystem {
     pub mouse: MouseInput,
     pub shift_down: bool,
+    pub ctrl_down: bool,
+    pub pressed: HashSet<VirtualKeyCode>,
 }
 
 /// Transforms a window-relative position `pos` into viewport relative
@@ -38,6 +40,10 @@ impl InputSystem {
     /// Called every frame, updates the input data structures
     pub fn update(&mut self) {
         self.mouse.update();
+    }
+
+    pub fn is_key_pressed(&self, key: VirtualKeyCode) -> bool {
+        self.pressed.contains(&key)
     }
 
     /// Called when a new `winit` window event is received. The `viewport_rect`
@@ -102,6 +108,19 @@ impl InputSystem {
             }
             WindowEvent::ModifiersChanged(state) => {
                 self.shift_down = state.contains(ModifiersState::SHIFT);
+                self.ctrl_down = state.contains(ModifiersState::CTRL);
+            }
+            WindowEvent::KeyboardInput { input, .. } => {
+                if let Some(key) = input.virtual_keycode {
+                    match input.state {
+                        ElementState::Pressed => {
+                            self.pressed.insert(key);
+                        },
+                        ElementState::Released => {
+                            self.pressed.remove(&key);
+                        },
+                    }
+                }
             }
             _ => {}
         }
