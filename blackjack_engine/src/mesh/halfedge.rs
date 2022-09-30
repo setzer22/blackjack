@@ -50,6 +50,8 @@ pub use gpu_buffer_generation::*;
 pub mod channels;
 pub use channels::*;
 
+use self::mappings::MeshMapping;
+
 /// HalfEdge meshes are a type of linked list. This means it is sometimes
 /// impossible to ensure some algorithms will terminate when the mesh is
 /// malformed. To ensure the code never goes into an infinite loop, this max
@@ -961,14 +963,14 @@ impl<'a> Iterator for HalfedgeLoopIterator<'a> {
 }
 
 impl Vertex {
-    pub fn introspect(&self, h_mapping: &SecondaryMap<HalfEdgeId, u32>) -> String {
+    pub fn introspect(&self, h_mapping: &MeshMapping<HalfEdgeId>) -> String {
         let h = self.halfedge.map(|h| h_mapping[h]);
         format!("halfedge: {h:?}")
     }
 }
 
 impl Face {
-    pub fn introspect(&self, h_mapping: &SecondaryMap<HalfEdgeId, u32>) -> String {
+    pub fn introspect(&self, h_mapping: &MeshMapping<HalfEdgeId>) -> String {
         let h = self.halfedge.map(|h| h_mapping[h]);
         format!("halfedge: {h:?}")
     }
@@ -977,9 +979,9 @@ impl Face {
 impl HalfEdge {
     pub fn introspect(
         &self,
-        h_mapping: &SecondaryMap<HalfEdgeId, u32>,
-        v_mapping: &SecondaryMap<VertexId, u32>,
-        f_mapping: &SecondaryMap<FaceId, u32>,
+        h_mapping: &MeshMapping<HalfEdgeId>,
+        v_mapping: &MeshMapping<VertexId>,
+        f_mapping: &MeshMapping<FaceId>,
     ) -> String {
         let next = self.next.map(|h| h_mapping[h]);
         let twin = self.twin.map(|h| h_mapping[h]);
@@ -989,28 +991,36 @@ impl HalfEdge {
     }
 }
 
+pub mod mappings;
+
 impl MeshConnectivity {
-    pub fn vertex_mapping(&self) -> SecondaryMap<VertexId, u32> {
-        self.vertices
-            .iter()
-            .enumerate()
-            .map(|(i, (v, _))| (v, i as u32))
-            .collect()
+    pub fn vertex_mapping(&self) -> mappings::MeshMapping<VertexId> {
+        mappings::MeshMapping(
+            self.vertices
+                .iter()
+                .enumerate()
+                .map(|(i, (v, _))| (v, i as u32))
+                .collect(),
+        )
     }
 
-    pub fn face_mapping(&self) -> SecondaryMap<FaceId, u32> {
-        self.faces
-            .iter()
-            .enumerate()
-            .map(|(i, (v, _))| (v, i as u32))
-            .collect()
+    pub fn face_mapping(&self) -> mappings::MeshMapping<FaceId> {
+        mappings::MeshMapping(
+            self.faces
+                .iter()
+                .enumerate()
+                .map(|(i, (v, _))| (v, i as u32))
+                .collect(),
+        )
     }
 
-    pub fn halfedge_mapping(&self) -> SecondaryMap<HalfEdgeId, u32> {
-        self.halfedges
-            .iter()
-            .enumerate()
-            .map(|(i, (v, _))| (v, i as u32))
-            .collect()
+    pub fn halfedge_mapping(&self) -> mappings::MeshMapping<HalfEdgeId> {
+        mappings::MeshMapping(
+            self.halfedges
+                .iter()
+                .enumerate()
+                .map(|(i, (v, _))| (v, i as u32))
+                .collect(),
+        )
     }
 }

@@ -832,7 +832,7 @@ pub fn bridge_chains(
     for (v, w) in chain_1
         .iter()
         .tuple_windows()
-        .chain(chain_2.iter().rev().tuple_windows())
+        .chain(chain_2.iter().tuple_windows())
     {
         if !conn.at_vertex(*v).halfedge_to(*w).is_boundary()? {
             bail!("Cannot bridge loops with edges that are not in a boundary. This would lead to a non-manifold mesh.");
@@ -900,12 +900,7 @@ pub fn bridge_chains(
     {
         conn.add_debug_vertex(v1, DebugMark::blue(&format!("{i}",)));
         conn.add_debug_vertex(v3, DebugMark::blue(&format!("{i}",)));
-
-        if i <= 0 {
         make_quad(&mut conn, &[v1, v2, v4, v3])?;
-
-        }
-
     }
 
     Ok(())
