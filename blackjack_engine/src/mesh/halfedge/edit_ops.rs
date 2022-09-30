@@ -1460,9 +1460,6 @@ pub fn extrude_along_curve(
     }
 
     HalfEdgeMesh::build_from_polygons(&positions, &polygons)
-
-    // WIP: This works on the basic case, but seems to fail on the procedural
-    // road example.
 }
 
 pub enum ResampleCurveDensity {
