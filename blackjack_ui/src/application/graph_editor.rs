@@ -202,10 +202,10 @@ impl GraphEditor {
     ) -> ScreenDescriptor {
         ScreenDescriptor {
             size_in_pixels: [
-                (viewport_rect.width() * parent_scale * self.zoom_level()) as u32,
-                (viewport_rect.height() * parent_scale * self.zoom_level()) as u32,
+                (viewport_rect.width() * parent_scale) as u32,
+                (viewport_rect.height() * parent_scale) as u32,
             ],
-            pixels_per_point: 1.0,
+            pixels_per_point: 1.0 / self.zoom_level(),
         }
     }
 
@@ -262,13 +262,8 @@ impl GraphEditor {
                     &screen_descriptor,
                 );
 
-                this.renderpass.execute_with_renderpass(
-                    rpass,
-                    &paint_jobs,
-                    &screen_descriptor,
-                    // this.zoom_level(),
-                    // Some(resolution.to_array()),
-                );
+                this.renderpass
+                    .execute_with_renderpass(rpass, &paint_jobs, &screen_descriptor);
             },
         );
     }

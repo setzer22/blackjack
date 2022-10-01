@@ -12,7 +12,7 @@ resolver = "2"
 [profile.dev.package."*"]
 opt-level = 3
 
-[patch.crates-io]
+# [patch.crates-io]
 # NOTE: These patches are only used for development, and should be left
 # commented out in any commits to the 'main' branch
 # egui_wgpu_backend = { path = "../egui_wgpu_backend" }
