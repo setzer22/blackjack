@@ -102,7 +102,7 @@ impl RootViewport {
             "inspector" => payload.inspector_tabs.ui(
                 ui,
                 payload.app_context.mesh.as_ref(),
-                &mut payload.graph_editor.state,
+                &mut payload.graph_editor.editor_state,
             ),
             _ => panic!("Invalid split name {}", name),
         }

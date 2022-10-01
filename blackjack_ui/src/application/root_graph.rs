@@ -115,8 +115,8 @@ impl RootViewport {
                     rpass,
                     &paint_jobs,
                     screen_descriptor,
-                    1.0,
-                    None,
+                    // 1.0,
+                    // None,
                 );
             },
         );

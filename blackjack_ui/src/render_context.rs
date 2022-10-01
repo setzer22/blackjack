@@ -17,7 +17,16 @@ use crate::{
 
 use glam::Mat4;
 use rend3_routine::pbr::PbrRoutine;
-use wgpu::{Surface, TextureFormat};
+use wgpu::{Adapter, Surface, TextureFormat};
+
+fn get_present_mode(surface: &Surface, adapter: &Adapter) -> rend3::types::PresentMode {
+    let modes = surface.get_supported_modes(adapter);
+    if modes.contains(&wgpu::PresentMode::Mailbox) {
+        rend3::types::PresentMode::Mailbox
+    } else {
+        rend3::types::PresentMode::AutoVsync
+    }
+}
 
 pub struct RenderContext {
     pub renderer: Arc<r3::Renderer>,
@@ -30,6 +39,7 @@ pub struct RenderContext {
     pub face_routine: FaceRoutine,
     pub point_cloud_routine: PointCloudRoutine,
     pub surface: Arc<Surface>,
+    pub adapter: Arc<Adapter>,
     pub texture_format: TextureFormat,
     pub shader_manager: ShaderManager,
 
@@ -49,14 +59,15 @@ impl RenderContext {
         .unwrap();
 
         let surface = Arc::new(unsafe { iad.instance.create_surface(&window) });
+        let adapter = iad.adapter.clone();
 
-        let format = surface.get_preferred_format(&iad.adapter).unwrap();
+        let format = surface.get_supported_formats(&iad.adapter)[0];
         rend3::configure_surface(
             &surface,
             &iad.device,
             format,
             glam::UVec2::new(window_size.width, window_size.height),
-            rend3::types::PresentMode::Mailbox,
+            get_present_mode(&surface, &adapter),
         );
 
         let renderer = r3::Renderer::new(
@@ -91,6 +102,7 @@ impl RenderContext {
             point_cloud_routine,
             face_routine,
             surface,
+            adapter,
             texture_format: format,
             shader_manager,
             objects: vec![],
@@ -161,7 +173,7 @@ impl RenderContext {
             &self.renderer.device,
             self.texture_format,
             glam::uvec2(width, height),
-            rend3::types::PresentMode::Mailbox,
+            get_present_mode(&self.surface, &self.adapter),
         );
     }
 }

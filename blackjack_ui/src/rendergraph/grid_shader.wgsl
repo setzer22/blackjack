@@ -1,24 +1,24 @@
 // Vertex shader
 
 struct VertexOutput {
-    [[builtin(position)]] clip_position: vec4<f32>;
-    [[location(0)]] near_point: vec3<f32>;
-    [[location(1)]] far_point: vec3<f32>;
+    @builtin(position) clip_position: vec4<f32>,
+    @location(0) near_point: vec3<f32>,
+    @location(1) far_point: vec3<f32>,
 };
 
 struct FragmentOutput {
-    [[builtin(frag_depth)]] depth: f32;
-    [[location(0)]] color: vec4<f32>;
+    @builtin(frag_depth) depth: f32,
+    @location(0) color: vec4<f32>,
 };
 
 struct GridRoutineUniform {
-    view: mat4x4<f32>;
-    proj: mat4x4<f32>;
-    inv_view: mat4x4<f32>;
-    inv_proj: mat4x4<f32>;
+    view: mat4x4<f32>,
+    proj: mat4x4<f32>,
+    inv_view: mat4x4<f32>,
+    inv_proj: mat4x4<f32>,
 };
 
-[[group(0), binding(0)]]
+@group(0) @binding(0)
 var<uniform> matrices: GridRoutineUniform;
 
 var<private> vertices: array<vec2<f32>, 6> = array<vec2<f32>, 6>( 
@@ -30,14 +30,14 @@ var<private> vertices: array<vec2<f32>, 6> = array<vec2<f32>, 6>(
     vec2<f32>(-1.0, -1.0),
 );
 
-fn unproject_point(point: vec3<f32>, inv_view: mat4x4<f32>, inv_proj: mat4x4<f32>) -> vec3<f32> {
-    let unprojected_point =  inv_view * inv_proj * vec4<f32>(point, 1.0);
+fn unproject_point(projected_point: vec3<f32>, inv_view: mat4x4<f32>, inv_proj: mat4x4<f32>) -> vec3<f32> {
+    let unprojected_point =  inv_view * inv_proj * vec4<f32>(projected_point, 1.0);
     return unprojected_point.xyz / unprojected_point.w;
 }
 
-[[stage(vertex)]]
+@vertex
 fn vs_main(
-    [[builtin(vertex_index)]] in_vertex_index: u32,
+    @builtin(vertex_index) in_vertex_index: u32,
 ) -> VertexOutput {
     var out: VertexOutput;
 
@@ -58,10 +58,10 @@ fn grid(frag_pos_3d: vec3<f32>, scale: f32) -> vec4<f32> {
     let coord = frag_pos_3d.xz * scale; // use the scale variable to set the distance between the lines
     let derivative = fwidth(coord);
     let grid = abs(fract(coord - 0.5) - 0.5) / derivative;
-    let line = min(grid.x, grid.y);
+    let grid_line = min(grid.x, grid.y);
     let minimumz = min(derivative.y, 1.0);
     let minimumx = min(derivative.x, 1.0);
-    var color = vec4<f32>(0.2, 0.2, 0.2, 1.0 - min(line, 1.0));
+    var color = vec4<f32>(0.2, 0.2, 0.2, 1.0 - min(grid_line, 1.0));
 
     let threshold = 1.0 / scale;
 
@@ -89,7 +89,7 @@ fn fading(frag_pos_3d: vec3<f32>, depth: f32) -> f32 {
     return max(0.0, 1.5 - linear_depth);
 }
 
-[[stage(fragment)]]
+@fragment
 fn fs_main(in: VertexOutput) -> FragmentOutput {
     let t = -in.near_point.y / (in.far_point.y - in.near_point.y);
     let frag_pos_3d = in.near_point + t * (in.far_point - in.near_point);
@@ -102,5 +102,4 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
     out.color.a = out.color.a * fading(frag_pos_3d, depth);
 
     return out;
-
 }
