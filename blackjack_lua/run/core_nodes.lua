@@ -102,7 +102,7 @@ local primitives = {
         op = function(inputs)
             local f = load_function(inputs.code)
             return {
-                out_heightmap = Blackjack.heightmap_fn(inputs.width, inputs.height, f),
+                out_heightmap = HeightMap.from_fn(inputs.width, inputs.height, f),
             }
         end,
         inputs = {
