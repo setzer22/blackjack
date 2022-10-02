@@ -131,6 +131,8 @@ mod lua_api {
 
     use super::HeightMap;
 
+    /// Builds a heightmap with a grid of `width` times `height` filled with
+    /// perlin noise with given parameters.
     #[lua(under = "Blackjack")]
     pub fn heightmap_perlin(
         width: usize,
@@ -142,10 +144,40 @@ mod lua_api {
         HeightMap::from_perlin(width, height, frequency, offset.0.truncate(), amplitude)
     }
 
+    /// Builds a heightmap with a grid of `width` times `height` filled with
+    /// perlin noise, where each cell is filled with the result of running the
+    /// function `f`. The function is called with the (i, j) coordinates of the
+    /// current cell.
     #[lua(under = "Blackjack")]
     pub fn heightmap_fn(width: usize, height: usize, f: mlua::Function) -> Result<HeightMap> {
         HeightMap::from_lua_fn(width, height, f)
     }
-}
 
-impl UserData for HeightMap {}
+    /// Builds a heightmap with a grid of `width` times `height` filled with
+    /// perlin noise with given parameters.
+    #[lua(under = "HeightMap")]
+    pub fn from_perlin(
+        width: usize,
+        height: usize,
+        frequency: f32,
+        offset: LVec3,
+        amplitude: f32,
+    ) -> HeightMap {
+        HeightMap::from_perlin(width, height, frequency, offset.0.truncate(), amplitude)
+    }
+
+    #[lua_impl]
+    impl HeightMap {
+        /// Returns the width of this heightmap
+        #[lua]
+        fn width(&self) -> usize {
+            self.inner.dim().0
+        }
+
+        /// Returns the height of this heightmap
+        #[lua]
+        fn height(&self) -> usize {
+            self.inner.dim().1
+        }
+    }
+}

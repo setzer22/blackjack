@@ -47,8 +47,8 @@ pub use runtime_types::*;
 pub mod lua_require_io;
 pub use lua_require_io::*;
 
-mod lua_core_library;
 mod lua_constructors_library;
+mod lua_core_library;
 mod lua_export_library;
 mod lua_mesh_library;
 mod lua_primitives_library;
@@ -61,6 +61,12 @@ pub struct LuaRegisterFn {
     pub f: fn(&mlua::Lua) -> mlua::Result<()>,
 }
 inventory::collect!(LuaRegisterFn);
+
+/// Lua docstrings for symbol names. Stored globally using `inventory`.
+pub struct LuaDocstringData {
+    pub data: &'static [(&'static str, &'static str, &'static str)],
+}
+inventory::collect!(LuaDocstringData);
 
 /// Loads pure Lua libraries that are part of the blackjack core APIs
 pub fn load_lua_libraries(lua: &Lua) -> anyhow::Result<()> {

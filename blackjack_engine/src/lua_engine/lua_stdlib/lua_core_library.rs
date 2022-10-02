@@ -65,11 +65,16 @@ pub fn load(lua: &Lua, lua_io: Arc<dyn LuaFileIo + 'static>) -> anyhow::Result<(
 mod lua_module {
     use anyhow::Result;
 
+    /// Read the contents of the file at `path` and return as a string. Will
+    /// fail if the path does not exist, or the user does not have correct
+    /// access permissions.
     #[lua(under="Io")]
     pub fn read_to_string(path: String) -> Result<String> {
         Ok(std::fs::read_to_string(&path)?)
     }
 
+    /// Write the given string `contents` as a file to the given `path`. Will
+    /// overwrite any previous existing file with that name.
     #[lua(under="Io")]
     pub fn write(path: String, contents: String) -> Result<()> {
         std::fs::write(&path, &contents)?;

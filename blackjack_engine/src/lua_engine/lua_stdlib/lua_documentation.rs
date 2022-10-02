@@ -2,22 +2,30 @@ use anyhow::{bail, Result};
 use std::io::Write;
 use std::{collections::BTreeMap, fs::File, path::PathBuf};
 
+use crate::lua_engine::lua_stdlib::LuaDocstringData;
+
 pub fn generate_lua_documentation(out_path: &str) -> Result<()> {
     let mut docs_by_module = BTreeMap::<&str, Vec<&str>>::new();
+    let mut docs_by_class = BTreeMap::<&str, Vec<&str>>::new();
 
     fn populate_from<'a>(
-        it: &'a [(&'a str, &'a str)],
+        it: &'a [(&'a str, &'a str, &'a str)],
         docs_by_module: &mut BTreeMap<&'a str, Vec<&'a str>>,
+        docs_by_class: &mut BTreeMap<&'a str, Vec<&'a str>>,
     ) {
-        for (m, f) in it {
-            docs_by_module.entry(m).or_default().push(f);
+        for (t, m, f) in it {
+            if *t == "module" {
+                docs_by_module.entry(m).or_default().push(f);
+            }
+            if *t == "class" {
+                docs_by_class.entry(m).or_default().push(f);
+            }
         }
     }
 
-    populate_from(
-        crate::mesh::halfedge::edit_ops::lua_fns::__blackjack_lua_docstrings,
-        &mut docs_by_module,
-    );
+    for docstring_data in inventory::iter::<LuaDocstringData>() {
+        populate_from(docstring_data.data, &mut docs_by_module, &mut docs_by_class);
+    }
 
     let out_file = File::open(&out_path)?;
     if !out_file.metadata()?.is_dir() {
@@ -26,10 +34,21 @@ pub fn generate_lua_documentation(out_path: &str) -> Result<()> {
 
     let out_path = PathBuf::from(out_path);
     for (module, doc_fns) in docs_by_module.iter() {
-        let file_path = out_path.join(format!("{module}.lua"));
+        let file_path = out_path.join(format!("Mod_{module}.lua"));
         let mut w = std::io::BufWriter::new(File::create(file_path)?);
         writeln!(w, "--- Module {module}")?;
         writeln!(w, "--- @module {module}\n")?;
+
+        for doc_fn in doc_fns {
+            writeln!(w, "{doc_fn}")?;
+        }
+    }
+
+    for (class, doc_fns) in docs_by_class.iter() {
+        let file_path = out_path.join(format!("Class_{class}.lua"));
+        let mut w = std::io::BufWriter::new(File::create(file_path)?);
+        writeln!(w, "--- Class {class}")?;
+        writeln!(w, "--- @classmod {class}\n")?;
 
         for doc_fn in doc_fns {
             writeln!(w, "{doc_fn}")?;

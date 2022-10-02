@@ -112,12 +112,14 @@ mod vector_math {
     use super::*;
     use glam::Quat;
 
+    /// Return vector `v` rotated around given `axis` and `angle` (in radians).
     #[lua(under="NativeMath")]
     pub fn rotate_around_axis(v: LVec3, axis: LVec3, angle: f32) -> LVec3 {
         let q = Quat::from_axis_angle(axis.0.normalize(), angle);
         LVec3(q * v.0)
     }
 
+    /// Returns the `cross` product of vectors `v` and `v2`.
     #[lua(under="NativeMath")]
     pub fn cross(v: LVec3, v2: LVec3) -> LVec3 {
         LVec3(v.0.cross(v2.0))

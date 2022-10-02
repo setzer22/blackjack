@@ -405,6 +405,7 @@ dependencies = [
  "nonmax",
  "notify",
  "num-traits",
+ "paste",
  "profiling",
  "rayon",
  "rstar",
@@ -2682,6 +2683,12 @@ dependencies = [
  "smallvec",
  "windows-sys",
 ]
+
+[[package]]
+name = "paste"
+version = "1.0.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b1de2e551fb905ac83f73f7aedf2f0cb4a0da7e35efa24a202a936269f1f18e1"
 
 [[package]]
 name = "peeking_take_while"
