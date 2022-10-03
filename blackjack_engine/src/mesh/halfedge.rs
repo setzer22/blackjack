@@ -47,6 +47,8 @@ pub mod selection;
 pub mod gpu_buffer_generation;
 pub use gpu_buffer_generation::*;
 
+pub mod halfedge_lua_api;
+
 pub mod channels;
 pub use channels::*;
 
@@ -163,71 +165,6 @@ pub type Positions = Channel<VertexId, Vec3>;
 impl MeshConnectivity {
     pub fn new() -> Self {
         Self::default()
-    }
-
-    // Adds a disconnected quad into the mesh. Returns the id to the first
-    // halfedge of the quad
-    pub fn add_quad(
-        &mut self,
-        positions: &mut Positions,
-        a: Vec3,
-        b: Vec3,
-        c: Vec3,
-        d: Vec3,
-    ) -> HalfEdgeId {
-        let v_a = self.alloc_vertex(positions, a, None);
-        let v_b = self.alloc_vertex(positions, b, None);
-        let v_c = self.alloc_vertex(positions, c, None);
-        let v_d = self.alloc_vertex(positions, d, None);
-
-        let f = self.alloc_face(None);
-
-        let h_a_b = self.alloc_halfedge(HalfEdge {
-            vertex: Some(v_a),
-            face: Some(f),
-            ..Default::default()
-        });
-        let h_b_c = self.alloc_halfedge(HalfEdge {
-            vertex: Some(v_b),
-            face: Some(f),
-            ..Default::default()
-        });
-        let h_c_d = self.alloc_halfedge(HalfEdge {
-            vertex: Some(v_c),
-            face: Some(f),
-            ..Default::default()
-        });
-        let h_d_a = self.alloc_halfedge(HalfEdge {
-            vertex: Some(v_d),
-            face: Some(f),
-            ..Default::default()
-        });
-
-        // Make the half-edge loop
-        self[h_a_b].next = Some(h_b_c);
-        self[h_b_c].next = Some(h_c_d);
-        self[h_c_d].next = Some(h_d_a);
-        self[h_d_a].next = Some(h_a_b);
-
-        // Set the face for all half-edges
-        let half_edges = [h_a_b, h_b_c, h_c_d, h_d_a];
-        for h in half_edges {
-            self[h].face = Some(f);
-        }
-
-        // Set the half-edges for the face and vertices
-        self[f].halfedge = Some(h_a_b);
-        self[v_a].halfedge = Some(h_a_b);
-        self[v_b].halfedge = Some(h_b_c);
-        self[v_c].halfedge = Some(h_c_d);
-        self[v_d].halfedge = Some(h_d_a);
-
-        h_a_b
-    }
-
-    /// Returns the number of edges a face has
-    pub fn num_face_edges(&self, face_id: FaceId) -> usize {
-        self.face_edges(face_id).len()
     }
 
     /// Returns the edges of a given face
@@ -870,71 +807,6 @@ impl HalfEdgeMesh {
 impl Default for HalfEdgeMesh {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-#[cfg(test)]
-pub mod test {
-    use super::*;
-
-    fn quad_abcd() -> (Vec3, Vec3, Vec3, Vec3) {
-        (
-            Vec3::new(0.0, 0.0, 0.0),
-            Vec3::new(1.0, 0.0, 0.0),
-            Vec3::new(1.0, 0.0, 1.0),
-            Vec3::new(0.0, 0.0, 1.0),
-        )
-    }
-
-    #[test]
-    pub fn test_add_quad() {
-        let hem = HalfEdgeMesh::new();
-        let mut positions = hem.write_positions();
-        let mut conn = hem.write_connectivity();
-        let (a, b, c, d) = quad_abcd();
-        let q = conn.add_quad(&mut positions, a, b, c, d);
-
-        assert_eq!(conn.at_halfedge(q).next().next().next().next().end(), q);
-
-        assert_eq!(positions[conn.at_halfedge(q).vertex().end()], a);
-        assert_eq!(positions[conn.at_halfedge(q).next().vertex().end()], b);
-        assert_eq!(
-            positions[conn.at_halfedge(q).next().next().vertex().end()],
-            c,
-        );
-        assert_eq!(
-            positions[conn.at_halfedge(q).next().next().next().vertex().end()],
-            d,
-        );
-
-        assert_eq!(
-            conn.at_halfedge(q).face().end(),
-            conn.at_halfedge(q).next().face().end()
-        );
-    }
-
-    #[test]
-    pub fn test_face_size() {
-        let hem = HalfEdgeMesh::new();
-        let mut positions = hem.write_positions();
-        let mut conn = hem.write_connectivity();
-        let (a, b, c, d) = quad_abcd();
-        let q = conn.add_quad(&mut positions, a, b, c, d);
-
-        let f = conn.at_halfedge(q).face().end();
-        assert_eq!(conn.num_face_edges(f), 4);
-    }
-
-    #[test]
-    pub fn generate_quad_buffers() {
-        let hem = HalfEdgeMesh::new();
-        {
-            let mut conn = hem.write_connectivity();
-            let mut positions = hem.write_positions();
-            let (a, b, c, d) = quad_abcd();
-            let _q = conn.add_quad(&mut positions, a, b, c, d);
-        }
-        dbg!(hem.generate_triangle_buffers_flat(true).unwrap());
     }
 }
 
