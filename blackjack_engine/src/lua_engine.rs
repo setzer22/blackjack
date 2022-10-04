@@ -51,6 +51,7 @@ pub struct LuaRuntime {
     pub watcher: notify::RecommendedWatcher,
     pub watcher_channel: Receiver<notify::DebouncedEvent>,
     pub node_libraries_path: String,
+    #[allow(clippy::type_complexity)]
     pub load_libraries_fn: Box<dyn Fn(&Lua, &str) -> Result<NodeDefinitions>>,
 }
 

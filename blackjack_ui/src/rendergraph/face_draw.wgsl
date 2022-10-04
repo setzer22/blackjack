@@ -2,24 +2,24 @@
 #include <rend3_uniforms.wgsl>
 
 struct VertexOutput {
-    [[builtin(position)]] clip_position: vec4<f32>;
-    [[location(1)]] normal: vec3<f32>;
+    @builtin(position) clip_position: vec4<f32>,
+    @location(1) normal: vec3<f32>,
 };
 
 struct FragmentOutput {
-    [[location(0)]] color: vec4<f32>;
+    @location(0) color: vec4<f32>,
 };
 
-[[group(1), binding(0)]]
+@group(1) @binding(0)
 var<storage> positions: Vec3Array;
-[[group(1), binding(1)]]
+@group(1) @binding(1)
 var<storage> normals: Vec3Array;
-[[group(1), binding(2)]]
+@group(1) @binding(2)
 var matcap: texture_2d<f32>;
 
-[[stage(vertex)]]
+@vertex
 fn vs_main(
-    [[builtin(vertex_index)]] vertex_idx: u32,
+    @builtin(vertex_index) vertex_idx: u32,
 ) -> VertexOutput {
     let position = unpack_v3(positions.inner[vertex_idx]);
     let normal = unpack_v3(normals.inner[vertex_idx]);
@@ -30,7 +30,7 @@ fn vs_main(
     return output;
 }
 
-[[stage(fragment)]]
+@fragment
 fn fs_main(input: VertexOutput) -> FragmentOutput {
     var out : FragmentOutput;
 

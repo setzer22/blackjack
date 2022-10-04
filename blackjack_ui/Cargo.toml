@@ -17,27 +17,25 @@ tracy = ["profiling/profile-with-tracy"]
 blackjack_commons = { path = "../blackjack_commons" }
 blackjack_engine = { path = "../blackjack_engine" }
 
-# Forked crates
-egui-winit = { version = "0.18" } # This is a patch.crates-io fork on main Cargo.toml
-egui-wgpu = { version = "0.18" } # This is a patch.crates-io fork on main Cargo.toml
-egui = { version = "0.18", features = ["persistence"] } # This is a patch.crates-io fork on main Cargo.toml
-
 # Git dependencies
-egui_node_graph = { git = "https://github.com/setzer22/egui_node_graph", rev = "54ae2dc45fb8882563ca98e2b8910af1ea1413dd", features = [
+egui_node_graph = { git = "https://github.com/setzer22/egui_node_graph", rev = "75308d0e72dd604339cd864173ca31f1bc7a3fc7", features = [
     "persistence",
 ] }
-rend3 = { git = "https://github.com/Cakefish/rend3.git", rev = "1b6cac44938c0890" }
-rend3-routine = { git = "https://github.com/Cakefish/rend3.git", rev = "1b6cac44938c0890" }
+rend3 = { git = "https://github.com/Cakefish/rend3.git", rev = "dbdfc32264a1fcab3a15c698c4fc474344f10aab" }
+rend3-routine = { git = "https://github.com/Cakefish/rend3.git", rev = "dbdfc32264a1fcab3a15c698c4fc474344f10aab" }
 glsl-include = { git = "https://github.com/setzer22/glsl-include", rev = "d9b1ade" }
 
 # Crates.io crates
-glam = { version = "0.20", features = ["serde", "bytemuck"] }
+egui-winit = { version = "0.19" }
+egui-wgpu = { version = "0.19" }
+egui = { version = "0.19", features = ["persistence"] }
+glam = { version = "0.21.2", features = ["serde", "bytemuck"] }
 env_logger = { version = "0.9", default-features = false, features = [
     "termcolor",
     "atty",
 ] }
-winit = { version = "0.26" }
-wgpu = "0.12"
+winit = { version = "0.27.2" }
+wgpu = "0.13"
 pollster = "0.2"
 smallvec = { version = "1.7.0", features = ["serde"] }
 itertools = "0.10"

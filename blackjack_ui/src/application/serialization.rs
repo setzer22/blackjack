@@ -23,40 +23,48 @@ struct SerializedEditorState {
 }
 
 impl SerializedEditorState {
-    pub fn from_state(editor_state: &GraphEditorState) -> Self {
+    pub fn from_state(editor_state: &GraphEditorState, custom_state: &CustomGraphState) -> Self {
         SerializedEditorState {
             graph: editor_state.graph.clone(),
             node_order: Some(editor_state.node_order.clone()),
-            active_node: editor_state.user_state.active_node,
+            active_node: custom_state.active_node,
             node_positions: editor_state.node_positions.clone(),
             pan_zoom: editor_state.pan_zoom,
         }
     }
 
-    pub fn into_state(self) -> GraphEditorState {
-        let user_state = CustomGraphState {
+    pub fn into_state(self) -> (GraphEditorState, CustomGraphState) {
+        let custom_state = CustomGraphState {
             run_side_effect: None,
             active_node: self.active_node,
         };
 
-        let mut state = GraphEditorState::new(1.0, user_state);
-        state.graph = self.graph;
-        state.node_order = self
+        let mut editor_state = GraphEditorState::new(1.0);
+        editor_state.graph = self.graph;
+        editor_state.node_order = self
             .node_order
-            .unwrap_or_else(|| state.graph.iter_nodes().collect());
-        state.node_positions = self.node_positions;
-        state.pan_zoom = self.pan_zoom;
-        state
+            .unwrap_or_else(|| editor_state.graph.iter_nodes().collect());
+        editor_state.node_positions = self.node_positions;
+        editor_state.pan_zoom = self.pan_zoom;
+
+        (editor_state, custom_state)
     }
 }
 
-pub fn save(editor_state: &GraphEditorState, path: PathBuf) -> Result<()> {
+pub fn save(
+    editor_state: &GraphEditorState,
+    custom_state: &CustomGraphState,
+    path: PathBuf,
+) -> Result<()> {
     let writer = std::io::BufWriter::new(std::fs::File::create(path)?);
-    ron::ser::to_writer(writer, &SerializedEditorState::from_state(editor_state))?;
+    ron::ser::to_writer(
+        writer,
+        &SerializedEditorState::from_state(editor_state, custom_state),
+    )?;
     Ok(())
 }
 
-pub fn load(path: PathBuf) -> Result<GraphEditorState> {
+pub fn load(path: PathBuf) -> Result<(GraphEditorState, CustomGraphState)> {
     let reader = std::io::BufReader::new(std::fs::File::open(path)?);
     let state: SerializedEditorState = ron::de::from_reader(reader)?;
     Ok(state.into_state())

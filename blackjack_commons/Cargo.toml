@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-glam = { version = "0.20", features = ["serde", "bytemuck"] }
+glam = { version = "0.21.2", features = ["serde", "bytemuck"] }
 smallvec = { version = "1.7.0", features = ["serde"] }
 itertools = "0.10"
 float-ord = "0.3.2"
