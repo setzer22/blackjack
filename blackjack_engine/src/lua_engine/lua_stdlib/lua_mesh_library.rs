@@ -229,7 +229,7 @@ fn mesh_channel_to_lua_table<'lua>(
     }
 }
 
-impl UserData for HalfEdgeMesh {
+/*impl UserData for HalfEdgeMesh {
     fn add_methods<'lua, M: mlua::UserDataMethods<'lua, Self>>(methods: &mut M) {
         methods.add_method(
             "get_channel",
@@ -383,7 +383,7 @@ impl UserData for HalfEdgeMesh {
             },
         );
     }
-}
+}*/
 
 pub struct SharedChannel(pub Rc<RefCell<dyn DynChannel>>);
 impl Clone for SharedChannel {

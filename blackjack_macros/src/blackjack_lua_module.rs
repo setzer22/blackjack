@@ -10,12 +10,6 @@ use fn_attr::*;
 
 use crate::utils::{join_str, parse_doc_attr, unwrap_result};
 
-#[derive(Debug, Copy, Clone)]
-enum LuaDocType {
-    Module,
-    Method,
-}
-
 /// Metadata to generate automatic Lua documentation
 #[derive(Debug)]
 struct LuaDocstring {
@@ -99,12 +93,13 @@ fn generate_lua_fn_documentation(
 
 /// Some sanity checks for a function annotated as #[lua]
 fn lua_fn_sanity_checks(item_fn: &GlobalFnOrMethod) -> syn::Result<()> {
-    if item_fn.sig.generics.params.iter().count() > 0 {
+    /*if item_fn.sig.generics.params.iter().count() > 0 {
         return Err(syn::Error::new(
             item_fn.sig.ident.span(),
             "Functions exported to lua can't have generic parameters.",
         ));
-    } else if item_fn.sig.asyncness.is_some() {
+    } else */
+    if item_fn.sig.asyncness.is_some() {
         return Err(syn::Error::new(
             item_fn.sig.ident.span(),
             "Functions exported to lua can't be marked async.",
@@ -119,6 +114,7 @@ enum LuaFnArgKind {
     RefMut,
     SelfRef,
     SelfRefMut,
+    LuaRef,
 }
 
 struct LuaFnArg {
@@ -178,15 +174,23 @@ fn analyze_lua_fn_args(
                 };
                 match &*t.ty {
                     Type::Reference(inner) => {
-                        lua_fn_args.push(LuaFnArg {
-                            kind: if inner.mutability.is_some() {
-                                LuaFnArgKind::RefMut
-                            } else {
-                                LuaFnArgKind::Ref
-                            },
-                            typ: *inner.elem.clone(),
-                            name: arg_name.ident,
-                        });
+                        if inner.elem.to_token_stream().to_string() == "Lua" {
+                            lua_fn_args.push(LuaFnArg {
+                                kind: LuaFnArgKind::LuaRef,
+                                typ: *inner.elem.clone(),
+                                name: arg_name.ident,
+                            });
+                        } else {
+                            lua_fn_args.push(LuaFnArg {
+                                kind: if inner.mutability.is_some() {
+                                    LuaFnArgKind::RefMut
+                                } else {
+                                    LuaFnArgKind::Ref
+                                },
+                                typ: *inner.elem.clone(),
+                                name: arg_name.ident,
+                            });
+                        }
                     }
                     t => {
                         lua_fn_args.push(LuaFnArg {
@@ -221,7 +225,7 @@ fn analyze_lua_fn_args(
 /// bits we care about so our code can be agnostic over that without introducing
 /// traits.
 struct GlobalFnOrMethod<'a> {
-    sig: &'a Signature,
+    sig: &'a mut Signature,
 }
 
 /// Given a global function (i.e. not a method) annotated with a #[lua] mark,
@@ -244,8 +248,12 @@ fn analyze_lua_global_fn(
     let fn_sig_args_code = signature.code_for_fn_signature();
     let fn_borrows_code = signature.code_for_fn_borrows();
     let fn_invoke_args_code = signature.code_for_fn_invoke_args();
-    let call_fn_and_map_result_code = signature
-        .code_for_call_fn_and_map_result(quote! { #original_fn_ident }, fn_invoke_args_code);
+    let call_fn_and_map_result_code = signature.code_for_call_fn_and_map_result(
+        quote! { #original_fn_ident },
+        fn_invoke_args_code,
+        None,
+        None,
+    );
     let ret_typ_code = &signature.output.inner_type;
 
     Ok(LuaFnDef {
@@ -280,14 +288,22 @@ fn analyze_lua_global_fn(
 /// Given a method inside an impl block annotated with a #[lua] mark, performs
 /// the analysis for that method and returns the collected metadata.
 fn analyze_lua_method_fn(
-    item_fn: &GlobalFnOrMethod,
+    item_fn: &mut GlobalFnOrMethod,
     class_name: String,
     attrs: &FunctionAttributes,
 ) -> syn::Result<LuaFnDef> {
     lua_fn_sanity_checks(item_fn)?;
 
     let register_fn_ident = format_ident!("__blackjack_export_{}_to_lua", &item_fn.sig.ident);
+    // NOTE: The original_fn_name stores the name of the function as it's going
+    // to be bound to lua. OTOH, the original_fn_ident stores the name of the
+    // function as it's going to be bound to rust. This difference is important
+    // when the 'hidden' attribute is set to true.
     let original_fn_name = item_fn.sig.ident.to_string();
+    if attrs.lua_attr.hidden_fn {
+        let new_ident = format_ident!("__lua_hidden_{}", item_fn.sig.ident);
+        item_fn.sig.ident = new_ident;
+    }
     let original_fn_ident = &item_fn.sig.ident;
     let class_ident = format_ident!("{class_name}");
     let fn_def_kind = LuaFnDefKind::Method {
@@ -298,8 +314,20 @@ fn analyze_lua_method_fn(
     let fn_sig_args_code = signature.code_for_fn_signature();
     let fn_borrows_code = signature.code_for_fn_borrows();
     let fn_invoke_args_code = signature.code_for_fn_invoke_args();
-    let call_fn_and_map_result_code = signature
-        .code_for_call_fn_and_map_result(quote! { this.#original_fn_ident }, fn_invoke_args_code);
+
+    let call_fn_and_map_result_code = signature.code_for_call_fn_and_map_result(
+        if let Some(self_expr) = attrs.lua_attr.map_this.as_ref() {
+            quote! { this.#self_expr.#original_fn_ident }
+        } else {
+            quote! { this.#original_fn_ident }
+        },
+        fn_invoke_args_code,
+        attrs
+            .lua_attr
+            .coerce
+            .then(|| signature.output.inner_type.clone()),
+        attrs.lua_attr.map_result.as_ref(),
+    );
 
     let add_method_maybe_mut_code = if let Some(rcv) = signature.inputs.first() {
         match rcv.kind {
@@ -447,7 +475,9 @@ pub(crate) fn blackjack_lua_module2(
                     let function_attributes = collect_function_attributes(&mut item_fn.attrs);
                     if let Some(lua_attr) = function_attributes {
                         if let Some(under) = lua_attr.lua_attr.under.as_ref().cloned() {
-                            let item_fn = GlobalFnOrMethod { sig: &item_fn.sig };
+                            let item_fn = GlobalFnOrMethod {
+                                sig: &mut item_fn.sig,
+                            };
                             fn_defs.push(analyze_lua_global_fn(&item_fn, under, &lua_attr)?);
                         }
                     }
@@ -472,11 +502,11 @@ pub(crate) fn blackjack_lua_module2(
                                     let class_name =
                                         item_impl.self_ty.to_token_stream().to_string();
                                     if let Some(method_attrs) = method_attributes {
-                                        let item_fn = GlobalFnOrMethod {
-                                            sig: &item_method.sig,
+                                        let mut item_fn = GlobalFnOrMethod {
+                                            sig: &mut item_method.sig,
                                         };
                                         fn_defs.push(analyze_lua_method_fn(
-                                            &item_fn,
+                                            &mut item_fn,
                                             class_name,
                                             &method_attrs,
                                         )?);
@@ -562,7 +592,6 @@ pub(crate) fn blackjack_lua_module2(
     };
 
     let static_docstrings_code = fn_defs.iter().map(|fn_def| {
-
         let (typ, name) = match &fn_def.lua_docstr.def_kind {
             LuaFnDefKind::Method { class } => ("class", class),
             LuaFnDefKind::Global { table } => ("module", table),
@@ -626,14 +655,16 @@ impl LuaFnSignature {
             let name = &arg.name;
             let typ = &arg.typ;
             match arg.kind {
-                LuaFnArgKind::Owned => None,
                 LuaFnArgKind::Ref => Some(quote! {
                     let #name = #name.borrow::<#typ>()?;
                 }),
                 LuaFnArgKind::RefMut => Some(quote! {
                     let mut #name = #name.borrow_mut::<#typ>()?;
                 }),
-                LuaFnArgKind::SelfRef | LuaFnArgKind::SelfRefMut => None,
+                LuaFnArgKind::SelfRef
+                | LuaFnArgKind::SelfRefMut
+                | LuaFnArgKind::LuaRef
+                | LuaFnArgKind::Owned => None,
             }
         })
     }
@@ -658,15 +689,17 @@ impl LuaFnSignature {
         let types = self.inputs.iter().filter_map(|arg| match &arg.kind {
             LuaFnArgKind::Owned => Some(arg.typ.to_token_stream()),
             LuaFnArgKind::Ref | LuaFnArgKind::RefMut => Some(quote! { mlua::AnyUserData }),
-            LuaFnArgKind::SelfRef | LuaFnArgKind::SelfRefMut => {
+            LuaFnArgKind::SelfRef | LuaFnArgKind::SelfRefMut | LuaFnArgKind::LuaRef => {
                 // We can safely ignore self values here, because when they
-                // occur, they don't go inside the tuple
+                // occur, they don't go inside the tuple. Same for the lua
+                // reference, which is always a separate argument from the
+                // tuple.
                 None
             }
         });
         let names = self.inputs.iter().filter_map(|arg| match &arg.kind {
             LuaFnArgKind::Owned | LuaFnArgKind::Ref | LuaFnArgKind::RefMut => Some(&arg.name),
-            LuaFnArgKind::SelfRef | LuaFnArgKind::SelfRefMut => None,
+            LuaFnArgKind::SelfRef | LuaFnArgKind::SelfRefMut | LuaFnArgKind::LuaRef => None,
         });
 
         quote! { (#(#names),*) : (#(#types),*) }
@@ -691,6 +724,7 @@ impl LuaFnSignature {
                 LuaFnArgKind::Owned => Some(quote! { #name }),
                 LuaFnArgKind::Ref => Some(quote! { &#name}),
                 LuaFnArgKind::RefMut => Some(quote! { &mut #name }),
+                LuaFnArgKind::LuaRef => Some(quote! { lua }),
                 LuaFnArgKind::SelfRef | LuaFnArgKind::SelfRefMut => None,
             })
     }
@@ -699,7 +733,21 @@ impl LuaFnSignature {
         &self,
         fn_expr: TokenStream,
         fn_invoke_args_code: impl Iterator<Item = TokenStream>,
+        coerce_return_type: Option<TokenStream>,
+        map_result: Option<&syn::Expr>,
     ) -> TokenStream {
+        let maybe_coercion = if let Some(coerce_ret) = coerce_return_type {
+            quote! { .map(|x| <#coerce_ret>::from(x)) }
+        } else {
+            quote! {}
+        };
+
+        let maybe_map_result = if let Some(map_result) = map_result {
+            quote! { .map(|x| #map_result ) }
+        } else {
+            quote! {}
+        };
+
         if self.output.is_result {
             quote! {
                 match #fn_expr(#(#fn_invoke_args_code),*) {
@@ -708,10 +756,14 @@ impl LuaFnSignature {
                         mlua::Result::Err(mlua::Error::RuntimeError(format!("{:?}", err)))
                     }
                 }
+                #maybe_coercion
+                #maybe_map_result
             }
         } else {
             quote! {
                 mlua::Result::Ok(#fn_expr(#(#fn_invoke_args_code),*))
+                    #maybe_coercion
+                    #maybe_map_result
             }
         }
     }
@@ -731,50 +783,10 @@ mod test {
             pub mod lua_fns {
                 use super::*;
 
-                #[lua(under = "Ops")]
-                pub fn test_exported_fn(
-                    mesh: &mut HalfEdgeMesh,
-                ) -> Result<i32> {
-                    let mut conn = mesh.write_connectivity();
-                    let f = conn.iter_faces().next().unwrap().0;
-                    conn.remove_face(f);
-                    Ok(42)
-                }
-
-
                 #[lua_impl]
                 impl HalfEdgeMesh {
-                    // WIP:
-                    // - [ ] Need to abstract the analyze_fn function so that it
-                    // can take both a method and a plain fn (or, at least,
-                    // figure out how to extract the common logic.)
-                    //
-                    #[lua]
-                    fn set_channel(
-                        &mut self,
-                        lua: &mlua::Lua,
-                        kty: ChannelKeyType,
-                        vty: ChannelValueType,
-                        name: String,
-                        table: mlua::Table,
-                    ) -> Result<()> {
-                        use slotmap::Key;
-                        let conn = self.read_connectivity();
-                        let keys: Box<dyn Iterator<Item = u64>> = match kty {
-                            ChannelKeyType::VertexId => {
-                                Box::new(conn.iter_vertices().map(|(v_id, _)| v_id.data().as_ffi()))
-                            }
-                            ChannelKeyType::FaceId => {
-                                Box::new(conn.iter_faces().map(|(f_id, _)| f_id.data().as_ffi()))
-                            }
-                            ChannelKeyType::HalfEdgeId => {
-                                Box::new(conn.iter_halfedges().map(|(h_id, _)| h_id.data().as_ffi()))
-                            }
-                        };
-                        self.channels
-                            .dyn_write_channel_by_name(kty, vty, &name)?
-                            .set_from_seq_table(keys, lua, table)
-                    }
+                    #[lua(map = "x.to_vec()")]
+                    fn set_channel(&mut self, lua: &mlua::Lua) -> Vec<Potato>;
                 }
             }
         };
