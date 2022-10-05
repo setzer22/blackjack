@@ -16,6 +16,8 @@ pub fn load(lua: &Lua) -> anyhow::Result<()> {
     //
     // #[lua(under = "Types")]
     // const VertexId: ChannelKeyType = ChannelKeyType::VertexId;
+    //
+    // WIP: Also add a #[lua_extra] that receives methods and fields directly.
 
     let types = lua.create_table()?;
     types.set("VertexId", ChannelKeyType::VertexId)?;
