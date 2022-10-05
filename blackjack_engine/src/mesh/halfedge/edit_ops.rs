@@ -1744,6 +1744,7 @@ pub fn resample_curve(
 #[blackjack_macros::blackjack_lua_module]
 pub mod lua_fns {
 
+    use crate::lua_engine::lua_stdlib::LVec3;
     use halfedge::compact_mesh::CompactMesh;
 
     use super::*;
@@ -1874,5 +1875,110 @@ pub mod lua_fns {
         };
 
         super::resample_curve(mesh, density_mode, tension, alpha)
+    }
+
+    #[lua(under = "Ops")]
+    pub fn bridge_chains(
+        mesh: &mut HalfEdgeMesh,
+        loop_1: SelectionExpression,
+        loop_2: SelectionExpression,
+        flip: usize,
+    ) -> Result<()> {
+        let bag_1 = mesh.resolve_halfedge_selection_full(&loop_1)?;
+        let bag_2 = mesh.resolve_halfedge_selection_full(&loop_2)?;
+        super::bridge_chains_ui(mesh, &bag_1, &bag_2, flip)
+    }
+
+    #[lua(under = "Ops")]
+    pub fn make_quad(
+        mesh: &mut HalfEdgeMesh,
+        a: SelectionExpression,
+        b: SelectionExpression,
+        c: SelectionExpression,
+        d: SelectionExpression,
+    ) -> Result<()> {
+        macro_rules! get_selection {
+            ($sel:expr) => {
+                mesh.resolve_vertex_selection_full(&$sel)?
+                    .get(0)
+                    .copied()
+                    .ok_or_else(|| anyhow::anyhow!("Empty selection"))?
+            };
+        }
+
+        let a = get_selection!(a);
+        let b = get_selection!(b);
+        let c = get_selection!(c);
+        let d = get_selection!(d);
+
+        super::make_quad(&mut mesh.write_connectivity(), &[a, b, c, d])
+    }
+
+    #[lua(under = "Ops")]
+    pub fn transform(
+        mesh: &mut HalfEdgeMesh,
+        translate: LVec3,
+        rotate: LVec3,
+        scale: LVec3,
+    ) -> Result<()> {
+        super::transform(mesh, translate.0, rotate.0, scale.0)
+    }
+
+    #[lua(under = "Ops")]
+    pub fn make_group(
+        mesh: &mut HalfEdgeMesh,
+        key_type: ChannelKeyType,
+        selection: SelectionExpression,
+        group_name: String,
+    ) -> Result<()> {
+        super::make_group(mesh, key_type, &selection, &group_name)
+    }
+
+    #[lua(under = "Ops")]
+    pub fn set_material(
+        mesh: &mut HalfEdgeMesh,
+        selection: SelectionExpression,
+        material_index: f32,
+    ) -> Result<()> {
+        super::set_material(mesh, &selection, material_index)
+    }
+
+    #[lua(under = "Ops")]
+    pub fn vertex_attribute_transfer(
+        src_mesh: &HalfEdgeMesh,
+        dst_mesh: &mut HalfEdgeMesh,
+        value_type: ChannelValueType,
+        channel_name: String,
+    ) -> Result<()> {
+        match value_type {
+            ChannelValueType::Vec3 => {
+                super::vertex_attribute_transfer::<glam::Vec3>(&src_mesh, dst_mesh, &channel_name)
+            }
+            ChannelValueType::f32 => {
+                super::vertex_attribute_transfer::<f32>(&src_mesh, dst_mesh, &channel_name)
+            }
+            ChannelValueType::bool => {
+                super::vertex_attribute_transfer::<bool>(&src_mesh, dst_mesh, &channel_name)
+            }
+        }
+    }
+
+    #[lua(under = "Ops")]
+    pub fn set_full_range_uvs(mesh: &mut HalfEdgeMesh) -> Result<()> {
+        super::set_full_range_uvs(mesh)
+    }
+
+    #[lua(under = "Ops")]
+    pub fn copy_to_points(points: &HalfEdgeMesh, mesh: &HalfEdgeMesh) -> Result<HalfEdgeMesh> {
+        super::copy_to_points(points, mesh)
+    }
+
+    #[lua(under = "Ops")]
+    pub fn extrude_along_curve(
+        backbone: &HalfEdgeMesh,
+        cross_section: &HalfEdgeMesh,
+        flip: usize,
+    ) -> Result<HalfEdgeMesh> {
+        super::extrude_along_curve(&backbone, &cross_section, flip)
     }
 }

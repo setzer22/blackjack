@@ -29,6 +29,11 @@ impl<'lua> FromLua<'lua> for LVec3 {
         }
     }
 }
+impl From<glam::Vec3> for LVec3 {
+    fn from(v: glam::Vec3) -> Self {
+        Self(v)
+    }
+}
 impl LVec3 {
     /// Unwraps all the internal Vec<LVec3> values.
     pub fn cast_vector(this: Vec<LVec3>) -> Vec<glam::Vec3> {

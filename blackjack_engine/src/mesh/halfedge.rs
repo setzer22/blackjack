@@ -778,7 +778,7 @@ impl HalfEdgeMesh {
         /// Doing this in a way that we can still invoke the object-safe methods
         /// of a DynChannelGroup requires a copy of the id vectors and wrapping
         /// them in an Rc. The cost of the Rc is negligible, but the copy may
-        /// become an issue for very large meshes. On the other handm, the copy
+        /// become an issue for very large meshes. On the other hand, the copy
         /// can also help speed iteration up when there are many channels:
         /// since collected vectors are contiguous, unlike the slotmaps,
         /// there will not be holes and thus no required branching.
