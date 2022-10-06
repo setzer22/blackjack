@@ -6,7 +6,7 @@
 
 local P = require("params")
 
-local perlin = Blackjack.perlin()
+local perlin = PerlinNoise.new()
 
 local function normalize(v: Vec3)
     local len = math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z)
@@ -170,7 +170,7 @@ local function l_system_interpreter(sentence: string, params: LSystemParams): { 
 end
 
 local function make_l_system_mesh(edges: { Edge }): any
-    local mesh = Blackjack.mesh()
+    local mesh = HalfEdgeMesh.new()
     local edge_distances = mesh:ensure_assoc_channel(Types.HALFEDGE_ID, Types.F32, "distance")
     local final_verts = mesh:ensure_assoc_channel(Types.VERTEX_ID, Types.BOOL, "final")
     for _, edge in edges do
@@ -205,12 +205,12 @@ local test_channel_nodes = {
         end,
         inputs = {
             P.mesh("mesh"),
-            P.scalar("scale", { default = 3.0, min = 0.0, max = 10.0}),
+            P.scalar("scale", { default = 3.0, min = 0.0, max = 10.0 }),
             P.v3("offset", vector(0, 0, 0)),
-            P.scalar("strength", { default = 0.1, min = 0.0, max = 1.0}),
+            P.scalar("strength", { default = 0.1, min = 0.0, max = 1.0 }),
         },
         outputs = {
-            P.mesh("out_mesh")
+            P.mesh("out_mesh"),
         },
         returns = "out_mesh",
     },
@@ -229,10 +229,10 @@ local test_channel_nodes = {
             }
         end,
         inputs = {
-            P.scalar("strength", { default = 0.1, min = 0.0, max = 1.0}),
-            P.scalar("noise_scale", { default = 0.1, min = 0.01, max = 1.0}),
-            P.scalar("seed", { default = 0.0, min = 0.0, max = 100.0}),
-            P.scalar("points", { default = 8.0, min = 3.0, max = 16.0}),
+            P.scalar("strength", { default = 0.1, min = 0.0, max = 1.0 }),
+            P.scalar("noise_scale", { default = 0.1, min = 0.01, max = 1.0 }),
+            P.scalar("seed", { default = 0.0, min = 0.0, max = 100.0 }),
+            P.scalar("points", { default = 8.0, min = 3.0, max = 16.0 }),
         },
         outputs = {
             P.mesh("out_mesh"),
@@ -242,17 +242,19 @@ local test_channel_nodes = {
     Capsule = {
         label = "Capsule",
         op = function(inputs)
-            local m = Blackjack.mesh()
+            local m = HalfEdgeMesh.new()
             local r: number = inputs.radius
             local height: number = inputs.height
             local rings = inputs.rings
+
+            local selection = SelectionExpression.new
 
             for ring = 0, rings do
                 local ring_height = r * (ring / rings)
                 local inner_radius = math.sqrt(r * r - ring_height * ring_height)
 
                 local circle = Primitives.circle(vector(0, ring_height + height / 2, 0), inner_radius, inputs.sections)
-                Ops.make_group(circle, Types.HALFEDGE_ID, Blackjack.selection("*"), "ring" .. ring)
+                Ops.make_group(circle, Types.HALFEDGE_ID, selection("*"), "ring" .. ring)
                 Ops.merge(m, circle)
             end
 
@@ -261,32 +263,32 @@ local test_channel_nodes = {
                 local inner_radius = math.sqrt(r * r - ring_height * ring_height)
 
                 local circle = Primitives.circle(vector(0, -ring_height - height / 2, 0), inner_radius, inputs.sections)
-                Ops.make_group(circle, Types.HALFEDGE_ID, Blackjack.selection("*"), "bot_ring" .. ring)
+                Ops.make_group(circle, Types.HALFEDGE_ID, selection("*"), "bot_ring" .. ring)
                 Ops.merge(m, circle)
             end
 
             for ring = 0, rings - 1 do
-                Ops.bridge_chains(m, Blackjack.selection("@ring" .. ring), Blackjack.selection("@ring" .. ring + 1), 0)
+                Ops.bridge_chains(m, selection("@ring" .. ring), selection("@ring" .. ring + 1), 0)
             end
 
             for ring = 0, rings - 1 do
                 Ops.bridge_chains(
                     m,
-                    Blackjack.selection("@bot_ring" .. ring),
-                    Blackjack.selection("@bot_ring" .. ring + 1),
+                    selection("@bot_ring" .. ring),
+                    selection("@bot_ring" .. ring + 1),
                     1
                 )
             end
 
-            Ops.bridge_chains(m, Blackjack.selection("@ring0"), Blackjack.selection("@bot_ring0"), 1)
+            Ops.bridge_chains(m, selection("@ring0"), selection("@bot_ring0"), 1)
 
             return { out_mesh = m }
         end,
         inputs = {
-            P.scalar("radius", { default = 1.0, min = 0.0, max = 10.0}),
-            P.scalar_int("rings", { default = 5, min = 1, soft_max = 10}),
-            P.scalar_int("sections", { default = 12, min = 1, soft_max = 32}),
-            P.scalar("height", { default = 2.0, min = 0.0, max = 5.0}),
+            P.scalar("radius", { default = 1.0, min = 0.0, max = 10.0 }),
+            P.scalar_int("rings", { default = 5, min = 1, soft_max = 10 }),
+            P.scalar_int("sections", { default = 12, min = 1, soft_max = 32 }),
+            P.scalar("height", { default = 2.0, min = 0.0, max = 5.0 }),
         },
         outputs = {
             P.mesh("out_mesh"),
@@ -314,11 +316,11 @@ local test_channel_nodes = {
         end,
         inputs = {
             P.strparam("rule", "F+[F--F]", true),
-            P.scalar_int("iterations", { default = 1, min = 1, max = 10}),
-            P.scalar_int("initial_forward", { default = 1, min = 0, max = 5}),
-            P.scalar("forward_damp", { default = 0.1, min = 0, max = 1}),
-            P.scalar("initial_angle", { default = PI / 6, min = 0, max = 2 * PI}),
-            P.scalar("angle_damp", { default = 0.1, min = 0, max = 1}),
+            P.scalar_int("iterations", { default = 1, min = 1, max = 10 }),
+            P.scalar_int("initial_forward", { default = 1, min = 0, max = 5 }),
+            P.scalar("forward_damp", { default = 0.1, min = 0, max = 1 }),
+            P.scalar("initial_angle", { default = PI / 6, min = 0, max = 2 * PI }),
+            P.scalar("angle_damp", { default = 0.1, min = 0, max = 1 }),
         } :: { any },
         outputs = {
             P.mesh("out_mesh"),
@@ -329,7 +331,7 @@ local test_channel_nodes = {
         label = "Make trunk",
         op = function(inputs)
             local edge_distances = inputs.l_system:get_assoc_channel(Types.HALFEDGE_ID, Types.F32, "distance")
-            local result = inputs.l_system:reduce_halfedges(Blackjack.mesh(), function(acc, h_id)
+            local result = inputs.l_system:reduce_halfedges(HalfEdgeMesh.new(), function(acc, h_id)
                 local scale_damp: number = inputs.scale_damp
                 if edge_distances[h_id] < 0 then
                     return acc
@@ -338,17 +340,18 @@ local test_channel_nodes = {
 
                     local src_scale = 1.0 * scale_damp ^ edge_distances[h_id]
                     local dst_scale = 1.0 * scale_damp ^ (edge_distances[h_id] + 1)
+                    local selection = SelectionExpression.new
 
                     local src_ring = inputs.ring:clone()
                     Ops.transform(src_ring, src_pos, vector(0, 0, 0), vector(src_scale, src_scale, src_scale))
-                    Ops.make_group(src_ring, Types.HALFEDGE_ID, Blackjack.selection("*"), "src_ring")
+                    Ops.make_group(src_ring, Types.HALFEDGE_ID, selection("*"), "src_ring")
 
                     local dst_ring = inputs.ring:clone()
                     Ops.transform(dst_ring, dst_pos, vector(0, 0, 0), vector(dst_scale, dst_scale, dst_scale))
-                    Ops.make_group(dst_ring, Types.HALFEDGE_ID, Blackjack.selection("*"), "dst_ring")
+                    Ops.make_group(dst_ring, Types.HALFEDGE_ID, selection("*"), "dst_ring")
 
                     Ops.merge(src_ring, dst_ring)
-                    Ops.bridge_chains(src_ring, Blackjack.selection("@src_ring"), Blackjack.selection("@dst_ring"), 0)
+                    Ops.bridge_chains(src_ring, selection("@src_ring"), selection("@dst_ring"), 0)
 
                     Ops.merge(acc, src_ring)
                     return acc
@@ -359,7 +362,7 @@ local test_channel_nodes = {
         inputs = {
             P.mesh("l_system"),
             P.mesh("ring"),
-            P.scalar("scale_damp", { default = 0.95, min = 0.0, max = 1.0}),
+            P.scalar("scale_damp", { default = 0.95, min = 0.0, max = 1.0 }),
         },
         outputs = {
             P.mesh("out_mesh"),
@@ -369,7 +372,7 @@ local test_channel_nodes = {
     MakeLeaves = {
         label = "Make leaves",
         op = function(inputs)
-            local result = Blackjack.mesh()
+            local result = HalfEdgeMesh.new()
             local final_verts = inputs.l_system:get_assoc_channel(Types.VERTEX_ID, Types.BOOL, "final")
             for v, is_final in final_verts do
                 if is_final then
@@ -415,8 +418,8 @@ local test_channel_nodes = {
         end,
         inputs = {
             P.mesh("mesh"),
-            P.scalar("scale", { default = 1.0, min = 0.0, max = 2.0}),
-            P.scalar("seed", { default = 0.0, min = 0.0, max = 100.0}),
+            P.scalar("scale", { default = 1.0, min = 0.0, max = 2.0 }),
+            P.scalar("seed", { default = 0.0, min = 0.0, max = 100.0 }),
         },
         outputs = {
             P.mesh("out_mesh"),

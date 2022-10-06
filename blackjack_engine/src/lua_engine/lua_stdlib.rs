@@ -47,10 +47,8 @@ pub use runtime_types::*;
 pub mod lua_require_io;
 pub use lua_require_io::*;
 
-mod lua_constructors_library;
 mod lua_core_library;
 mod lua_export_library;
-mod lua_mesh_library;
 mod lua_primitives_library;
 
 pub mod lua_documentation;
@@ -86,7 +84,6 @@ pub fn load_host_libraries(lua: &Lua, lua_io: Arc<dyn LuaFileIo + 'static>) -> a
     lua_core_library::load(lua, lua_io)?;
     lua_primitives_library::load(lua)?;
     lua_export_library::load(lua)?;
-    lua_constructors_library::load(lua)?;
 
     for register_fn in inventory::iter::<LuaRegisterFn>() {
         (register_fn.f)(lua).expect("Failed to register Lua API");

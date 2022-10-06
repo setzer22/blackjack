@@ -340,3 +340,24 @@ mod test {
         assert!(SelectionExpression::parse("@1").is_err());
     }
 }
+
+#[blackjack_macros::blackjack_lua_module]
+mod lua_api {
+    use super::*;
+    use anyhow::Result;
+
+    /// Constructs a new Selection.
+    /// TODO: Document selection DSL
+    #[lua(under = "Selection")]
+    fn new(expr: String) -> Result<SelectionExpression> {
+        SelectionExpression::parse(&expr)
+    }
+
+    #[lua_impl]
+    impl SelectionExpression {
+        /// Returns a canonical string representation for this selection
+        /// expression.
+        #[lua]
+        pub fn unparse(&self) -> String;
+    }
+}
