@@ -12,17 +12,19 @@ NodeLibrary:addNodes({
     Playground = {
         label = "Playground",
         op = function(inputs)
-            print(getmetatable(inputs.m1))
-            local p2 = inputs.m1:clone()
+            local mesh = HalfEdgeMesh.new()
+            local cube = Primitives.cube(vector(0, 0, 0), vector(1, 1, 1))
 
-            return {
-                out_mesh = p2,
-            }
+            Ops.merge(mesh, cube)
+
+            local ch = mesh:get_shared_channel(Types.VERTEX_ID, Types.VEC3, "position")
+            for v in mesh:iter_vertices() do
+                print(ch[v])
+            end
+
+            return { out_mesh = mesh }
         end,
-        inputs = {
-            P.mesh("m1"),
-            P.mesh("m2"),
-        },
+        inputs = {},
         outputs = {
             P.mesh("out_mesh"),
         },

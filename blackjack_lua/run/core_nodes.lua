@@ -133,18 +133,18 @@ local primitives = {
 
 local function parse_ch_key(s)
     if s == "Vertex" then
-        return Types.VertexId
+        return Types.VERTEX_ID
     elseif s == "Face" then
-        return Types.FaceId
+        return Types.FACE_ID
     elseif s == "Halfedge" then
-        return Types.HalfEdgeId
+        return Types.HALFEDGE_ID
     end
 end
 local function parse_ch_val(s)
     if s == "f32" then
-        return Types.f32
+        return Types.F32
     elseif s == "Vec3" then
-        return Types.Vec3
+        return Types.VEC3
     end
 end
 
@@ -326,7 +326,7 @@ local edit_ops = {
         returns = "out_mesh",
         op = function(inputs)
             local out_mesh = inputs.dst_mesh:clone()
-            Ops.vertex_attribute_transfer(inputs.src_mesh, out_mesh, Types.Vec3, inputs.channel)
+            Ops.vertex_attribute_transfer(inputs.src_mesh, out_mesh, Types.VEC3, inputs.channel)
             return { out_mesh = out_mesh }
         end,
     },

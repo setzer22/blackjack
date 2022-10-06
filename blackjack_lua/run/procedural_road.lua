@@ -178,9 +178,9 @@ local test_channel_nodes = {
         label = "Show tangents (debug)",
         op = function(inputs)
             local mesh = inputs.mesh:clone()
-            local pos = mesh:get_channel(Types.VertexId, Types.Vec3, "position")
-            local tangent = mesh:get_channel(Types.VertexId, Types.Vec3, "tangent")
-            local normal = mesh:get_channel(Types.VertexId, Types.Vec3, "normal")
+            local pos = mesh:get_channel(Types.VERTEX_ID, Types.VEC3, "position")
+            local tangent = mesh:get_channel(Types.VERTEX_ID, Types.VEC3, "tangent")
+            local normal = mesh:get_channel(Types.VERTEX_ID, Types.VEC3, "normal")
 
             for i = 1, #pos do
                 mesh:add_edge(pos[i], pos[i] + V.normalize(tangent[i]) * inputs.width)
@@ -204,11 +204,11 @@ local test_channel_nodes = {
         label = "Compute road cant",
         op = function(inputs)
             local mesh = inputs.mesh:clone()
-            local pos = mesh:get_channel(Types.VertexId, Types.Vec3, "position")
-            local tangent = mesh:get_channel(Types.VertexId, Types.Vec3, "tangent")
-            local normal = mesh:get_channel(Types.VertexId, Types.Vec3, "normal")
-            local curvature = mesh:get_channel(Types.VertexId, Types.f32, "curvature")
-            local acceleration = mesh:get_channel(Types.VertexId, Types.Vec3, "acceleration")
+            local pos = mesh:get_channel(Types.VERTEX_ID, Types.VEC3, "position")
+            local tangent = mesh:get_channel(Types.VERTEX_ID, Types.VEC3, "tangent")
+            local normal = mesh:get_channel(Types.VERTEX_ID, Types.VEC3, "normal")
+            local curvature = mesh:get_channel(Types.VERTEX_ID, Types.F32, "curvature")
+            local acceleration = mesh:get_channel(Types.VERTEX_ID, Types.VEC3, "acceleration")
 
             for i = 1, #pos do
                 local function sign(num)
@@ -231,7 +231,7 @@ local test_channel_nodes = {
                 normal[i] = nrm
             end
 
-            mesh:set_channel(Types.VertexId, Types.Vec3, "normal", normal)
+            mesh:set_channel(Types.VERTEX_ID, Types.VEC3, "normal", normal)
 
             return {
                 out_mesh = mesh,

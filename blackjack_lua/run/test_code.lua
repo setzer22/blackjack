@@ -26,14 +26,14 @@ end
 
 local function circle_noise(pos, radius, seed, strength, noise_scale, points)
     local m = Primitives.circle(pos, radius, points)
-    local position_ch = m:get_channel(Types.VertexId, Types.Vec3, "position")
+    local position_ch = m:get_channel(Types.VERTEX_ID, Types.VEC3, "position")
     for i, pos in ipairs(position_ch) do
         local noise_pos = pos * noise_scale + vector(seed, seed, seed)
         local noise = perlin:get_3d(noise_pos.x, noise_pos.y, noise_pos.z)
         local dir = normalize(pos)
         position_ch[i] = position_ch[i] + dir * noise * strength
     end
-    m:set_channel(Types.VertexId, Types.Vec3, "position", position_ch)
+    m:set_channel(Types.VERTEX_ID, Types.VEC3, "position", position_ch)
     return m
 end
 
@@ -171,16 +171,16 @@ end
 
 local function make_l_system_mesh(edges: { Edge }): any
     local mesh = Blackjack.mesh()
-    local edge_distances = mesh:ensure_assoc_channel(Types.HalfEdgeId, Types.f32, "distance")
-    local final_verts = mesh:ensure_assoc_channel(Types.VertexId, Types.bool, "final")
+    local edge_distances = mesh:ensure_assoc_channel(Types.HALFEDGE_ID, Types.F32, "distance")
+    local final_verts = mesh:ensure_assoc_channel(Types.VERTEX_ID, Types.BOOL, "final")
     for _, edge in edges do
         local h_start, h_end = mesh:add_edge(edge.start_point, edge.end_point)
         edge_distances[h_start] = edge.distance
         edge_distances[h_end] = -100 -- Mark as negative to ignore these edges
         final_verts[mesh:halfedge_vertex_id(h_end)] = edge.final
     end
-    mesh:set_assoc_channel(Types.HalfEdgeId, Types.f32, "distance", edge_distances)
-    mesh:set_assoc_channel(Types.VertexId, Types.bool, "final", final_verts)
+    mesh:set_assoc_channel(Types.HALFEDGE_ID, Types.F32, "distance", edge_distances)
+    mesh:set_assoc_channel(Types.VERTEX_ID, Types.BOOL, "final", final_verts)
     return mesh
 end
 
@@ -190,8 +190,8 @@ local test_channel_nodes = {
         op = function(inputs)
             local m = inputs.mesh:clone()
 
-            local position_ch: { Vec3 } = m:get_channel(Types.VertexId, Types.Vec3, "position")
-            local normal_ch: { Vec3 } = m:get_channel(Types.VertexId, Types.Vec3, "vertex_normal")
+            local position_ch: { Vec3 } = m:get_channel(Types.VERTEX_ID, Types.VEC3, "position")
+            local normal_ch: { Vec3 } = m:get_channel(Types.VERTEX_ID, Types.VEC3, "vertex_normal")
 
             for i, pos in ipairs(position_ch) do
                 local noise_pos = pos * inputs.scale + inputs.offset
@@ -199,7 +199,7 @@ local test_channel_nodes = {
                 position_ch[i] = pos + normal_ch[i] * noise * inputs.strength
             end
 
-            m:set_channel(Types.VertexId, Types.Vec3, "position", position_ch)
+            m:set_channel(Types.VERTEX_ID, Types.VEC3, "position", position_ch)
 
             return { out_mesh = m }
         end,
@@ -252,7 +252,7 @@ local test_channel_nodes = {
                 local inner_radius = math.sqrt(r * r - ring_height * ring_height)
 
                 local circle = Primitives.circle(vector(0, ring_height + height / 2, 0), inner_radius, inputs.sections)
-                Ops.make_group(circle, Types.HalfEdgeId, Blackjack.selection("*"), "ring" .. ring)
+                Ops.make_group(circle, Types.HALFEDGE_ID, Blackjack.selection("*"), "ring" .. ring)
                 Ops.merge(m, circle)
             end
 
@@ -261,7 +261,7 @@ local test_channel_nodes = {
                 local inner_radius = math.sqrt(r * r - ring_height * ring_height)
 
                 local circle = Primitives.circle(vector(0, -ring_height - height / 2, 0), inner_radius, inputs.sections)
-                Ops.make_group(circle, Types.HalfEdgeId, Blackjack.selection("*"), "bot_ring" .. ring)
+                Ops.make_group(circle, Types.HALFEDGE_ID, Blackjack.selection("*"), "bot_ring" .. ring)
                 Ops.merge(m, circle)
             end
 
@@ -328,7 +328,7 @@ local test_channel_nodes = {
     MakeTrunk = {
         label = "Make trunk",
         op = function(inputs)
-            local edge_distances = inputs.l_system:get_assoc_channel(Types.HalfEdgeId, Types.f32, "distance")
+            local edge_distances = inputs.l_system:get_assoc_channel(Types.HALFEDGE_ID, Types.F32, "distance")
             local result = inputs.l_system:reduce_halfedges(Blackjack.mesh(), function(acc, h_id)
                 local scale_damp: number = inputs.scale_damp
                 if edge_distances[h_id] < 0 then
@@ -341,11 +341,11 @@ local test_channel_nodes = {
 
                     local src_ring = inputs.ring:clone()
                     Ops.transform(src_ring, src_pos, vector(0, 0, 0), vector(src_scale, src_scale, src_scale))
-                    Ops.make_group(src_ring, Types.HalfEdgeId, Blackjack.selection("*"), "src_ring")
+                    Ops.make_group(src_ring, Types.HALFEDGE_ID, Blackjack.selection("*"), "src_ring")
 
                     local dst_ring = inputs.ring:clone()
                     Ops.transform(dst_ring, dst_pos, vector(0, 0, 0), vector(dst_scale, dst_scale, dst_scale))
-                    Ops.make_group(dst_ring, Types.HalfEdgeId, Blackjack.selection("*"), "dst_ring")
+                    Ops.make_group(dst_ring, Types.HALFEDGE_ID, Blackjack.selection("*"), "dst_ring")
 
                     Ops.merge(src_ring, dst_ring)
                     Ops.bridge_chains(src_ring, Blackjack.selection("@src_ring"), Blackjack.selection("@dst_ring"), 0)
@@ -370,7 +370,7 @@ local test_channel_nodes = {
         label = "Make leaves",
         op = function(inputs)
             local result = Blackjack.mesh()
-            local final_verts = inputs.l_system:get_assoc_channel(Types.VertexId, Types.bool, "final")
+            local final_verts = inputs.l_system:get_assoc_channel(Types.VERTEX_ID, Types.BOOL, "final")
             for v, is_final in final_verts do
                 if is_final then
                     result:add_vertex(inputs.l_system:vertex_position(v))
@@ -405,12 +405,12 @@ local test_channel_nodes = {
         label = "Randomize size",
         op = function(inputs)
             local mesh = inputs.mesh:clone()
-            local size_ch = mesh:ensure_channel(Types.VertexId, Types.f32, "size")
+            local size_ch = mesh:ensure_channel(Types.VERTEX_ID, Types.F32, "size")
             math.randomseed(inputs.seed)
             for i = 0, #size_ch do
                 size_ch[i] = math.random() * inputs.scale
             end
-            mesh:set_channel(Types.VertexId, Types.f32, "size", size_ch)
+            mesh:set_channel(Types.VERTEX_ID, Types.F32, "size", size_ch)
             return { out_mesh = mesh }
         end,
         inputs = {

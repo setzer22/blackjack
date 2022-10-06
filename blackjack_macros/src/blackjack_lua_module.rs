@@ -24,6 +24,7 @@ struct LuaDocstring {
 enum LuaFnDefKind {
     Method { class: String },
     Global { table: String },
+    GlobalConstant { table: String },
 }
 
 #[derive(Debug)]
@@ -36,6 +37,13 @@ struct LuaFnDef {
     /// The name of the function in the `register_fn_item`.
     register_fn_ident: Ident,
     /// Lua docstring metadata
+    lua_docstr: LuaDocstring,
+}
+
+#[derive(Debug)]
+struct LuaConst {
+    register_const_fn_item: TokenStream,
+    register_const_fn_ident: Ident,
     lua_docstr: LuaDocstring,
 }
 
@@ -91,20 +99,65 @@ fn generate_lua_fn_documentation(
     }
 }
 
+/// Generates the automatic Lua documentation for this `item_const`, using
+/// LuaDoc format. The generated constant will be set to null
+fn generate_lua_const_documentation(
+    item_const: &syn::ItemConst,
+    attrs: &FunctionAttributes,
+) -> LuaDocstring {
+    use std::fmt::Write;
+    let doc = (|| -> Result<String, Box<dyn std::error::Error>> {
+        let mut docstr = String::new();
+        let mut first = true;
+        for line in &attrs.docstring_lines {
+            if first {
+                first = false;
+                writeln!(docstr, "--- {line}")?;
+            } else {
+                writeln!(docstr, "-- {line}")?;
+            }
+        }
+
+        let const_name = &item_const.ident;
+        writeln!(docstr, "local {const_name} = null")?;
+
+        Ok(docstr)
+    })()
+    .unwrap();
+
+    LuaDocstring {
+        def_kind: LuaFnDefKind::GlobalConstant {
+            table: attrs.lua_attr.under.clone().unwrap_or("Default".into()),
+        },
+        doc,
+    }
+}
+
 /// Some sanity checks for a function annotated as #[lua]
 fn lua_fn_sanity_checks(item_fn: &GlobalFnOrMethod) -> syn::Result<()> {
-    /*if item_fn.sig.generics.params.iter().count() > 0 {
-        return Err(syn::Error::new(
-            item_fn.sig.ident.span(),
-            "Functions exported to lua can't have generic parameters.",
-        ));
-    } else */
+    // Lifetime parameters are allowed, but not other kinds
+    item_fn
+        .sig
+        .generics
+        .params
+        .iter()
+        .map(|x| match x {
+            syn::GenericParam::Lifetime(_) => Ok(()),
+            _ => Err(syn::Error::new(
+                item_fn.sig.ident.span(),
+                "Functions exported to lua can't have generic parameters.",
+            )),
+        })
+        .collect::<syn::Result<()>>()?;
+
+    // Async functions are not allowed
     if item_fn.sig.asyncness.is_some() {
         return Err(syn::Error::new(
             item_fn.sig.ident.span(),
             "Functions exported to lua can't be marked async.",
         ));
     }
+
     Ok(())
 }
 
@@ -160,11 +213,14 @@ fn analyze_lua_fn_args(
                         name: format_ident!("self_ref"),
                     });
                 }
-                LuaFnDefKind::Global { table } => {
+                LuaFnDefKind::Global { .. } => {
                     return Err(syn::Error::new(
                         item_fn.sig.ident.span(),
                         "Can't use self here.",
                     ));
+                }
+                LuaFnDefKind::GlobalConstant { .. } => {
+                    panic!("Not a function. This should never happen.");
                 }
             },
             syn::FnArg::Typed(t) => {
@@ -237,7 +293,8 @@ fn analyze_lua_global_fn(
 ) -> syn::Result<LuaFnDef> {
     lua_fn_sanity_checks(item_fn)?;
 
-    let register_fn_ident = format_ident!("__blackjack_export_{}_to_lua", &item_fn.sig.ident);
+    let register_fn_ident =
+        format_ident!("__blackjack_export_global_fn_{}_to_lua", &item_fn.sig.ident);
     let original_fn_name = item_fn.sig.ident.to_string();
     let original_fn_ident = &item_fn.sig.ident;
     let fn_def_kind = LuaFnDefKind::Global {
@@ -294,11 +351,24 @@ fn analyze_lua_method_fn(
 ) -> syn::Result<LuaFnDef> {
     lua_fn_sanity_checks(item_fn)?;
 
-    let register_fn_ident = format_ident!("__blackjack_export_{}_to_lua", &item_fn.sig.ident);
+    let fn_def_kind = LuaFnDefKind::Method {
+        class: class_name.clone(),
+    };
+
+    // It's important to generate this now before we (maybe) mutate the function
+    // below. See the NOTE.
+    let docstring = generate_lua_fn_documentation(item_fn, attrs, &fn_def_kind);
+
+    let register_fn_ident =
+        format_ident!("__blackjack_export_method_{}_to_lua", &item_fn.sig.ident);
     // NOTE: The original_fn_name stores the name of the function as it's going
     // to be bound to lua. OTOH, the original_fn_ident stores the name of the
     // function as it's going to be bound to rust. This difference is important
-    // when the 'hidden' attribute is set to true.
+    // when the 'hidden' attribute is set to true, because in that case we
+    // mutate the fn identifier to add a __lua_hidden_ prefix. The zzzz is
+    // just a hack so these functions will appear at the bottom of
+    // auto-completion list, because Rust language servers don't take function
+    // visibility into account for autocompletion.
     let original_fn_name = item_fn.sig.ident.to_string();
     if attrs.lua_attr.hidden_fn {
         let new_ident = format_ident!("__lua_hidden_{}", item_fn.sig.ident);
@@ -306,9 +376,6 @@ fn analyze_lua_method_fn(
     }
     let original_fn_ident = &item_fn.sig.ident;
     let class_ident = format_ident!("{class_name}");
-    let fn_def_kind = LuaFnDefKind::Method {
-        class: class_name.clone(),
-    };
 
     let signature = analyze_lua_fn_args(item_fn, &fn_def_kind)?;
     let fn_sig_args_code = signature.code_for_fn_signature();
@@ -351,10 +418,49 @@ fn analyze_lua_method_fn(
     };
 
     Ok(LuaFnDef {
-        lua_docstr: generate_lua_fn_documentation(item_fn, attrs, &fn_def_kind),
+        lua_docstr: docstring,
         kind: fn_def_kind,
         register_fn_item,
         register_fn_ident,
+    })
+}
+
+/// Given a constant declaration inside the lua module with a #[lua] mark, the
+/// analysis for it and returns the collected metadata.
+fn analyze_lua_const(
+    item_const: &mut syn::ItemConst,
+    attributes: &FunctionAttributes,
+) -> syn::Result<LuaConst> {
+    let register_const_fn_ident =
+        format_ident!("__blackjack_export_const_{}_to_lua", item_const.ident);
+    let original_const_ident = &item_const.ident;
+    let under_table = attributes
+        .lua_attr
+        .under
+        .clone()
+        .unwrap_or("Default".into());
+    let register_const_fn_item = quote! {
+        #[allow(non_snake_case)]
+        pub fn #register_const_fn_ident(lua: &mlua::Lua) -> mlua::Result<()> {
+            // Ensure the table exists before accessing
+            if !lua.globals().contains_key(#under_table)? {
+                lua.globals().set(#under_table, lua.create_table()?)?;
+            }
+            let table = lua.globals().get::<_, mlua::Table>(#under_table).unwrap();
+
+
+            table.set(
+                stringify!(#original_const_ident),
+                #original_const_ident,
+            )?;
+
+            Ok(())
+        }
+    };
+    Ok(LuaConst {
+        register_const_fn_item,
+        register_const_fn_ident,
+        lua_docstr: generate_lua_const_documentation(item_const, attributes),
     })
 }
 
@@ -465,8 +571,12 @@ fn collect_lua_impl_attrs(attrs: &mut Vec<Attribute>) -> bool {
 pub(crate) fn blackjack_lua_module2(
     mut module: syn::ItemMod,
 ) -> Result<TokenStream, Box<dyn std::error::Error>> {
-    // Any new items that will be appended at the end of the module are stored here.
+    // Any new function definitions that will be exported to Lua at the end of
+    // the module are stored here.
     let mut fn_defs = vec![];
+
+    // Similarly Const defs are stored here.
+    let mut const_defs = vec![];
 
     if let Some((_, items)) = module.content.as_mut() {
         for item in items.iter_mut() {
@@ -521,6 +631,11 @@ pub(crate) fn blackjack_lua_module2(
                         }
                     }
                 }
+                syn::Item::Const(item_const) => {
+                    if let Some(attributes) = collect_function_attributes(&mut item_const.attrs) {
+                        const_defs.push(analyze_lua_const(item_const, &attributes)?);
+                    }
+                }
                 _ => { /* Ignore */ }
             }
         }
@@ -540,9 +655,19 @@ pub(crate) fn blackjack_lua_module2(
                 },
             );
 
+        let const_calls = const_defs.iter().map(
+            |LuaConst {
+                 register_const_fn_ident,
+                 ..
+             }| {
+                quote! { #register_const_fn_ident(lua)?; }
+            },
+        );
+
         quote! {
             pub fn __blackjack_register_lua_fns(lua: &mlua::Lua) -> mlua::Result<()> {
                 #(#calls)*
+                #(#const_calls)*
                 Ok(())
             }
 
@@ -591,28 +716,41 @@ pub(crate) fn blackjack_lua_module2(
         })
     };
 
-    let static_docstrings_code = fn_defs.iter().map(|fn_def| {
-        let (typ, name) = match &fn_def.lua_docstr.def_kind {
-            LuaFnDefKind::Method { class } => ("class", class),
-            LuaFnDefKind::Global { table } => ("module", table),
-        };
-        let doc = &fn_def.lua_docstr.doc;
+    let static_docstrings_code = fn_defs
+        .iter()
+        .map(|x| &x.lua_docstr)
+        .chain(const_defs.iter().map(|x| &x.lua_docstr))
+        .map(|lua_docstr| {
+            let (typ, name) = match &lua_docstr.def_kind {
+                LuaFnDefKind::Method { class } => ("class", class),
+                LuaFnDefKind::Global { table } => ("module", table),
+                LuaFnDefKind::GlobalConstant { table } => ("module", table),
+            };
+            let doc = &lua_docstr.doc;
 
-        quote! { (#typ, #name, #doc) }
-    });
+            quote! { (#typ, #name, #doc) }
+        });
 
     let original_items_code = module.content.as_ref().unwrap().1.iter();
     let register_fns_code = fn_defs.iter().map(|n| &n.register_fn_item);
+    let register_consts_code = const_defs.iter().map(|n| &n.register_const_fn_item);
     let mod_name = module.ident;
     let visibility = module.vis;
+    let mod_attrs = module.attrs.iter().filter(|attr| {
+        attr.path.to_token_stream().to_string() != "blackjack_macros::blackjack_lua_module"
+    });
 
     Ok(quote! {
+        #(#mod_attrs)*
         #visibility mod #mod_name {
             #(#original_items_code)*
 
-            // One function for each thing (method, global fn) that needs to be
-            // registered here..
+            // One function for each function-like object (method, global fn)
+            // that needs to be registered here..
             #(#register_fns_code)*
+
+            // One function for constant that needs to be registered here..
+            #(#register_consts_code)*
 
             // A single function to register all global functions in this module
             #register_global_fn_calls_code
@@ -771,9 +909,6 @@ impl LuaFnSignature {
 
 #[cfg(test)]
 mod test {
-
-    use syn::ImplItemMethod;
-
     use super::*;
     use crate::utils::write_and_fmt;
 
@@ -792,28 +927,5 @@ mod test {
         };
         let module = syn::parse2(input).unwrap();
         write_and_fmt("/tmp/test.rs", blackjack_lua_module2(module).unwrap()).unwrap();
-    }
-
-    #[test]
-    fn other_test() {
-        let code = "mod foo { impl Bar { fn foo(); fn bar() { 1 + 1 } fn baz() { ; } } }";
-        let item_mod: syn::ItemMod = syn::parse_str(code).unwrap();
-        for item in item_mod.content.unwrap().1 {
-            match item {
-                syn::Item::Impl(i) => {
-                    for item in i.items {
-                        match item {
-                            syn::ImplItem::Method(m) => {
-                                if let &[syn::Stmt::Item(syn::Item::Verbatim(semi))] =
-                                    &m.block.stmts.as_slice()
-                                {}
-                            }
-                            _ => unreachable!(),
-                        }
-                    }
-                }
-                _ => unreachable!(),
-            }
-        }
     }
 }

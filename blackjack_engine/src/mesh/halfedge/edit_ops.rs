@@ -1877,6 +1877,11 @@ pub mod lua_fns {
         super::resample_curve(mesh, density_mode, tension, alpha)
     }
 
+    /// Given two edge selections, bridges the two edge selections with quads
+    /// spanning every pair of consecutive edges.
+    ///
+    /// The `flip` parameter can be used to select a permutation for the winding
+    /// order of each of the input loops.
     #[lua(under = "Ops")]
     pub fn bridge_chains(
         mesh: &mut HalfEdgeMesh,
@@ -1889,6 +1894,10 @@ pub mod lua_fns {
         super::bridge_chains_ui(mesh, &bag_1, &bag_2, flip)
     }
 
+    /// Given four vertices `a`, `b`, `c` and `d`, creates a quad face between
+    /// these vertices. This operation will fail if the operation would lead to
+    /// a non-manifold mesh, or if any of the a->b b->c c->d or d->a halfedges
+    /// is already part of a face.
     #[lua(under = "Ops")]
     pub fn make_quad(
         mesh: &mut HalfEdgeMesh,
@@ -1914,6 +1923,8 @@ pub mod lua_fns {
         super::make_quad(&mut mesh.write_connectivity(), &[a, b, c, d])
     }
 
+    /// Applies a transformation to the `position` channel of this mesh, by
+    /// translating, rotating and scaling the mesh with given parameters.
     #[lua(under = "Ops")]
     pub fn transform(
         mesh: &mut HalfEdgeMesh,
@@ -1924,6 +1935,13 @@ pub mod lua_fns {
         super::transform(mesh, translate.0, rotate.0, scale.0)
     }
 
+    /// Creates a group named `group_name` in `mesh` for the given mesh element
+    /// `key_type`. This will put all the elements in `selection` inside this
+    /// group.
+    ///
+    /// A group is simply a boolean channel storing `true` values for every
+    /// element in the group, so this method is only a convenient wrapper over
+    /// the more general `edit_channels`.
     #[lua(under = "Ops")]
     pub fn make_group(
         mesh: &mut HalfEdgeMesh,
@@ -1934,6 +1952,11 @@ pub mod lua_fns {
         super::make_group(mesh, key_type, &selection, &group_name)
     }
 
+    /// Sets the `material` channel for all faces in `selection` to use the
+    /// given `material_index`.
+    ///
+    /// Material indices are currently not interpreted by blackjack, but game
+    /// engine integrations may use this channel in different ways.
     #[lua(under = "Ops")]
     pub fn set_material(
         mesh: &mut HalfEdgeMesh,
@@ -1943,6 +1966,12 @@ pub mod lua_fns {
         super::set_material(mesh, &selection, material_index)
     }
 
+    /// Given a source mesh (`src_mesh`) and a destination mesh (`dst_mesh`),
+    /// transfers the vertex channel with given `value_type` and `channel_name`
+    /// from source to mesh.
+    ///
+    /// Transfer for a vertex of the source mesh works by copying the value of
+    /// the nearest vertex of the destination mesh.
     #[lua(under = "Ops")]
     pub fn vertex_attribute_transfer(
         src_mesh: &HalfEdgeMesh,
@@ -1963,16 +1992,40 @@ pub mod lua_fns {
         }
     }
 
+    /// Generates an UV channel (HalfEdgeId -> Vec3) for the mesh where ever
+    /// polygon is mapped to the full UV range. Triangles will take half the UV
+    /// space, quads will take the full space, and n-gons will take as much
+    /// space as possible, being centered in the middle.
     #[lua(under = "Ops")]
     pub fn set_full_range_uvs(mesh: &mut HalfEdgeMesh) -> Result<()> {
         super::set_full_range_uvs(mesh)
     }
 
+    /// Given a `points` mesh, taken as a point cloud and another `mesh`, returs
+    /// a new mesh where `mesh` is instanced at every point of the point cloud.
+    ///
+    /// The following additional channels influence the behavior of this
+    /// operation:
+    ///
+    /// - The `normal` and `tangent` vertex channels, if present, will be used
+    /// to set the orientation of the cross-section at each point.
+    /// - The `size` vertex channel will be used to scale the cross section at
+    /// each point.
     #[lua(under = "Ops")]
     pub fn copy_to_points(points: &HalfEdgeMesh, mesh: &HalfEdgeMesh) -> Result<HalfEdgeMesh> {
         super::copy_to_points(points, mesh)
     }
 
+    /// Given a `backbone` mesh and a cross-section mesh, both polylines,
+    /// returns a new mesh which extrudes the cross-section across the backbone.
+    ///
+    /// The following additional channels influence the behavior of this
+    /// operation:
+    ///
+    /// - The `normal` and `tangent` vertex channels, if present, will be used
+    /// to set the orientation of the cross-section at each point.
+    /// - The `size` vertex channel will be used to scale the cross section at
+    /// each point.
     #[lua(under = "Ops")]
     pub fn extrude_along_curve(
         backbone: &HalfEdgeMesh,

@@ -3,6 +3,7 @@ use crate::lua_engine::{lua_stdlib::LVec3, ToLuaError};
 use mlua::{Function, Lua, ToLua, Value};
 
 #[blackjack_macros::blackjack_lua_module]
+#[allow(non_upper_case_globals)]
 mod lua_api {
     use mlua::{Function, Table, Value};
 
@@ -13,13 +14,40 @@ mod lua_api {
         HalfEdgeMesh::default()
     }
 
+    /// The 'vertex' is one of the three mesh elements. Channels attached to
+    /// vertices have this key type.
+    #[lua(under = "Types")]
+    const VERTEX_ID : ChannelKeyType = ChannelKeyType::VertexId;
+
+    /// The 'face' is one of the three mesh elements. Channels attached to faces
+    /// have this key type.
+    #[lua(under = "Types")]
+    const FACE_ID: ChannelKeyType = ChannelKeyType::FaceId;
+
+    /// The 'face' is one of the three mesh elements. Channels attached to faces
+    /// have this key type.
+    #[lua(under = "Types")]
+    const HALFEDGE_ID: ChannelKeyType = ChannelKeyType::FaceId;
+
+    /// The type of vector channels associated to a mesh element.
+    #[lua(under = "Types")]
+    const VEC3: ChannelValueType = ChannelValueType::Vec3;
+
+    /// The type of scalar channels associated to a mesh element.
+    #[lua(under = "Types")]
+    const F32: ChannelValueType = ChannelValueType::f32;
+
+    /// The type of boolean channels (groups) associated to a mesh element.
+    #[lua(under = "Types")]
+    const BOOL: ChannelValueType = ChannelValueType::bool;
+
     #[lua_impl]
     impl HalfEdgeMesh {
         // ==== CORE ====
 
         /// Duplicates this mesh by deep-cloning all its data.
         #[lua(hidden)]
-        pub fn clone(&self) -> HalfEdgeMesh {
+        fn clone(&self) -> HalfEdgeMesh {
             self.clone()
         }
 
@@ -31,7 +59,7 @@ mod lua_api {
         /// parallel iteration of data from multiple channels, where knowing the
         /// exact vertex / face / halfedge id is not important.
         #[lua(hidden)]
-        pub fn get_channel<'lua>(
+        fn get_channel<'lua>(
             &self,
             lua: &'lua Lua,
             kty: ChannelKeyType,
@@ -51,7 +79,7 @@ mod lua_api {
         /// but allows for more complex manipulation since you can iterate the
         /// data alongside the ids.
         #[lua(hidden)]
-        pub fn get_assoc_channel<'lua>(
+        fn get_assoc_channel<'lua>(
             &self,
             lua: &'lua Lua,
             kty: ChannelKeyType,
@@ -76,7 +104,7 @@ mod lua_api {
         /// index operator to query or set keys, using the right channel keys as
         /// values.
         #[lua(hidden)]
-        pub fn get_shared_channel(
+        fn get_shared_channel(
             &self,
             kty: ChannelKeyType,
             vty: ChannelValueType,
@@ -92,7 +120,7 @@ mod lua_api {
         /// one for each element (vertex, halfedge, face) equivalent to the one
         /// that would be obtained via `HalfEdgeMesh::get_channel`.
         #[lua(hidden)]
-        pub fn set_channel<'lua>(
+        fn set_channel<'lua>(
             &self,
             lua: &'lua Lua,
             kty: ChannelKeyType,
@@ -124,7 +152,7 @@ mod lua_api {
         /// values, one for each element (vertex, halfedge, face) equivalent to
         /// the one obtained via `HalfEdgeMesh::get_assoc_channel`.
         #[lua(hidden)]
-        pub fn set_assoc_channel<'lua>(
+        fn set_assoc_channel<'lua>(
             &self,
             lua: &'lua Lua,
             kty: ChannelKeyType,
@@ -141,7 +169,7 @@ mod lua_api {
         /// Same as `HalfEdgeMesh::get_channel`, but creates the channel if one
         /// didn't exist already.
         #[lua(hidden)]
-        pub fn ensure_channel<'lua>(
+        fn ensure_channel<'lua>(
             &mut self,
             lua: &'lua Lua,
             kty: ChannelKeyType,
@@ -155,7 +183,7 @@ mod lua_api {
         /// Same as `HalfEdgeMesh::get_assoc_channel`, but creates the channel
         /// if one didn't exist already.
         #[lua(hidden)]
-        pub fn ensure_assoc_channel<'lua>(
+        fn ensure_assoc_channel<'lua>(
             &mut self,
             lua: &'lua Lua,
             kty: ChannelKeyType,
@@ -172,7 +200,7 @@ mod lua_api {
         /// not useful on their own, but can be used to retrieve data by calling
         /// other methods.
         #[lua(hidden)]
-        pub fn iter_vertices<'lua>(&self, lua: &'lua Lua) -> mlua::Result<Function<'lua>> {
+        fn iter_vertices<'lua>(&self, lua: &'lua Lua) -> mlua::Result<Function<'lua>> {
             let vertices: Vec<VertexId> = self
                 .read_connectivity()
                 .iter_vertices()
@@ -194,7 +222,7 @@ mod lua_api {
         /// are not useful on their own, but can be used to retrieve data by
         /// calling other methods.
         #[lua(hidden)]
-        pub fn iter_halfedges<'lua>(&self, lua: &'lua Lua) -> mlua::Result<Function<'lua>> {
+        fn iter_halfedges<'lua>(&self, lua: &'lua Lua) -> mlua::Result<Function<'lua>> {
             let halfedges: Vec<HalfEdgeId> = self
                 .read_connectivity()
                 .iter_halfedges()
@@ -216,7 +244,7 @@ mod lua_api {
         /// useful on their own, but can be used to retrieve data by calling
         /// other methods.
         #[lua(hidden)]
-        pub fn iter_faces<'lua>(&self, lua: &'lua Lua) -> mlua::Result<Function<'lua>> {
+        fn iter_faces<'lua>(&self, lua: &'lua Lua) -> mlua::Result<Function<'lua>> {
             let halfedges: Vec<FaceId> = self
                 .read_connectivity()
                 .iter_faces()
@@ -244,7 +272,7 @@ mod lua_api {
         /// This is similar to the `reduce` function in other languages:
         /// https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/reduce
         #[lua(hidden)]
-        pub fn reduce<'lua>(
+        fn reduce<'lua>(
             &self,
             kty: ChannelKeyType,
             init: Value<'lua>,
@@ -255,7 +283,7 @@ mod lua_api {
 
         /// Same as `HalfEdgeMesh::reduce`, but specifically for `VertexId`
         #[lua(hidden)]
-        pub fn reduce_vertices<'lua>(
+        fn reduce_vertices<'lua>(
             &self,
             init: Value<'lua>,
             f: Function<'lua>,
@@ -265,7 +293,7 @@ mod lua_api {
 
         /// Same as `HalfEdgeMesh::reduce`, but specifically for `HalfEdgeId`
         #[lua(hidden)]
-        pub fn reduce_halfedges<'lua>(
+        fn reduce_halfedges<'lua>(
             &self,
             init: Value<'lua>,
             f: Function<'lua>,
@@ -275,7 +303,7 @@ mod lua_api {
 
         /// Same as `HalfEdgeMesh::reduce`, but specifically for `FaceId`
         #[lua(hidden)]
-        pub fn reduce_faces<'lua>(
+        fn reduce_faces<'lua>(
             &self,
             init: Value<'lua>,
             f: Function<'lua>,

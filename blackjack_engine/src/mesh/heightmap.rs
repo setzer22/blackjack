@@ -1,6 +1,5 @@
 use anyhow::Result;
 use glam::{Vec2, Vec3};
-use mlua::UserData;
 use noise::NoiseFn;
 
 use crate::prelude::VertexIndexBuffers;
