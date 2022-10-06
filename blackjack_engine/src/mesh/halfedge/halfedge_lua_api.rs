@@ -27,7 +27,7 @@ mod lua_api {
     /// The 'face' is one of the three mesh elements. Channels attached to faces
     /// have this key type.
     #[lua(under = "Types")]
-    const HALFEDGE_ID: ChannelKeyType = ChannelKeyType::FaceId;
+    const HALFEDGE_ID: ChannelKeyType = ChannelKeyType::HalfEdgeId;
 
     /// The type of vector channels associated to a mesh element.
     #[lua(under = "Types")]

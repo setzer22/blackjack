@@ -348,7 +348,7 @@ mod lua_api {
 
     /// Constructs a new Selection.
     /// TODO: Document selection DSL
-    #[lua(under = "Selection")]
+    #[lua(under = "SelectionExpression")]
     fn new(expr: String) -> Result<SelectionExpression> {
         SelectionExpression::parse(&expr)
     }
