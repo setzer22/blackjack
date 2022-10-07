@@ -6,7 +6,7 @@
 
 local P = require("params")
 local NodeLibrary = require("node_library")
-local load_function = require("blackjack_utils").load_function
+local load_function = require("utils").load_function
 
 
 -- Primitives: Construct new meshes based on common patterns

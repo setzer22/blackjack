@@ -16,3 +16,5 @@ BlackjackUtils.load_function = function(code)
     end
     return func
 end
+
+return BlackjackUtils
