@@ -5,6 +5,7 @@
 -- file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 local P = require("params")
+local NodeLibrary = require("node_library")
 
 NodeLibrary:addNodes({
     ReadCustomFile = {

@@ -39,21 +39,8 @@ pub struct LuaDocstringData {
 }
 inventory::collect!(LuaDocstringData);
 
-/// Loads pure Lua libraries that are part of the blackjack core APIs
-pub fn load_lua_libraries(lua: &Lua) -> anyhow::Result<()> {
-    macro_rules! def_library {
-        ($name:expr, $file:expr) => {
-            let lib: mlua::Value = lua.load(include_str!($file)).call(())?;
-            lua.globals().set($name, lib)?;
-        };
-    }
-
-    def_library!("NodeLibrary", "node_library.lua");
-    Ok(())
-}
-
 /// Loads all blackjack Rust function wrappers to the Lua API
-pub fn load_host_libraries(lua: &Lua, lua_io: Arc<dyn LuaFileIo + 'static>) -> anyhow::Result<()> {
+pub fn load_lua_bindings(lua: &Lua, lua_io: Arc<dyn LuaFileIo + 'static>) -> anyhow::Result<()> {
     lua_core_library::load(lua, lua_io)?;
 
     // This collects functions from all over the codebase. Any module annotated

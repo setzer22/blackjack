@@ -112,8 +112,8 @@ pub fn load_node_definitions(
     }
 
     let table = lua
-        .globals()
-        .get::<_, mlua::Table>("NodeLibrary")?
+        .load("require('node_library')")
+        .eval::<mlua::Table>()?
         .get::<_, mlua::Table>("nodes")?;
     NodeDefinition::load_nodes_from_table(table)
 }

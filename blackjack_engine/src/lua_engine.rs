@@ -104,8 +104,7 @@ impl LuaRuntime {
     pub fn initialize_custom(lua_io: impl LuaFileIo + 'static) -> anyhow::Result<LuaRuntime> {
         let lua = Lua::new();
         let lua_io = Arc::new(lua_io);
-        lua_stdlib::load_host_libraries(&lua, lua_io.clone())?;
-        lua_stdlib::load_lua_libraries(&lua)?;
+        lua_stdlib::load_lua_bindings(&lua, lua_io.clone())?;
         let node_definitions = load_node_definitions(&lua, lua_io.as_ref())?;
         let (watcher, watcher_channel) = {
             let (tx, rx) = mpsc::channel();

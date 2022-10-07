@@ -32,6 +32,12 @@ pub fn load(lua: &Lua, lua_io: Arc<dyn LuaFileIo + 'static>) -> anyhow::Result<(
                             .eval::<mlua::Value>()?;
                         loaded.set(file.clone(), value.clone())?;
                         Ok(value)
+                    } else if file == "node_library" {
+                        let value = lua
+                            .load(include_str!("../node_library.lua"))
+                            .eval::<mlua::Value>()?;
+                        loaded.set(file.clone(), value.clone())?;
+                        Ok(value)
                     } else {
                         let file_chunk = lua_io.load_file_require(&file).map_lua_err()?;
                         let value = lua.load(&file_chunk).eval::<mlua::Value>()?;
@@ -57,7 +63,6 @@ pub fn load(lua: &Lua, lua_io: Arc<dyn LuaFileIo + 'static>) -> anyhow::Result<(
         })?,
     )?;
 
-
     Ok(())
 }
 
@@ -68,14 +73,14 @@ mod lua_module {
     /// Read the contents of the file at `path` and return as a string. Will
     /// fail if the path does not exist, or the user does not have correct
     /// access permissions.
-    #[lua(under="Io")]
+    #[lua(under = "Io")]
     pub fn read_to_string(path: String) -> Result<String> {
         Ok(std::fs::read_to_string(&path)?)
     }
 
     /// Write the given string `contents` as a file to the given `path`. Will
     /// overwrite any previous existing file with that name.
-    #[lua(under="Io")]
+    #[lua(under = "Io")]
     pub fn write(path: String, contents: String) -> Result<()> {
         std::fs::write(&path, &contents)?;
         Ok(())

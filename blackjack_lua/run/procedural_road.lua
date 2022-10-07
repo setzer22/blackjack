@@ -5,6 +5,7 @@
 -- file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 local P = require("params")
+local NodeLibrary = require("node_library")
 local PriorityQueue = require("priority_queue")
 local V = require("vector_math")
 local T = require("table_helpers")

@@ -209,7 +209,7 @@ fn codegen_node(
 
     let node_name = &node.op_name;
 
-    emit_line!("local {output_addr} = NodeLibrary:callNode('{node_name}', {args})");
+    emit_line!("local {output_addr} = require('node_library'):callNode('{node_name}', {args})");
 
     if target && !ctx.is_side_effect {
         // NOTE: Return is ignored if the current compiled graph is a side effect invovation.
@@ -251,11 +251,11 @@ mod tests {
         let program = compile_graph(&graph, transform, false).unwrap();
 
         let expected_output = r#"function main(input_params)
-    local Box_1v1_out = NodeLibrary:callNode('Box', {
+    local Box_1v1_out = require('node_library'):callNode('Box', {
         origin = input_params.Box_1v1_origin,
         size = input_params.Box_1v1_size,
     })
-    local Translate_2v1_out = NodeLibrary:callNode('Translate', {
+    local Translate_2v1_out = require('node_library'):callNode('Translate', {
         mesh = Box_1v1_out.out_mesh,
         translate = input_params.Translate_2v1_translate,
     })
