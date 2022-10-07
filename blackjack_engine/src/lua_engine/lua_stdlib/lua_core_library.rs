@@ -25,20 +25,25 @@ pub fn load(lua: &Lua, lua_io: Arc<dyn LuaFileIo + 'static>) -> anyhow::Result<(
                 .expect("The _LOADED table must always exist");
             match loaded.get::<_, Value>(file.clone())? {
                 Value::Nil => {
-                    // Standard blackjack libraries. These are hardcoded
-                    if file == "params" {
-                        let value = lua
-                            .load(include_str!("../node_params.lua"))
-                            .eval::<mlua::Value>()?;
-                        loaded.set(file, value.clone())?;
-                        Ok(value)
-                    } else if file == "node_library" {
-                        let value = lua
-                            .load(include_str!("../node_library.lua"))
-                            .eval::<mlua::Value>()?;
-                        loaded.set(file, value.clone())?;
-                        Ok(value)
-                    } else {
+                    macro_rules! def_lib {
+                        ($req_name:expr, $path:expr) => {
+                            if file == $req_name {
+                                let value = lua.load(include_str!($path)).eval::<mlua::Value>()?;
+                                loaded.set(file, value.clone())?;
+                                return Ok(value);
+                            }
+                        };
+                    }
+
+                    // Here we list all the predefined libraries. These are
+                    // baked into the blackjack binary via `include_str!`
+                    def_lib!("params", "../node_params.lua");
+                    def_lib!("node_library", "../node_library.lua");
+                    def_lib!("utils", "../blackjack_utils.lua");
+
+                    // The `def_lib!` calls above return. If none did, then we
+                    // know this is a regular lua file from the filesystem.
+                    {
                         let file_chunk = lua_io.load_file_require(&file).map_lua_err()?;
                         let value = lua.load(&file_chunk).eval::<mlua::Value>()?;
                         loaded.set(file, value.clone())?;
