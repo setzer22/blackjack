@@ -1536,7 +1536,7 @@ pub fn resample_curve(
 
                 let t = (length - l_last_under) / (l_first_over - l_last_under);
 
-                lerpf(
+                lerp(
                     last_under as f32 / (LUT_LEN - 1) as f32,
                     first_over as f32 / (LUT_LEN - 1) as f32,
                     t,
