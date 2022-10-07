@@ -138,14 +138,3 @@ mod vector_math {
         LVec3(v.0.cross(v2.0))
     }
 }
-
-#[cfg(test)]
-mod test {
-    use noise::NoiseFn;
-
-    #[test]
-    pub fn test() {
-        let perlin = noise::Perlin::new();
-        dbg!(perlin.get([0.0, 0.0, 0.0]));
-    }
-}
