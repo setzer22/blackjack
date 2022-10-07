@@ -493,6 +493,43 @@ local edit_ops = {
         },
         returns = "out_mesh",
     },
+    PointCloud = {
+        label = "Point cloud",
+        op = function(inputs)
+            return { out_mesh = inputs.mesh:point_cloud(inputs.points) }
+        end,
+        inputs = {
+            P.mesh("mesh"),
+            P.selection("points"),
+        },
+        outputs = {
+            P.mesh("out_mesh"),
+        },
+        returns = "out_mesh",
+    },
+    -- TODO: This should be a more generic randomize channel
+    RandomizeSize = {
+        label = "Randomize size",
+        op = function(inputs)
+            local mesh = inputs.mesh:clone()
+            local size_ch = mesh:ensure_channel(Types.VERTEX_ID, Types.F32, "size")
+            math.randomseed(inputs.seed)
+            for i = 0, #size_ch do
+                size_ch[i] = math.random() * inputs.scale
+            end
+            mesh:set_channel(Types.VERTEX_ID, Types.F32, "size", size_ch)
+            return { out_mesh = mesh }
+        end,
+        inputs = {
+            P.mesh("mesh"),
+            P.scalar("scale", { default = 1.0, soft_min = 0.0, soft_max = 2.0 }),
+            P.scalar("seed", { default = 0.0 }),
+        },
+        outputs = {
+            P.mesh("out_mesh"),
+        },
+        returns = "out_mesh",
+    },
 }
 
 -- Math: Nodes to perform vector or scalar math operations
@@ -572,7 +609,7 @@ local math_nodes = {
 -- Export: Nodes to export the generated meshes outside of blacjack
 local export = {
     ExportObj = {
-        label = "Export obj",
+        label = "Export OBJ",
         inputs = {
             P.mesh("mesh"),
             P.file("path"),
@@ -583,6 +620,19 @@ local export = {
             HalfEdgeMesh.to_wavefront_obj(inputs.mesh, inputs.path)
         end,
     },
+    ImportObj = {
+        label = "Import OBJ",
+        inputs = {
+            P.file("path", "open")
+        },
+        outputs = {
+            P.mesh("out_mesh")
+        },
+        op = function(inputs)
+            local out_mesh = HalfEdgeMesh.from_wavefront_obj(inputs.path)
+            return { out_mesh = out_mesh }
+        end,
+    }
 }
 
 NodeLibrary:addNodes(primitives)

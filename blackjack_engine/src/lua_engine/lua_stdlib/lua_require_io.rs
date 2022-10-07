@@ -68,6 +68,7 @@ impl LuaFileIo for StdLuaFileIo {
         let run_path = PathBuf::from(&self.base_folder).join("run");
         Box::new(
             walkdir::WalkDir::new(run_path)
+                .follow_links(true)
                 .into_iter()
                 .filter_map(|e| e.ok())
                 .filter(|e| {
