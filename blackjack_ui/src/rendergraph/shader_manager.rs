@@ -27,11 +27,11 @@ impl Shader {
         FragmentState {
             module: &self.module,
             entry_point: &self.fs_entry_point,
-            targets: &[ColorTargetState {
+            targets: &[Some(ColorTargetState {
                 format: wgpu::TextureFormat::Rgba16Float,
                 blend: None,
                 write_mask: wgpu::ColorWrites::ALL,
-            }],
+            })],
         }
     }
 
@@ -39,11 +39,11 @@ impl Shader {
         FragmentState {
             module: &self.module,
             entry_point: &self.fs_entry_point,
-            targets: &[ColorTargetState {
+            targets: &[Some(ColorTargetState {
                 format: wgpu::TextureFormat::Rgba16Float,
                 blend: Some(BlendState::ALPHA_BLENDING),
                 write_mask: wgpu::ColorWrites::ALL,
-            }],
+            })],
         }
     }
 }
@@ -71,7 +71,7 @@ impl ShaderManager {
                     Shader {
                         fs_entry_point: "fs_main".into(),
                         vs_entry_point: "vs_main".into(),
-                        module: device.create_shader_module(&wgpu::ShaderModuleDescriptor {
+                        module: device.create_shader_module(wgpu::ShaderModuleDescriptor {
                             label: Some($name),
                             source: wgpu::ShaderSource::Wgsl(
                                 context

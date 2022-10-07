@@ -107,12 +107,12 @@ impl RootViewport {
         let egui_context = egui::Context::default();
         egui_context.set_visuals(blackjack_theme());
 
+        let mut egui_winit_state = egui_winit::State::new_with_wayland_display(None);
+        egui_winit_state.set_max_texture_side(renderer.limits.max_texture_dimension_2d as usize);
+        egui_winit_state.set_pixels_per_point(scale_factor as f32);
+
         RootViewport {
-            egui_winit_state: egui_winit::State::from_pixels_per_point(
-                renderer.limits.max_texture_dimension_2d as usize,
-                scale_factor as f32,
-                None,
-            ),
+            egui_winit_state,
             egui_context,
             textures_to_free: Vec::new(),
             screen_descriptor: ScreenDescriptor {
@@ -196,6 +196,7 @@ impl RootViewport {
         }
 
         self.graph_editor.update(
+            window,
             self.screen_descriptor.pixels_per_point,
             self.offscreen_viewports[&OffscreenViewport::GraphEditor].rect,
             &self.lua_runtime.node_definitions,
@@ -206,10 +207,8 @@ impl RootViewport {
             render_ctx,
         );
 
-        self.egui_context.begin_frame(
-            self.egui_winit_state
-                .take_egui_input(egui_winit::WindowOrSize::Window(window)),
-        );
+        self.egui_context
+            .begin_frame(self.egui_winit_state.take_egui_input(window));
 
         if let Some(menubar_action) = self.top_menubar() {
             actions.push(menubar_action);
@@ -226,7 +225,8 @@ impl RootViewport {
 
         actions.extend(self.app_context.update(
             &self.egui_context,
-            &mut self.graph_editor.state,
+            &mut self.graph_editor.editor_state,
+            &mut self.graph_editor.custom_state,
             render_ctx,
             &self.viewport_3d.settings,
             &self.lua_runtime,
@@ -242,17 +242,23 @@ impl RootViewport {
     pub fn handle_root_action(&mut self, action: AppRootAction) -> Result<()> {
         match action {
             AppRootAction::Save(path) => {
-                serialization::save(&self.graph_editor.state, path)?;
+                serialization::save(
+                    &self.graph_editor.editor_state,
+                    &self.graph_editor.custom_state,
+                    path,
+                )?;
                 Ok(())
             }
             AppRootAction::Load(path) => {
-                self.graph_editor.state = serialization::load(path)?;
+                let (editor_state, custom_state) = serialization::load(path)?;
+                self.graph_editor.editor_state = editor_state;
+                self.graph_editor.custom_state = custom_state;
                 Ok(())
             }
             AppRootAction::ExportJack(path) => {
-                if let Some(active_node) = self.graph_editor.state.user_state.active_node {
+                if let Some(active_node) = self.graph_editor.custom_state.active_node {
                     let (program, params) = self.app_context.compile_program(
-                        &self.graph_editor.state,
+                        &self.graph_editor.editor_state,
                         active_node,
                         false,
                     )?;

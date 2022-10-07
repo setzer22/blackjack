@@ -54,6 +54,7 @@ impl ApplicationContext {
         &mut self,
         egui_ctx: &egui::Context,
         editor_state: &mut graph::GraphEditorState,
+        custom_state: &mut graph::CustomGraphState,
         render_ctx: &mut RenderContext,
         viewport_settings: &Viewport3dSettings,
         lua_runtime: &LuaRuntime,
@@ -64,7 +65,7 @@ impl ApplicationContext {
 
         let mut actions = vec![];
 
-        match self.run_active_node(editor_state, lua_runtime) {
+        match self.run_active_node(editor_state, custom_state, lua_runtime) {
             Ok(code) => {
                 actions.push(AppRootAction::SetCodeViewerCode(code));
             }
@@ -72,9 +73,9 @@ impl ApplicationContext {
                 self.paint_errors(egui_ctx, err);
             }
         };
-        if let Err(err) = self.run_side_effects(editor_state, lua_runtime) {
+        if let Err(err) = self.run_side_effects(editor_state, custom_state, lua_runtime) {
             eprintln!(
-                "There was an errror executing side effect: {err}\nBacktrace:\n-----------\n{}",
+                "There was an errror executing side effect: {err}\nBacktrace:\n----------\n{}",
                 err.backtrace()
             );
         }
@@ -216,17 +217,17 @@ impl ApplicationContext {
     pub fn run_active_node(
         &mut self,
         editor_state: &graph::GraphEditorState,
+        custom_state: &mut graph::CustomGraphState,
         lua_runtime: &LuaRuntime,
     ) -> Result<String> {
-        if let Some(active) = editor_state.user_state.active_node {
+        if let Some(active) = custom_state.active_node {
             let (program, params) = self.compile_program(editor_state, active, false)?;
-            let renderable = blackjack_engine::lua_engine::run_program(
+            let mesh = blackjack_engine::lua_engine::run_program(
                 &lua_runtime.lua,
                 &program.lua_program,
                 &params,
             )?;
-            // WIP: Renderable...
-            self.renderable_thing = Some(renderable);
+            self.renderable_thing = Some(mesh);
             Ok(program.lua_program)
         } else {
             self.renderable_thing = None;
@@ -237,9 +238,10 @@ impl ApplicationContext {
     pub fn run_side_effects(
         &mut self,
         editor_state: &mut graph::GraphEditorState,
+        custom_state: &mut graph::CustomGraphState,
         lua_runtime: &LuaRuntime,
     ) -> Result<()> {
-        if let Some(side_effect) = editor_state.user_state.run_side_effect.take() {
+        if let Some(side_effect) = custom_state.run_side_effect.take() {
             let (program, params) = self.compile_program(editor_state, side_effect, true)?;
             // We ignore the result. The program is only executed to produce a
             // side effect (e.g. exporting a mesh as OBJ)

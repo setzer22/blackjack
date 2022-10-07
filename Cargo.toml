@@ -13,13 +13,13 @@ resolver = "2"
 [profile.dev.package."*"]
 opt-level = 3
 
+
 [patch.crates-io]
-# These patches are necessary until either of these is fixed:
-# - https://github.com/BVE-Reborn/rend3/pull/400
-# - https://github.com/emilk/egui/issues/1805
-egui = { git = "https://github.com/setzer22/egui", branch = "blackjack" }
-egui-wgpu = { git = "https://github.com/setzer22/egui", branch = "blackjack" }
-egui-winit = { git = "https://github.com/setzer22/egui", branch = "blackjack" }
+# This is necessary until egui 0.20, because blackjack needs the changes from this PR:
+# https://github.com/emilk/egui/pull/2051
+egui = { git = "https://github.com/setzer22/egui", branch = "egui_0_19_plus_pr_2051" }
+egui-winit = { git = "https://github.com/setzer22/egui", branch = "egui_0_19_plus_pr_2051" }
+egui-wgpu = { git = "https://github.com/setzer22/egui", branch = "egui_0_19_plus_pr_2051" }
 
 # NOTE: These patches are only used for development, and should be left
 # commented out in any commits to the 'main' branch

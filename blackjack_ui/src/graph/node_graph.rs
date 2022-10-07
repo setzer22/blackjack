@@ -58,7 +58,7 @@ pub struct CustomGraphState {
 #[derive(Copy, Clone, PartialEq, Eq, Serialize, Deserialize, Debug)]
 pub struct DataTypeUi(pub DataType); // Prevents orphan rules
 impl DataTypeTrait<CustomGraphState> for DataTypeUi {
-    fn data_type_color(&self, _user_state: &CustomGraphState) -> egui::Color32 {
+    fn data_type_color(&self, _user_state: &mut CustomGraphState) -> egui::Color32 {
         match self.0 {
             DataType::Mesh => color_from_hex("#b43e3e").unwrap(),
             DataType::HeightMap => color_from_hex("#33673b").unwrap(),
@@ -101,7 +101,7 @@ impl NodeDataTrait for NodeData {
         ui: &mut egui::Ui,
         node_id: NodeId,
         graph: &egui_node_graph::Graph<Self, DataTypeUi, ValueTypeUi>,
-        user_state: &Self::UserState,
+        user_state: &mut Self::UserState,
     ) -> Vec<egui_node_graph::NodeResponse<Self::Response, NodeData>>
     where
         Self::Response: egui_node_graph::UserResponseTrait,
@@ -156,28 +156,31 @@ impl<'a> NodeTemplateIter for NodeDefinitionsUi<'a> {
 /// Blackjack's custom draw node graph function. It defers to egui_node_graph to
 /// draw the graph itself, then interprets any responses it got and applies the
 /// required side effects.
-pub fn draw_node_graph(ctx: &egui::Context, state: &mut GraphEditorState, defs: &NodeDefinitions) {
+pub fn draw_node_graph(
+    ctx: &egui::Context,
+    editor_state: &mut GraphEditorState,
+    custom_state: &mut CustomGraphState,
+    defs: &NodeDefinitions,
+) {
     egui::CentralPanel::default().show(ctx, |ui| {
-        let responses = state.draw_graph_editor(ui, NodeDefinitionsUi(defs));
+        let responses = editor_state.draw_graph_editor(ui, NodeDefinitionsUi(defs), custom_state);
         for response in responses.node_responses {
             match response {
                 NodeResponse::DeleteNodeFull { node_id, .. } => {
-                    if state.user_state.active_node == Some(node_id) {
-                        state.user_state.active_node = None;
+                    if custom_state.active_node == Some(node_id) {
+                        custom_state.active_node = None;
                     }
-                    if state.user_state.run_side_effect == Some(node_id) {
-                        state.user_state.run_side_effect = None;
+                    if custom_state.run_side_effect == Some(node_id) {
+                        custom_state.run_side_effect = None;
                     }
                 }
                 NodeResponse::User(response) => match response {
                     graph::CustomNodeResponse::SetActiveNode(n) => {
-                        state.user_state.active_node = Some(n)
+                        custom_state.active_node = Some(n)
                     }
-                    graph::CustomNodeResponse::ClearActiveNode => {
-                        state.user_state.active_node = None
-                    }
+                    graph::CustomNodeResponse::ClearActiveNode => custom_state.active_node = None,
                     graph::CustomNodeResponse::RunNodeSideEffect(n) => {
-                        state.user_state.run_side_effect = Some(n)
+                        custom_state.run_side_effect = Some(n)
                     }
                 },
                 _ => {}
@@ -213,7 +216,7 @@ impl NodeTemplateTrait for NodeDefinitionUi {
     fn build_node(
         &self,
         graph: &mut egui_node_graph::Graph<Self::NodeData, Self::DataType, Self::ValueType>,
-        _user_state: &Self::UserState,
+        _user_state: &mut Self::UserState,
         node_id: egui_node_graph::NodeId,
     ) {
         for input in &self.0.inputs {

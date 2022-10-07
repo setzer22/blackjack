@@ -6,12 +6,13 @@
 
 use crate::{app_window::input::viewport_relative_position, prelude::*};
 use blackjack_engine::graph::NodeDefinitions;
-use egui_wgpu::renderer::{RenderPass, ScreenDescriptor};
+use egui_wgpu::renderer::{ScreenDescriptor, RenderPass};
 
 use super::blackjack_theme;
 
 pub struct GraphEditor {
-    pub state: graph::GraphEditorState,
+    pub editor_state: graph::GraphEditorState,
+    pub custom_state: graph::CustomGraphState,
     pub egui_context: egui::Context,
     pub egui_winit_state: egui_winit::State,
     pub renderpass: RenderPass,
@@ -32,18 +33,17 @@ impl GraphEditor {
     pub fn new(renderer: &r3::Renderer, format: r3::TextureFormat, parent_scale: f32) -> Self {
         let egui_context = egui::Context::default();
         egui_context.set_visuals(blackjack_graph_theme());
+
+        let mut egui_winit_state = egui_winit::State::new_with_wayland_display(None);
+        egui_winit_state.set_max_texture_side(renderer.limits.max_texture_dimension_2d as usize);
+        egui_winit_state.set_pixels_per_point(1.0);
+
         Self {
             // Set default zoom to the inverse of ui scale to preserve dpi
-            state: graph::GraphEditorState::new(
-                1.0 / parent_scale,
-                graph::CustomGraphState::default(),
-            ),
+            editor_state: graph::GraphEditorState::new(1.0 / parent_scale),
+            custom_state: graph::CustomGraphState::default(),
             egui_context,
-            egui_winit_state: egui_winit::State::from_pixels_per_point(
-                renderer.limits.max_texture_dimension_2d as usize,
-                1.0,
-                None,
-            ),
+            egui_winit_state,
             renderpass: RenderPass::new(&renderer.device, format, 1),
             // The mouse position, in window coordinates. Stored to hide other
             // window events from egui when the cursor is not over the viewport
@@ -53,7 +53,7 @@ impl GraphEditor {
     }
 
     pub fn zoom_level(&self) -> f32 {
-        self.state.pan_zoom.zoom
+        self.editor_state.pan_zoom.zoom
     }
 
     /// Handles most window events, but ignores resize / dpi change events,
@@ -103,7 +103,7 @@ impl GraphEditor {
                 .to_vec2();
                 match delta {
                     winit::event::MouseScrollDelta::LineDelta(_, dy) => {
-                        self.state.pan_zoom.adjust_zoom(
+                        self.editor_state.pan_zoom.adjust_zoom(
                             -*dy as f32 * 8.0 * 0.01,
                             mouse_pos,
                             Self::ZOOM_LEVEL_MIN,
@@ -111,7 +111,7 @@ impl GraphEditor {
                         );
                     }
                     winit::event::MouseScrollDelta::PixelDelta(pos) => {
-                        self.state.pan_zoom.adjust_zoom(
+                        self.editor_state.pan_zoom.adjust_zoom(
                             -pos.y as f32 * 0.01,
                             mouse_pos,
                             Self::ZOOM_LEVEL_MIN,
@@ -140,22 +140,51 @@ impl GraphEditor {
 
     pub fn update(
         &mut self,
+        window: &winit::window::Window,
         parent_scale: f32,
         viewport_rect: egui::Rect,
         node_definitions: &NodeDefinitions,
     ) {
         self.resize_platform(parent_scale, viewport_rect);
         self.egui_context.input_mut().pixels_per_point = 1.0 / self.zoom_level();
-        self.egui_context
-            .begin_frame(
-                self.egui_winit_state
-                    .take_egui_input(egui_winit::WindowOrSize::Size(egui::vec2(
-                        viewport_rect.width() * parent_scale * self.zoom_level(),
-                        viewport_rect.height() * parent_scale * self.zoom_level(),
-                    ))),
-            );
 
-        graph::draw_node_graph(&self.egui_context, &mut self.state, node_definitions);
+        // The version with forked egui_winit had the following code:
+        // self.egui_context
+        //     .begin_frame(
+        //         self.egui_winit_state
+        //             .take_egui_input(egui_winit::WindowOrSize::Size(egui::vec2(
+        //                 viewport_rect.width() * parent_scale * self.zoom_level(),
+        //                 viewport_rect.height() * parent_scale * self.zoom_level(),
+        //             ))),
+        //     );
+        // As take_egui_input just transfers inner fields to the return value
+        // and uses window only for calculating `screen_rect`,
+        // we can call take_egui_input(window) and then modify `screen_rect` manually
+
+        let mut egui_input = self.egui_winit_state.take_egui_input(window);
+        let pixels_per_point = self.egui_winit_state.pixels_per_point();
+        let screen_size_in_pixels = egui::vec2(
+            viewport_rect.width() * parent_scale * self.zoom_level(),
+            viewport_rect.height() * parent_scale * self.zoom_level(),
+        );
+        let screen_size_in_points = screen_size_in_pixels / pixels_per_point;
+        egui_input.screen_rect = if screen_size_in_points.x > 0.0 && screen_size_in_points.y > 0.0 {
+            Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                screen_size_in_points,
+            ))
+        } else {
+            None
+        };
+
+        self.egui_context.begin_frame(egui_input);
+
+        graph::draw_node_graph(
+            &self.egui_context,
+            &mut self.editor_state,
+            &mut self.custom_state,
+            node_definitions,
+        );
 
         // Debug mouse pointer position
         // -- This is useful when mouse events are not being interpreted correctly.
@@ -173,10 +202,10 @@ impl GraphEditor {
     ) -> ScreenDescriptor {
         ScreenDescriptor {
             size_in_pixels: [
-                (viewport_rect.width() * parent_scale * self.zoom_level()) as u32,
-                (viewport_rect.height() * parent_scale * self.zoom_level()) as u32,
+                (viewport_rect.width() * parent_scale) as u32,
+                (viewport_rect.height() * parent_scale) as u32,
             ],
-            pixels_per_point: 1.0,
+            pixels_per_point: 1.0 / self.zoom_level(),
         }
     }
 
@@ -185,7 +214,7 @@ impl GraphEditor {
         graph: &mut r3::RenderGraph<'node>,
         viewport_rect: egui::Rect,
         parent_scale: f32,
-        resolution: UVec2,
+        _resolution: UVec2,
         render_target: r3::RenderTargetHandle,
     ) {
         let full_output = self.egui_context.end_frame();
@@ -233,13 +262,8 @@ impl GraphEditor {
                     &screen_descriptor,
                 );
 
-                this.renderpass.execute_with_renderpass(
-                    rpass,
-                    &paint_jobs,
-                    &screen_descriptor,
-                    this.zoom_level(),
-                    Some(resolution.to_array()),
-                );
+                this.renderpass
+                    .execute_with_renderpass(rpass, &paint_jobs, &screen_descriptor);
             },
         );
     }

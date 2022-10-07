@@ -18,7 +18,7 @@ blackjack_macros = { path = "../blackjack_macros/" }
 blackjack_commons = { path = "../blackjack_commons" }
 
 # Crates.io crates
-glam = { version = "0.20", features = ["serde", "bytemuck"] }
+glam = { version = "0.21.2", features = ["serde", "bytemuck"] }
 smallvec = { version = "1.7.0", features = ["serde"] }
 itertools = "0.10"
 anyhow = { version = "1.0", features = ["backtrace"] }
