@@ -628,6 +628,7 @@ local export = {
         outputs = {
             P.mesh("out_mesh")
         },
+        returns = "out_mesh",
         op = function(inputs)
             local out_mesh = HalfEdgeMesh.from_wavefront_obj(inputs.path)
             return { out_mesh = out_mesh }
