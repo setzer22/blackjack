@@ -6,17 +6,8 @@
 
 local P = require("params")
 local NodeLibrary = require("node_library")
+local load_function = require("blackjack_utils").load_function
 
-local function load_function(code)
-    local func, err = loadstring(code)
-    if err ~= nil then
-        error(err)
-    end
-    if typeof(func) ~= "function" then
-        error("Code should be a single lua function")
-    end
-    return func
-end
 
 -- Primitives: Construct new meshes based on common patterns
 local primitives = {
