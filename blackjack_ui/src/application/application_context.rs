@@ -179,8 +179,6 @@ impl ApplicationContext {
                         &indices,
                     );
                 }
-
-                // TODO @Heightmap
             }
             None => { /* Ignore */ }
         }
