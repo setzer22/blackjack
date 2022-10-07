@@ -7,6 +7,7 @@ excludes:
   - README.*
   - LICENSE.*
   - .*\.(md|rst|txt)
+  - priority_queue.lua
 licenses:
   - files: "(^.*\\.rs$|^.*\\.lua$|^.*\\.gd$)"
     ident: MPL-2.0
