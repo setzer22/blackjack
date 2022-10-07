@@ -152,10 +152,10 @@ impl Viewport3d {
                 self.camera.pitch += self.input.mouse.cursor_delta().y * 2.0;
             }
         }
-        // self.camera.distance += self.input.mouse.wheel_delta() * 0.25;
-        self.camera
-            .fov
-            .set(|fov| (fov - self.input.mouse.wheel_delta() * 4.0).clamp(MIN_FOV, MAX_FOV));
+        self.camera.distance -= self.input.mouse.wheel_delta() * 0.5;
+        // self.camera
+            // .fov
+            // .set(|fov| (fov - self.input.mouse.wheel_delta() * 4.0).clamp(MIN_FOV, MAX_FOV));
 
         // Compute view matrix
         let view = Mat4::from_translation(Vec3::Z * self.camera.distance.get())

@@ -1,4 +1,4 @@
-use std::ops::{Add, AddAssign, Mul, Sub};
+use std::ops::{Add, AddAssign, Mul, Sub, SubAssign};
 
 /// A generic lerper. Calling `get`, returns the current value, but calling
 /// `set` (or any update methods like AddAssign) update the target value.
@@ -40,5 +40,15 @@ where
 {
     fn add_assign(&mut self, rhs: T) {
         self.target += rhs;
+    }
+}
+
+
+impl<T> SubAssign<T> for Lerp<T>
+where
+    T: SubAssign<T>,
+{
+    fn sub_assign(&mut self, rhs: T) {
+        self.target -= rhs;
     }
 }
