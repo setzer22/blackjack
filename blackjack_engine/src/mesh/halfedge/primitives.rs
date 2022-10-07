@@ -240,16 +240,66 @@ impl Line {
     }
 
     pub fn build_straight_line(start: Vec3, end: Vec3, segments: u32) -> HalfEdgeMesh {
-        Self::build(
-            |i| start.lerp(end, i as f32 / segments as f32),
-            segments,
-        )
+        Self::build(|i| start.lerp(end, i as f32 / segments as f32), segments)
     }
 
     pub fn build_from_points(points: Vec<Vec3>) -> HalfEdgeMesh {
-        Self::build(
-            |i| { points[i as usize] },
-            points.len() as u32 - 1,
+        Self::build(|i| points[i as usize], points.len() as u32 - 1)
+    }
+}
+
+#[blackjack_macros::blackjack_lua_module]
+mod lua_api {
+    use super::*;
+    use crate::lua_engine::lua_stdlib::LVec3;
+
+    /// Creates a box with given `center` and `size` vectors.
+    #[lua(under = "Primitives")]
+    fn cube(center: LVec3, size: LVec3) -> HalfEdgeMesh {
+        crate::mesh::halfedge::primitives::Box::build(center.0, size.0)
+    }
+
+    /// Creates a single quad, located at `center` and oriented along its
+    /// `normal` and `right` vectors with given `size`.
+    #[lua(under = "Primitives")]
+    fn quad(center: LVec3, normal: LVec3, right: LVec3, size: LVec3) -> HalfEdgeMesh {
+        crate::mesh::halfedge::primitives::Quad::build(
+            center.0,
+            normal.0,
+            right.0,
+            size.0.truncate(),
         )
+    }
+
+    /// Creates an open circle (polyline) with given `center`, `radius` and
+    /// `num_vertices`.
+    #[lua(under = "Primitives")]
+    fn circle(center: LVec3, radius: f32, num_vertices: f32) -> HalfEdgeMesh {
+        crate::mesh::halfedge::primitives::Circle::build_open(
+            center.0,
+            radius,
+            num_vertices as usize,
+        )
+    }
+
+    /// Creates a UV-sphere with given `center` and `radius`. The `rings` and
+    /// `segments` let you specify the specify the number of longitudinal
+    /// and vertical sections respectively.
+    #[lua(under = "Primitives")]
+    fn uv_sphere(center: LVec3, radius: f32, segments: u32, rings: u32) -> HalfEdgeMesh {
+        crate::mesh::halfedge::primitives::UVSphere::build(center.0, segments, rings, radius)
+    }
+
+    /// Creates a polyline with `start` and `end` points split into a number of
+    /// `segments`.
+    #[lua(under = "Primitives")]
+    fn line(start: LVec3, end: LVec3, segments: u32) -> HalfEdgeMesh {
+        crate::mesh::halfedge::primitives::Line::build_straight_line(start.0, end.0, segments)
+    }
+
+    /// Creates a polyline from a given sequence of `points`.
+    #[lua(under = "Primitives")]
+    fn line_from_points(points: Vec<LVec3>) -> HalfEdgeMesh {
+        crate::mesh::halfedge::primitives::Line::build_from_points(LVec3::cast_vector(points))
     }
 }

@@ -579,7 +579,7 @@ local export = {
         outputs = {},
         executable = true,
         op = function(inputs)
-            Export.wavefront_obj(inputs.mesh, inputs.path)
+            HalfEdgeMesh.to_wavefront_obj(inputs.mesh, inputs.path)
         end,
     },
 }

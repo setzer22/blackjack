@@ -82,8 +82,6 @@ pub fn load_lua_libraries(lua: &Lua) -> anyhow::Result<()> {
 /// Loads all blackjack Rust function wrappers to the Lua API
 pub fn load_host_libraries(lua: &Lua, lua_io: Arc<dyn LuaFileIo + 'static>) -> anyhow::Result<()> {
     lua_core_library::load(lua, lua_io)?;
-    lua_primitives_library::load(lua)?;
-    lua_export_library::load(lua)?;
 
     for register_fn in inventory::iter::<LuaRegisterFn>() {
         (register_fn.f)(lua).expect("Failed to register Lua API");

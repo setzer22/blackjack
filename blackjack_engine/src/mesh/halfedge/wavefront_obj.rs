@@ -145,6 +145,30 @@ impl HalfEdgeMesh {
     }
 }
 
+#[blackjack_macros::blackjack_lua_module]
+mod lua_api {
+    use super::*;
+    use anyhow::Result;
+
+    /// Saves this mesh as a Wavefront OBJ file at a given `path`. The path's
+    /// parent folder must exist. If there was a file at that path, it will be
+    /// overwritten.
+    #[lua(under = "HalfEdgeMesh")]
+    pub fn to_wavefront_obj(mesh: &HalfEdgeMesh, path: String) -> Result<()> {
+        mesh.to_wavefront_obj(path)
+    }
+
+    /// Loads a wavefront OBJ file from disk at the given `path` and returns a
+    /// `HalfEdgeMesh`.
+    ///
+    /// NOTE: This currently only loads vertex positions, no normals or texture
+    /// coordinates.
+    #[lua(under = "HalfEdgeMesh")]
+    pub fn from_wavefront_obj(path: String) -> Result<HalfEdgeMesh> {
+        HalfEdgeMesh::from_wavefront_obj(path.into())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
