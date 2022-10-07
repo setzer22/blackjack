@@ -57,22 +57,3 @@ pub fn generate_lua_documentation(out_path: &str) -> Result<()> {
 
     Ok(())
 }
-
-pub fn handle_ldoc_cmdline_arg() -> bool {
-    let args: Vec<String> = std::env::args().collect();
-    if let Some(arg) = args.get(1) {
-        if arg == "--generate-ldoc" {
-            if let Some(out_path) = args.get(2) {
-                if let Err(err) = generate_lua_documentation(out_path) {
-                    eprintln!("LDoc generation error: {err}");
-                }
-            } else {
-                eprintln!(
-                    "When --generate-ldoc is provided, second argument must be the output path"
-                );
-            }
-            return true;
-        }
-    }
-    false
-}

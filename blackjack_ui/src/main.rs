@@ -31,6 +31,9 @@ pub mod color_hex_utils;
 /// Custom egui widgets.
 pub mod custom_widgets;
 
+/// Command line argument parsing.
+pub mod cli_args;
+
 fn main() {
     #[cfg(feature = "tracy")]
     let _client = profiling::tracy_client::Client::start();
@@ -38,11 +41,12 @@ fn main() {
     // Setup logging
     env_logger::init();
 
-    // Handle the --generate-ldoc command line flag.
-    // If the flag is active, don't run the app.
-    use blackjack_engine::lua_engine::lua_stdlib::lua_documentation;
-    if lua_documentation::handle_ldoc_cmdline_arg() {
-        return;
+    // Handle luadoc flag
+    if let Some(ldoc_path) = &cli_args::CLI_ARGS.generate_ldoc {
+        use blackjack_engine::lua_engine::lua_stdlib::lua_documentation;
+        lua_documentation::generate_lua_documentation(&ldoc_path).unwrap();
+        println!("Wrote ldoc sources to {ldoc_path}");
+        return; // Do nothing else when generating luadoc
     }
 
     let (app_window, event_loop) = app_window::AppWindow::new();
