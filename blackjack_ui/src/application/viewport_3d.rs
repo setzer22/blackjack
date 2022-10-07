@@ -131,8 +131,8 @@ impl Viewport3d {
     }
 
     fn update_camera(&mut self, render_ctx: &mut RenderContext) {
-        const MIN_FOV: f32 = 1.0;
-        const MAX_FOV: f32 = 120.0;
+        const MIN_DIST: f32 = 0.1;
+        const MAX_DIST: f32 = 120.0;
 
         self.camera.update(10.0 / 60.0);
 
@@ -143,7 +143,7 @@ impl Viewport3d {
                     * Mat4::from_rotation_x(self.camera.pitch.get().to_radians());
                 let camera_right = cam_rotation.transform_point3(Vec3::X);
                 let camera_up = cam_rotation.transform_vector3(Vec3::Y);
-                let move_speed = 0.25 * self.camera.fov.get() / MAX_FOV;
+                let move_speed = self.camera.distance.get() / MAX_DIST;
                 self.camera.focus_point +=
                     self.input.mouse.cursor_delta().x * camera_right * move_speed
                         + self.input.mouse.cursor_delta().y * -camera_up * move_speed;
@@ -152,7 +152,9 @@ impl Viewport3d {
                 self.camera.pitch += self.input.mouse.cursor_delta().y * 2.0;
             }
         }
-        self.camera.distance -= self.input.mouse.wheel_delta() * 0.5;
+        self.camera
+            .distance
+            .set(|dist| (dist - self.input.mouse.wheel_delta() * 0.5).clamp(MIN_DIST, MAX_DIST));
         // self.camera
         // .fov
         // .set(|fov| (fov - self.input.mouse.wheel_delta() * 4.0).clamp(MIN_FOV, MAX_FOV));
