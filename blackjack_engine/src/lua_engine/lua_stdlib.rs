@@ -6,40 +6,15 @@
 
 use std::sync::Arc;
 
-use mlua::{AnyUserData, FromLua, Lua, Table, ToLua, UserData};
+use mlua::{FromLua, Lua, Table, ToLua, UserData};
 
 use crate::{
     lua_engine::ToLuaError,
-    prelude::{
-        halfedge::{
-            id_types::{FaceId, HalfEdgeId, VertexId},
-            ChannelKeyType, ChannelValueType, HalfEdgeMesh,
-        },
-        selection::SelectionExpression,
+    prelude::halfedge::{
+        id_types::{FaceId, HalfEdgeId, VertexId},
+        ChannelKeyType, ChannelValueType,
     },
 };
-
-/// Convenience macro for registering a lua function inside a global table.
-macro_rules! lua_fn {
-    ($lua:ident, $table:ident, $name:expr, || -> $retval:ty { $($body:tt)* }) => {
-        $table.set($name,
-            #[allow(unused_parens)]
-            #[allow(unused_variables)]
-            $lua.create_function(|$lua, ()| -> mlua::Result<$retval> {
-                $($body)*
-            })?
-        )?
-    };
-    ($lua:ident, $table:ident, $name:expr, |$($argname:ident : $typ:ty),*| -> $retval:ty { $($body:tt)* }) => {
-        $table.set($name,
-            #[allow(unused_parens)]
-            #[allow(unused_variables)]
-            $lua.create_function(|$lua, ($($argname),*) : ($($typ),*)| -> mlua::Result<$retval> {
-                $($body)*
-            })?
-        )?
-    };
-}
 
 mod runtime_types;
 pub use runtime_types::*;
@@ -48,8 +23,6 @@ pub mod lua_require_io;
 pub use lua_require_io::*;
 
 mod lua_core_library;
-mod lua_export_library;
-mod lua_primitives_library;
 
 pub mod lua_documentation;
 
@@ -83,6 +56,10 @@ pub fn load_lua_libraries(lua: &Lua) -> anyhow::Result<()> {
 pub fn load_host_libraries(lua: &Lua, lua_io: Arc<dyn LuaFileIo + 'static>) -> anyhow::Result<()> {
     lua_core_library::load(lua, lua_io)?;
 
+    // This collects functions from all over the codebase. Any module annotated
+    // with `#[blackjack_macros::blackjack_lua_module]` is inspected and may
+    // export any number of functions or constants marked with `#[lua]`
+    // annotations.
     for register_fn in inventory::iter::<LuaRegisterFn>() {
         (register_fn.f)(lua).expect("Failed to register Lua API");
     }
