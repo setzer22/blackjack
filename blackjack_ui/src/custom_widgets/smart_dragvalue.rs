@@ -254,13 +254,14 @@ impl<'a, 'b> SmartDragValue<'a, 'b> {
             }
         };
 
+        let painter = ui.ctx().layer_painter(LayerId::new(
+            Order::Tooltip,
+            Id::new("smart_dragvalue_tooltip"),
+        ));
+
         for (i, label) in ranges.labels.iter().enumerate() {
             let pos = top_left + vec2(0.0, size.y) * i as f32;
 
-            let painter = ui.ctx().layer_painter(LayerId::new(
-                Order::Tooltip,
-                Id::new("smart_dragvalue_tooltip"),
-            ));
             painter.rect(
                 Rect::from_min_size(pos, size),
                 Rounding::none(),
@@ -280,6 +281,21 @@ impl<'a, 'b> SmartDragValue<'a, 'b> {
                 ui.style().noninteractive().fg_stroke.color,
             );
         }
+
+        #[cfg(target_os = "macos")]
+        static CTRL_KEY_LABEL: &str = "↕ Cmd";
+        #[cfg(not(target_os = "macos"))]
+        static CTRL_KEY_LABEL: &str = "↕ Ctrl";
+
+        let bottom_left = top_left + vec2(0.0, size.y * ranges.len() as f32);
+        painter.text(
+            bottom_left,
+            Align2::LEFT_TOP,
+            // Either Ctrl or Command, depending on platform
+            CTRL_KEY_LABEL,
+            TextStyle::Small.resolve(ui.style()),
+            ui.style().noninteractive().fg_stroke.color,
+        );
     }
 }
 
@@ -417,7 +433,12 @@ impl<'a, 'b> Widget for SmartDragValue<'a, 'b> {
                 const MOUSE_AIM_PRECISION: f32 = 20.0;
                 const SCROLL_WHEEL_PRECISION: f32 = 50.0;
 
-                let should_increment = mdelta.x.abs() * 3.0 > mdelta.y.abs();
+                #[cfg(target_os = "macos")]
+                static CTRL_KEY_LABEL: &str = "↕ Cmd";
+                let should_increment = !(ui.input().modifiers.command);
+                #[cfg(not(target_os = "macos"))]
+                let should_increment = !(ui.input().modifiers.ctrl);
+
                 let delta_value = {
                     let LocalState {
                         ref mut drag_amount,
