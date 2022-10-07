@@ -11,6 +11,7 @@ use std::{
 
 use anyhow::{anyhow, bail};
 use float_ord::FloatOrd;
+use glam::EulerRot;
 use smallvec::SmallVec;
 
 use crate::prelude::*;
@@ -1741,6 +1742,53 @@ pub fn resample_curve(
     Ok(result_mesh)
 }
 
+pub fn edit_geometry(
+    mesh: &mut HalfEdgeMesh,
+    geometry_type: ChannelKeyType,
+    selection: SelectionExpression,
+    translate: Vec3,
+    rotate: Vec3,
+    scale: Vec3,
+) -> Result<()> {
+    let conn = mesh.read_connectivity();
+    let vertices = match geometry_type {
+        ChannelKeyType::VertexId => mesh.resolve_vertex_selection_full(&selection)?,
+        ChannelKeyType::FaceId => mesh
+            .resolve_face_selection_full(&selection)?
+            .iter()
+            .flat_map(|f| conn.at_face(*f).vertices())
+            .flatten()
+            .collect_vec(),
+        ChannelKeyType::HalfEdgeId => mesh
+            .resolve_halfedge_selection_full(&selection)?
+            .iter()
+            .flat_map(|h| conn.at_halfedge(*h).src_dst_pair())
+            .flat_map(|(a, b)| [a, b])
+            .collect_vec(),
+    };
+
+    let mut pos = mesh.write_positions();
+    let centroid = vertices
+        .iter()
+        .map(|v| pos[*v])
+        .fold(Vec3::ZERO, |v, v2| v + v2)
+        / vertices.len() as f32;
+
+    let transform_matrix = Mat4::from_translation(-centroid)
+        * Mat4::from_scale_rotation_translation(
+            scale,
+            Quat::from_euler(EulerRot::XYZ, rotate.x, rotate.y, rotate.z),
+            translate,
+        )
+        * Mat4::from_translation(centroid);
+
+    for v in vertices {
+        pos[v] = transform_matrix.transform_point3(pos[v]);
+    }
+
+    Ok(())
+}
+
 #[blackjack_macros::blackjack_lua_module]
 pub mod lua_fns {
 
@@ -2033,5 +2081,27 @@ pub mod lua_fns {
         flip: usize,
     ) -> Result<HalfEdgeMesh> {
         super::extrude_along_curve(backbone, cross_section, flip)
+    }
+
+    /// Applies a transformation to the given selection of mesh elements
+    /// (vertex, face, halfedge). The transformation is applied relative to the
+    /// elements centroid.
+    #[lua(under = "Ops")]
+    pub fn edit_geometry(
+        mesh: &mut HalfEdgeMesh,
+        geometry_type: ChannelKeyType,
+        selection: SelectionExpression,
+        translate: LVec3,
+        rotate: LVec3,
+        scale: LVec3,
+    ) -> Result<()> {
+        super::edit_geometry(
+            mesh,
+            geometry_type,
+            selection,
+            translate.0,
+            rotate.0,
+            scale.0,
+        )
     }
 }

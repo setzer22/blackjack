@@ -8,7 +8,6 @@ local P = require("params")
 local NodeLibrary = require("node_library")
 local load_function = require("utils").load_function
 
-
 -- Primitives: Construct new meshes based on common patterns
 local primitives = {
     MakeBox = {
@@ -521,6 +520,27 @@ local edit_ops = {
         },
         returns = "out_mesh",
     },
+    EditGeometry = {
+        label = "Edit Geometry",
+        op = function(inputs)
+            local kty = parse_ch_key(inputs.geometry)
+            local out_mesh = inputs.mesh:clone()
+            Ops.edit_geometry(out_mesh, kty, inputs.selection, inputs.translate, inputs.rotate, inputs.scale)
+            return { out_mesh = out_mesh }
+        end,
+        returns = "out_mesh",
+        inputs = {
+            P.mesh("mesh"),
+            P.enum("geometry", { "Vertex", "Face", "HalfEdge" }),
+            P.selection("selection"),
+            P.v3("translate", vector(0, 0, 0)),
+            P.v3("rotate", vector(0, 0, 0)),
+            P.v3("scale", vector(1, 1, 1)),
+        },
+        outputs = {
+            P.mesh("out_mesh"),
+        },
+    },
 }
 
 -- Math: Nodes to perform vector or scalar math operations
@@ -614,17 +634,17 @@ local export = {
     ImportObj = {
         label = "Import OBJ",
         inputs = {
-            P.file("path", "open")
+            P.file("path", "open"),
         },
         outputs = {
-            P.mesh("out_mesh")
+            P.mesh("out_mesh"),
         },
         returns = "out_mesh",
         op = function(inputs)
             local out_mesh = HalfEdgeMesh.from_wavefront_obj(inputs.path)
             return { out_mesh = out_mesh }
         end,
-    }
+    },
 }
 
 NodeLibrary:addNodes(primitives)
