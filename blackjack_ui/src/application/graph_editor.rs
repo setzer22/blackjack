@@ -6,7 +6,7 @@
 
 use crate::{app_window::input::viewport_relative_position, prelude::*};
 use blackjack_engine::graph::NodeDefinitions;
-use egui_wgpu::renderer::{ScreenDescriptor, RenderPass};
+use egui_wgpu::renderer::{RenderPass, ScreenDescriptor};
 
 use super::blackjack_theme;
 

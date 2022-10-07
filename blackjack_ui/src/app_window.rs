@@ -8,9 +8,10 @@ use crate::{application::RootViewport, prelude::*};
 use std::time::{Duration, Instant};
 
 use winit::{
+    dpi::PhysicalSize,
     event::{Event, WindowEvent},
     event_loop::EventLoop,
-    window::Window, dpi::PhysicalSize,
+    window::Window,
 };
 
 pub mod gui_overlay;

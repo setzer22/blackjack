@@ -76,9 +76,9 @@ impl BlackjackGodotRuntime {
                 godot_error!("Invalid path in project settings {e}");
                 "".into()
             });
-        let lua_runtime = LuaRuntime::initialize_custom(
-            GodotLuaIo { base_folder: library_path },
-        )?;
+        let lua_runtime = LuaRuntime::initialize_custom(GodotLuaIo {
+            base_folder: library_path,
+        })?;
 
         Ok(Self {
             lua_runtime,
@@ -316,9 +316,9 @@ impl BlackjackApi {
                     let godot_mesh = halfedge_to_godot_mesh(&mesh, materials).unwrap();
                     Some(UpdateJackResult::Ok(godot_mesh))
                 }
-                Ok(_) => {
-                    Some(UpdateJackResult::Err("This renderable type is not supported. @Heightmap".into()))
-                }
+                Ok(_) => Some(UpdateJackResult::Err(
+                    "This renderable type is not supported. @Heightmap".into(),
+                )),
                 Err(err) => Some(UpdateJackResult::Err(err.to_string())),
             }
         })
@@ -435,14 +435,13 @@ fn halfedge_to_godot_mesh(
     Ok(mesh.into_shared())
 }
 
-
-#[cfg(not(feature="library"))]
+#[cfg(not(feature = "library"))]
 fn init(handle: InitHandle) {
     handle.add_tool_class::<BlackjackApi>();
     handle.add_tool_class::<BlackjackGodotRuntime>();
 }
 
-#[cfg(not(feature="library"))]
+#[cfg(not(feature = "library"))]
 godot_init!(init);
 
 /// NOTE: Registering a tool class in GDNative breaks hot reloading, so for
@@ -450,7 +449,7 @@ godot_init!(init);
 /// feature is provided. This feature disables automatic registration of
 /// classes, and instead provides this function that lets you use
 /// blackjack_godot as a library.
-#[cfg(feature="library")]
+#[cfg(feature = "library")]
 pub fn register_classes(handle: InitHandle) {
     handle.add_class::<BlackjackApi>();
     handle.add_class::<BlackjackGodotRuntime>();

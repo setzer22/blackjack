@@ -115,10 +115,10 @@ impl InputSystem {
                     match input.state {
                         ElementState::Pressed => {
                             self.pressed.insert(key);
-                        },
+                        }
                         ElementState::Released => {
                             self.pressed.remove(&key);
-                        },
+                        }
                     }
                 }
             }

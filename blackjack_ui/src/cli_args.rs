@@ -15,6 +15,4 @@ pub struct Args {
 
 /// CLI args are stored in a lazy static variable so they're accessible from
 /// everywhere. Arguments are parsed on first access.
-pub static CLI_ARGS : Lazy<Args> = Lazy::new(|| {
-    Args::parse()
-});
+pub static CLI_ARGS: Lazy<Args> = Lazy::new(|| Args::parse());

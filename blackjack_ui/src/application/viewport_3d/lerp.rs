@@ -1,4 +1,4 @@
-use std::ops::{Sub, Mul, Add, AddAssign};
+use std::ops::{Add, AddAssign, Mul, Sub};
 
 /// A generic lerper. Calling `get`, returns the current value, but calling
 /// `set` (or any update methods like AddAssign) update the target value.

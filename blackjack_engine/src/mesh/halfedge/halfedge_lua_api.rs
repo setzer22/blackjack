@@ -17,7 +17,7 @@ mod lua_api {
     /// The 'vertex' is one of the three mesh elements. Channels attached to
     /// vertices have this key type.
     #[lua(under = "Types")]
-    const VERTEX_ID : ChannelKeyType = ChannelKeyType::VertexId;
+    const VERTEX_ID: ChannelKeyType = ChannelKeyType::VertexId;
 
     /// The 'face' is one of the three mesh elements. Channels attached to faces
     /// have this key type.

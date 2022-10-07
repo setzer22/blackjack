@@ -91,7 +91,6 @@ fn ligthdata_to_keydata(d: mlua::LightUserData) -> slotmap::KeyData {
 impl UserData for ChannelKeyType {}
 impl UserData for ChannelValueType {}
 
-
 pub struct PerlinNoise(pub noise::Perlin);
 
 #[blackjack_macros::blackjack_lua_module]
