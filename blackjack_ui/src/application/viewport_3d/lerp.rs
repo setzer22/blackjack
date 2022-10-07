@@ -49,7 +49,6 @@ where
     }
 }
 
-
 impl<T> SubAssign<T> for Lerp<T>
 where
     T: SubAssign<T>,
