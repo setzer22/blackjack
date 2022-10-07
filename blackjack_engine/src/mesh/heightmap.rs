@@ -27,11 +27,7 @@ impl HeightMap {
         Self { inner }
     }
 
-    pub fn from_lua_fn<'lua>(
-        width: usize,
-        height: usize,
-        f: mlua::Function<'lua>,
-    ) -> Result<HeightMap> {
+    pub fn from_lua_fn(width: usize, height: usize, f: mlua::Function) -> Result<HeightMap> {
         // We can't jump out of the closure, so if there's an error we store it
         // here and return at the end.
         let mut error = None;

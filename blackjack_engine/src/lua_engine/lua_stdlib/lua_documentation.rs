@@ -27,7 +27,7 @@ pub fn generate_lua_documentation(out_path: &str) -> Result<()> {
         populate_from(docstring_data.data, &mut docs_by_module, &mut docs_by_class);
     }
 
-    let out_file = File::open(&out_path)?;
+    let out_file = File::open(out_path)?;
     if !out_file.metadata()?.is_dir() {
         bail!("Output path '{out_path}' must be a directory");
     }

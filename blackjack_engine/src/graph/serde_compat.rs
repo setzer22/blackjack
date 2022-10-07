@@ -31,7 +31,7 @@ where
         where
             D: serde::Deserializer<'de>,
         {
-            f32::deserialize(deserializer).map(|x| Some(x))
+            f32::deserialize(deserializer).map(Some)
         }
     }
 

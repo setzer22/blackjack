@@ -39,6 +39,7 @@ impl<T> ToLuaError<T> for Result<T, TraversalError> {
     }
 }
 
+#[allow(clippy::large_enum_variant)]
 pub enum RenderableThing {
     HalfEdgeMesh(HalfEdgeMesh),
     HeightMap(HeightMap),

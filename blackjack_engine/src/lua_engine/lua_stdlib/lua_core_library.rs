@@ -30,18 +30,18 @@ pub fn load(lua: &Lua, lua_io: Arc<dyn LuaFileIo + 'static>) -> anyhow::Result<(
                         let value = lua
                             .load(include_str!("../node_params.lua"))
                             .eval::<mlua::Value>()?;
-                        loaded.set(file.clone(), value.clone())?;
+                        loaded.set(file, value.clone())?;
                         Ok(value)
                     } else if file == "node_library" {
                         let value = lua
                             .load(include_str!("../node_library.lua"))
                             .eval::<mlua::Value>()?;
-                        loaded.set(file.clone(), value.clone())?;
+                        loaded.set(file, value.clone())?;
                         Ok(value)
                     } else {
                         let file_chunk = lua_io.load_file_require(&file).map_lua_err()?;
                         let value = lua.load(&file_chunk).eval::<mlua::Value>()?;
-                        loaded.set(file.clone(), value.clone())?;
+                        loaded.set(file, value.clone())?;
                         Ok(value)
                     }
                 }

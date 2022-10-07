@@ -44,7 +44,7 @@ fn main() {
     // Handle luadoc flag
     if let Some(ldoc_path) = &cli_args::CLI_ARGS.generate_ldoc {
         use blackjack_engine::lua_engine::lua_stdlib::lua_documentation;
-        lua_documentation::generate_lua_documentation(&ldoc_path).unwrap();
+        lua_documentation::generate_lua_documentation(ldoc_path).unwrap();
         println!("Wrote ldoc sources to {ldoc_path}");
         return; // Do nothing else when generating luadoc
     }

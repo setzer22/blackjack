@@ -434,7 +434,6 @@ impl<'a, 'b> Widget for SmartDragValue<'a, 'b> {
                 const SCROLL_WHEEL_PRECISION: f32 = 50.0;
 
                 #[cfg(target_os = "macos")]
-                static CTRL_KEY_LABEL: &str = "↕ Cmd";
                 let should_increment = !(ui.input().modifiers.command);
                 #[cfg(not(target_os = "macos"))]
                 let should_increment = !(ui.input().modifiers.ctrl);

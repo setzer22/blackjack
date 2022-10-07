@@ -284,9 +284,8 @@ impl WidgetValueTrait for ValueTypeUi {
     type Response = CustomNodeResponse;
 
     fn value_widget(&mut self, param_name: &str, ui: &mut egui::Ui) -> Vec<Self::Response> {
-        const DRAG_SPEEDS: &'static [f64] = &[100.0, 10.0, 1.0, 0.1, 0.01, 0.001, 0.0001];
-        const DRAG_LABELS: &'static [&'static str] =
-            &["100", "10", "1", ".1", ".01", ".001", ".0001"];
+        const DRAG_SPEEDS: &[f64] = &[100.0, 10.0, 1.0, 0.1, 0.01, 0.001, 0.0001];
+        const DRAG_LABELS: &[&str] = &["100", "10", "1", ".1", ".01", ".001", ".0001"];
 
         match (&mut self.0.value, &self.0.config) {
             (BlackjackValue::Vector(vector), InputValueConfig::Vector { .. }) => {

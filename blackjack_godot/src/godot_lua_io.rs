@@ -71,7 +71,7 @@ impl LuaFileIo for GodotLuaIo {
         &self,
         path: &str,
     ) -> anyhow::Result<blackjack_engine::lua_engine::lua_stdlib::LuaSourceFile> {
-        let mut path = String::from(self.base_folder.clone() + "/lib/" + path);
+        let mut path = self.base_folder.clone() + "/lib/" + path;
         if !path.ends_with(".lua") {
             path += ".lua";
         }

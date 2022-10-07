@@ -1521,7 +1521,7 @@ pub fn resample_curve(
 
         pub fn t_for_arc_length(&self, length: f32) -> f32 {
             if length == 0.0 {
-                return 0.0;
+                0.0
             } else {
                 let first_over = self
                     .arc_length_lut
@@ -1981,13 +1981,13 @@ pub mod lua_fns {
     ) -> Result<()> {
         match value_type {
             ChannelValueType::Vec3 => {
-                super::vertex_attribute_transfer::<glam::Vec3>(&src_mesh, dst_mesh, &channel_name)
+                super::vertex_attribute_transfer::<glam::Vec3>(src_mesh, dst_mesh, &channel_name)
             }
             ChannelValueType::f32 => {
-                super::vertex_attribute_transfer::<f32>(&src_mesh, dst_mesh, &channel_name)
+                super::vertex_attribute_transfer::<f32>(src_mesh, dst_mesh, &channel_name)
             }
             ChannelValueType::bool => {
-                super::vertex_attribute_transfer::<bool>(&src_mesh, dst_mesh, &channel_name)
+                super::vertex_attribute_transfer::<bool>(src_mesh, dst_mesh, &channel_name)
             }
         }
     }
@@ -2032,6 +2032,6 @@ pub mod lua_fns {
         cross_section: &HalfEdgeMesh,
         flip: usize,
     ) -> Result<HalfEdgeMesh> {
-        super::extrude_along_curve(&backbone, &cross_section, flip)
+        super::extrude_along_curve(backbone, cross_section, flip)
     }
 }

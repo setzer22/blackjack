@@ -127,7 +127,11 @@ fn generate_lua_const_documentation(
 
     LuaDocstring {
         def_kind: LuaFnDefKind::GlobalConstant {
-            table: attrs.lua_attr.under.clone().unwrap_or("Default".into()),
+            table: attrs
+                .lua_attr
+                .under
+                .clone()
+                .unwrap_or_else(|| "Default".into()),
         },
         doc,
     }
@@ -141,14 +145,13 @@ fn lua_fn_sanity_checks(item_fn: &GlobalFnOrMethod) -> syn::Result<()> {
         .generics
         .params
         .iter()
-        .map(|x| match x {
+        .try_for_each(|x| match x {
             syn::GenericParam::Lifetime(_) => Ok(()),
             _ => Err(syn::Error::new(
                 item_fn.sig.ident.span(),
                 "Functions exported to lua can't have generic parameters.",
             )),
-        })
-        .collect::<syn::Result<()>>()?;
+        })?;
 
     // Async functions are not allowed
     if item_fn.sig.asyncness.is_some() {
@@ -438,7 +441,7 @@ fn analyze_lua_const(
         .lua_attr
         .under
         .clone()
-        .unwrap_or("Default".into());
+        .unwrap_or_else(|| "Default".into());
     let register_const_fn_item = quote! {
         #[allow(non_snake_case)]
         pub fn #register_const_fn_ident(lua: &mlua::Lua) -> mlua::Result<()> {
@@ -565,7 +568,7 @@ fn collect_lua_impl_attrs(attrs: &mut Vec<Attribute>) -> bool {
         panic!("Only one #[lua_impl] annotation is supported per impl block.")
     }
 
-    lua_impl_attrs.len() > 0
+    !lua_impl_attrs.is_empty()
 }
 
 pub(crate) fn blackjack_lua_module2(
@@ -596,33 +599,29 @@ pub(crate) fn blackjack_lua_module2(
                     if collect_lua_impl_attrs(&mut item_impl.attrs) {
                         let mut to_delete = vec![];
                         for (i, impl_item) in item_impl.items.iter_mut().enumerate() {
-                            match impl_item {
-                                syn::ImplItem::Method(item_method) => {
-                                    // Empty methods are only used to tell the
-                                    // macro to forward this method which is
-                                    // declared somewhere else, so remove the
-                                    // declaration to avoid rustc complaining
-                                    // about an empty conflicting method.
-                                    if is_empty_method(&item_method) {
-                                        to_delete.push(i);
-                                    }
-
-                                    let method_attributes =
-                                        collect_function_attributes(&mut item_method.attrs);
-                                    let class_name =
-                                        item_impl.self_ty.to_token_stream().to_string();
-                                    if let Some(method_attrs) = method_attributes {
-                                        let mut item_fn = GlobalFnOrMethod {
-                                            sig: &mut item_method.sig,
-                                        };
-                                        fn_defs.push(analyze_lua_method_fn(
-                                            &mut item_fn,
-                                            class_name,
-                                            &method_attrs,
-                                        )?);
-                                    }
+                            if let syn::ImplItem::Method(item_method) = impl_item {
+                                // Empty methods are only used to tell the
+                                // macro to forward this method which is
+                                // declared somewhere else, so remove the
+                                // declaration to avoid rustc complaining
+                                // about an empty conflicting method.
+                                if is_empty_method(item_method) {
+                                    to_delete.push(i);
                                 }
-                                _ => { /* Ignore */ }
+
+                                let method_attributes =
+                                    collect_function_attributes(&mut item_method.attrs);
+                                let class_name = item_impl.self_ty.to_token_stream().to_string();
+                                if let Some(method_attrs) = method_attributes {
+                                    let mut item_fn = GlobalFnOrMethod {
+                                        sig: &mut item_method.sig,
+                                    };
+                                    fn_defs.push(analyze_lua_method_fn(
+                                        &mut item_fn,
+                                        class_name,
+                                        &method_attrs,
+                                    )?);
+                                }
                             }
                         }
                         // Execute the deferred deletes
@@ -788,7 +787,7 @@ impl LuaFnSignature {
     /// let a = a.borrow::<HalfEdgeMesh>()?;
     /// let mut c = c.borrow_mut::<PerlinNoise>()?;
     /// ```
-    fn code_for_fn_borrows<'a>(&'a self) -> impl Iterator<Item = TokenStream> + 'a {
+    fn code_for_fn_borrows(&self) -> impl Iterator<Item = TokenStream> + '_ {
         self.inputs.iter().filter_map(|arg| {
             let name = &arg.name;
             let typ = &arg.typ;
@@ -855,7 +854,7 @@ impl LuaFnSignature {
     /// ```ignore
     /// &a, b, &mut c
     /// ```
-    fn code_for_fn_invoke_args<'a>(&'a self) -> impl Iterator<Item = TokenStream> + 'a {
+    fn code_for_fn_invoke_args(&self) -> impl Iterator<Item = TokenStream> + '_ {
         self.inputs
             .iter()
             .filter_map(|LuaFnArg { kind, name, .. }| match kind {

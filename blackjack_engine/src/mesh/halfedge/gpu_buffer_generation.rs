@@ -287,9 +287,8 @@ impl HalfEdgeMesh {
 
             let tangent = normal.cross(bitangent);
 
-            positions.extend(&[src_pos, dst_pos]);
-
-            positions.extend(&[
+            positions.extend([src_pos, dst_pos]);
+            positions.extend([
                 dst_pos,
                 dst_pos + 0.30 * edge_length * tangent.lerp(-bitangent, 2.0 / 3.0),
             ]);
