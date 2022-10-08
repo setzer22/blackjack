@@ -317,7 +317,18 @@ impl RootViewport {
                 face: face_routine,
             },
         );
+
+        // Use error scopes to prevent wgpu validation errors from crashing.
+        render_ctx
+            .renderer
+            .device
+            .push_error_scope(wgpu::ErrorFilter::Validation);
+
         graph.execute(&render_ctx.renderer, frame, cmd_bufs, &ready);
+
+        if let Some(error) = pollster::block_on(render_ctx.renderer.device.pop_error_scope()) {
+            println!("WGPU VALIDATION ERROR: {error}");
+        }
     }
 }
 
