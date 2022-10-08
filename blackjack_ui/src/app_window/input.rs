@@ -71,7 +71,7 @@ impl InputSystem {
             // Cursor moves are always registered. The raw (untransformed) mouse
             // position is also stored so we know if the mosue is over the
             // viewport on the next events.
-            WindowEvent::CursorMoved { position, .. } if mouse_in_viewport => {
+            WindowEvent::CursorMoved { position, .. } => {
                 self.mouse.last_pos_raw = Some(Vec2::new(position.x as f32, position.y as f32));
 
                 let position = viewport_relative_position(
@@ -80,8 +80,12 @@ impl InputSystem {
                     viewport_rect,
                     1.0, // zoom doesn't affect cursor on this viewport
                 );
-                self.mouse
-                    .on_cursor_move(Vec2::new(position.x as f32, position.y as f32));
+                // We always update the raw mouse position, but the real mouse
+                // position is not updated if the mouse is captured elsewhere.
+                if !mouse_captured_elsewhere {
+                    self.mouse
+                        .on_cursor_move(Vec2::new(position.x as f32, position.y as f32));
+                }
             }
             // Wheel events will only get registered when the cursor is inside the viewport
             WindowEvent::MouseWheel { delta, .. } if mouse_in_viewport => match delta {
