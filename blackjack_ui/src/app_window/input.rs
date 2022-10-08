@@ -54,22 +54,24 @@ impl InputSystem {
         event: &WindowEvent,
         parent_scale: f32,
         viewport_rect: egui::Rect,
+        mouse_captured_elsewhere: bool,
     ) {
-        let mouse_in_viewport = self
-            .mouse
-            .last_pos_raw
-            .map(|pos| {
-                viewport_rect
-                    .scale_from_origin(parent_scale)
-                    .contains(egui::pos2(pos.x, pos.y))
-            })
-            .unwrap_or(false);
+        let mouse_in_viewport = !mouse_captured_elsewhere
+            && self
+                .mouse
+                .last_pos_raw
+                .map(|pos| {
+                    viewport_rect
+                        .scale_from_origin(parent_scale)
+                        .contains(egui::pos2(pos.x, pos.y))
+                })
+                .unwrap_or(false);
 
         match event {
             // Cursor moves are always registered. The raw (untransformed) mouse
             // position is also stored so we know if the mosue is over the
             // viewport on the next events.
-            WindowEvent::CursorMoved { position, .. } => {
+            WindowEvent::CursorMoved { position, .. } if mouse_in_viewport => {
                 self.mouse.last_pos_raw = Some(Vec2::new(position.x as f32, position.y as f32));
 
                 let position = viewport_relative_position(

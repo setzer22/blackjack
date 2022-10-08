@@ -65,11 +65,13 @@ impl GraphEditor {
         parent_scale: f32,
         viewport_rect: egui::Rect,
         mut event: winit::event::WindowEvent,
+        mouse_captured_elsewhere: bool,
     ) {
-        let mouse_in_viewport = self
-            .raw_mouse_position
-            .map(|pos| viewport_rect.scale_from_origin(parent_scale).contains(pos))
-            .unwrap_or(false);
+        let mouse_in_viewport = !mouse_captured_elsewhere
+            && self
+                .raw_mouse_position
+                .map(|pos| viewport_rect.scale_from_origin(parent_scale).contains(pos))
+                .unwrap_or(false);
 
         match &mut event {
             // Filter out scaling / resize events
@@ -89,10 +91,15 @@ impl GraphEditor {
                     self.zoom_level(),
                 );
             }
-            // Ignore mouse events when clicking outside the editor area. This
-            // prevents a bug where clicking on the inspector window while a
-            // node is selected disables the current selection.
-            winit::event::WindowEvent::MouseInput { .. } if !mouse_in_viewport => return,
+            // Ignore mouse press events when clicking outside the editor
+            // area. This prevents a bug where clicking on the inspector
+            // window while a node is selected disables the current
+            // selection.
+            winit::event::WindowEvent::MouseInput {
+                state: winit::event::ElementState::Pressed,
+                ..
+            } if !mouse_in_viewport => return,
+
             winit::event::WindowEvent::MouseWheel { delta, .. } if mouse_in_viewport => {
                 let mouse_pos = if let Some(raw_pos) = self.raw_mouse_position {
                     viewport_relative_position(raw_pos.to_winit(), parent_scale, viewport_rect, 1.0)

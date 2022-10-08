@@ -38,6 +38,7 @@ pub struct RootViewport {
     code_viewer_open: bool,
     code_viewer_code: Option<String>,
     lua_runtime: LuaRuntime,
+    mouse_captured_by_split: bool,
 }
 
 /// The application context is state that is global to an instance of blackjack.
@@ -130,7 +131,8 @@ impl RootViewport {
             code_viewer_code: None,
             // TODO: Hardcoded node libraries path. Read from cmd line?
             lua_runtime: LuaRuntime::initialize_with_std("./blackjack_lua/".into())
-                .expect("Init lua should not fail"),
+                .unwrap_or_else(|err| panic!("Init lua should not fail. {err}")),
+            mouse_captured_by_split: false,
         }
     }
 
@@ -169,11 +171,13 @@ impl RootViewport {
                     parent_scale,
                     self.offscreen_viewports[&OffscreenViewport::GraphEditor].rect,
                     event.clone(),
+                    self.mouse_captured_by_split,
                 );
                 self.viewport_3d.on_winit_event(
                     parent_scale,
                     self.offscreen_viewports[&OffscreenViewport::Viewport3d].rect,
                     event.clone(),
+                    self.mouse_captured_by_split,
                 )
             }
         }
@@ -216,6 +220,14 @@ impl RootViewport {
 
         egui::CentralPanel::default().show(&self.egui_context.clone(), |ui| {
             let mut split_tree = self.app_context.split_tree.clone();
+
+            impl viewport_split::PayloadTrait for RootViewport {
+                fn notify_interacted(&mut self) {
+                    self.mouse_captured_by_split = true;
+                }
+            }
+
+            self.mouse_captured_by_split = false; // Will be set by `show`.
             split_tree.show(ui, self, Self::show_leaf);
             self.app_context.split_tree = split_tree;
         });

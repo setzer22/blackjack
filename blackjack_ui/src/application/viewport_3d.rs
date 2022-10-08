@@ -125,9 +125,14 @@ impl Viewport3d {
         parent_scale: f32,
         viewport_rect: egui::Rect,
         event: winit::event::WindowEvent,
+        mouse_captured_elsewhere: bool,
     ) {
-        self.input
-            .on_window_event(&event, parent_scale, viewport_rect);
+        self.input.on_window_event(
+            &event,
+            parent_scale,
+            viewport_rect,
+            mouse_captured_elsewhere,
+        );
     }
 
     fn update_camera(&mut self, render_ctx: &mut RenderContext) {
