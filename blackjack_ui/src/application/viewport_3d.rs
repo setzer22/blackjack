@@ -196,28 +196,35 @@ impl Viewport3d {
         Vec4::splat(0.25)
     }
 
-    fn get_resolution(&self) -> UVec2 {
+    pub fn get_resolution(&self) -> UVec2 {
         UVec2::new(
             (self.viewport_rect.width() * self.parent_scale) as u32,
             (self.viewport_rect.height() * self.parent_scale) as u32,
         )
     }
 
+    /// Returns Some(render_target) when the viewport should be drawn by the
+    /// calling context.
     pub fn add_to_graph<'node>(
         &'node mut self,
         graph: &mut r3::RenderGraph<'node>,
         ready: &r3::ReadyData,
         viewport_routines: super::ViewportRoutines<'node>,
-    ) -> r3::RenderTargetHandle {
-        rendergraph::blackjack_viewport_rendergraph(
-            graph,
-            ready,
-            viewport_routines,
-            self.get_resolution(),
-            r3::SampleCount::One,
-            Self::ambient_light(),
-            &self.settings,
-        )
+    ) -> Option<r3::RenderTargetHandle> {
+        let resolution = self.get_resolution();
+        if resolution.x == 0 || resolution.y == 0 {
+            None
+        } else {
+            Some(rendergraph::blackjack_viewport_rendergraph(
+                graph,
+                ready,
+                viewport_routines,
+                self.get_resolution(),
+                r3::SampleCount::One,
+                Self::ambient_light(),
+                &self.settings,
+            ))
+        }
     }
 
     pub fn show_ui(

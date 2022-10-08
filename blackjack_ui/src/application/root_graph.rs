@@ -27,7 +27,11 @@ impl RootViewport {
         } = self;
 
         // --- Draw child UIs ---
+        //
+        // NOTE: We don't draw empty viewports because that leads to wgpu
+        // validation errors.
         let parent_scale = egui_context.pixels_per_point();
+
         let graph_texture = graph_editor.add_draw_to_graph(
             graph,
             offscreen_viewports[&OffscreenViewport::GraphEditor].rect,
@@ -51,8 +55,8 @@ impl RootViewport {
             depth_stencil: None,
         });
 
-        let graph_handle = builder.add_render_target_input(graph_texture);
-        let viewport_3d_handle = builder.add_render_target_input(viewport_3d_texture);
+        let graph_handle = graph_texture.map(|t| builder.add_render_target_input(t));
+        let viewport_3d_handle = viewport_3d_texture.map(|t| builder.add_render_target_input(t));
 
         let renderpass_pt = builder.passthrough_ref_mut(renderpass);
         let screen_descriptor_pt = builder.passthrough_ref_mut(screen_descriptor);
@@ -86,30 +90,34 @@ impl RootViewport {
                 // --- Register offscreen viewports ---
 
                 // Graph editor
-                let graph_texture = graph_data.get_render_target(graph_handle);
-                let graph_texture_egui = renderpass.register_native_texture(
-                    &renderer.device,
-                    graph_texture,
-                    wgpu::FilterMode::Linear,
-                );
-                offscreen_viewports
-                    .entry(OffscreenViewport::GraphEditor)
-                    .and_modify(|vwp| {
-                        vwp.texture_id = Some(graph_texture_egui);
-                    });
+                if let Some(graph_handle) = graph_handle {
+                    let graph_texture = graph_data.get_render_target(graph_handle);
+                    let graph_texture_egui = renderpass.register_native_texture(
+                        &renderer.device,
+                        graph_texture,
+                        wgpu::FilterMode::Linear,
+                    );
+                    offscreen_viewports
+                        .entry(OffscreenViewport::GraphEditor)
+                        .and_modify(|vwp| {
+                            vwp.texture_id = Some(graph_texture_egui);
+                        });
+                }
 
                 // Viewport 3d
-                let viewport_3d_texture = graph_data.get_render_target(viewport_3d_handle);
-                let viewport_3d_texture_egui = renderpass.register_native_texture(
-                    &renderer.device,
-                    viewport_3d_texture,
-                    wgpu::FilterMode::Linear,
-                );
-                offscreen_viewports
-                    .entry(OffscreenViewport::Viewport3d)
-                    .and_modify(|vwp| {
-                        vwp.texture_id = Some(viewport_3d_texture_egui);
-                    });
+                if let Some(viewport_3d_handle) = viewport_3d_handle {
+                    let viewport_3d_texture = graph_data.get_render_target(viewport_3d_handle);
+                    let viewport_3d_texture_egui = renderpass.register_native_texture(
+                        &renderer.device,
+                        viewport_3d_texture,
+                        wgpu::FilterMode::Linear,
+                    );
+                    offscreen_viewports
+                        .entry(OffscreenViewport::Viewport3d)
+                        .and_modify(|vwp| {
+                            vwp.texture_id = Some(viewport_3d_texture_egui);
+                        });
+                }
 
                 renderpass.execute_with_renderpass(rpass, &paint_jobs, screen_descriptor);
             },
