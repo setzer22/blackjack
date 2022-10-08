@@ -14,6 +14,7 @@ tracy = ["profiling/profile-with-tracy"]
 
 [dependencies]
 # Workspace dependencies
+blackjack_macros = { path = "../blackjack_macros/" }
 blackjack_commons = { path = "../blackjack_commons" }
 
 # Crates.io crates
@@ -39,3 +40,5 @@ noise = "0.7"
 rstar = "0.9.3"
 wavefront_rs = "1.0.4"
 derive_more = "0.99"
+inventory = "0.3.0"
+ndarray = "0.15.6"

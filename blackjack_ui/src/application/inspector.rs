@@ -5,8 +5,9 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 use crate::prelude::*;
-use blackjack_engine::prelude::{
-    selection::SelectionExpression, ChannelKeyType, ChannelValueType, HalfEdgeMesh,
+use blackjack_engine::{
+    lua_engine::RenderableThing,
+    prelude::{selection::SelectionExpression, ChannelKeyType, ChannelValueType, HalfEdgeMesh},
 };
 use egui::*;
 use egui_node_graph::{InputId, WidgetValueTrait};
@@ -82,27 +83,36 @@ impl InspectorTabs {
     pub fn ui(
         &mut self,
         ui: &mut Ui,
-        mesh: Option<&HalfEdgeMesh>,
+        renderable_thing: Option<&RenderableThing>,
         editor_state: &mut graph::GraphEditorState,
     ) {
-        ui.horizontal(|ui| {
-            ui.selectable_value(
-                &mut self.current_view,
-                InspectorTab::Properties,
-                "Inspector",
-            );
-            ui.selectable_value(
-                &mut self.current_view,
-                InspectorTab::Spreadsheet,
-                "Spreadsheet",
-            );
-            ui.selectable_value(&mut self.current_view, InspectorTab::Debug, "Debug");
-        });
-        ui.separator();
-        match self.current_view {
-            InspectorTab::Properties => self.properties.ui(ui, editor_state),
-            InspectorTab::Spreadsheet => self.spreadsheet.ui(ui, mesh),
-            InspectorTab::Debug => self.debug.ui(ui, mesh),
+        match renderable_thing {
+            Some(RenderableThing::HalfEdgeMesh(mesh)) => {
+                ui.horizontal(|ui| {
+                    ui.selectable_value(
+                        &mut self.current_view,
+                        InspectorTab::Properties,
+                        "Inspector",
+                    );
+                    ui.selectable_value(
+                        &mut self.current_view,
+                        InspectorTab::Spreadsheet,
+                        "Spreadsheet",
+                    );
+                    ui.selectable_value(&mut self.current_view, InspectorTab::Debug, "Debug");
+                });
+                ui.separator();
+
+                match self.current_view {
+                    InspectorTab::Properties => self.properties.ui(ui, editor_state),
+                    InspectorTab::Spreadsheet => self.spreadsheet.ui(ui, Some(mesh)),
+                    InspectorTab::Debug => self.debug.ui(ui, Some(mesh)),
+                }
+            }
+            Some(RenderableThing::HeightMap(_)) => {
+                // TODO: @Heightmap
+            }
+            None => { /**/ }
         }
     }
 }

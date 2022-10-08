@@ -46,8 +46,8 @@ fn vs_main(
 
     out.clip_position = pos;
     // TODO: Compute near_point / far_point
-    out.near_point = unproject_point(vec3<f32>(pos.x, pos.y, 0.1), matrices.inv_view, matrices.inv_proj).xyz; 
-    out.far_point = unproject_point(vec3<f32>(pos.x, pos.y, 1.0), matrices.inv_view, matrices.inv_proj).xyz; 
+    out.near_point = unproject_point(vec3<f32>(pos.x, pos.y, 0.1), matrices.inv_view, matrices.inv_proj).xyz;
+    out.far_point = unproject_point(vec3<f32>(pos.x, pos.y, 1.0), matrices.inv_view, matrices.inv_proj).xyz;
 
     return out;
 }
@@ -82,11 +82,11 @@ fn compute_depth(frag_pos_3d: vec3<f32>) -> f32 {
 }
 
 fn fading(frag_pos_3d: vec3<f32>, depth: f32) -> f32 {
-    let znear = 0.01;
+    let znear = 0.001;
     // If you're using far plane at infinity as described here, then linearized depth is simply znear / depth.
     // From: https://www.reddit.com/r/GraphicsProgramming/comments/f9zwin/linearising_reverse_depth_buffer/
     let linear_depth = znear / depth;
-    return max(0.0, 1.5 - linear_depth);
+    return max(0.0, 2.5 - linear_depth);
 }
 
 @fragment

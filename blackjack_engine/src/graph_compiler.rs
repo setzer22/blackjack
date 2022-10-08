@@ -98,9 +98,15 @@ struct CodegenContext {
     external_parameters: Vec<ExternalParameterDef>,
     /// The length of an indent, in spaces.
     indent_length: usize,
+    /// Is the graph being compiled for a node side effect (i.e. a "⛭ Run" button)
+    is_side_effect: bool,
 }
 
-pub fn compile_graph(graph: &BjkGraph, final_node: BjkNodeId) -> Result<CompiledProgram> {
+pub fn compile_graph(
+    graph: &BjkGraph,
+    final_node: BjkNodeId,
+    is_side_effect: bool,
+) -> Result<CompiledProgram> {
     let input_params_ident = "input_params";
     let mut ctx = CodegenContext {
         indent_length: 4,
@@ -108,6 +114,7 @@ pub fn compile_graph(graph: &BjkGraph, final_node: BjkNodeId) -> Result<Compiled
         lua_program: String::new(),
         outputs_cache: Default::default(),
         external_parameters: Default::default(),
+        is_side_effect,
     };
 
     writeln!(ctx.lua_program, "function main({input_params_ident})")?;
@@ -138,9 +145,7 @@ fn codegen_node(
     }
     macro_rules! emit_return {
         ($name:expr) => {
-            if target {
-                emit_line!("return {};", $name);
-            }
+            emit_line!("return {};", $name);
         };
     }
 
@@ -204,11 +209,16 @@ fn codegen_node(
 
     let node_name = &node.op_name;
 
-    emit_line!("local {output_addr} = NodeLibrary:callNode('{node_name}', {args})");
+    emit_line!("local {output_addr} = require('node_library'):callNode('{node_name}', {args})");
 
-    // TODO: The return value is not always out_mesh. This should be stored
-    // somehow in the node definition.
-    emit_return!(format!("{output_addr}.out_mesh"));
+    if target && !ctx.is_side_effect {
+        // NOTE: Return is ignored if the current compiled graph is a side effect invovation.
+        let return_val = node
+            .return_value
+            .as_ref()
+            .ok_or_else(|| anyhow!("The target node should return something"))?;
+        emit_return!(format!("{output_addr}.{return_val}"));
+    }
 
     Ok(())
 }
@@ -220,12 +230,12 @@ mod tests {
     pub fn compile_simple_graph_test() {
         let mut graph = BjkGraph::new();
 
-        let cube = graph.add_node("Box");
+        let cube = graph.add_node("Box", Some("out_mesh".into()));
         graph.add_input(cube, "origin", DataType::Vector).unwrap();
         graph.add_input(cube, "size", DataType::Scalar).unwrap();
         graph.add_output(cube, "out_mesh", DataType::Mesh).unwrap();
 
-        let transform = graph.add_node("Translate");
+        let transform = graph.add_node("Translate", Some("out_mesh".into()));
         graph.add_input(transform, "mesh", DataType::Mesh).unwrap();
         graph
             .add_input(transform, "translate", DataType::Vector)
@@ -238,14 +248,14 @@ mod tests {
             .add_connection(cube, "out_mesh", transform, "mesh")
             .unwrap();
 
-        let program = compile_graph(&graph, transform).unwrap();
+        let program = compile_graph(&graph, transform, false).unwrap();
 
         let expected_output = r#"function main(input_params)
-    local Box_1v1_out = NodeLibrary:callNode('Box', {
+    local Box_1v1_out = require('node_library'):callNode('Box', {
         origin = input_params.Box_1v1_origin,
         size = input_params.Box_1v1_size,
     })
-    local Translate_2v1_out = NodeLibrary:callNode('Translate', {
+    local Translate_2v1_out = require('node_library'):callNode('Translate', {
         mesh = Box_1v1_out.out_mesh,
         translate = input_params.Translate_2v1_translate,
     })

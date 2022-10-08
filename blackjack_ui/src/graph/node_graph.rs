@@ -6,6 +6,7 @@
 
 use std::borrow::Cow;
 
+use crate::custom_widgets::smart_dragvalue::SmartDragValue;
 use crate::{application::code_viewer::code_edit_ui, prelude::*};
 use egui::RichText;
 use egui_node_graph::{
@@ -16,8 +17,8 @@ use serde::{Deserialize, Serialize};
 
 use blackjack_engine::{
     graph::{
-        BlackjackParameter, BlackjackValue, DataType, InputValueConfig, NodeDefinition,
-        NodeDefinitions,
+        BlackjackParameter, BlackjackValue, DataType, FilePathMode, InputValueConfig,
+        NodeDefinition, NodeDefinitions,
     },
     prelude::selection::SelectionExpression,
 };
@@ -60,6 +61,7 @@ impl DataTypeTrait<CustomGraphState> for DataTypeUi {
     fn data_type_color(&self, _user_state: &mut CustomGraphState) -> egui::Color32 {
         match self.0 {
             DataType::Mesh => color_from_hex("#b43e3e").unwrap(),
+            DataType::HeightMap => color_from_hex("#33673b").unwrap(),
             DataType::Vector => color_from_hex("#1A535C").unwrap(),
             DataType::Scalar => color_from_hex("#4ecdc4").unwrap(),
             DataType::Selection => color_from_hex("#f7fff7").unwrap(),
@@ -73,6 +75,7 @@ impl DataTypeTrait<CustomGraphState> for DataTypeUi {
             DataType::Scalar => "scalar",
             DataType::Selection => "selection",
             DataType::Mesh => "mesh",
+            DataType::HeightMap => "heightmap",
             DataType::String => "string",
         })
     }
@@ -108,7 +111,7 @@ impl NodeDataTrait for NodeData {
             // Show 'Enable' button for nodes that output a mesh
             let can_be_enabled = graph[node_id]
                 .outputs(graph)
-                .any(|output| output.typ.0 == DataType::Mesh);
+                .any(|output| output.typ.0.can_be_enabled());
             let is_active = user_state.active_node == Some(node_id);
 
             if can_be_enabled {
@@ -222,6 +225,7 @@ impl NodeTemplateTrait for NodeDefinitionUi {
                 DataType::Scalar => InputParamKind::ConnectionOrConstant,
                 DataType::Selection => InputParamKind::ConnectionOrConstant,
                 DataType::Mesh => InputParamKind::ConnectionOnly,
+                DataType::HeightMap => InputParamKind::ConnectionOnly,
                 DataType::String => InputParamKind::ConnectionOrConstant,
             };
 
@@ -249,7 +253,9 @@ impl NodeTemplateTrait for NodeDefinitionUi {
                             default_selection.unparse(),
                             Some(default_selection.clone()),
                         ),
-                        InputValueConfig::FilePath { ref default_path } => BlackjackValue::String(
+                        InputValueConfig::FilePath {
+                            ref default_path, ..
+                        } => BlackjackValue::String(
                             default_path.as_ref().cloned().unwrap_or_else(|| "".into()),
                         ),
                         InputValueConfig::String {
@@ -278,26 +284,58 @@ impl WidgetValueTrait for ValueTypeUi {
     type Response = CustomNodeResponse;
 
     fn value_widget(&mut self, param_name: &str, ui: &mut egui::Ui) -> Vec<Self::Response> {
+        const DRAG_SPEEDS: &[f64] = &[100.0, 10.0, 1.0, 0.1, 0.01, 0.001, 0.0001];
+        const DRAG_LABELS: &[&str] = &["100", "10", "1", ".1", ".01", ".001", ".0001"];
+
         match (&mut self.0.value, &self.0.config) {
             (BlackjackValue::Vector(vector), InputValueConfig::Vector { .. }) => {
                 ui.label(param_name);
                 ui.horizontal(|ui| {
                     ui.label("x");
-                    ui.add(egui::DragValue::new(&mut vector.x).speed(0.1));
+                    ui.add(
+                        SmartDragValue::new(&mut vector.x, DRAG_SPEEDS, DRAG_LABELS)
+                            .speed(1.0)
+                            .decimals(5),
+                    );
                     ui.label("y");
-                    ui.add(egui::DragValue::new(&mut vector.y).speed(0.1));
+                    ui.add(
+                        SmartDragValue::new(&mut vector.y, DRAG_SPEEDS, DRAG_LABELS)
+                            .speed(1.0)
+                            .decimals(5),
+                    );
                     ui.label("z");
-                    ui.add(egui::DragValue::new(&mut vector.z).speed(0.1));
+                    ui.add(
+                        SmartDragValue::new(&mut vector.z, DRAG_SPEEDS, DRAG_LABELS)
+                            .speed(1.0)
+                            .decimals(5),
+                    );
                 });
             }
-            (BlackjackValue::Scalar(value), InputValueConfig::Scalar { min, max, .. }) => {
+            (
+                BlackjackValue::Scalar(value),
+                InputValueConfig::Scalar {
+                    min,
+                    max,
+                    soft_min,
+                    soft_max,
+                    num_decimals,
+                    ..
+                },
+            ) => {
                 ui.horizontal(|ui| {
                     ui.label(param_name);
                     ui.add(
-                        egui::DragValue::new(value)
-                            .speed(0.1)
-                            .clamp_range(*min..=*max),
-                    );
+                        SmartDragValue::new(value, DRAG_SPEEDS, DRAG_LABELS)
+                            .speed(1.0)
+                            .clamp_range_hard(
+                                min.unwrap_or(f32::NEG_INFINITY)..=max.unwrap_or(f32::INFINITY),
+                            )
+                            .clamp_range_soft(
+                                soft_min.unwrap_or(f32::NEG_INFINITY)
+                                    ..=soft_max.unwrap_or(f32::INFINITY),
+                            )
+                            .decimals(num_decimals.unwrap_or(5) as usize),
+                    )
                 });
             }
             (BlackjackValue::String(string), InputValueConfig::Enum { values, .. }) => {
@@ -309,11 +347,16 @@ impl WidgetValueTrait for ValueTypeUi {
                         }
                     });
             }
-            (BlackjackValue::String(path), InputValueConfig::FilePath { .. }) => {
+            (BlackjackValue::String(path), InputValueConfig::FilePath { file_path_mode, .. }) => {
                 ui.label(param_name);
                 ui.horizontal(|ui| {
                     if ui.button("Select").clicked() {
-                        if let Some(new_path) = rfd::FileDialog::new().save_file() {
+                        let new_path = match file_path_mode {
+                            FilePathMode::Open => rfd::FileDialog::new().pick_file(),
+                            FilePathMode::Save => rfd::FileDialog::new().save_file(),
+                        };
+
+                        if let Some(new_path) = new_path {
                             *path = new_path
                                 .into_os_string()
                                 .into_string()

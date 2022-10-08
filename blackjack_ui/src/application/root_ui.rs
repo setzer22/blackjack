@@ -89,7 +89,7 @@ impl RootViewport {
                         .offscreen_viewports
                         .get_mut(&OffscreenViewport::Viewport3d)
                         .unwrap(),
-                    payload.app_context.mesh.as_ref(),
+                    payload.app_context.renderable_thing.as_ref(),
                 );
             }
             "graph_editor" => {
@@ -101,7 +101,7 @@ impl RootViewport {
             }
             "inspector" => payload.inspector_tabs.ui(
                 ui,
-                payload.app_context.mesh.as_ref(),
+                payload.app_context.renderable_thing.as_ref(),
                 &mut payload.graph_editor.editor_state,
             ),
             _ => panic!("Invalid split name {}", name),

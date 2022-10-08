@@ -4,6 +4,8 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+use std::ops::{Add, Mul, Sub};
+
 use float_ord::FloatOrd;
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -30,4 +32,11 @@ impl ToVec<glam::Vec3> for Vec3Ord {
     fn to_vec(&self) -> glam::Vec3 {
         glam::Vec3::new(self.0[0].0, self.0[1].0, self.0[2].0)
     }
+}
+
+pub fn lerp<T>(start: T, end: T, t: f32) -> T
+where
+    T: Copy + Add<Output = T> + Sub<Output = T> + Mul<f32, Output = T>,
+{
+    start + (end - start) * t
 }

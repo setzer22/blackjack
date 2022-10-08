@@ -13,6 +13,10 @@ use mlua::{Table, ToLua};
 use serde::{Deserialize, Serialize};
 use slotmap::SlotMap;
 
+/// Defines helper functions to load old file formats with serde. This allows
+/// some variation in the structs types without breaking the `blj` file format.
+mod serde_compat;
+
 pub struct LuaExpression(pub String);
 
 /// A node has inputs (dependencies) that need to be met. A dependency can be
@@ -35,6 +39,17 @@ pub enum DataType {
     Selection,
     Mesh,
     String,
+    HeightMap,
+}
+
+impl DataType {
+    /// Returns whether this datatype can be rendered into a final artifact
+    pub fn can_be_enabled(&self) -> bool {
+        match self {
+            DataType::Mesh | DataType::HeightMap => true,
+            DataType::Vector | DataType::Scalar | DataType::Selection | DataType::String => false,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -86,6 +101,9 @@ pub struct Output {
 /// A node in the blackjack graph
 pub struct BjkNode {
     pub op_name: String,
+    /// When this node is the target of a graph, this stores the name of the
+    /// output parameter that should be displayed (typically, a mesh).
+    pub return_value: Option<String>,
     pub inputs: Vec<InputParameter>,
     pub outputs: Vec<Output>,
 }
@@ -106,6 +124,21 @@ pub struct BjkGraph {
     pub nodes: SlotMap<BjkNodeId, BjkNode>,
 }
 
+/// Specifies the ways in which the file picker dialog for an
+/// `InputValueConfig::FilePath` can work.
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
+pub enum FilePathMode {
+    /// The file picker will only let the user select an existing file
+    Open,
+    /// The file picker will let the user choose a new file or an existing one,
+    /// with an overwrite warning.
+    Save,
+}
+
+fn default_file_path_mode() -> FilePathMode {
+    FilePathMode::Save // Kept for backwards compatibility
+}
+
 /// The settings to describe an input value in a node template. This information
 /// is used by the UI, or engine integrations, to know which default values
 /// should be displayed in widgets when no other value is provided.
@@ -122,8 +155,16 @@ pub enum InputValueConfig {
     },
     Scalar {
         default: f32,
-        min: f32,
-        max: f32,
+        #[serde(deserialize_with = "serde_compat::de_option_or_f32")]
+        min: Option<f32>,
+        #[serde(deserialize_with = "serde_compat::de_option_or_f32")]
+        max: Option<f32>,
+        #[serde(default)]
+        soft_min: Option<f32>,
+        #[serde(default)]
+        soft_max: Option<f32>,
+        #[serde(default)]
+        num_decimals: Option<u32>,
     },
     Selection {
         default_selection: SelectionExpression,
@@ -134,6 +175,8 @@ pub enum InputValueConfig {
     },
     FilePath {
         default_path: Option<String>,
+        #[serde(default = "default_file_path_mode")]
+        file_path_mode: FilePathMode,
     },
     String {
         multiline: bool,
@@ -191,6 +234,7 @@ fn data_type_from_str(s: &str) -> Result<DataType> {
         "scalar" => Ok(DataType::Scalar),
         "selection" => Ok(DataType::Selection),
         "mesh" => Ok(DataType::Mesh),
+        "heightmap" => Ok(DataType::HeightMap),
         "enum" => Ok(DataType::String),
         "file" => Ok(DataType::String),
         "string" => Ok(DataType::String),
@@ -210,13 +254,17 @@ impl InputDefinition {
             },
             DataType::Scalar => InputValueConfig::Scalar {
                 default: table.get::<_, f32>("default")?,
-                min: table.get::<_, f32>("min")?,
-                max: table.get::<_, f32>("max")?,
+                min: table.get::<_, Option<f32>>("min")?,
+                max: table.get::<_, Option<f32>>("max")?,
+                soft_min: table.get::<_, Option<f32>>("soft_min")?,
+                soft_max: table.get::<_, Option<f32>>("soft_max")?,
+                num_decimals: table.get::<_, Option<u32>>("num_decimals")?,
             },
             DataType::Selection => InputValueConfig::Selection {
                 default_selection: SelectionExpression::None,
             },
             DataType::Mesh => InputValueConfig::None,
+            DataType::HeightMap => InputValueConfig::None,
             DataType::String if type_str == "enum" => InputValueConfig::Enum {
                 values: table
                     .get::<_, Table>("values")?
@@ -225,7 +273,17 @@ impl InputDefinition {
                 default_selection: table.get::<_, Option<u32>>("selected")?,
             },
             DataType::String if type_str == "file" => {
-                InputValueConfig::FilePath { default_path: None }
+                let mode = table.get::<_, String>("mode")?;
+                InputValueConfig::FilePath {
+                    default_path: None,
+                    file_path_mode: if mode == "open" {
+                        FilePathMode::Open
+                    } else if mode == "save" {
+                        FilePathMode::Save
+                    } else {
+                        bail!("Undefined mode {mode}")
+                    },
+                }
             }
             DataType::String if type_str == "lua_string" => InputValueConfig::LuaString {},
             DataType::String => InputValueConfig::String {
@@ -298,9 +356,10 @@ impl BjkGraph {
         }
     }
     /// Adds a new empty node to the graph
-    pub fn add_node(&mut self, op_name: impl ToString) -> BjkNodeId {
+    pub fn add_node(&mut self, op_name: impl ToString, return_value: Option<String>) -> BjkNodeId {
         self.nodes.insert(BjkNode {
             op_name: op_name.to_string(),
+            return_value,
             inputs: vec![],
             outputs: vec![],
         })

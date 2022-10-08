@@ -43,7 +43,10 @@ pub fn ui_graph_to_blackjack_graph(graph: &Graph) -> Result<(BjkGraph, NodeMappi
     let mut output_names = SecondaryMap::<OutputId, &str>::new();
 
     for (node_id, node) in &graph.nodes {
-        let bjk_id = bjk_graph.add_node(node.user_data.op_name.clone());
+        let bjk_id = bjk_graph.add_node(
+            node.user_data.op_name.clone(),
+            node.user_data.returns.clone(),
+        );
         mapping.insert(node_id, bjk_id);
         rev_mapping.insert(bjk_id, node_id);
 

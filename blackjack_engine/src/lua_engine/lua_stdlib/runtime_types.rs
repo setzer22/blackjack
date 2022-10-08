@@ -4,11 +4,13 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+use blackjack_commons::utils::transmute_vec;
 use noise::NoiseFn;
 
 use super::*;
 
 #[derive(Debug)]
+#[repr(transparent)]
 pub struct LVec3(pub glam::Vec3);
 impl<'lua> ToLua<'lua> for LVec3 {
     fn to_lua(self, _lua: &'lua Lua) -> mlua::Result<mlua::Value<'lua>> {
@@ -27,12 +29,19 @@ impl<'lua> FromLua<'lua> for LVec3 {
         }
     }
 }
-
-impl UserData for SelectionExpression {}
-
-#[derive(Clone, Debug)]
-pub struct Path(pub std::path::PathBuf);
-impl UserData for Path {}
+impl From<glam::Vec3> for LVec3 {
+    fn from(v: glam::Vec3) -> Self {
+        Self(v)
+    }
+}
+impl LVec3 {
+    /// Unwraps all the internal Vec<LVec3> values.
+    pub fn cast_vector(this: Vec<LVec3>) -> Vec<glam::Vec3> {
+        // SAFETY: LVec3 is marked as #[repr(transparent)] and contains a
+        // single glam::Vec3. Both types are copy and have no Drop logic.
+        unsafe { transmute_vec(this) }
+    }
+}
 
 /// Vertex ids cross the Rust<->Lua boundary a lot, so we can't pay the price of
 /// boxing that a `UserData` requires. Instead we use LightUserData by casting
@@ -81,11 +90,51 @@ fn ligthdata_to_keydata(d: mlua::LightUserData) -> slotmap::KeyData {
 
 impl UserData for ChannelKeyType {}
 impl UserData for ChannelValueType {}
+
 pub struct PerlinNoise(pub noise::Perlin);
-impl UserData for PerlinNoise {
-    fn add_methods<'lua, M: mlua::UserDataMethods<'lua, Self>>(methods: &mut M) {
-        methods.add_method("get_3d", |_lua, this, (x, y, z): (f64, f64, f64)| {
-            Ok(this.0.get([x, y, z]))
-        });
+
+#[blackjack_macros::blackjack_lua_module]
+mod perlin_noise {
+    use super::*;
+
+    /// Constructs a new PerlinNoise
+    #[lua(under = "PerlinNoise")]
+    pub fn new() -> PerlinNoise {
+        PerlinNoise(noise::Perlin::new())
+    }
+
+    #[lua_impl]
+    impl PerlinNoise {
+        /// Sample a standard 3d perlin noise function at coordinates `(x, y, z)`
+        #[lua]
+        pub fn get_3d(&self, x: f64, y: f64, z: f64) -> f64 {
+            // NOTE: Noise crate crashes when given weird numbers. We can't
+            // afford to crash when weird numbers are sent from Lua, so we need
+            // to add this guard here.
+            if x.is_finite() && y.is_finite() && z.is_finite() {
+                self.0.get([x, y, z])
+            } else {
+                f64::NAN
+            }
+        }
+    }
+}
+
+#[blackjack_macros::blackjack_lua_module]
+mod vector_math {
+    use super::*;
+    use glam::Quat;
+
+    /// Return vector `v` rotated around given `axis` and `angle` (in radians).
+    #[lua(under = "NativeMath")]
+    pub fn rotate_around_axis(v: LVec3, axis: LVec3, angle: f32) -> LVec3 {
+        let q = Quat::from_axis_angle(axis.0.normalize(), angle);
+        LVec3(q * v.0)
+    }
+
+    /// Returns the `cross` product of vectors `v` and `v2`.
+    #[lua(under = "NativeMath")]
+    pub fn cross(v: LVec3, v2: LVec3) -> LVec3 {
+        LVec3(v.0.cross(v2.0))
     }
 }

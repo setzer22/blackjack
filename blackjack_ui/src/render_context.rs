@@ -140,12 +140,9 @@ impl RenderContext {
         self.objects.push(self.renderer.add_object(object));
     }
 
-    pub fn set_camera(&mut self, view_matrix: Mat4) {
+    pub fn set_camera(&mut self, view_matrix: Mat4, vfov: f32) {
         self.renderer.set_camera_data(rend3::types::Camera {
-            projection: rend3::types::CameraProjection::Perspective {
-                vfov: 60.0,
-                near: 0.1,
-            },
+            projection: rend3::types::CameraProjection::Perspective { vfov, near: 0.01 },
             view: view_matrix,
         });
     }

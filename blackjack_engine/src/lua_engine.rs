@@ -5,13 +5,21 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 use std::{
-    sync::mpsc::{self, Receiver},
+    sync::{
+        mpsc::{self, Receiver},
+        Arc,
+    },
     time::Duration,
 };
 
-use crate::{graph::NodeDefinitions, graph_compiler::ExternalParameterValues, prelude::*};
+use crate::{
+    graph::NodeDefinitions, graph_compiler::ExternalParameterValues, mesh::heightmap::HeightMap,
+    prelude::*,
+};
 use mlua::{Function, Lua};
 use notify::{DebouncedEvent, Watcher};
+
+use self::lua_stdlib::{load_node_definitions, LuaFileIo, StdLuaFileIo};
 
 pub mod lua_stdlib;
 
@@ -31,18 +39,49 @@ impl<T> ToLuaError<T> for Result<T, TraversalError> {
     }
 }
 
+#[allow(clippy::large_enum_variant)]
+pub enum RenderableThing {
+    HalfEdgeMesh(HalfEdgeMesh),
+    HeightMap(HeightMap),
+}
+
 pub fn run_program<'lua>(
     lua: &'lua Lua,
     lua_program: &str,
     input: &ExternalParameterValues,
-) -> Result<HalfEdgeMesh> {
+) -> Result<RenderableThing> {
     lua.load(lua_program).exec()?;
     let values = input.make_input_table(lua)?;
     let entry_point: Function = lua.globals().get("main")?;
-    let mesh = entry_point
-        .call::<_, HalfEdgeMesh>(values)
+    let result = entry_point
+        .call::<_, mlua::AnyUserData>(values)
         .map_err(|err| anyhow!("{}", err))?;
-    Ok(mesh)
+
+    if result.is::<HalfEdgeMesh>() {
+        Ok(RenderableThing::HalfEdgeMesh(result.take()?))
+    } else if result.is::<HeightMap>() {
+        Ok(RenderableThing::HeightMap(result.take()?))
+    } else {
+        Err(anyhow::anyhow!(
+            "Object {result:?} is not a renderable thing"
+        ))
+    }
+}
+
+/// Like `run_program`, but does not return anything and only runs the code for
+/// its side effects
+pub fn run_program_side_effects<'lua>(
+    lua: &'lua Lua,
+    lua_program: &str,
+    input: &ExternalParameterValues,
+) -> Result<()> {
+    lua.load(lua_program).exec()?;
+    let values = input.make_input_table(lua)?;
+    let entry_point: Function = lua.globals().get("main")?;
+    entry_point
+        .call::<_, mlua::Value>(values)
+        .map_err(|err| anyhow!("{}", err))?;
+    Ok(())
 }
 
 pub struct LuaRuntime {
@@ -50,37 +89,29 @@ pub struct LuaRuntime {
     pub node_definitions: NodeDefinitions,
     pub watcher: notify::RecommendedWatcher,
     pub watcher_channel: Receiver<notify::DebouncedEvent>,
-    pub node_libraries_path: String,
-    #[allow(clippy::type_complexity)]
-    pub load_libraries_fn: Box<dyn Fn(&Lua, &str) -> Result<NodeDefinitions>>,
+    pub lua_io: Arc<dyn LuaFileIo + 'static>,
 }
-
-const NODE_LIBRARIES_PATH: &str = "node_libraries";
 
 impl LuaRuntime {
     /// Initializes and returns the Blackjack Lua runtime. This function will
     /// use the `std::fs` API to load Lua source files. Some integrations may
     /// prefer to use other file reading methods with `initialize_custom`.
     pub fn initialize_with_std(node_libraries_path: String) -> anyhow::Result<LuaRuntime> {
-        Self::initialize_custom(
-            node_libraries_path,
-            lua_stdlib::load_node_libraries_with_std,
-        )
+        Self::initialize_custom(StdLuaFileIo {
+            base_folder: node_libraries_path,
+        })
     }
 
-    pub fn initialize_custom(
-        node_libraries_path: String,
-        load_libraries_fn: impl Fn(&Lua, &str) -> Result<NodeDefinitions> + 'static,
-    ) -> anyhow::Result<LuaRuntime> {
+    pub fn initialize_custom(lua_io: impl LuaFileIo + 'static) -> anyhow::Result<LuaRuntime> {
         let lua = Lua::new();
-        lua_stdlib::load_host_libraries(&lua)?;
-        lua_stdlib::load_lua_libraries(&lua)?;
-        let node_definitions = load_libraries_fn(&lua, &node_libraries_path)?;
+        let lua_io = Arc::new(lua_io);
+        lua_stdlib::load_lua_bindings(&lua, lua_io.clone())?;
+        let node_definitions = load_node_definitions(&lua, lua_io.as_ref())?;
         let (watcher, watcher_channel) = {
             let (tx, rx) = mpsc::channel();
             let mut watcher = notify::watcher(tx, Duration::from_secs(1))?;
             watcher
-                .watch(NODE_LIBRARIES_PATH, notify::RecursiveMode::Recursive)
+                .watch(lua_io.base_folder(), notify::RecursiveMode::Recursive)
                 .unwrap();
             (watcher, rx)
         };
@@ -90,8 +121,7 @@ impl LuaRuntime {
             node_definitions,
             watcher,
             watcher_channel,
-            node_libraries_path,
-            load_libraries_fn: Box::new(load_libraries_fn),
+            lua_io,
         })
     }
 
@@ -103,8 +133,18 @@ impl LuaRuntime {
                 | DebouncedEvent::Remove(_)
                 | DebouncedEvent::Rename(_, _) => {
                     println!("Reloading Lua scripts...");
-                    self.node_definitions =
-                        (self.load_libraries_fn)(&self.lua, &self.node_libraries_path)?;
+                    // Reset the _LOADED table to clear any required libraries
+                    // from the cache. This will trigger reloading of libraries
+                    // when the hot reloaded code first requires them,
+                    // effectively picking up changes in transitively required
+                    // libraries as well.
+                    self.lua
+                        .globals()
+                        .set("_LOADED", self.lua.create_table()?)?;
+
+                    // By calling this, all code under $BLACKJACK_LUA/run will
+                    // be executed and the node definitions will be reloaded.
+                    self.node_definitions = load_node_definitions(&self.lua, self.lua_io.as_ref())?;
                 }
                 _ => {}
             }

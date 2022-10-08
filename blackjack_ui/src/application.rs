@@ -7,6 +7,7 @@
 use std::sync::Arc;
 
 use crate::{
+    cli_args::CLI_ARGS,
     prelude::*,
     rendergraph::{
         face_routine::FaceRoutine, grid_routine::GridRoutine,
@@ -128,7 +129,7 @@ impl RootViewport {
             code_viewer_open: false,
             code_viewer_code: None,
             // TODO: Hardcoded node libraries path. Read from cmd line?
-            lua_runtime: LuaRuntime::initialize_with_std("./node_libraries/".into())
+            lua_runtime: LuaRuntime::initialize_with_std("./blackjack_lua/".into())
                 .expect("Init lua should not fail"),
         }
     }
@@ -181,9 +182,8 @@ impl RootViewport {
     pub fn setup(&mut self, render_ctx: &mut RenderContext) {
         self.app_context.setup(render_ctx);
 
-        let args: Vec<String> = std::env::args().collect();
-        if let Some(load_path) = args.get(1) {
-            self.handle_root_action(AppRootAction::Load(std::path::PathBuf::from(load_path)))
+        if let Some(load) = &CLI_ARGS.load {
+            self.handle_root_action(AppRootAction::Load(std::path::PathBuf::from(load)))
                 .expect("Error loading scene from cli arg");
         }
     }
@@ -257,9 +257,11 @@ impl RootViewport {
             }
             AppRootAction::ExportJack(path) => {
                 if let Some(active_node) = self.graph_editor.custom_state.active_node {
-                    let (program, params) = self
-                        .app_context
-                        .compile_program(&self.graph_editor.editor_state, active_node)?;
+                    let (program, params) = self.app_context.compile_program(
+                        &self.graph_editor.editor_state,
+                        active_node,
+                        false,
+                    )?;
                     let bga = BlackjackJackAsset { program, params };
                     let writer = std::io::BufWriter::new(std::fs::File::create(path)?);
                     ron::ser::to_writer(writer, &bga)?;

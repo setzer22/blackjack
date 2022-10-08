@@ -28,12 +28,26 @@ pub mod graph;
 /// Conversion from hexadecimal string to egui colors and vice-versa.
 pub mod color_hex_utils;
 
+/// Custom egui widgets.
+pub mod custom_widgets;
+
+/// Command line argument parsing.
+pub mod cli_args;
+
 fn main() {
     #[cfg(feature = "tracy")]
     let _client = profiling::tracy_client::Client::start();
 
     // Setup logging
     env_logger::init();
+
+    // Handle luadoc flag
+    if let Some(ldoc_path) = &cli_args::CLI_ARGS.generate_ldoc {
+        use blackjack_engine::lua_engine::lua_stdlib::lua_documentation;
+        lua_documentation::generate_lua_documentation(ldoc_path).unwrap();
+        println!("Wrote ldoc sources to {ldoc_path}");
+        return; // Do nothing else when generating luadoc
+    }
 
     let (app_window, event_loop) = app_window::AppWindow::new();
     app_window.run_app(event_loop);

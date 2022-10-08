@@ -47,8 +47,12 @@ pub mod selection;
 pub mod gpu_buffer_generation;
 pub use gpu_buffer_generation::*;
 
+pub mod halfedge_lua_api;
+
 pub mod channels;
 pub use channels::*;
+
+use self::mappings::MeshMapping;
 
 /// HalfEdge meshes are a type of linked list. This means it is sometimes
 /// impossible to ensure some algorithms will terminate when the mesh is
@@ -56,7 +60,7 @@ pub use channels::*;
 /// number of iterations will be performed before giving an error. This error
 /// should be large enough, as faces with a very large number of vertices may
 /// trigger it.
-pub const MAX_LOOP_ITERATIONS: usize = 512;
+pub const MAX_LOOP_ITERATIONS: usize = 8196;
 
 #[derive(Debug, Default, Clone)]
 pub struct HalfEdge {
@@ -161,71 +165,6 @@ pub type Positions = Channel<VertexId, Vec3>;
 impl MeshConnectivity {
     pub fn new() -> Self {
         Self::default()
-    }
-
-    // Adds a disconnected quad into the mesh. Returns the id to the first
-    // halfedge of the quad
-    pub fn add_quad(
-        &mut self,
-        positions: &mut Positions,
-        a: Vec3,
-        b: Vec3,
-        c: Vec3,
-        d: Vec3,
-    ) -> HalfEdgeId {
-        let v_a = self.alloc_vertex(positions, a, None);
-        let v_b = self.alloc_vertex(positions, b, None);
-        let v_c = self.alloc_vertex(positions, c, None);
-        let v_d = self.alloc_vertex(positions, d, None);
-
-        let f = self.alloc_face(None);
-
-        let h_a_b = self.alloc_halfedge(HalfEdge {
-            vertex: Some(v_a),
-            face: Some(f),
-            ..Default::default()
-        });
-        let h_b_c = self.alloc_halfedge(HalfEdge {
-            vertex: Some(v_b),
-            face: Some(f),
-            ..Default::default()
-        });
-        let h_c_d = self.alloc_halfedge(HalfEdge {
-            vertex: Some(v_c),
-            face: Some(f),
-            ..Default::default()
-        });
-        let h_d_a = self.alloc_halfedge(HalfEdge {
-            vertex: Some(v_d),
-            face: Some(f),
-            ..Default::default()
-        });
-
-        // Make the half-edge loop
-        self[h_a_b].next = Some(h_b_c);
-        self[h_b_c].next = Some(h_c_d);
-        self[h_c_d].next = Some(h_d_a);
-        self[h_d_a].next = Some(h_a_b);
-
-        // Set the face for all half-edges
-        let half_edges = [h_a_b, h_b_c, h_c_d, h_d_a];
-        for h in half_edges {
-            self[h].face = Some(f);
-        }
-
-        // Set the half-edges for the face and vertices
-        self[f].halfedge = Some(h_a_b);
-        self[v_a].halfedge = Some(h_a_b);
-        self[v_b].halfedge = Some(h_b_c);
-        self[v_c].halfedge = Some(h_c_d);
-        self[v_d].halfedge = Some(h_d_a);
-
-        h_a_b
-    }
-
-    /// Returns the number of edges a face has
-    pub fn num_face_edges(&self, face_id: FaceId) -> usize {
-        self.face_edges(face_id).len()
     }
 
     /// Returns the edges of a given face
@@ -839,7 +778,7 @@ impl HalfEdgeMesh {
         /// Doing this in a way that we can still invoke the object-safe methods
         /// of a DynChannelGroup requires a copy of the id vectors and wrapping
         /// them in an Rc. The cost of the Rc is negligible, but the copy may
-        /// become an issue for very large meshes. On the other handm, the copy
+        /// become an issue for very large meshes. On the other hand, the copy
         /// can also help speed iteration up when there are many channels:
         /// since collected vectors are contiguous, unlike the slotmaps,
         /// there will not be holes and thus no required branching.
@@ -871,71 +810,6 @@ impl Default for HalfEdgeMesh {
     }
 }
 
-#[cfg(test)]
-pub mod test {
-    use super::*;
-
-    fn quad_abcd() -> (Vec3, Vec3, Vec3, Vec3) {
-        (
-            Vec3::new(0.0, 0.0, 0.0),
-            Vec3::new(1.0, 0.0, 0.0),
-            Vec3::new(1.0, 0.0, 1.0),
-            Vec3::new(0.0, 0.0, 1.0),
-        )
-    }
-
-    #[test]
-    pub fn test_add_quad() {
-        let hem = HalfEdgeMesh::new();
-        let mut positions = hem.write_positions();
-        let mut conn = hem.write_connectivity();
-        let (a, b, c, d) = quad_abcd();
-        let q = conn.add_quad(&mut positions, a, b, c, d);
-
-        assert_eq!(conn.at_halfedge(q).next().next().next().next().end(), q);
-
-        assert_eq!(positions[conn.at_halfedge(q).vertex().end()], a);
-        assert_eq!(positions[conn.at_halfedge(q).next().vertex().end()], b);
-        assert_eq!(
-            positions[conn.at_halfedge(q).next().next().vertex().end()],
-            c,
-        );
-        assert_eq!(
-            positions[conn.at_halfedge(q).next().next().next().vertex().end()],
-            d,
-        );
-
-        assert_eq!(
-            conn.at_halfedge(q).face().end(),
-            conn.at_halfedge(q).next().face().end()
-        );
-    }
-
-    #[test]
-    pub fn test_face_size() {
-        let hem = HalfEdgeMesh::new();
-        let mut positions = hem.write_positions();
-        let mut conn = hem.write_connectivity();
-        let (a, b, c, d) = quad_abcd();
-        let q = conn.add_quad(&mut positions, a, b, c, d);
-
-        let f = conn.at_halfedge(q).face().end();
-        assert_eq!(conn.num_face_edges(f), 4);
-    }
-
-    #[test]
-    pub fn generate_quad_buffers() {
-        let hem = HalfEdgeMesh::new();
-        {
-            let mut conn = hem.write_connectivity();
-            let mut positions = hem.write_positions();
-            let (a, b, c, d) = quad_abcd();
-            let _q = conn.add_quad(&mut positions, a, b, c, d);
-        }
-        dbg!(hem.generate_triangle_buffers_flat(true).unwrap());
-    }
-}
-
 pub struct HalfedgeLoopIterator<'a> {
     conn: &'a MeshConnectivity,
     start: HalfEdgeId,
@@ -961,14 +835,14 @@ impl<'a> Iterator for HalfedgeLoopIterator<'a> {
 }
 
 impl Vertex {
-    pub fn introspect(&self, h_mapping: &SecondaryMap<HalfEdgeId, u32>) -> String {
+    pub fn introspect(&self, h_mapping: &MeshMapping<HalfEdgeId>) -> String {
         let h = self.halfedge.map(|h| h_mapping[h]);
         format!("halfedge: {h:?}")
     }
 }
 
 impl Face {
-    pub fn introspect(&self, h_mapping: &SecondaryMap<HalfEdgeId, u32>) -> String {
+    pub fn introspect(&self, h_mapping: &MeshMapping<HalfEdgeId>) -> String {
         let h = self.halfedge.map(|h| h_mapping[h]);
         format!("halfedge: {h:?}")
     }
@@ -977,9 +851,9 @@ impl Face {
 impl HalfEdge {
     pub fn introspect(
         &self,
-        h_mapping: &SecondaryMap<HalfEdgeId, u32>,
-        v_mapping: &SecondaryMap<VertexId, u32>,
-        f_mapping: &SecondaryMap<FaceId, u32>,
+        h_mapping: &MeshMapping<HalfEdgeId>,
+        v_mapping: &MeshMapping<VertexId>,
+        f_mapping: &MeshMapping<FaceId>,
     ) -> String {
         let next = self.next.map(|h| h_mapping[h]);
         let twin = self.twin.map(|h| h_mapping[h]);
@@ -989,28 +863,36 @@ impl HalfEdge {
     }
 }
 
+pub mod mappings;
+
 impl MeshConnectivity {
-    pub fn vertex_mapping(&self) -> SecondaryMap<VertexId, u32> {
-        self.vertices
-            .iter()
-            .enumerate()
-            .map(|(i, (v, _))| (v, i as u32))
-            .collect()
+    pub fn vertex_mapping(&self) -> mappings::MeshMapping<VertexId> {
+        mappings::MeshMapping(
+            self.vertices
+                .iter()
+                .enumerate()
+                .map(|(i, (v, _))| (v, i as u32))
+                .collect(),
+        )
     }
 
-    pub fn face_mapping(&self) -> SecondaryMap<FaceId, u32> {
-        self.faces
-            .iter()
-            .enumerate()
-            .map(|(i, (v, _))| (v, i as u32))
-            .collect()
+    pub fn face_mapping(&self) -> mappings::MeshMapping<FaceId> {
+        mappings::MeshMapping(
+            self.faces
+                .iter()
+                .enumerate()
+                .map(|(i, (v, _))| (v, i as u32))
+                .collect(),
+        )
     }
 
-    pub fn halfedge_mapping(&self) -> SecondaryMap<HalfEdgeId, u32> {
-        self.halfedges
-            .iter()
-            .enumerate()
-            .map(|(i, (v, _))| (v, i as u32))
-            .collect()
+    pub fn halfedge_mapping(&self) -> mappings::MeshMapping<HalfEdgeId> {
+        mappings::MeshMapping(
+            self.halfedges
+                .iter()
+                .enumerate()
+                .map(|(i, (v, _))| (v, i as u32))
+                .collect(),
+        )
     }
 }

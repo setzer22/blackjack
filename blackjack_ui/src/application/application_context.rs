@@ -9,8 +9,8 @@ use crate::prelude::*;
 use anyhow::Error;
 use blackjack_engine::{
     graph_compiler::{compile_graph, CompiledProgram, ExternalParameterValues},
-    lua_engine::LuaRuntime,
-    prelude::{FaceOverlayBuffers, HalfEdgeMesh, LineBuffers, PointBuffers, VertexIndexBuffers},
+    lua_engine::{LuaRuntime, RenderableThing},
+    prelude::{FaceOverlayBuffers, LineBuffers, PointBuffers, VertexIndexBuffers},
 };
 use egui_node_graph::NodeId;
 
@@ -21,10 +21,11 @@ use super::{
 };
 
 pub struct ApplicationContext {
-    /// The mesh is at the center of the application
-    /// - The graph generates a program that produces this mesh.
-    /// - The 3d viewport renders this mesh.
-    pub mesh: Option<HalfEdgeMesh>,
+    /// The 'renderable thing' is at the center of the application, it is
+    /// typically a kind of mesh.
+    /// - The graph generates a program that produces it.
+    /// - The 3d viewport renders it.
+    pub renderable_thing: Option<RenderableThing>,
     /// The tree of splits at the center of application. Splits recursively
     /// partition the state either horizontally or vertically. This separation
     /// is dynamic, very similar to Blender's UI model
@@ -34,7 +35,7 @@ pub struct ApplicationContext {
 impl ApplicationContext {
     pub fn new() -> ApplicationContext {
         ApplicationContext {
-            mesh: None,
+            renderable_thing: None,
             split_tree: SplitTree::default_tree(),
         }
     }
@@ -73,7 +74,10 @@ impl ApplicationContext {
             }
         };
         if let Err(err) = self.run_side_effects(editor_state, custom_state, lua_runtime) {
-            eprintln!("There was an errror executing side effect: {}", err);
+            eprintln!(
+                "There was an errror executing side effect: {err}\nBacktrace:\n----------\n{}",
+                err.backtrace()
+            );
         }
         if let Err(err) = self.build_and_render_mesh(render_ctx, viewport_settings) {
             self.paint_errors(egui_ctx, err);
@@ -87,74 +91,96 @@ impl ApplicationContext {
         render_ctx: &mut RenderContext,
         viewport_settings: &Viewport3dSettings,
     ) -> Result<()> {
-        if let Some(mesh) = self.mesh.as_mut() {
-            // Base mesh
-            {
-                if let Some(VertexIndexBuffers {
-                    positions,
-                    normals,
-                    indices,
-                }) = match viewport_settings.face_mode {
-                    FaceDrawMode::Real => {
-                        if mesh.gen_config.smooth_normals {
-                            Some(mesh.generate_triangle_buffers_smooth(false)?)
-                        } else {
-                            Some(mesh.generate_triangle_buffers_flat(false)?)
+        match self.renderable_thing.as_mut() {
+            Some(RenderableThing::HalfEdgeMesh(mesh)) => {
+                // Base mesh
+                {
+                    if let Some(VertexIndexBuffers {
+                        positions,
+                        normals,
+                        indices,
+                    }) = match viewport_settings.face_mode {
+                        FaceDrawMode::Real => {
+                            if mesh.gen_config.smooth_normals {
+                                Some(mesh.generate_triangle_buffers_smooth(false)?)
+                            } else {
+                                Some(mesh.generate_triangle_buffers_flat(false)?)
+                            }
+                        }
+                        FaceDrawMode::Flat => Some(mesh.generate_triangle_buffers_flat(true)?),
+                        FaceDrawMode::Smooth => Some(mesh.generate_triangle_buffers_smooth(true)?),
+                        FaceDrawMode::None => None,
+                    } {
+                        if !positions.is_empty() {
+                            render_ctx.face_routine.add_base_mesh(
+                                &render_ctx.renderer,
+                                &positions,
+                                &normals,
+                                &indices,
+                            );
                         }
                     }
-                    FaceDrawMode::Flat => Some(mesh.generate_triangle_buffers_flat(true)?),
-                    FaceDrawMode::Smooth => Some(mesh.generate_triangle_buffers_smooth(true)?),
-                    FaceDrawMode::None => None,
-                } {
+                }
+
+                // Face overlays
+                {
+                    let FaceOverlayBuffers { positions, colors } =
+                        mesh.generate_face_overlay_buffers();
                     if !positions.is_empty() {
-                        render_ctx.face_routine.add_base_mesh(
+                        render_ctx.face_routine.add_overlay_mesh(
                             &render_ctx.renderer,
                             &positions,
-                            &normals,
-                            &indices,
+                            &colors,
                         );
                     }
                 }
-            }
 
-            // Face overlays
-            {
-                let FaceOverlayBuffers { positions, colors } = mesh.generate_face_overlay_buffers();
-                if !positions.is_empty() {
-                    render_ctx.face_routine.add_overlay_mesh(
-                        &render_ctx.renderer,
-                        &positions,
-                        &colors,
-                    );
+                // Edges
+                {
+                    if let Some(LineBuffers { positions, colors }) =
+                        match viewport_settings.edge_mode {
+                            EdgeDrawMode::HalfEdge => Some(mesh.generate_halfedge_arrow_buffers()?),
+                            EdgeDrawMode::FullEdge => Some(mesh.generate_line_buffers()?),
+                            EdgeDrawMode::None => None,
+                        }
+                    {
+                        if !positions.is_empty() {
+                            render_ctx.wireframe_routine.add_wireframe(
+                                &render_ctx.renderer.device,
+                                &positions,
+                                &colors,
+                            )
+                        }
+                    }
                 }
-            }
 
-            // Edges
-            {
-                if let Some(LineBuffers { positions, colors }) = match viewport_settings.edge_mode {
-                    EdgeDrawMode::HalfEdge => Some(mesh.generate_halfedge_arrow_buffers()?),
-                    EdgeDrawMode::FullEdge => Some(mesh.generate_line_buffers()?),
-                    EdgeDrawMode::None => None,
-                } {
+                // Vertices
+                {
+                    let PointBuffers { positions } = mesh.generate_point_buffers();
                     if !positions.is_empty() {
-                        render_ctx.wireframe_routine.add_wireframe(
-                            &render_ctx.renderer.device,
-                            &positions,
-                            &colors,
-                        )
+                        render_ctx
+                            .point_cloud_routine
+                            .add_point_cloud(&render_ctx.renderer.device, &positions);
                     }
                 }
             }
+            Some(RenderableThing::HeightMap(heightmap)) => {
+                let VertexIndexBuffers {
+                    positions,
+                    normals,
+                    indices,
+                } = heightmap.generate_triangle_buffers();
 
-            // Vertices
-            {
-                let PointBuffers { positions } = mesh.generate_point_buffers();
                 if !positions.is_empty() {
-                    render_ctx
-                        .point_cloud_routine
-                        .add_point_cloud(&render_ctx.renderer.device, &positions);
+                    render_ctx.face_routine.add_base_mesh(
+                        &render_ctx.renderer,
+                        &positions,
+                        &normals,
+                        &indices,
+                    );
                 }
             }
+            None => { /* Ignore */ }
         }
         Ok(())
     }
@@ -175,10 +201,11 @@ impl ApplicationContext {
         &'lua self,
         editor_state: &'lua graph::GraphEditorState,
         node: NodeId,
+        is_side_effect: bool,
     ) -> Result<(CompiledProgram, ExternalParameterValues)> {
         let (bjk_graph, mapping) = graph_interop::ui_graph_to_blackjack_graph(&editor_state.graph)?;
         let final_node = mapping[node];
-        let program = compile_graph(&bjk_graph, final_node)?;
+        let program = compile_graph(&bjk_graph, final_node, is_side_effect)?;
         let params = graph_interop::extract_graph_params(&editor_state.graph, &mapping, &program)?;
 
         Ok((program, params))
@@ -192,16 +219,16 @@ impl ApplicationContext {
         lua_runtime: &LuaRuntime,
     ) -> Result<String> {
         if let Some(active) = custom_state.active_node {
-            let (program, params) = self.compile_program(editor_state, active)?;
+            let (program, params) = self.compile_program(editor_state, active, false)?;
             let mesh = blackjack_engine::lua_engine::run_program(
                 &lua_runtime.lua,
                 &program.lua_program,
                 &params,
             )?;
-            self.mesh = Some(mesh);
+            self.renderable_thing = Some(mesh);
             Ok(program.lua_program)
         } else {
-            self.mesh = None;
+            self.renderable_thing = None;
             Ok("".into())
         }
     }
@@ -213,10 +240,10 @@ impl ApplicationContext {
         lua_runtime: &LuaRuntime,
     ) -> Result<()> {
         if let Some(side_effect) = custom_state.run_side_effect.take() {
-            let (program, params) = self.compile_program(editor_state, side_effect)?;
+            let (program, params) = self.compile_program(editor_state, side_effect, true)?;
             // We ignore the result. The program is only executed to produce a
             // side effect (e.g. exporting a mesh as OBJ)
-            let _ = blackjack_engine::lua_engine::run_program(
+            blackjack_engine::lua_engine::run_program_side_effects(
                 &lua_runtime.lua,
                 &program.lua_program,
                 &params,

@@ -8,6 +8,7 @@ use crate::{application::RootViewport, prelude::*};
 use std::time::{Duration, Instant};
 
 use winit::{
+    dpi::PhysicalSize,
     event::{Event, WindowEvent},
     event_loop::EventLoop,
     window::Window,
@@ -28,8 +29,11 @@ impl AppWindow {
     pub fn new() -> (Self, EventLoop<()>) {
         let event_loop = winit::event_loop::EventLoop::new();
         let window = {
-            let mut builder = winit::window::WindowBuilder::new();
-            builder = builder.with_title("Blackjack");
+            let builder = winit::window::WindowBuilder::new()
+                .with_title("Blackjack")
+                .with_inner_size(PhysicalSize::new(800, 600))
+                .with_maximized(true);
+
             builder.build(&event_loop).expect("Could not build window")
         };
 

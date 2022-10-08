@@ -4,13 +4,17 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-use blackjack_engine::prelude::HalfEdgeMesh;
+use blackjack_engine::lua_engine::RenderableThing;
 use winit::event::MouseButton;
 
 use crate::app_window::input::InputSystem;
 use crate::{prelude::*, rendergraph};
 
 use super::app_viewport::AppViewport;
+
+/// A generic lerper
+mod lerp;
+use lerp::*;
 
 #[derive(PartialEq, Eq)]
 pub enum EdgeDrawMode {
@@ -36,8 +40,14 @@ pub enum FaceDrawMode {
 pub enum TextOverlayMode {
     /// No text overlay
     None,
-    /// Display mesh information
-    MeshInfo,
+    /// Display face ids
+    MeshInfoFaces,
+    /// Display vertex ids
+    MeshInfoVertices,
+    /// Display halfedge ids
+    MeshInfoHalfedges,
+    /// Display all edge ids
+    MeshInfoAll,
     /// Display mesh debug information set by the developers when debugging a
     /// problem. This is not intended to be used by regular users.
     DevDebug,
@@ -61,19 +71,31 @@ pub struct Viewport3d {
 }
 
 struct OrbitCamera {
-    yaw: f32,
-    pitch: f32,
-    distance: f32,
-    focus_point: Vec3,
+    yaw: Lerp<f32>,
+    pitch: Lerp<f32>,
+    distance: Lerp<f32>,
+    fov: Lerp<f32>,
+    focus_point: Lerp<Vec3>,
+}
+
+impl OrbitCamera {
+    pub fn update(&mut self, delta: f32) {
+        self.yaw.update(delta);
+        self.pitch.update(delta);
+        self.distance.update(delta);
+        self.fov.update(delta * 2.0);
+        self.focus_point.update(delta);
+    }
 }
 
 impl Default for OrbitCamera {
     fn default() -> Self {
         Self {
-            yaw: -30.0,
-            pitch: 30.0,
-            distance: 8.0,
-            focus_point: Vec3::ZERO,
+            yaw: Lerp::new(-30.0),
+            pitch: Lerp::new(30.0),
+            distance: Lerp::new(8.0),
+            fov: Lerp::new(60.0),
+            focus_point: Lerp::new(Vec3::ZERO),
         }
     }
 }
@@ -109,28 +131,40 @@ impl Viewport3d {
     }
 
     fn update_camera(&mut self, render_ctx: &mut RenderContext) {
+        const MIN_DIST: f32 = 0.1;
+        const MAX_DIST: f32 = 120.0;
+
+        self.camera.update(10.0 / 60.0);
+
         // Update status
         if self.input.mouse.buttons().pressed(MouseButton::Left) {
             if self.input.shift_down {
-                let cam_rotation = Mat4::from_rotation_y(self.camera.yaw.to_radians())
-                    * Mat4::from_rotation_x(self.camera.pitch.to_radians());
+                let cam_rotation = Mat4::from_rotation_y(self.camera.yaw.get().to_radians())
+                    * Mat4::from_rotation_x(self.camera.pitch.get().to_radians());
                 let camera_right = cam_rotation.transform_point3(Vec3::X);
                 let camera_up = cam_rotation.transform_vector3(Vec3::Y);
-                self.camera.focus_point += self.input.mouse.cursor_delta().x * camera_right * 0.1
-                    + self.input.mouse.cursor_delta().y * -camera_up * 0.1;
+                let move_speed = self.camera.distance.get() / MAX_DIST;
+                self.camera.focus_point +=
+                    self.input.mouse.cursor_delta().x * camera_right * move_speed
+                        + self.input.mouse.cursor_delta().y * -camera_up * move_speed;
             } else {
                 self.camera.yaw += self.input.mouse.cursor_delta().x * 2.0;
                 self.camera.pitch += self.input.mouse.cursor_delta().y * 2.0;
             }
         }
-        self.camera.distance += self.input.mouse.wheel_delta() * 0.25;
+        self.camera
+            .distance
+            .set(|dist| (dist - self.input.mouse.wheel_delta() * 0.5).clamp(MIN_DIST, MAX_DIST));
+        // self.camera
+        // .fov
+        // .set(|fov| (fov - self.input.mouse.wheel_delta() * 4.0).clamp(MIN_FOV, MAX_FOV));
 
         // Compute view matrix
-        let view = Mat4::from_translation(Vec3::Z * self.camera.distance)
-            * Mat4::from_rotation_x(-self.camera.pitch.to_radians())
-            * Mat4::from_rotation_y(-self.camera.yaw.to_radians())
-            * Mat4::from_translation(self.camera.focus_point);
-        render_ctx.set_camera(view);
+        let view = Mat4::from_translation(Vec3::Z * self.camera.distance.get())
+            * Mat4::from_rotation_x(-self.camera.pitch.get().to_radians())
+            * Mat4::from_rotation_y(-self.camera.yaw.get().to_radians())
+            * Mat4::from_translation(self.camera.focus_point.get());
+        render_ctx.set_camera(view, self.camera.fov.get());
     }
 
     pub fn update(
@@ -190,7 +224,7 @@ impl Viewport3d {
         &mut self,
         ui: &mut egui::Ui,
         offscreen_viewport: &mut AppViewport,
-        mesh: Option<&HalfEdgeMesh>,
+        renderable_thing: Option<&RenderableThing>,
     ) {
         ui.vertical(|ui| {
             ui.horizontal(|ui| {
@@ -266,8 +300,23 @@ impl Viewport3d {
                         );
                         ui.selectable_value(
                             &mut self.settings.overlay_mode,
-                            TextOverlayMode::MeshInfo,
-                            "Info",
+                            TextOverlayMode::MeshInfoVertices,
+                            "V",
+                        );
+                        ui.selectable_value(
+                            &mut self.settings.overlay_mode,
+                            TextOverlayMode::MeshInfoFaces,
+                            "F",
+                        );
+                        ui.selectable_value(
+                            &mut self.settings.overlay_mode,
+                            TextOverlayMode::MeshInfoHalfedges,
+                            "H",
+                        );
+                        ui.selectable_value(
+                            &mut self.settings.overlay_mode,
+                            TextOverlayMode::MeshInfoAll,
+                            "A",
                         );
                         ui.selectable_value(
                             &mut self.settings.overlay_mode,
@@ -279,12 +328,12 @@ impl Viewport3d {
             });
             offscreen_viewport.show(ui, ui.available_size());
         });
-        if let Some(mesh) = mesh {
+        if let Some(renderable_thing) = renderable_thing {
             crate::app_window::gui_overlay::draw_gui_overlays(
                 &self.view_proj,
                 offscreen_viewport.rect,
                 ui.ctx(),
-                mesh,
+                renderable_thing,
                 self.settings.overlay_mode,
             );
         }
