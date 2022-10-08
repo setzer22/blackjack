@@ -46,6 +46,13 @@ impl ViewportSplit {
         view_1: impl FnOnce(&mut Ui, &mut Payload),
         view_2: impl FnOnce(&mut Ui, &mut Payload),
     ) {
+        // HACK: Sometimes, in some window managers / platforms, windows can
+        // end up having zero size. This can lead to NaNs getting their way
+        // into the `fraction` and breaking the UI. This workaround solves it.
+        if self.fraction.is_nan() {
+            self.fraction = 0.5;
+        }
+
         let total_space = ui.available_rect_before_wrap();
         let hsep = self.separator_width * 0.5;
 

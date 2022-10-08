@@ -268,14 +268,20 @@ impl GraphEditor {
         );
     }
 
+    /// Returns Some(render_target) when the graph should be drawn by the parent
+    /// context.
     pub fn add_draw_to_graph<'node>(
         &'node mut self,
         graph: &mut r3::RenderGraph<'node>,
         viewport_rect: egui::Rect,
         parent_scale: f32,
-    ) -> r3::RenderTargetHandle {
+    ) -> Option<r3::RenderTargetHandle> {
         let resolution = viewport_rect.size() * parent_scale;
         let resolution = UVec2::new(resolution.x as u32, resolution.y as u32);
+
+        if resolution.x == 0 || resolution.y == 0 {
+            return None;
+        }
 
         let render_target = graph.add_render_target(r3::RenderTargetDescriptor {
             label: None,
@@ -295,6 +301,6 @@ impl GraphEditor {
             render_target,
         );
 
-        render_target
+        Some(render_target)
     }
 }
