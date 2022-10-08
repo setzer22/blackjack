@@ -139,13 +139,9 @@ pub fn cut_face(
 ) -> Result<HalfEdgeId> {
     let face = mesh
         .at_vertex(v)
-        .outgoing_halfedges()?
-        .iter()
-        .map(|h| mesh.at_halfedge(*h).face().try_end())
-        .collect::<Result<SVec<FaceId>, TraversalError>>()?
-        .iter()
-        .find(|f| mesh.face_vertices(**f).contains(&w))
-        .cloned()
+        .adjacent_faces()?
+        .into_iter()
+        .find(|f| mesh.face_vertices(*f).contains(&w))
         .ok_or_else(|| anyhow!("cut_face: v and w must share a face"))?;
 
     if mesh.at_vertex(v).halfedge_to(w).try_end().is_ok() {
@@ -287,6 +283,10 @@ pub fn chamfer_vertex(
     for &h in &outgoing {
         vertices.push(divide_edge(mesh, positions, h, interpolation_factor)?);
     }
+
+    // WIP: Cut face is telling me v and w share an edge, but if I did
+    // everything right, they shouldn't! I'm not sure what's broken here, the
+    // check or the code itself. Needs further investigation.
 
     for (&v, &w) in vertices.iter().circular_tuple_windows() {
         cut_face(mesh, v, w)?;
@@ -537,11 +537,18 @@ pub fn extrude_faces(
                 if !face_set.contains(&tw_face) {
                     halfedges.push(h);
                 }
+            } else {
+                halfedges.push(h);
             }
         }
     }
 
-    let beveled_edges = bevel_edges_connectivity(mesh, positions, &halfedges)?;
+    let beveled_edges = bevel_edges_connectivity(mesh, positions, &halfedges);
+    if let Err(err) = beveled_edges {
+        println!("{err}");
+        return Ok(())
+    }
+    let beveled_edges = beveled_edges.unwrap();
 
     // --- Adjust vertex positions ---
 
