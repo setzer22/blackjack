@@ -54,16 +54,18 @@ impl InputSystem {
         event: &WindowEvent,
         parent_scale: f32,
         viewport_rect: egui::Rect,
+        mouse_captured_elsewhere: bool,
     ) {
-        let mouse_in_viewport = self
-            .mouse
-            .last_pos_raw
-            .map(|pos| {
-                viewport_rect
-                    .scale_from_origin(parent_scale)
-                    .contains(egui::pos2(pos.x, pos.y))
-            })
-            .unwrap_or(false);
+        let mouse_in_viewport = !mouse_captured_elsewhere
+            && self
+                .mouse
+                .last_pos_raw
+                .map(|pos| {
+                    viewport_rect
+                        .scale_from_origin(parent_scale)
+                        .contains(egui::pos2(pos.x, pos.y))
+                })
+                .unwrap_or(false);
 
         match event {
             // Cursor moves are always registered. The raw (untransformed) mouse
@@ -78,8 +80,12 @@ impl InputSystem {
                     viewport_rect,
                     1.0, // zoom doesn't affect cursor on this viewport
                 );
-                self.mouse
-                    .on_cursor_move(Vec2::new(position.x as f32, position.y as f32));
+                // We always update the raw mouse position, but the real mouse
+                // position is not updated if the mouse is captured elsewhere.
+                if !mouse_captured_elsewhere {
+                    self.mouse
+                        .on_cursor_move(Vec2::new(position.x as f32, position.y as f32));
+                }
             }
             // Wheel events will only get registered when the cursor is inside the viewport
             WindowEvent::MouseWheel { delta, .. } if mouse_in_viewport => match delta {

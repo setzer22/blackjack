@@ -39,7 +39,7 @@ impl ViewportSplit {
 }
 
 impl ViewportSplit {
-    pub fn show<Payload>(
+    pub fn show<Payload: PayloadTrait>(
         &mut self,
         ui: &mut Ui,
         payload: &mut Payload,
@@ -56,7 +56,7 @@ impl ViewportSplit {
         let total_space = ui.available_rect_before_wrap();
         let hsep = self.separator_width * 0.5;
 
-        match self.kind {
+        let response = match self.kind {
             ViewportSplitKind::Horizontal => {
                 let width_1 = total_space.width() * self.fraction;
                 let width_2 = total_space.width() * (1.0 - self.fraction);
@@ -92,6 +92,8 @@ impl ViewportSplit {
                 self.fraction = (self.fraction + resp.drag_delta().x / total_space.width())
                     // Clamp fraction so that it never becomes zero
                     .clamp(0.05, 0.95);
+
+                resp
             }
             ViewportSplitKind::Vertical => {
                 // @CopyPaste TODO: Get rid of this code duplication
@@ -130,7 +132,16 @@ impl ViewportSplit {
                 self.fraction = (self.fraction + resp.drag_delta().y / total_space.height())
                     // Clamp fraction so that it never becomes zero
                     .clamp(0.05, 0.95);
+
+                resp
             }
+        };
+
+        // We need to notify the payload (really, the app root) that this widget
+        // is being interacted with so it can stop propagating mouse events to
+        // the child viewports.
+        if response.dragged() {
+            payload.notify_interacted()
         }
     }
 }
@@ -145,8 +156,14 @@ pub enum SplitTree {
     },
 }
 
+pub trait PayloadTrait {
+    /// Called when the split tree is currently being interacted with. This is
+    /// used to notify this fact back to the caller.
+    fn notify_interacted(&mut self);
+}
+
 impl SplitTree {
-    pub fn show<Payload>(
+    pub fn show<Payload: PayloadTrait>(
         &mut self,
         ui: &mut Ui,
         payload: &mut Payload,
