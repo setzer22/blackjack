@@ -5,6 +5,7 @@
 -- file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 local P = require("params")
+local V = require("vector_math")
 local NodeLibrary = require("node_library")
 local load_function = require("utils").load_function
 
@@ -119,6 +120,42 @@ local primitives = {
         outputs = {
             P.lua_str("out_code"),
         },
+    },
+    MakePolygon = {
+        label = "Polygon",
+        op = function(inputs)
+            local points = {}
+            -- Parse the point list, separated by space
+            for point in inputs.points:gmatch('([^ \n]+)') do
+                table.insert(points, V.from_string(point))
+            end
+            return { out_mesh = Primitives.polygon(points) }
+        end,
+        inputs = {
+            P.strparam("points", "", true),
+        },
+        outputs = {
+            P.mesh("out_mesh"),
+        },
+        returns = "out_mesh",
+    },
+    MakeLineFromPoints = {
+        label = "Line from points",
+        op = function(inputs)
+            local points = {}
+            -- Parse the point list, separated by space
+            for point in inputs.points:gmatch('([^ \n]+)') do
+                table.insert(points, V.from_string(point))
+            end
+            return { out_mesh = Primitives.line_from_points(points) }
+        end,
+        inputs = {
+            P.strparam("points", "", true),
+        },
+        outputs = {
+            P.mesh("out_mesh"),
+        },
+        returns = "out_mesh",
     },
 }
 
