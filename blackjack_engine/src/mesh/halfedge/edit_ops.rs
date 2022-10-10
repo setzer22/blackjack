@@ -1758,12 +1758,14 @@ pub fn edit_geometry(
             .iter()
             .flat_map(|f| conn.at_face(*f).vertices())
             .flatten()
+            .dedup()
             .collect_vec(),
         ChannelKeyType::HalfEdgeId => mesh
             .resolve_halfedge_selection_full(&selection)?
             .iter()
             .flat_map(|h| conn.at_halfedge(*h).src_dst_pair())
             .flat_map(|(a, b)| [a, b])
+            .dedup()
             .collect_vec(),
     };
 
