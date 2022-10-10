@@ -474,7 +474,7 @@ impl<'a, 'b> Widget for SmartDragValue<'a, 'b> {
                 let delta_value = if should_increment { delta_value } else { 0.0 };
 
                 if delta_value != 0.0 {
-                    let new_value = value + delta_value as f64;
+                    let new_value = value + delta_value;
                     // Pick soft / hard bounds depending on when the drag event started.
                     let clamp_range = RangeInclusive::new(
                         if local_state.lower_soft_limit {

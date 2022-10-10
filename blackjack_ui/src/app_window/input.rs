@@ -90,7 +90,7 @@ impl InputSystem {
             // Wheel events will only get registered when the cursor is inside the viewport
             WindowEvent::MouseWheel { delta, .. } if mouse_in_viewport => match delta {
                 winit::event::MouseScrollDelta::LineDelta(_, y) => {
-                    self.mouse.on_wheel_scroll(*y as f32);
+                    self.mouse.on_wheel_scroll(*y);
                 }
                 winit::event::MouseScrollDelta::PixelDelta(pos) => {
                     self.mouse.on_wheel_scroll(pos.y as f32);

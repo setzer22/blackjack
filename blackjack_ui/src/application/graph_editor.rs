@@ -111,7 +111,7 @@ impl GraphEditor {
                 match delta {
                     winit::event::MouseScrollDelta::LineDelta(_, dy) => {
                         self.editor_state.pan_zoom.adjust_zoom(
-                            -*dy as f32 * 8.0 * 0.01,
+                            -*dy * 8.0 * 0.01,
                             mouse_pos,
                             Self::ZOOM_LEVEL_MIN,
                             Self::ZOOM_LEVEL_MAX,

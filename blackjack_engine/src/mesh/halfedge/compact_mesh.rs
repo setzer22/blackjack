@@ -259,7 +259,7 @@ impl<const Subdivided: bool> CompactMesh<Subdivided> {
             .and_then(|twin_h| NonMaxU32::new(4 * self.get_next(twin_h.get() as usize) as u32 + 3));
         twin[1] = NonMaxU32::new(4 * self.get_next(h) as u32 + 2);
         twin[2] = NonMaxU32::new(4 * self.get_prev(h) as u32 + 1);
-        twin[3] = self.twin[self.get_prev(h) as usize]
+        twin[3] = self.twin[self.get_prev(h)]
             .and_then(|twin_prev_h| NonMaxU32::new(4 * twin_prev_h.get()));
     }
 
@@ -272,7 +272,7 @@ impl<const Subdivided: bool> CompactMesh<Subdivided> {
         vert[0] = self.vert[h];
         vert[1] = v_d + f_d + self.edge[h];
         vert[2] = v_d + self.get_face(h) as u32;
-        vert[3] = v_d + f_d + self.edge[self.get_prev(h) as usize];
+        vert[3] = v_d + f_d + self.edge[self.get_prev(h)];
     }
 
     /// Generates the edge pointer for the 4 halfedges spawning from `h` during
@@ -283,7 +283,7 @@ impl<const Subdivided: bool> CompactMesh<Subdivided> {
         let h_gt_twin_h = self.twin[h]
             .map(|twin_h| (h as u32) < twin_h.get())
             .unwrap_or(true);
-        let hp_gt_twin_hp = self.twin[h_prev as usize]
+        let hp_gt_twin_hp = self.twin[h_prev]
             .map(|twhin_hp| (h_prev as u32) < twhin_hp.get())
             .unwrap_or(true);
 
@@ -295,9 +295,9 @@ impl<const Subdivided: bool> CompactMesh<Subdivided> {
         edge[1] = 2 * e_d + h as u32;
         edge[2] = 2 * e_d + h_prev as u32;
         edge[3] = if hp_gt_twin_hp {
-            2 * self.edge[h_prev as usize] + 1
+            2 * self.edge[h_prev] + 1
         } else {
-            2 * self.edge[h_prev as usize]
+            2 * self.edge[h_prev]
         };
     }
 
@@ -390,10 +390,10 @@ impl<const Subdivided: bool> CompactMesh<Subdivided> {
                 .into_par_iter()
                 .map(|h| {
                     let mut cycle_len = 1;
-                    let mut hh = self.get_next(h) as usize;
+                    let mut hh = self.get_next(h);
                     while hh != h {
                         cycle_len += 1;
-                        hh = self.get_next(hh) as usize;
+                        hh = self.get_next(hh);
                         if cycle_len > MAX_LOOP_ITERATIONS {
                             break;
                         }
@@ -415,10 +415,10 @@ impl<const Subdivided: bool> CompactMesh<Subdivided> {
             .into_par_iter()
             .map(|h| {
                 let mut valence = 1;
-                let mut hh = self.get_next(self.twin[h]?.get() as usize) as usize;
+                let mut hh = self.get_next(self.twin[h]?.get() as usize);
                 while hh != h {
                     valence += 1;
-                    hh = self.get_next(self.twin[hh]?.get() as usize) as usize;
+                    hh = self.get_next(self.twin[hh]?.get() as usize);
                     if valence > MAX_LOOP_ITERATIONS {
                         break;
                     }
@@ -433,7 +433,7 @@ impl<const Subdivided: bool> CompactMesh<Subdivided> {
             .for_each(|h| {
                 let m = get_cycle_length(h) as f32;
                 let v = self.vert[h] as usize;
-                let i = self.counts.num_vertices + self.get_face(h) as usize;
+                let i = self.counts.num_vertices + self.get_face(h);
                 new_vertex_positions[i].fetch_add(
                     self.vertex_positions[v] / m,
                     // NOTE: Relaxed ordering should be okay here. We only care
@@ -448,7 +448,7 @@ impl<const Subdivided: bool> CompactMesh<Subdivided> {
             .into_par_iter()
             .for_each(|h| {
                 let v = self.vert[h] as usize;
-                let i = self.counts.num_vertices + self.get_face(h) as usize;
+                let i = self.counts.num_vertices + self.get_face(h);
                 let j = self.counts.num_vertices + self.counts.num_faces + self.edge[h] as usize;
 
                 // Handle boundary edges as a separate case. During linear
@@ -479,7 +479,7 @@ impl<const Subdivided: bool> CompactMesh<Subdivided> {
                 // clark subdivision
                 if valences[h].is_some() && catmull_clark {
                     let n = valences[h].unwrap().get() as f32;
-                    let i = self.counts.num_vertices + self.get_face(h) as usize;
+                    let i = self.counts.num_vertices + self.get_face(h);
                     let j =
                         self.counts.num_vertices + self.counts.num_faces + self.edge[h] as usize;
 

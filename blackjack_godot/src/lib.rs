@@ -390,9 +390,9 @@ fn halfedge_to_godot_mesh(
         // Indices. Simple fan triangulation using the face vertices.
         let i0 = *counter;
         for (i1, i2) in (*counter + 1..*counter + face_halfedges.len() as i32).tuple_windows() {
-            gd_indices.push(i0 as i32);
-            gd_indices.push(i1 as i32);
-            gd_indices.push(i2 as i32);
+            gd_indices.push(i0);
+            gd_indices.push(i1);
+            gd_indices.push(i2);
         }
         *counter += face_halfedges.len() as i32;
     }
