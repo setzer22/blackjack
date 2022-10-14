@@ -268,6 +268,17 @@ pub fn dissolve_vertex(mesh: &mut halfedge::MeshConnectivity, v: VertexId) -> Re
 /// Chamfers a vertex. That is, for each outgoing edge of the vertex, a new
 /// vertex will be created. All the new vertices will be joined in a new face,
 /// and the original vertex will get removed.
+///
+/// ## Vertices in the boundary
+/// When any of the outgoing halfedges for `v` lies in the boundary, this
+/// operation cannot be completed as documented, because the final
+/// `dissolve_vertex` operation is not well-defined.
+///
+/// In that case, the operation doesn't complete, and the resulting `FaceId`
+/// return value will be `None`. This behavior is not only a best-effort, but is
+/// consistent with the expected behavior during the bevel operation, which
+/// depends on this operation.
+///
 /// ## Id Stability
 /// This operation guarantees that the outgoing halfedge ids are preserved.
 /// Additionally, the returned vertex id vector has the newly created vertex ids
@@ -277,22 +288,30 @@ pub fn chamfer_vertex(
     positions: &mut Positions,
     v: VertexId,
     interpolation_factor: f32,
-) -> Result<(FaceId, SVec<VertexId>)> {
+) -> Result<(Option<FaceId>, SVec<VertexId>)> {
     let outgoing = mesh.at_vertex(v).outgoing_halfedges()?;
     let mut vertices = SVec::new();
     for &h in &outgoing {
         vertices.push(divide_edge(mesh, positions, h, interpolation_factor)?);
     }
 
-    // WIP: Cut face is telling me v and w share an edge, but if I did
-    // everything right, they shouldn't! I'm not sure what's broken here, the
-    // check or the code itself. Needs further investigation.
+    let mut is_boundary = false;
 
-    for (&v, &w) in vertices.iter().circular_tuple_windows() {
-        cut_face(mesh, v, w)?;
+    for ((&v, _), (&w, &hw)) in vertices.iter().zip(outgoing.iter()).circular_tuple_windows() {
+        // Only cut faces at the boundary. If there's two vertices separated by
+        // boundary, we take note of that and don't do the final dissolve.
+        if !mesh.at_halfedge(hw).is_boundary()? {
+            cut_face(mesh, v, w)?;
+        } else {
+            is_boundary = true;
+        }
     }
 
-    Ok((dissolve_vertex(mesh, v)?, vertices))
+    if is_boundary {
+        Ok((None, vertices))
+    } else {
+        Ok((Some(dissolve_vertex(mesh, v)?), vertices))
+    }
 }
 
 /// Creates a 2-sided face on the inside of this edge. This has no effect on the
@@ -327,6 +346,12 @@ pub fn duplicate_edge(mesh: &mut MeshConnectivity, h: HalfEdgeId) -> Result<Half
 }
 
 /// Merges the src and dst vertices of `h` so that only the first one remains
+///
+/// WIP: This TODO is important and it's partly why extrude/bevel are broken...
+///
+/// Also WIP: Now that I fixed chamfer, I need to implement the fix inside bevel
+/// of skipping collapse for pairs of vertices in the boundary.
+///
 /// TODO: This does not handle the case where a collapse edge operation would
 /// remove a face
 pub fn collapse_edge(mesh: &mut MeshConnectivity, h: HalfEdgeId) -> Result<VertexId> {
