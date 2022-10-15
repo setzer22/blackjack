@@ -229,6 +229,23 @@ local edit_ops = {
             return { out_mesh = out_mesh }
         end,
     },
+    CollapseEdge = {
+        label = "Collapse edge",
+        inputs = {
+            P.mesh("in_mesh"),
+            P.selection("edge"),
+            P.scalar("interp", { default = 0.5, soft_min = 0.0, soft_max = 1.0 }),
+        },
+        outputs = {
+            P.mesh("out_mesh"),
+        },
+        returns = "out_mesh",
+        op = function(inputs)
+            local out_mesh = inputs.in_mesh:clone()
+            Ops.collapse_edge(out_mesh, inputs.edge, inputs.interp)
+            return { out_mesh = out_mesh }
+        end
+    },
     BridgeLoops = {
         label = "Bridge Loops",
         inputs = {

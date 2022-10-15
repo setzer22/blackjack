@@ -297,7 +297,11 @@ pub fn chamfer_vertex(
 
     let mut is_boundary = false;
 
-    for ((&v, _), (&w, &hw)) in vertices.iter().zip(outgoing.iter()).circular_tuple_windows() {
+    for ((&v, _), (&w, &hw)) in vertices
+        .iter()
+        .zip(outgoing.iter())
+        .circular_tuple_windows()
+    {
         // Only cut faces at the boundary. If there's two vertices separated by
         // boundary, we take note of that and don't do the final dissolve.
         if !mesh.at_halfedge(hw).is_boundary()? {
@@ -346,14 +350,6 @@ pub fn duplicate_edge(mesh: &mut MeshConnectivity, h: HalfEdgeId) -> Result<Half
 }
 
 /// Merges the src and dst vertices of `h` so that only the first one remains
-///
-/// WIP: This TODO is important and it's partly why extrude/bevel are broken...
-///
-/// Also WIP: Now that I fixed chamfer, I need to implement the fix inside bevel
-/// of skipping collapse for pairs of vertices in the boundary.
-///
-/// TODO: This does not handle the case where a collapse edge operation would
-/// remove a face
 pub fn collapse_edge(mesh: &mut MeshConnectivity, h: HalfEdgeId) -> Result<VertexId> {
     let (v, w) = mesh.at_halfedge(h).src_dst_pair()?;
     let t = mesh.at_halfedge(h).twin().try_end()?;
@@ -362,9 +358,12 @@ pub fn collapse_edge(mesh: &mut MeshConnectivity, h: HalfEdgeId) -> Result<Verte
     let t_next = mesh.at_halfedge(t).next().try_end()?;
     let t_prev = mesh.at_halfedge(t).previous().try_end()?;
     let w_outgoing = mesh.at_vertex(w).outgoing_halfedges()?;
-    let v_next_fan = mesh.at_halfedge(h).cycle_around_fan().try_end()?;
-    let f_h = mesh.at_halfedge(h).face().try_end();
-    let f_t = mesh.at_halfedge(t).face().try_end();
+    let f_h = mesh.at_halfedge(h).face_or_boundary()?;
+    let f_t = mesh.at_halfedge(t).face_or_boundary()?;
+    // We check here if either face is a triangle. This is an edge case that
+    // requires some additional post-processing later.
+    let f_h_is_triangle = f_h.is_some() && mesh.halfedge_loop_iter(h).count() == 3;
+    let f_t_is_triangle = f_t.is_some() && mesh.halfedge_loop_iter(t).count() == 3;
 
     // --- Adjust connectivity ---
     for h_wo in w_outgoing {
@@ -374,19 +373,15 @@ pub fn collapse_edge(mesh: &mut MeshConnectivity, h: HalfEdgeId) -> Result<Verte
     mesh[h_prev].next = Some(h_next);
 
     // Some face may point to the halfedges we're deleting. Fix that.
-    if let Ok(f_h) = f_h {
+    if let Some(f_h) = f_h {
         if mesh.at_face(f_h).halfedge().try_end()? == h {
             mesh[f_h].halfedge = Some(h_next);
         }
     }
-    if let Ok(f_t) = f_t {
+    if let Some(f_t) = f_t {
         if mesh.at_face(f_t).halfedge().try_end()? == t {
             mesh[f_t].halfedge = Some(t_next);
         }
-    }
-    // The vertex we're keeping may be pointing to one of the deleted halfedges.
-    if mesh.at_vertex(v).halfedge().try_end()? == h {
-        mesh[v].halfedge = Some(v_next_fan);
     }
 
     // --- Remove data ----
@@ -394,8 +389,76 @@ pub fn collapse_edge(mesh: &mut MeshConnectivity, h: HalfEdgeId) -> Result<Verte
     mesh.remove_halfedge(h);
     mesh.remove_vertex(w);
 
+    // --- Triangular face post-processing ---
+
+    // If either f_h or f_t were triangle faces, we need to do some extra
+    // cleanup, because the collapse edge operation also removes those faces.
+
+    /// The operation returns a pair of halfedges, which are the external edges
+    /// of the triangular face after the internal ones have been deleted. After
+    /// this operation, the triangular face is now a single edge.
+    fn post_process_triangular_face(
+        mesh: &mut MeshConnectivity,
+        prev: HalfEdgeId,
+        next: HalfEdgeId,
+        face: Option<FaceId>,
+    ) -> Result<(HalfEdgeId, HalfEdgeId)> {
+        let prev_twin = mesh.at_halfedge(prev).twin().try_end()?;
+        let next_twin = mesh.at_halfedge(next).twin().try_end()?;
+        mesh[prev_twin].twin = Some(next_twin);
+        mesh[next_twin].twin = Some(prev_twin);
+        mesh.remove_halfedge(prev);
+        mesh.remove_halfedge(next);
+        if let Some(face) = face {
+            mesh.remove_face(face);
+        }
+        Ok((prev_twin, next_twin))
+    }
+
+    let f_h_triangle_halfedges = if f_h_is_triangle {
+        Some(post_process_triangular_face(mesh, h_prev, h_next, f_h)?)
+    } else {
+        None
+    };
+    let f_t_triangle_halfedges = if f_t_is_triangle {
+        Some(post_process_triangular_face(mesh, t_prev, t_next, f_t)?)
+    } else {
+        None
+    };
+
+    // --- Fix connectivity for vertices ---
+
+    // The remaining vertices may be pointing to a deleted halfedge. We need to
+    // fix that here to prevent consistency issues.
+    if mesh[v].halfedge == Some(h) {
+        // In general, we can use `h_next` since that is not an outgoing
+        // halfedge of `v (because `h` was collapsed). But in case `f_h` was a
+        // triangle we need to use `h_v_x` since `h_next` was deleted.
+        if let Some((h_v_x, _)) = f_h_triangle_halfedges {
+            mesh[v].halfedge = Some(h_v_x);
+        } else {
+            mesh[v].halfedge = Some(h_next);
+        }
+    }
+    if let Some((_, h_x_w)) = f_h_triangle_halfedges {
+        let x = mesh.at_halfedge(h_x_w).vertex().try_end()?;
+        if mesh[x].halfedge == Some(h_prev) {
+            mesh[x].halfedge = Some(h_x_w)
+        }
+    }
+    if let Some((_, h_y_v)) = f_t_triangle_halfedges {
+        let y = mesh.at_halfedge(h_y_v).vertex().try_end()?;
+        if mesh[y].halfedge == Some(t_prev) {
+            mesh[y].halfedge = Some(h_y_v)
+        }
+    }
+
     Ok(v)
 }
+
+/// TODO WIP: Now that I fixed chamfer and collapse edge, I need to implement
+/// the fix inside bevel of skipping collapse for pairs of vertices in the
+/// boundary.
 
 /// Adjusts the connectivity of the mesh in preparation for a bevel operation.
 /// Any `halfedges` passed in will get "duplicated", and a face will be created
@@ -571,7 +634,7 @@ pub fn extrude_faces(
     let beveled_edges = bevel_edges_connectivity(mesh, positions, &halfedges);
     if let Err(err) = beveled_edges {
         println!("{err}");
-        return Ok(())
+        return Ok(());
     }
     let beveled_edges = beveled_edges.unwrap();
 
@@ -2137,5 +2200,34 @@ pub mod lua_fns {
             rotate.0,
             scale.0,
         )
+    }
+
+    /// Collapses an `edge`, fusing the source and destination vertices in to one.
+    /// If this operation is applied to a triangle, the face will be removed and
+    /// become a single edge.o
+    ///
+    /// The position of the new collapsed vertex will be interpolated between
+    /// the vertices of the original halfedge with a given `interpolation`
+    /// factor.
+    #[lua(under = "Ops")]
+    pub fn collapse_edge(
+        mesh: &mut HalfEdgeMesh,
+        edge: SelectionExpression,
+        interpolation: f32,
+    ) -> Result<VertexId> {
+        let edge = mesh
+            .resolve_halfedge_selection_full(&edge)?
+            .iter_cpy()
+            .next()
+            .ok_or_else(|| anyhow!("No edge selected"))?;
+
+        let mut positions = mesh.write_positions();
+        let (src, dst) = mesh.read_connectivity().at_halfedge(edge).src_dst_pair()?;
+        let vpos = lerp(positions[src], positions[dst], interpolation);
+
+        let v = super::collapse_edge(&mut mesh.write_connectivity(), edge)?;
+
+        positions[v] = vpos;
+        Ok(v)
     }
 }
