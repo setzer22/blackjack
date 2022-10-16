@@ -443,13 +443,17 @@ pub fn collapse_edge(mesh: &mut MeshConnectivity, h: HalfEdgeId) -> Result<Verte
     if let Some((_, h_x_w)) = f_h_triangle_halfedges {
         let x = mesh.at_halfedge(h_x_w).vertex().try_end()?;
         if mesh[x].halfedge == Some(h_prev) {
-            mesh[x].halfedge = Some(h_x_w)
+            mesh[x].halfedge = Some(h_x_w);
         }
     }
-    if let Some((_, h_y_v)) = f_t_triangle_halfedges {
+    if let Some((h_v_y, h_y_v)) = f_t_triangle_halfedges {
         let y = mesh.at_halfedge(h_y_v).vertex().try_end()?;
         if mesh[y].halfedge == Some(t_prev) {
-            mesh[y].halfedge = Some(h_y_v)
+            mesh[y].halfedge = Some(h_y_v);
+        }
+
+        if mesh[v].halfedge == Some(t_next) {
+            mesh[v].halfedge = Some(h_v_y);
         }
     }
 
