@@ -624,6 +624,11 @@ fn bevel_edges_connectivity(
     Ok(edges_to_bevel)
 }
 
+// WIP: Bevel finally seems to be working. But I'm hitting some issues in
+// extrude. To reproduce, simply extrude one of the faces of a subdivided quad
+// (grid). It's easier to see when beveling (topology is the same). I left an
+// example in ~/test.blj to keep debugging later.
+
 /// Bevels the given vertices by a given distance amount
 pub fn bevel_edges(
     mesh: &mut MeshConnectivity,
@@ -643,6 +648,10 @@ pub fn bevel_edges(
     let mut move_ops = HashMap::<VertexId, HashSet<Vec3Ord>>::new();
     for h in beveled_edges {
         mesh.add_debug_halfedge(h, DebugMark::green("bvl"));
+
+        if mesh.at_halfedge(h).is_boundary()? {
+            continue;
+        }
 
         let (v, w) = mesh.at_halfedge(h).src_dst_pair()?;
         let v_to = mesh.at_halfedge(h).previous().vertex().try_end()?;
