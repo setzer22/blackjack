@@ -6,7 +6,8 @@
 
 use std::{
     cell::{Ref, RefCell, RefMut},
-    rc::Rc, marker::PhantomData,
+    marker::PhantomData,
+    rc::Rc,
 };
 
 use crate::prelude::*;
@@ -338,6 +339,7 @@ impl MeshConnectivity {
 
     /// Returns an iterator that cycles around the halfedge fan starting at `h0`
     /// until closing the loop.
+    #[allow(dead_code)]
     fn halfedge_fan_iter(&self, h0: HalfEdgeId) -> HalfedgeOpIterator<'_, CycleFanOp> {
         HalfedgeOpIterator {
             conn: self,
@@ -860,7 +862,7 @@ impl<'a, Op: HalfEdgeOp> Iterator for HalfedgeOpIterator<'a, Op> {
             None
         } else {
             let res = self.next;
-            self.next = Op::op(&self.conn, self.next);
+            self.next = Op::op(self.conn, self.next);
             self.count += 1;
             Some(res)
         }
