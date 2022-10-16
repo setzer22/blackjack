@@ -456,10 +456,6 @@ pub fn collapse_edge(mesh: &mut MeshConnectivity, h: HalfEdgeId) -> Result<Verte
     Ok(v)
 }
 
-/// TODO WIP: Now that I fixed chamfer and collapse edge, I need to implement
-/// the fix inside bevel of skipping collapse for pairs of vertices in the
-/// boundary.
-
 /// Adjusts the connectivity of the mesh in preparation for a bevel operation.
 /// Any `halfedges` passed in will get "duplicated", and a face will be created
 /// in-between, consistently adjusting the connectivity everywhere.
@@ -518,17 +514,34 @@ fn bevel_edges_connectivity(
         // guaranteed to be in the same order as `v`'s outgoing halfedges.
         let (_, new_verts) = chamfer_vertex(mesh, positions, v, 0.0)?;
 
+        enum CollapseOp {
+            CollapseAcrossFace(VertexId, VertexId),
+            CollapseAcrossBoundary(VertexId, VertexId),
+        }
+
         let collapse_ops = new_verts
             .iter()
             .circular_tuple_windows()
             .zip(collapse_indices)
-            .filter_map(|((v, w), should_collapse)| {
+            .filter_map(|((x, y), should_collapse)| {
                 if should_collapse {
-                    // We want to keep w so next iterations don't produce dead
-                    // vertex ids This is not entirely necessary since the
-                    // translation map already ensures we will never access any
-                    // dead vertices.
-                    Some((*w, *v))
+                    let shared_face = mesh.at_vertex(*x).adjacent_faces().ok().and_then(|faces| {
+                        faces
+                            .into_iter()
+                            .find(|f| mesh.face_vertices(*f).contains(y))
+                    });
+
+                    // When the shared face between y and x is the boundary, we
+                    // can't collapse the edge between the two because it
+                    // doesn't exist. The correct fix here is to collapse both
+                    // vertices into the central one. The chamfer operation will
+                    // keep the central vertex if at least one of its adjacent
+                    // faces was the boundary.
+                    if shared_face.is_some() {
+                        Some(CollapseOp::CollapseAcrossFace(*y, *x))
+                    } else {
+                        Some(CollapseOp::CollapseAcrossBoundary(*y, *x))
+                    }
                 } else {
                     None
                 }
@@ -549,12 +562,28 @@ fn bevel_edges_connectivity(
             v
         }
 
-        for (w, v) in collapse_ops {
-            let v = get_translated(&translation_map, v);
-            let w = get_translated(&translation_map, w);
-            let h = mesh.at_vertex(w).halfedge_to(v).try_end()?;
-            collapse_edge(mesh, h)?;
-            translation_map.insert(v, w); // Take note that v is now w
+        for op in collapse_ops {
+            match op {
+                CollapseOp::CollapseAcrossFace(y, x) => {
+                    // Collapse the shared edge between the vertices
+                    let x = get_translated(&translation_map, x);
+                    let y = get_translated(&translation_map, y);
+                    let h = mesh.at_vertex(y).halfedge_to(x).try_end()?;
+                    collapse_edge(mesh, h)?;
+                    translation_map.insert(x, y); // Take note that v is now w
+                }
+                CollapseOp::CollapseAcrossBoundary(y, x) => {
+                    // Collapse both vertices into the central one
+                    let x = get_translated(&translation_map, x);
+                    let y = get_translated(&translation_map, y);
+                    let h1 = mesh.at_vertex(x).halfedge_to(v).try_end()?;
+                    let h2 = mesh.at_vertex(y).halfedge_to(v).try_end()?;
+                    collapse_edge(mesh, h1)?;
+                    collapse_edge(mesh, h2)?;
+                    translation_map.insert(x, v); // Take note that v is now w
+                    translation_map.insert(y, v); // Take note that v is now w
+                }
+            }
         }
     }
 

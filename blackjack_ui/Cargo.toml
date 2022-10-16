@@ -66,3 +66,5 @@ wavefront_rs = "1.0.4"
 derive_more = "0.99"
 clap = { version = "4.0", features = ["derive"] }
 once_cell = "1.15"
+# TODO: Hide behind feature flag.
+pretty_backtrace = "0.1.2"

@@ -38,8 +38,9 @@ fn main() {
     #[cfg(feature = "tracy")]
     let _client = profiling::tracy_client::Client::start();
 
-    // Setup logging
+    // Various setup calls
     env_logger::init();
+    pretty_backtrace::setup();
 
     // Handle luadoc flag
     if let Some(ldoc_path) = &cli_args::CLI_ARGS.generate_ldoc {
