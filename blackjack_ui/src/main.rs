@@ -40,7 +40,7 @@ fn main() {
 
     // Various setup calls
     env_logger::init();
-    pretty_backtrace::setup();
+    pretty_trace::PrettyTrace::new().on();
 
     // Handle luadoc flag
     if let Some(ldoc_path) = &cli_args::CLI_ARGS.generate_ldoc {

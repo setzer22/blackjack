@@ -489,8 +489,8 @@ fn bevel_edges_connectivity(
     }
 
     // ---- 2. Chamfer all vertices -----
-    for v in vertices_to_chamfer {
-        let outgoing_halfedges = mesh.at_vertex(v).outgoing_halfedges()?;
+    for central_vertex in vertices_to_chamfer {
+        let outgoing_halfedges = mesh.at_vertex(central_vertex).outgoing_halfedges()?;
 
         // After the chamfer operation, some vertex pairs need to get collapsed
         // into a single one. This binary vector has a `true` for every vertex
@@ -512,8 +512,9 @@ fn bevel_edges_connectivity(
 
         // Here, we execute the chamfer operation. The returned indices are
         // guaranteed to be in the same order as `v`'s outgoing halfedges.
-        let (_, new_verts) = chamfer_vertex(mesh, positions, v, 0.0)?;
+        let (_, new_verts) = chamfer_vertex(mesh, positions, central_vertex, 0.0)?;
 
+        #[derive(Debug)]
         enum CollapseOp {
             CollapseAcrossFace(VertexId, VertexId),
             CollapseAcrossBoundary(VertexId, VertexId),
@@ -570,18 +571,19 @@ fn bevel_edges_connectivity(
                     let y = get_translated(&translation_map, y);
                     let h = mesh.at_vertex(y).halfedge_to(x).try_end()?;
                     collapse_edge(mesh, h)?;
-                    translation_map.insert(x, y); // Take note that v is now w
+                    translation_map.insert(x, y); // Take note that x is now y
                 }
                 CollapseOp::CollapseAcrossBoundary(y, x) => {
                     // Collapse both vertices into the central one
                     let x = get_translated(&translation_map, x);
                     let y = get_translated(&translation_map, y);
-                    let h1 = mesh.at_vertex(x).halfedge_to(v).try_end()?;
-                    let h2 = mesh.at_vertex(y).halfedge_to(v).try_end()?;
+                    let central_vertex = get_translated(&translation_map, central_vertex);
+                    let h1 = mesh.at_vertex(central_vertex).halfedge_to(x).try_end()?;
+                    let h2 = mesh.at_vertex(central_vertex).halfedge_to(y).try_end()?;
                     collapse_edge(mesh, h1)?;
                     collapse_edge(mesh, h2)?;
-                    translation_map.insert(x, v); // Take note that v is now w
-                    translation_map.insert(y, v); // Take note that v is now w
+                    translation_map.insert(x, central_vertex); // Take note of the change
+                    translation_map.insert(y, central_vertex); // Take note of the change
                 }
             }
         }
@@ -1954,7 +1956,7 @@ pub mod lua_fns {
             &mut mesh.write_positions(),
             &edges,
             amount,
-        )?;
+        );
         Ok(())
     }
 
