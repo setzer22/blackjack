@@ -428,6 +428,8 @@ pub fn collapse_edge(mesh: &mut MeshConnectivity, h: HalfEdgeId) -> Result<Verte
 
     // --- Fix connectivity for vertices ---
 
+    // dbg!(h, t, h_prev, h_next, t_prev, t_next, f_h_triangle_halfedges, f_t_triangle_halfedges);
+
     // The remaining vertices may be pointing to a deleted halfedge. We need to
     // fix that here to prevent consistency issues.
     if mesh[v].halfedge == Some(h) {
@@ -493,8 +495,32 @@ fn bevel_edges_connectivity(
     }
 
     // ---- 2. Chamfer all vertices -----
+
+    #[derive(Debug)]
+    enum CollapseOp {
+        CollapseAcrossFace(VertexId, VertexId),
+        CollapseAcrossBoundary(VertexId, VertexId),
+    }
+
+    let mut deferred_collapse_ops = vec![];
+
+    // When collapsing vertices, we need a way to determine where those
+    // original vertices ended up or we may access invalid ids
+    type TranslationMap = HashMap<VertexId, VertexId>;
+    let mut translation_map: TranslationMap = HashMap::new();
+    /// Returns the translation of a vertex, that is, the vertex this vertex
+    /// ended up being translated to.
+    fn get_translated(m: &TranslationMap, v: VertexId) -> VertexId {
+        let mut v = v;
+        while let Some(v_tr) = m.get(&v) {
+            v = *v_tr;
+        }
+        v
+    }
+
     for central_vertex in vertices_to_chamfer {
         let outgoing_halfedges = mesh.at_vertex(central_vertex).outgoing_halfedges()?;
+        dbg!(&outgoing_halfedges);
 
         // After the chamfer operation, some vertex pairs need to get collapsed
         // into a single one. This binary vector has a `true` for every vertex
@@ -517,12 +543,6 @@ fn bevel_edges_connectivity(
         // Here, we execute the chamfer operation. The returned indices are
         // guaranteed to be in the same order as `v`'s outgoing halfedges.
         let (_, new_verts) = chamfer_vertex(mesh, positions, central_vertex, 0.0)?;
-
-        #[derive(Debug)]
-        enum CollapseOp {
-            CollapseAcrossFace(VertexId, VertexId),
-            CollapseAcrossBoundary(VertexId, VertexId),
-        }
 
         let collapse_ops = new_verts
             .iter()
@@ -553,21 +573,8 @@ fn bevel_edges_connectivity(
             })
             .collect::<SVecN<_, 16>>();
 
-        // When collapsing vertices, we need a way to determine where those
-        // original vertices ended up or we may access invalid ids
-        type TranslationMap = HashMap<VertexId, VertexId>;
-        let mut translation_map: TranslationMap = HashMap::new();
-        /// Returns the translation of a vertex, that is, the vertex this vertex
-        /// ended up being translated to.
-        fn get_translated(m: &TranslationMap, v: VertexId) -> VertexId {
-            let mut v = v;
-            while let Some(v_tr) = m.get(&v) {
-                v = *v_tr;
-            }
-            v
-        }
-
         for op in collapse_ops {
+            dbg!(&op);
             match op {
                 CollapseOp::CollapseAcrossFace(y, x) => {
                     // Collapse the shared edge between the vertices
@@ -577,18 +584,30 @@ fn bevel_edges_connectivity(
                     collapse_edge(mesh, h)?;
                     translation_map.insert(x, y); // Take note that x is now y
                 }
-                CollapseOp::CollapseAcrossBoundary(y, x) => {
-                    // Collapse both vertices into the central one
-                    let x = get_translated(&translation_map, x);
-                    let y = get_translated(&translation_map, y);
-                    let central_vertex = get_translated(&translation_map, central_vertex);
-                    let h1 = mesh.at_vertex(central_vertex).halfedge_to(x).try_end()?;
-                    let h2 = mesh.at_vertex(central_vertex).halfedge_to(y).try_end()?;
-                    collapse_edge(mesh, h1)?;
-                    collapse_edge(mesh, h2)?;
-                    translation_map.insert(x, central_vertex); // Take note of the change
-                    translation_map.insert(y, central_vertex); // Take note of the change
-                }
+                op @ CollapseOp::CollapseAcrossBoundary(_, _) => deferred_collapse_ops.push((op, central_vertex)),
+            }
+        }
+    }
+
+    for (op, central_vertex) in deferred_collapse_ops {
+        match op {
+            CollapseOp::CollapseAcrossBoundary(y, x) => {
+                // Collapse both vertices into the central one
+                let x = get_translated(&translation_map, x);
+                let y = get_translated(&translation_map, y);
+                let central_vertex = get_translated(&translation_map, central_vertex);
+
+                let h1 = mesh.at_vertex(central_vertex).halfedge_to(x).try_end()?;
+                collapse_edge(mesh, h1)?;
+
+                let h2 = mesh.at_vertex(central_vertex).halfedge_to(y).try_end()?;
+                collapse_edge(mesh, h2)?;
+
+                translation_map.insert(x, central_vertex); // Take note of the change
+                translation_map.insert(y, central_vertex); // Take note of the change
+            }
+            _ => {
+                unreachable!()
             }
         }
     }
@@ -1960,7 +1979,8 @@ pub mod lua_fns {
             &mut mesh.write_positions(),
             &edges,
             amount,
-        );
+        )
+        .unwrap();
         Ok(())
     }
 
