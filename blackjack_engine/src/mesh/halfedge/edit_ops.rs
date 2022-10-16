@@ -472,7 +472,6 @@ fn bevel_edges_connectivity(
     mesh: &mut MeshConnectivity,
     positions: &mut Positions,
     halfedges: &[HalfEdgeId],
-    extrude_mode: bool,
 ) -> Result<BTreeSet<HalfEdgeId>> {
     let mut edges_to_bevel = BTreeSet::new();
     let mut duplicated_edges = BTreeSet::new();
@@ -545,6 +544,10 @@ fn bevel_edges_connectivity(
         //
         // This binary vector has a `true` for every vertex position where that
         // needs to happen.
+        let num_hs_to_bevel: u32 = outgoing_halfedges
+            .iter()
+            .map(|h| edges_to_bevel.contains(h) as u32)
+            .sum();
         let collapse_indices = outgoing_halfedges
             .iter()
             .circular_tuple_windows()
@@ -556,11 +559,18 @@ fn bevel_edges_connectivity(
                 let h_n = !h_b && !h_d;
                 let h2_n = !h2_b && !h2_d;
 
-                if extrude_mode {
-                    h_b && h2_n || h_d && h2_b || h_d && h2_n || h_n && h2_b || h_n && h2_n
-                } else {
-                    h_b && h2_n || h_d && h2_b || h_d && h2_n || h_n && h2_b
-                }
+                h_b && h2_n
+                    || h_d && h2_b
+                    || h_d && h2_n
+                    || h_n && h2_b
+                    // NOTE: When we have exactly two edges to bevel in this
+                    // vertex, doing this gives nicer results (and is more
+                    // consistent with other 3d apps like Blender).
+                    || if num_hs_to_bevel == 2 {
+                        h_n && h2_n
+                    } else {
+                        false
+                    }
             })
             .collect::<SVecN<_, 16>>();
 
@@ -641,7 +651,7 @@ pub fn bevel_edges(
     halfedges: &[HalfEdgeId],
     amount: f32,
 ) -> Result<()> {
-    let beveled_edges = bevel_edges_connectivity(mesh, positions, halfedges, false)?;
+    let beveled_edges = bevel_edges_connectivity(mesh, positions, halfedges)?;
 
     // --- Adjust vertex positions ---
 
@@ -708,7 +718,7 @@ pub fn extrude_faces(
         }
     }
 
-    let _beveled_edges = bevel_edges_connectivity(mesh, positions, &halfedges, true)?;
+    let _beveled_edges = bevel_edges_connectivity(mesh, positions, &halfedges)?;
 
     // --- Adjust vertex positions ---
 
