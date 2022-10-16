@@ -472,6 +472,7 @@ fn bevel_edges_connectivity(
     mesh: &mut MeshConnectivity,
     positions: &mut Positions,
     halfedges: &[HalfEdgeId],
+    extrude_mode: bool,
 ) -> Result<BTreeSet<HalfEdgeId>> {
     let mut edges_to_bevel = BTreeSet::new();
     let mut duplicated_edges = BTreeSet::new();
@@ -555,7 +556,11 @@ fn bevel_edges_connectivity(
                 let h_n = !h_b && !h_d;
                 let h2_n = !h2_b && !h2_d;
 
-                h_b && h2_n || h_d && h2_b || h_d && h2_n || h_n && h2_b
+                if extrude_mode {
+                    h_b && h2_n || h_d && h2_b || h_d && h2_n || h_n && h2_b || h_n && h2_n
+                } else {
+                    h_b && h2_n || h_d && h2_b || h_d && h2_n || h_n && h2_b
+                }
             })
             .collect::<SVecN<_, 16>>();
 
@@ -563,7 +568,7 @@ fn bevel_edges_connectivity(
         // guaranteed to be in the same order as `v`'s outgoing halfedges.
         let (_, new_verts) = chamfer_vertex(mesh, positions, central_vertex, 0.0)?;
 
-        let mut local_collapse_ops : Vec<CollapseAcrossFace> = vec![];
+        let mut local_collapse_ops: Vec<CollapseAcrossFace> = vec![];
 
         for ((&x, &y), should_collapse) in new_verts
             .iter()
@@ -636,7 +641,7 @@ pub fn bevel_edges(
     halfedges: &[HalfEdgeId],
     amount: f32,
 ) -> Result<()> {
-    let beveled_edges = bevel_edges_connectivity(mesh, positions, halfedges)?;
+    let beveled_edges = bevel_edges_connectivity(mesh, positions, halfedges, false)?;
 
     // --- Adjust vertex positions ---
 
@@ -703,12 +708,7 @@ pub fn extrude_faces(
         }
     }
 
-    let beveled_edges = bevel_edges_connectivity(mesh, positions, &halfedges);
-    if let Err(err) = beveled_edges {
-        println!("{err}");
-        return Ok(());
-    }
-    let beveled_edges = beveled_edges.unwrap();
+    let _beveled_edges = bevel_edges_connectivity(mesh, positions, &halfedges, true)?;
 
     // --- Adjust vertex positions ---
 
@@ -716,37 +716,22 @@ pub fn extrude_faces(
     // normal vector. Vertices that share more than one face, get accumulated
     // pushes.
     let mut move_ops = HashMap::<VertexId, HashSet<Vec3Ord>>::new();
-    for h in beveled_edges {
-        // Find the halfedges adjacent to one of the extruded faces
-        if mesh
-            .at_halfedge(h)
-            .face_or_boundary()?
-            .map(|f| face_set.contains(&f))
-            .unwrap_or(false)
-        {
-            let face = mesh.at_halfedge(h).face().try_end()?;
-            let (src, dst) = mesh.at_halfedge(h).src_dst_pair()?;
 
-            mesh.add_debug_halfedge(h, DebugMark::green("bvl"));
-
+    for face in faces {
+        for v in mesh.at_face(*face).vertices()? {
             let push = mesh
-                .face_normal(positions, face)
-                .ok_or_else(|| anyhow!("Attempted to extrude a face with only two vertices."))?
-                * amount;
-
-            move_ops
-                .entry(src)
-                .or_insert_with(HashSet::new)
-                .insert(push.to_ord());
-            move_ops
-                .entry(dst)
-                .or_insert_with(HashSet::new)
-                .insert(push.to_ord());
+                .face_normal(positions, *face)
+                .ok_or_else(|| anyhow!("Attempted to extrude a face with only two vertices."))?;
+            move_ops.entry(v).or_default().insert(push.to_ord());
         }
     }
 
     for (v_id, ops) in move_ops {
-        positions[v_id] += ops.iter().fold(Vec3::ZERO, |x, y| x + y.to_vec());
+        positions[v_id] += ops
+            .iter()
+            .fold(Vec3::ZERO, |x, y| x + y.to_vec())
+            .normalize()
+            * amount;
     }
 
     Ok(())
@@ -1998,8 +1983,6 @@ pub mod lua_fns {
             &edges,
             amount,
         )
-        .unwrap();
-        Ok(())
     }
 
     /// Extrudes the given `faces` by a given `amount` distance.
