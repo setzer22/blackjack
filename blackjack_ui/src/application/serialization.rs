@@ -57,9 +57,10 @@ pub fn save(
     path: PathBuf,
 ) -> Result<()> {
     let writer = std::io::BufWriter::new(std::fs::File::create(path)?);
-    ron::ser::to_writer(
+    ron::ser::to_writer_pretty(
         writer,
         &SerializedEditorState::from_state(editor_state, custom_state),
+        ron::ser::PrettyConfig::default(),
     )?;
     Ok(())
 }

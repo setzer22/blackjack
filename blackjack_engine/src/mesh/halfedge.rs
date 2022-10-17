@@ -6,6 +6,7 @@
 
 use std::{
     cell::{Ref, RefCell, RefMut},
+    marker::PhantomData,
     rc::Rc,
 };
 
@@ -324,13 +325,28 @@ impl MeshConnectivity {
         ret
     }
 
-    #[allow(dead_code)] // Might become useful later
-    fn halfedge_loop_iter(&self, h0: HalfEdgeId) -> HalfedgeLoopIterator<'_> {
-        HalfedgeLoopIterator {
+    /// Returns an iterator that follows the next pointer for halfedges starting
+    /// at `h0` until closing the loop.
+    fn halfedge_loop_iter(&self, h0: HalfEdgeId) -> HalfedgeOpIterator<'_, NextOp> {
+        HalfedgeOpIterator {
             conn: self,
             start: h0,
             next: h0,
             count: 0,
+            _op: PhantomData,
+        }
+    }
+
+    /// Returns an iterator that cycles around the halfedge fan starting at `h0`
+    /// until closing the loop.
+    #[allow(dead_code)]
+    fn halfedge_fan_iter(&self, h0: HalfEdgeId) -> HalfedgeOpIterator<'_, CycleFanOp> {
+        HalfedgeOpIterator {
+            conn: self,
+            start: h0,
+            next: h0,
+            count: 0,
+            _op: PhantomData,
         }
     }
 
@@ -810,14 +826,33 @@ impl Default for HalfEdgeMesh {
     }
 }
 
-pub struct HalfedgeLoopIterator<'a> {
+pub trait HalfEdgeOp {
+    fn op(conn: &MeshConnectivity, h: HalfEdgeId) -> HalfEdgeId;
+}
+
+pub struct NextOp;
+impl HalfEdgeOp for NextOp {
+    fn op(conn: &MeshConnectivity, h: HalfEdgeId) -> HalfEdgeId {
+        conn.at_halfedge(h).next().end()
+    }
+}
+
+pub struct CycleFanOp;
+impl HalfEdgeOp for CycleFanOp {
+    fn op(conn: &MeshConnectivity, h: HalfEdgeId) -> HalfEdgeId {
+        conn.at_halfedge(h).cycle_around_fan().end()
+    }
+}
+
+pub struct HalfedgeOpIterator<'a, Op: HalfEdgeOp> {
     conn: &'a MeshConnectivity,
     start: HalfEdgeId,
     next: HalfEdgeId,
     count: usize,
+    _op: PhantomData<Op>,
 }
 
-impl<'a> Iterator for HalfedgeLoopIterator<'a> {
+impl<'a, Op: HalfEdgeOp> Iterator for HalfedgeOpIterator<'a, Op> {
     type Item = HalfEdgeId;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -827,7 +862,7 @@ impl<'a> Iterator for HalfedgeLoopIterator<'a> {
             None
         } else {
             let res = self.next;
-            self.next = self.conn.at_halfedge(self.next).next().end();
+            self.next = Op::op(self.conn, self.next);
             self.count += 1;
             Some(res)
         }

@@ -38,7 +38,7 @@ fn main() {
     #[cfg(feature = "tracy")]
     let _client = profiling::tracy_client::Client::start();
 
-    // Setup logging
+    // Various setup calls
     env_logger::init();
 
     // Handle luadoc flag

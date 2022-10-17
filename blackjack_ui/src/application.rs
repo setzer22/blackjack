@@ -276,7 +276,7 @@ impl RootViewport {
                     )?;
                     let bga = BlackjackJackAsset { program, params };
                     let writer = std::io::BufWriter::new(std::fs::File::create(path)?);
-                    ron::ser::to_writer(writer, &bga)?;
+                    ron::ser::to_writer_pretty(writer, &bga, ron::ser::PrettyConfig::default())?;
                 }
                 Ok(())
             }

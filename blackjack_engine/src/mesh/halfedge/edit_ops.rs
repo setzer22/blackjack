@@ -139,13 +139,9 @@ pub fn cut_face(
 ) -> Result<HalfEdgeId> {
     let face = mesh
         .at_vertex(v)
-        .outgoing_halfedges()?
-        .iter()
-        .map(|h| mesh.at_halfedge(*h).face().try_end())
-        .collect::<Result<SVec<FaceId>, TraversalError>>()?
-        .iter()
-        .find(|f| mesh.face_vertices(**f).contains(&w))
-        .cloned()
+        .adjacent_faces()?
+        .into_iter()
+        .find(|f| mesh.face_vertices(*f).contains(&w))
         .ok_or_else(|| anyhow!("cut_face: v and w must share a face"))?;
 
     if mesh.at_vertex(v).halfedge_to(w).try_end().is_ok() {
@@ -272,6 +268,17 @@ pub fn dissolve_vertex(mesh: &mut halfedge::MeshConnectivity, v: VertexId) -> Re
 /// Chamfers a vertex. That is, for each outgoing edge of the vertex, a new
 /// vertex will be created. All the new vertices will be joined in a new face,
 /// and the original vertex will get removed.
+///
+/// ## Vertices in the boundary
+/// When any of the outgoing halfedges for `v` lies in the boundary, this
+/// operation cannot be completed as documented, because the final
+/// `dissolve_vertex` operation is not well-defined.
+///
+/// In that case, the operation doesn't complete, and the resulting `FaceId`
+/// return value will be `None`. This behavior is not only a best-effort, but is
+/// consistent with the expected behavior during the bevel operation, which
+/// depends on this operation.
+///
 /// ## Id Stability
 /// This operation guarantees that the outgoing halfedge ids are preserved.
 /// Additionally, the returned vertex id vector has the newly created vertex ids
@@ -281,18 +288,34 @@ pub fn chamfer_vertex(
     positions: &mut Positions,
     v: VertexId,
     interpolation_factor: f32,
-) -> Result<(FaceId, SVec<VertexId>)> {
+) -> Result<(Option<FaceId>, SVec<VertexId>)> {
     let outgoing = mesh.at_vertex(v).outgoing_halfedges()?;
     let mut vertices = SVec::new();
     for &h in &outgoing {
         vertices.push(divide_edge(mesh, positions, h, interpolation_factor)?);
     }
 
-    for (&v, &w) in vertices.iter().circular_tuple_windows() {
-        cut_face(mesh, v, w)?;
+    let mut is_boundary = false;
+
+    for ((&v, _), (&w, &hw)) in vertices
+        .iter()
+        .zip(outgoing.iter())
+        .circular_tuple_windows()
+    {
+        // Only cut faces at the boundary. If there's two vertices separated by
+        // boundary, we take note of that and don't do the final dissolve.
+        if !mesh.at_halfedge(hw).is_boundary()? {
+            cut_face(mesh, v, w)?;
+        } else {
+            is_boundary = true;
+        }
     }
 
-    Ok((dissolve_vertex(mesh, v)?, vertices))
+    if is_boundary {
+        Ok((None, vertices))
+    } else {
+        Ok((Some(dissolve_vertex(mesh, v)?), vertices))
+    }
 }
 
 /// Creates a 2-sided face on the inside of this edge. This has no effect on the
@@ -327,8 +350,6 @@ pub fn duplicate_edge(mesh: &mut MeshConnectivity, h: HalfEdgeId) -> Result<Half
 }
 
 /// Merges the src and dst vertices of `h` so that only the first one remains
-/// TODO: This does not handle the case where a collapse edge operation would
-/// remove a face
 pub fn collapse_edge(mesh: &mut MeshConnectivity, h: HalfEdgeId) -> Result<VertexId> {
     let (v, w) = mesh.at_halfedge(h).src_dst_pair()?;
     let t = mesh.at_halfedge(h).twin().try_end()?;
@@ -337,9 +358,12 @@ pub fn collapse_edge(mesh: &mut MeshConnectivity, h: HalfEdgeId) -> Result<Verte
     let t_next = mesh.at_halfedge(t).next().try_end()?;
     let t_prev = mesh.at_halfedge(t).previous().try_end()?;
     let w_outgoing = mesh.at_vertex(w).outgoing_halfedges()?;
-    let v_next_fan = mesh.at_halfedge(h).cycle_around_fan().try_end()?;
-    let f_h = mesh.at_halfedge(h).face().try_end();
-    let f_t = mesh.at_halfedge(t).face().try_end();
+    let f_h = mesh.at_halfedge(h).face_or_boundary()?;
+    let f_t = mesh.at_halfedge(t).face_or_boundary()?;
+    // We check here if either face is a triangle. This is an edge case that
+    // requires some additional post-processing later.
+    let f_h_is_triangle = f_h.is_some() && mesh.halfedge_loop_iter(h).count() == 3;
+    let f_t_is_triangle = f_t.is_some() && mesh.halfedge_loop_iter(t).count() == 3;
 
     // --- Adjust connectivity ---
     for h_wo in w_outgoing {
@@ -349,25 +373,89 @@ pub fn collapse_edge(mesh: &mut MeshConnectivity, h: HalfEdgeId) -> Result<Verte
     mesh[h_prev].next = Some(h_next);
 
     // Some face may point to the halfedges we're deleting. Fix that.
-    if let Ok(f_h) = f_h {
+    if let Some(f_h) = f_h {
         if mesh.at_face(f_h).halfedge().try_end()? == h {
             mesh[f_h].halfedge = Some(h_next);
         }
     }
-    if let Ok(f_t) = f_t {
+    if let Some(f_t) = f_t {
         if mesh.at_face(f_t).halfedge().try_end()? == t {
             mesh[f_t].halfedge = Some(t_next);
         }
-    }
-    // The vertex we're keeping may be pointing to one of the deleted halfedges.
-    if mesh.at_vertex(v).halfedge().try_end()? == h {
-        mesh[v].halfedge = Some(v_next_fan);
     }
 
     // --- Remove data ----
     mesh.remove_halfedge(t);
     mesh.remove_halfedge(h);
     mesh.remove_vertex(w);
+
+    // --- Triangular face post-processing ---
+
+    // If either f_h or f_t were triangle faces, we need to do some extra
+    // cleanup, because the collapse edge operation also removes those faces.
+
+    /// The operation returns a pair of halfedges, which are the external edges
+    /// of the triangular face after the internal ones have been deleted. After
+    /// this operation, the triangular face is now a single edge.
+    fn post_process_triangular_face(
+        mesh: &mut MeshConnectivity,
+        prev: HalfEdgeId,
+        next: HalfEdgeId,
+        face: Option<FaceId>,
+    ) -> Result<(HalfEdgeId, HalfEdgeId)> {
+        let prev_twin = mesh.at_halfedge(prev).twin().try_end()?;
+        let next_twin = mesh.at_halfedge(next).twin().try_end()?;
+        mesh[prev_twin].twin = Some(next_twin);
+        mesh[next_twin].twin = Some(prev_twin);
+        mesh.remove_halfedge(prev);
+        mesh.remove_halfedge(next);
+        if let Some(face) = face {
+            mesh.remove_face(face);
+        }
+        Ok((prev_twin, next_twin))
+    }
+
+    let f_h_triangle_halfedges = if f_h_is_triangle {
+        Some(post_process_triangular_face(mesh, h_prev, h_next, f_h)?)
+    } else {
+        None
+    };
+    let f_t_triangle_halfedges = if f_t_is_triangle {
+        Some(post_process_triangular_face(mesh, t_prev, t_next, f_t)?)
+    } else {
+        None
+    };
+
+    // --- Fix connectivity for vertices ---
+
+    // The remaining vertices may be pointing to a deleted halfedge. We need to
+    // fix that here to prevent consistency issues.
+    if mesh[v].halfedge == Some(h) {
+        // In general, we can use `h_next` since that is not an outgoing
+        // halfedge of `v (because `h` was collapsed). But in case `f_h` was a
+        // triangle we need to use `h_v_x` since `h_next` was deleted.
+        if let Some((h_v_x, _)) = f_h_triangle_halfedges {
+            mesh[v].halfedge = Some(h_v_x);
+        } else {
+            mesh[v].halfedge = Some(h_next);
+        }
+    }
+    if let Some((_, h_x_w)) = f_h_triangle_halfedges {
+        let x = mesh.at_halfedge(h_x_w).vertex().try_end()?;
+        if mesh[x].halfedge == Some(h_prev) {
+            mesh[x].halfedge = Some(h_x_w);
+        }
+    }
+    if let Some((h_v_y, h_y_v)) = f_t_triangle_halfedges {
+        let y = mesh.at_halfedge(h_y_v).vertex().try_end()?;
+        if mesh[y].halfedge == Some(t_prev) {
+            mesh[y].halfedge = Some(h_y_v);
+        }
+
+        if mesh[v].halfedge == Some(t_next) {
+            mesh[v].halfedge = Some(h_v_y);
+        }
+    }
 
     Ok(v)
 }
@@ -405,12 +493,61 @@ fn bevel_edges_connectivity(
     }
 
     // ---- 2. Chamfer all vertices -----
-    for v in vertices_to_chamfer {
-        let outgoing_halfedges = mesh.at_vertex(v).outgoing_halfedges()?;
+
+    // There are two kinds of edge collapse operations, depending on wether the
+    // chamfer operation can cut the face between these two vertices. Sometimes
+    // faces can't be cut because the two vertices are separated by the boundary.
+
+    /// This is the regular operation, where a cut operation was performed
+    /// between two vertices, and we now want to collapse this cut edge.
+    struct CollapseAcrossFace {
+        x: VertexId,
+        y: VertexId,
+    }
+    /// This is the special case, where the cut operation couldn't be performed.
+    /// In that case, instead of collapsing the two vertices, we collapse them
+    /// into the central one (the one we chamfered).
+    struct CollapseAcrossBoundary {
+        x: VertexId,
+        y: VertexId,
+        central: VertexId,
+    }
+
+    // "Collapse across boundary" ops are deferred. If we do them locally for
+    // each vertex during chamfer we may end up introducing inconsistencies.
+    let mut deferred_collapse_ops: Vec<CollapseAcrossBoundary> = vec![];
+
+    // Since we're freely collapsing vertices, the reified operations may
+    // contain references to vertices that no longer exist. This translation map
+    // is used to know where vertices end up and avoid accessing invalid ids.
+    type TranslationMap = HashMap<VertexId, VertexId>;
+    let mut translation_map: TranslationMap = HashMap::new();
+
+    /// Returns the translation of a vertex, that is, the vertex this vertex
+    /// ended up being translated to.
+    fn get_translated(m: &TranslationMap, v: VertexId) -> VertexId {
+        let mut v = v;
+        // Translations may be transitive.. chase until we reach a vertex that
+        // has no translation, this is the one that still exists.
+        while let Some(v_tr) = m.get(&v) {
+            v = *v_tr;
+        }
+        v
+    }
+
+    for central_vertex in vertices_to_chamfer {
+        let outgoing_halfedges = mesh.at_vertex(central_vertex).outgoing_halfedges()?;
 
         // After the chamfer operation, some vertex pairs need to get collapsed
-        // into a single one. This binary vector has a `true` for every vertex
-        // position where that needs to happen.
+        // into a single one. The meaning of 'collapse' depends on whether the
+        // vertices are joined by an edge, or separated by the boundary.
+        //
+        // This binary vector has a `true` for every vertex position where that
+        // needs to happen.
+        let num_hs_to_bevel: u32 = outgoing_halfedges
+            .iter()
+            .map(|h| edges_to_bevel.contains(h) as u32)
+            .sum();
         let collapse_indices = outgoing_halfedges
             .iter()
             .circular_tuple_windows()
@@ -422,52 +559,81 @@ fn bevel_edges_connectivity(
                 let h_n = !h_b && !h_d;
                 let h2_n = !h2_b && !h2_d;
 
-                h_b && h2_n || h_d && h2_b || h_d && h2_n || h_n && h2_b
+                h_b && h2_n
+                    || h_d && h2_b
+                    || h_d && h2_n
+                    || h_n && h2_b
+                    // NOTE: When we have exactly two edges to bevel in this
+                    // vertex, doing this gives nicer results (and is more
+                    // consistent with other 3d apps like Blender).
+                    || if num_hs_to_bevel == 2 {
+                        h_n && h2_n
+                    } else {
+                        false
+                    }
             })
             .collect::<SVecN<_, 16>>();
 
         // Here, we execute the chamfer operation. The returned indices are
         // guaranteed to be in the same order as `v`'s outgoing halfedges.
-        let (_, new_verts) = chamfer_vertex(mesh, positions, v, 0.0)?;
+        let (_, new_verts) = chamfer_vertex(mesh, positions, central_vertex, 0.0)?;
 
-        let collapse_ops = new_verts
+        let mut local_collapse_ops: Vec<CollapseAcrossFace> = vec![];
+
+        for ((&x, &y), should_collapse) in new_verts
             .iter()
             .circular_tuple_windows()
             .zip(collapse_indices)
-            .filter_map(|((v, w), should_collapse)| {
-                if should_collapse {
-                    // We want to keep w so next iterations don't produce dead
-                    // vertex ids This is not entirely necessary since the
-                    // translation map already ensures we will never access any
-                    // dead vertices.
-                    Some((*w, *v))
+        {
+            if should_collapse {
+                let shared_face = mesh.at_vertex(x).adjacent_faces().ok().and_then(|faces| {
+                    faces
+                        .into_iter()
+                        .find(|f| mesh.face_vertices(*f).contains(&y))
+                });
+
+                // When the shared face between y and x is the boundary, we
+                // can't collapse the edge between the two because it
+                // doesn't exist. The correct fix here is to collapse both
+                // vertices into the central one. The chamfer operation will
+                // keep the central vertex if at least one of its adjacent
+                // faces was the boundary.
+                if shared_face.is_some() {
+                    local_collapse_ops.push(CollapseAcrossFace { x, y })
                 } else {
-                    None
+                    deferred_collapse_ops.push(CollapseAcrossBoundary {
+                        x,
+                        y,
+                        central: central_vertex,
+                    })
                 }
-            })
-            .collect::<SVecN<_, 16>>();
-
-        // When collapsing vertices, we need a way to determine where those
-        // original vertices ended up or we may access invalid ids
-        type TranslationMap = HashMap<VertexId, VertexId>;
-        let mut translation_map: TranslationMap = HashMap::new();
-        /// Returns the translation of a vertex, that is, the vertex this vertex
-        /// ended up being translated to.
-        fn get_translated(m: &TranslationMap, v: VertexId) -> VertexId {
-            let mut v = v;
-            while let Some(v_tr) = m.get(&v) {
-                v = *v_tr;
             }
-            v
         }
 
-        for (w, v) in collapse_ops {
-            let v = get_translated(&translation_map, v);
-            let w = get_translated(&translation_map, w);
-            let h = mesh.at_vertex(w).halfedge_to(v).try_end()?;
+        for CollapseAcrossFace { x, y } in local_collapse_ops {
+            // Collapse the shared edge between the vertices
+            let x = get_translated(&translation_map, x);
+            let y = get_translated(&translation_map, y);
+            let h = mesh.at_vertex(y).halfedge_to(x).try_end()?;
             collapse_edge(mesh, h)?;
-            translation_map.insert(v, w); // Take note that v is now w
+            translation_map.insert(x, y); // Take note that x is now y
         }
+    }
+
+    for CollapseAcrossBoundary { x, y, central } in deferred_collapse_ops {
+        // Collapse both vertices into the central one
+        let x = get_translated(&translation_map, x);
+        let y = get_translated(&translation_map, y);
+        let central_vertex = get_translated(&translation_map, central);
+
+        let h1 = mesh.at_vertex(central_vertex).halfedge_to(x).try_end()?;
+        collapse_edge(mesh, h1)?;
+
+        let h2 = mesh.at_vertex(central_vertex).halfedge_to(y).try_end()?;
+        collapse_edge(mesh, h2)?;
+
+        translation_map.insert(x, central_vertex); // Take note of the change
+        translation_map.insert(y, central_vertex); // Take note of the change
     }
 
     Ok(edges_to_bevel)
@@ -492,6 +658,10 @@ pub fn bevel_edges(
     let mut move_ops = HashMap::<VertexId, HashSet<Vec3Ord>>::new();
     for h in beveled_edges {
         mesh.add_debug_halfedge(h, DebugMark::green("bvl"));
+
+        if mesh.at_halfedge(h).is_boundary()? {
+            continue;
+        }
 
         let (v, w) = mesh.at_halfedge(h).src_dst_pair()?;
         let v_to = mesh.at_halfedge(h).previous().vertex().try_end()?;
@@ -537,11 +707,13 @@ pub fn extrude_faces(
                 if !face_set.contains(&tw_face) {
                     halfedges.push(h);
                 }
+            } else {
+                halfedges.push(h);
             }
         }
     }
 
-    let beveled_edges = bevel_edges_connectivity(mesh, positions, &halfedges)?;
+    let _beveled_edges = bevel_edges_connectivity(mesh, positions, &halfedges)?;
 
     // --- Adjust vertex positions ---
 
@@ -549,37 +721,22 @@ pub fn extrude_faces(
     // normal vector. Vertices that share more than one face, get accumulated
     // pushes.
     let mut move_ops = HashMap::<VertexId, HashSet<Vec3Ord>>::new();
-    for h in beveled_edges {
-        // Find the halfedges adjacent to one of the extruded faces
-        if mesh
-            .at_halfedge(h)
-            .face_or_boundary()?
-            .map(|f| face_set.contains(&f))
-            .unwrap_or(false)
-        {
-            let face = mesh.at_halfedge(h).face().try_end()?;
-            let (src, dst) = mesh.at_halfedge(h).src_dst_pair()?;
 
-            mesh.add_debug_halfedge(h, DebugMark::green("bvl"));
-
+    for face in faces {
+        for v in mesh.at_face(*face).vertices()? {
             let push = mesh
-                .face_normal(positions, face)
-                .ok_or_else(|| anyhow!("Attempted to extrude a face with only two vertices."))?
-                * amount;
-
-            move_ops
-                .entry(src)
-                .or_insert_with(HashSet::new)
-                .insert(push.to_ord());
-            move_ops
-                .entry(dst)
-                .or_insert_with(HashSet::new)
-                .insert(push.to_ord());
+                .face_normal(positions, *face)
+                .ok_or_else(|| anyhow!("Attempted to extrude a face with only two vertices."))?;
+            move_ops.entry(v).or_default().insert(push.to_ord());
         }
     }
 
     for (v_id, ops) in move_ops {
-        positions[v_id] += ops.iter().fold(Vec3::ZERO, |x, y| x + y.to_vec());
+        positions[v_id] += ops
+            .iter()
+            .fold(Vec3::ZERO, |x, y| x + y.to_vec())
+            .normalize()
+            * amount;
     }
 
     Ok(())
@@ -1830,8 +1987,7 @@ pub mod lua_fns {
             &mut mesh.write_positions(),
             &edges,
             amount,
-        )?;
-        Ok(())
+        )
     }
 
     /// Extrudes the given `faces` by a given `amount` distance.
@@ -2105,5 +2261,34 @@ pub mod lua_fns {
             rotate.0,
             scale.0,
         )
+    }
+
+    /// Collapses an `edge`, fusing the source and destination vertices in to one.
+    /// If this operation is applied to a triangle, the face will be removed and
+    /// become a single edge.o
+    ///
+    /// The position of the new collapsed vertex will be interpolated between
+    /// the vertices of the original halfedge with a given `interpolation`
+    /// factor.
+    #[lua(under = "Ops")]
+    pub fn collapse_edge(
+        mesh: &mut HalfEdgeMesh,
+        edge: SelectionExpression,
+        interpolation: f32,
+    ) -> Result<VertexId> {
+        let edge = mesh
+            .resolve_halfedge_selection_full(&edge)?
+            .iter_cpy()
+            .next()
+            .ok_or_else(|| anyhow!("No edge selected"))?;
+
+        let mut positions = mesh.write_positions();
+        let (src, dst) = mesh.read_connectivity().at_halfedge(edge).src_dst_pair()?;
+        let vpos = lerp(positions[src], positions[dst], interpolation);
+
+        let v = super::collapse_edge(&mut mesh.write_connectivity(), edge)?;
+
+        positions[v] = vpos;
+        Ok(v)
     }
 }
