@@ -8,13 +8,13 @@ use crate::graph::graph_interop;
 use crate::prelude::*;
 use anyhow::Error;
 use blackjack_engine::{
-    graph_compiler::{compile_graph, CompiledProgram, ExternalParameterValues},
-    lua_engine::{LuaRuntime, RenderableThing},
+    lua_engine::{LuaRuntime, ProgramResult, RenderableThing},
     prelude::{FaceOverlayBuffers, LineBuffers, PointBuffers, VertexIndexBuffers},
 };
 use egui_node_graph::NodeId;
 
 use super::{
+    gizmo_ui::BlackjackUiGizmo,
     root_ui::AppRootAction,
     viewport_3d::{EdgeDrawMode, FaceDrawMode, Viewport3dSettings},
     viewport_split::SplitTree,
@@ -26,6 +26,9 @@ pub struct ApplicationContext {
     /// - The graph generates a program that produces it.
     /// - The 3d viewport renders it.
     pub renderable_thing: Option<RenderableThing>,
+    /// The currently active gizmos. Gizmos are returned by nodes to represent
+    /// visual objects that can be used to manipulate its parameters.
+    pub active_gizmos: Vec<Box<dyn BlackjackUiGizmo>>,
     /// The tree of splits at the center of application. Splits recursively
     /// partition the state either horizontally or vertically. This separation
     /// is dynamic, very similar to Blender's UI model
@@ -36,6 +39,7 @@ impl ApplicationContext {
     pub fn new() -> ApplicationContext {
         ApplicationContext {
             renderable_thing: None,
+            active_gizmos: Vec::new(),
             split_tree: SplitTree::default_tree(),
         }
     }
@@ -58,6 +62,7 @@ impl ApplicationContext {
         render_ctx: &mut RenderContext,
         viewport_settings: &Viewport3dSettings,
         lua_runtime: &LuaRuntime,
+        model_matrix: Mat4,
     ) -> Vec<AppRootAction> {
         // TODO: Instead of clearing all objects, make the app context own the
         // objects it's drawing and clear those instead.
@@ -73,6 +78,18 @@ impl ApplicationContext {
                 self.paint_errors(egui_ctx, err);
             }
         };
+
+        if let Some(RenderableThing::HalfEdgeMesh(m)) = &self.renderable_thing {
+            let (s, r, t) = model_matrix.to_scale_rotation_translation();
+            blackjack_engine::mesh::halfedge::edit_ops::transform(
+                m,
+                t,
+                Vec3::from(r.to_euler(glam::EulerRot::XYZ)),
+                s,
+            )
+            .expect("This code should not make it to review...");
+        }
+
         if let Err(err) = self.run_side_effects(editor_state, custom_state, lua_runtime) {
             eprintln!(
                 "There was an errror executing side effect: {err}\nBacktrace:\n----------\n{}",
@@ -197,18 +214,20 @@ impl ApplicationContext {
         );
     }
 
-    pub fn compile_program<'lua>(
-        &'lua self,
-        editor_state: &'lua graph::GraphEditorState,
+    pub fn run_node(
+        &self,
+        graph: &graph::Graph,
+        lua_runtime: &LuaRuntime,
         node: NodeId,
-        is_side_effect: bool,
-    ) -> Result<(CompiledProgram, ExternalParameterValues)> {
-        let (bjk_graph, mapping) = graph_interop::ui_graph_to_blackjack_graph(&editor_state.graph)?;
-        let final_node = mapping[node];
-        let program = compile_graph(&bjk_graph, final_node, is_side_effect)?;
-        let params = graph_interop::extract_graph_params(&editor_state.graph, &mapping, &program)?;
-
-        Ok((program, params))
+    ) -> Result<ProgramResult> {
+        let (bjk_graph, mapping) = graph_interop::ui_graph_to_blackjack_graph(graph)?;
+        let params = graph_interop::extract_graph_params(graph, &bjk_graph, &mapping)?;
+        blackjack_engine::graph_interpreter::run_graph(
+            &lua_runtime.lua,
+            &bjk_graph,
+            mapping[node],
+            &params,
+        )
     }
 
     // Returns the compiled lua code
@@ -219,14 +238,10 @@ impl ApplicationContext {
         lua_runtime: &LuaRuntime,
     ) -> Result<String> {
         if let Some(active) = custom_state.active_node {
-            let (program, params) = self.compile_program(editor_state, active, false)?;
-            let mesh = blackjack_engine::lua_engine::run_program(
-                &lua_runtime.lua,
-                &program.lua_program,
-                &params,
-            )?;
-            self.renderable_thing = Some(mesh);
-            Ok(program.lua_program)
+            let program_result = self.run_node(&editor_state.graph, lua_runtime, active)?;
+            self.renderable_thing = program_result.renderable;
+            // TODO REVIEW: Remove the whole "code" tab
+            Ok("".into())
         } else {
             self.renderable_thing = None;
             Ok("".into())
@@ -240,14 +255,9 @@ impl ApplicationContext {
         lua_runtime: &LuaRuntime,
     ) -> Result<()> {
         if let Some(side_effect) = custom_state.run_side_effect.take() {
-            let (program, params) = self.compile_program(editor_state, side_effect, true)?;
             // We ignore the result. The program is only executed to produce a
             // side effect (e.g. exporting a mesh as OBJ)
-            blackjack_engine::lua_engine::run_program_side_effects(
-                &lua_runtime.lua,
-                &program.lua_program,
-                &params,
-            )?;
+            let _ = self.run_node(&editor_state.graph, lua_runtime, side_effect)?;
         }
         Ok(())
     }

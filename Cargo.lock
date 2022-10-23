@@ -488,6 +488,7 @@ dependencies = [
  "derive_more",
  "dyn-clone",
  "egui",
+ "egui-gizmo",
  "egui-wgpu",
  "egui-winit",
  "egui_node_graph",
@@ -1100,6 +1101,14 @@ dependencies = [
  "ron 0.8.0",
  "serde",
  "tracing",
+]
+
+[[package]]
+name = "egui-gizmo"
+version = "0.8.0"
+dependencies = [
+ "egui",
+ "glam 0.21.3",
 ]
 
 [[package]]

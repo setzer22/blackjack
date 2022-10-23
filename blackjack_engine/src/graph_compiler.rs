@@ -170,7 +170,6 @@ fn codegen_node(
     } else {
         let mut args = String::from("{\n");
         for input in &node.inputs {
-            //let input_addr = codegen_input(graph, ctx, node_id, input_name)?;
             let input_name = &input.name;
 
             let input_value = match &input.kind {
@@ -212,12 +211,13 @@ fn codegen_node(
     emit_line!("local {output_addr} = require('node_library'):callNode('{node_name}', {args})");
 
     if target && !ctx.is_side_effect {
-        // NOTE: Return is ignored if the current compiled graph is a side effect invovation.
-        let return_val = node
-            .return_value
-            .as_ref()
-            .ok_or_else(|| anyhow!("The target node should return something"))?;
-        emit_return!(format!("{output_addr}.{return_val}"));
+        emit_line!("return {{");
+
+        if let Some(return_val) = node.return_value.as_ref() {
+            emit_line!("{indent}renderable = {output_addr}.{return_val}");
+        }
+
+        emit_line!("}}");
     }
 
     Ok(())

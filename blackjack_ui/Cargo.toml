@@ -29,6 +29,8 @@ glsl-include = { git = "https://github.com/setzer22/glsl-include", rev = "d9b1ad
 egui-winit = { version = "0.19" }
 egui-wgpu = { version = "0.19" }
 egui = { version = "0.19", features = ["persistence"] }
+# egui-gizmo = "0.8.0"
+egui-gizmo = { path = "../../egui-gizmo" }
 glam = { version = "0.21.2", features = ["serde", "bytemuck"] }
 env_logger = { version = "0.9", default-features = false, features = [
     "termcolor",

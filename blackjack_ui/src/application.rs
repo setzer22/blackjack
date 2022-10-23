@@ -14,7 +14,7 @@ use crate::{
         point_cloud_routine::PointCloudRoutine, wireframe_routine::WireframeRoutine,
     },
 };
-use blackjack_engine::{graph_compiler::BlackjackJackAsset, lua_engine::LuaRuntime};
+use blackjack_engine::lua_engine::LuaRuntime;
 use egui_wgpu::renderer::{RenderPass, ScreenDescriptor};
 
 use self::{
@@ -44,6 +44,9 @@ pub struct RootViewport {
 /// The application context is state that is global to an instance of blackjack.
 /// The currently open file and any data that is not per-viewport goes here.
 pub mod application_context;
+
+/// The gizmo logic specific to blackjack_ui
+pub mod gizmo_ui;
 
 /// The graph editor viewport. Shows an inner egui instance with zooming /
 /// panning functionality.
@@ -242,6 +245,7 @@ impl RootViewport {
             render_ctx,
             &self.viewport_3d.settings,
             &self.lua_runtime,
+            self.viewport_3d.model_matrix,
         ));
 
         for action in actions {
@@ -269,12 +273,9 @@ impl RootViewport {
             }
             AppRootAction::ExportJack(path) => {
                 if let Some(active_node) = self.graph_editor.custom_state.active_node {
-                    let (program, params) = self.app_context.compile_program(
-                        &self.graph_editor.editor_state,
-                        active_node,
-                        false,
-                    )?;
-                    let bga = BlackjackJackAsset { program, params };
+                    // TODO: REVIEW:
+                    let bga = todo!("REWORK JACK ASSET SYSTEM");
+                    // let bga = BlackjackJackAsset { program, params };
                     let writer = std::io::BufWriter::new(std::fs::File::create(path)?);
                     ron::ser::to_writer_pretty(writer, &bga, ron::ser::PrettyConfig::default())?;
                 }

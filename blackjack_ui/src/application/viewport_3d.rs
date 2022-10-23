@@ -67,7 +67,14 @@ pub struct Viewport3d {
     viewport_rect: egui::Rect,
     parent_scale: f32,
     pub settings: Viewport3dSettings,
-    view_proj: Mat4,
+    view_proj_matrix: Mat4,
+    view_matrix: Mat4,
+    projection_matrix: Mat4,
+    // TODO: Remove this one
+    pub model_matrix: Mat4,
+    // True when a mouse drag does not belong to the camera. Such as when
+    // dragging a gizmo.
+    mouse_captured: bool,
 }
 
 struct OrbitCamera {
@@ -116,7 +123,11 @@ impl Viewport3d {
                 render_vertices: true,
                 matcap: 0,
             },
-            view_proj: Mat4::default(),
+            view_proj_matrix: Mat4::default(),
+            view_matrix: Mat4::default(),
+            projection_matrix: Mat4::default(),
+            model_matrix: Mat4::default(),
+            mouse_captured: false,
         }
     }
 
@@ -141,28 +152,30 @@ impl Viewport3d {
 
         self.camera.update(10.0 / 60.0);
 
-        // Update status
-        if self.input.mouse.buttons().pressed(MouseButton::Left) {
-            if self.input.shift_down {
-                let cam_rotation = Mat4::from_rotation_y(self.camera.yaw.get().to_radians())
-                    * Mat4::from_rotation_x(self.camera.pitch.get().to_radians());
-                let camera_right = cam_rotation.transform_point3(Vec3::X);
-                let camera_up = cam_rotation.transform_vector3(Vec3::Y);
-                let move_speed = self.camera.distance.get() / MAX_DIST;
-                self.camera.focus_point +=
-                    self.input.mouse.cursor_delta().x * camera_right * move_speed
-                        + self.input.mouse.cursor_delta().y * -camera_up * move_speed;
-            } else {
-                self.camera.yaw += self.input.mouse.cursor_delta().x * 2.0;
-                self.camera.pitch += self.input.mouse.cursor_delta().y * 2.0;
+        if !self.mouse_captured {
+            // Update status
+            if self.input.mouse.buttons().pressed(MouseButton::Left) {
+                if self.input.shift_down {
+                    let cam_rotation = Mat4::from_rotation_y(self.camera.yaw.get().to_radians())
+                        * Mat4::from_rotation_x(self.camera.pitch.get().to_radians());
+                    let camera_right = cam_rotation.transform_point3(Vec3::X);
+                    let camera_up = cam_rotation.transform_vector3(Vec3::Y);
+                    let move_speed = self.camera.distance.get() / MAX_DIST;
+                    self.camera.focus_point +=
+                        self.input.mouse.cursor_delta().x * camera_right * move_speed
+                            + self.input.mouse.cursor_delta().y * -camera_up * move_speed;
+                } else {
+                    self.camera.yaw += self.input.mouse.cursor_delta().x * 2.0;
+                    self.camera.pitch += self.input.mouse.cursor_delta().y * 2.0;
+                }
             }
+            self.camera.distance.set(|dist| {
+                (dist - self.input.mouse.wheel_delta() * 0.5).clamp(MIN_DIST, MAX_DIST)
+            });
+            // self.camera
+            // .fov
+            // .set(|fov| (fov - self.input.mouse.wheel_delta() * 4.0).clamp(MIN_FOV, MAX_FOV));
         }
-        self.camera
-            .distance
-            .set(|dist| (dist - self.input.mouse.wheel_delta() * 0.5).clamp(MIN_DIST, MAX_DIST));
-        // self.camera
-        // .fov
-        // .set(|fov| (fov - self.input.mouse.wheel_delta() * 4.0).clamp(MIN_FOV, MAX_FOV));
 
         // Compute view matrix
         let view = Mat4::from_translation(Vec3::Z * self.camera.distance.get())
@@ -185,7 +198,9 @@ impl Viewport3d {
         self.input.update();
 
         let camera_manager = &render_ctx.renderer.data_core.lock().camera_manager;
-        self.view_proj = camera_manager.view_proj();
+        self.view_proj_matrix = camera_manager.view_proj();
+        self.view_matrix = camera_manager.view();
+        self.projection_matrix = camera_manager.proj();
 
         // TODO: What if we ever have multiple 3d viewports? There's no way to
         // set the aspect ratio differently for different render passes in rend3
@@ -342,12 +357,25 @@ impl Viewport3d {
         });
         if let Some(renderable_thing) = renderable_thing {
             crate::app_window::gui_overlay::draw_gui_overlays(
-                &self.view_proj,
+                &self.view_proj_matrix,
                 offscreen_viewport.rect,
                 ui.ctx(),
                 renderable_thing,
                 self.settings.overlay_mode,
             );
+
+            let gizmo = egui_gizmo::Gizmo::new("viewport_gizmo")
+                .view_matrix(self.view_matrix.to_cols_array_2d())
+                .projection_matrix(self.projection_matrix.to_cols_array_2d())
+                .model_matrix(self.model_matrix.to_cols_array_2d())
+                .viewport(self.viewport_rect)
+                .mode(egui_gizmo::GizmoMode::Rotate);
+            if let Some(response) = gizmo.interact(ui) {
+                self.mouse_captured = true;
+                self.model_matrix = Mat4::from_cols_array_2d(&response.transform);
+            } else {
+                self.mouse_captured = false;
+            }
         }
     }
 }

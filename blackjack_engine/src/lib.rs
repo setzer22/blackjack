@@ -20,4 +20,10 @@ pub mod lua_engine;
 pub mod graph;
 
 /// Converts graphs into Lua programs
-pub mod graph_compiler;
+// pub mod graph_compiler;
+
+/// High level interpreter of blackjack graphs.
+pub mod graph_interpreter;
+
+/// Gizmos allow visual modifications of a node's parameters.
+pub mod gizmos;

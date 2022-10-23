@@ -8,6 +8,7 @@
 // TODO: This is to make clippy happy
 // Need to fix #[export] -> #[method] later
 
+use blackjack_engine::lua_engine::ProgramResult;
 use blackjack_engine::lua_engine::RenderableThing;
 use gdnative::api::Material;
 use slotmap::KeyData;
@@ -17,8 +18,6 @@ use std::sync::atomic::AtomicBool;
 
 use blackjack_engine::graph::BlackjackValue;
 use blackjack_engine::graph::InputValueConfig;
-use blackjack_engine::graph_compiler::BlackjackJackAsset;
-use blackjack_engine::graph_compiler::ExternalParamAddr;
 use blackjack_engine::lua_engine::LuaRuntime;
 use blackjack_engine::mesh::halfedge::HalfEdgeMesh;
 use blackjack_engine::prelude::selection::SelectionExpression;
@@ -48,6 +47,9 @@ impl ToVariant for JackId {
     }
 }
 
+// TODO: REVIEW: FIX GODOT INTEGRATION
+struct BlackjackJackAsset {}
+
 /// A singleton node that manages the lifetime for all the loaded jacks. This
 /// node is never directly used by GDscript, which instead accesses it via the
 /// [`BlackjackApi`].
@@ -62,6 +64,7 @@ pub struct BlackjackGodotRuntime {
     jacks: SlotMap<JackId, Option<BlackjackJackAsset>>,
 }
 
+/*
 static LUA_NEEDS_INIT: AtomicBool = AtomicBool::new(true);
 
 #[methods]
@@ -312,7 +315,7 @@ impl BlackjackApi {
                 &jack.program.lua_program,
                 &jack.params,
             ) {
-                Ok(RenderableThing::HalfEdgeMesh(mesh)) => {
+                Ok(ProgramResult { renderable: Some(RenderableThing::HalfEdgeMesh(mesh)), .. }) => {
                     let godot_mesh = halfedge_to_godot_mesh(&mesh, materials).unwrap();
                     Some(UpdateJackResult::Ok(godot_mesh))
                 }
@@ -454,3 +457,4 @@ pub fn register_classes(handle: InitHandle) {
     handle.add_class::<BlackjackApi>();
     handle.add_class::<BlackjackGodotRuntime>();
 }
+*/

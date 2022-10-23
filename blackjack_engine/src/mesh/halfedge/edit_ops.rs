@@ -1219,7 +1219,7 @@ pub fn bridge_chains_ui(
 }
 
 pub fn transform(
-    mesh: &mut HalfEdgeMesh,
+    mesh: &HalfEdgeMesh,
     translate: Vec3,
     rotate: Vec3,
     scale: Vec3,
@@ -1532,7 +1532,7 @@ pub fn copy_to_points(points: &HalfEdgeMesh, cpy_mesh: &HalfEdgeMesh) -> Result<
         drop(cpy_instance_conn);
         drop(instance_idx_ch);
 
-        transform(&mut cpy_instance, position_ch[v], rotate, scale)?;
+        transform(&cpy_instance, position_ch[v], rotate, scale)?;
         result.merge_with(&cpy_instance);
     }
 

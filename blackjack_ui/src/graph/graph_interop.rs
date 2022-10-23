@@ -9,10 +9,9 @@ use std::ops::Index;
 use super::node_graph::Graph;
 
 use crate::prelude::*;
-use blackjack_engine::graph_compiler::ExternalParameterValues;
 use blackjack_engine::{
-    graph::{BjkGraph, BjkNodeId},
-    graph_compiler::CompiledProgram,
+    graph::{BjkGraph, BjkNodeId, DependencyKind},
+    graph_interpreter::{ExternalParameter, ExternalParameterValues},
 };
 use egui_node_graph::{InputId, NodeId, OutputId};
 use slotmap::SecondaryMap;
@@ -75,18 +74,23 @@ pub fn ui_graph_to_blackjack_graph(graph: &Graph) -> Result<(BjkGraph, NodeMappi
 
 pub fn extract_graph_params(
     graph: &Graph,
+    bjk_graph: &BjkGraph,
     mapping: &NodeMapping,
-    program: &CompiledProgram,
 ) -> Result<ExternalParameterValues> {
     let mut params = ExternalParameterValues::default();
 
-    for external_def in &program.external_parameters {
-        let node = mapping[external_def.node_id];
-        let input = graph[node].get_input(&external_def.param_name)?;
-        // TODO: @perf The whole parameter definition is copied here, but we're
-        // just interested in the data table that we'll feed into Lua. Maybe we
-        // need two different concepts here?
-        params.insert(external_def.addr.clone(), graph[input].value.0.clone());
+    for (node_id, node) in &bjk_graph.nodes {
+        for input in &node.inputs {
+            if let DependencyKind::External = input.kind {
+                let external_param =
+                    ExternalParameter::new(&node.op_name, node_id, &input.name);
+                let ui_node_id = mapping[node_id];
+                let ui_input = graph[ui_node_id].get_input(&input.name)?;
+                params
+                    .0
+                    .insert(external_param, graph[ui_input].value.0.value.clone());
+            }
+        }
     }
 
     Ok(params)

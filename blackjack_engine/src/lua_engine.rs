@@ -12,11 +12,8 @@ use std::{
     time::Duration,
 };
 
-use crate::{
-    graph::NodeDefinitions, graph_compiler::ExternalParameterValues, mesh::heightmap::HeightMap,
-    prelude::*,
-};
-use mlua::{Function, Lua};
+use crate::{graph::NodeDefinitions, mesh::heightmap::HeightMap, prelude::*};
+use mlua::Lua;
 use notify::{DebouncedEvent, Watcher};
 
 use self::lua_stdlib::{load_node_definitions, LuaFileIo, StdLuaFileIo};
@@ -45,43 +42,26 @@ pub enum RenderableThing {
     HeightMap(HeightMap),
 }
 
-pub fn run_program<'lua>(
-    lua: &'lua Lua,
-    lua_program: &str,
-    input: &ExternalParameterValues,
-) -> Result<RenderableThing> {
-    lua.load(lua_program).exec()?;
-    let values = input.make_input_table(lua)?;
-    let entry_point: Function = lua.globals().get("main")?;
-    let result = entry_point
-        .call::<_, mlua::AnyUserData>(values)
-        .map_err(|err| anyhow!("{}", err))?;
-
-    if result.is::<HalfEdgeMesh>() {
-        Ok(RenderableThing::HalfEdgeMesh(result.take()?))
-    } else if result.is::<HeightMap>() {
-        Ok(RenderableThing::HeightMap(result.take()?))
-    } else {
-        Err(anyhow::anyhow!(
-            "Object {result:?} is not a renderable thing"
-        ))
+impl RenderableThing {
+    pub fn from_lua_value(renderable: mlua::Value<'_>) -> Result<Self> {
+        match renderable {
+            mlua::Value::UserData(renderable) if renderable.is::<HalfEdgeMesh>() => {
+                Ok(RenderableThing::HalfEdgeMesh(renderable.take()?))
+            }
+            mlua::Value::UserData(renderable) if renderable.is::<HeightMap>() => {
+                Ok(RenderableThing::HeightMap(renderable.take()?))
+            }
+            _ => {
+                bail!("Object {renderable:?} is not a thing we can render.")
+            }
+        }
     }
 }
 
-/// Like `run_program`, but does not return anything and only runs the code for
-/// its side effects
-pub fn run_program_side_effects<'lua>(
-    lua: &'lua Lua,
-    lua_program: &str,
-    input: &ExternalParameterValues,
-) -> Result<()> {
-    lua.load(lua_program).exec()?;
-    let values = input.make_input_table(lua)?;
-    let entry_point: Function = lua.globals().get("main")?;
-    entry_point
-        .call::<_, mlua::Value>(values)
-        .map_err(|err| anyhow!("{}", err))?;
-    Ok(())
+/// The result of an invocation to a lua program.
+pub struct ProgramResult {
+    /// The renderable thing produced by this program to be shown on-screen.
+    pub renderable: Option<RenderableThing>,
 }
 
 pub struct LuaRuntime {
