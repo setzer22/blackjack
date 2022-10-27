@@ -13,6 +13,9 @@ use mlua::{Table, ToLua};
 use serde::{Deserialize, Serialize};
 use slotmap::SlotMap;
 
+/// The core `blj` file format
+mod serialization;
+
 /// Defines helper functions to load old file formats with serde. This allows
 /// some variation in the structs types without breaking the `blj` file format.
 mod serde_compat;

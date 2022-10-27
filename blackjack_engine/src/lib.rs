@@ -19,9 +19,6 @@ pub mod lua_engine;
 /// The graph core datatypes
 pub mod graph;
 
-/// Converts graphs into Lua programs
-// pub mod graph_compiler;
-
 /// High level interpreter of blackjack graphs.
 pub mod graph_interpreter;
 
