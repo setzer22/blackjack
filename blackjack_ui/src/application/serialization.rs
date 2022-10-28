@@ -7,6 +7,7 @@
 use crate::{graph::graph_interop, prelude::graph::*, prelude::*};
 use std::path::PathBuf;
 
+use blackjack_engine::graph::serialization::RuntimeData;
 use egui_node_graph::PanZoom;
 use serde::{Deserialize, Serialize};
 use slotmap::SecondaryMap;
@@ -65,12 +66,19 @@ pub fn save(
     let (bjk_graph, mapping) = graph_interop::ui_graph_to_blackjack_graph(&editor_state.graph)?;
     let external_param_values =
         graph_interop::extract_graph_params(&editor_state.graph, &bjk_graph, &mapping)?;
+    let positions = editor_state
+        .node_positions
+        .iter()
+        .map(|(node_id, pos2)| (mapping[node_id], glam::Vec2::new(pos2.x, pos2.y)))
+        .collect();
     blackjack_engine::graph::serialization::SerializedBjkGraph::write_to_file(
         format!("{}.bjk", path.to_str().unwrap().trim_end_matches(".blj")),
-        &bjk_graph,
-        Some(external_param_values),
-        None,
-        None,
+        RuntimeData {
+            graph: bjk_graph,
+            external_parameters: Some(external_param_values),
+            positions: Some(positions),
+            parameters: None,
+        },
     )?;
 
     Ok(())

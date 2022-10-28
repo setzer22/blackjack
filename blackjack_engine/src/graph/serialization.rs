@@ -181,7 +181,7 @@ pub struct SerializedBjkGraph {
 /// Maps slotmap ids to serialized indices.
 type IdToIdx = SecondaryMap<BjkNodeId, usize>;
 
-/// Maps seri
+/// Maps serialized indices to node ids
 type IdxToId = Vec<BjkNodeId>;
 
 struct IdMappings {
@@ -189,32 +189,36 @@ struct IdMappings {
     idx_to_id: IdxToId,
 }
 
+/// This struct represents the runtime data that can be written to, or loaded
+/// from a serialized file.
+pub struct RuntimeData {
+    pub graph: BjkGraph,
+    pub external_parameters: Option<ExternalParameterValues>,
+    pub positions: Option<SecondaryMap<BjkNodeId, glam::Vec2>>,
+    pub parameters: Option<Vec<(BjkNodeId, String, BlackjackParameter)>>,
+}
+
 // ===========================================
 // ==== SERIALIZATION FROM RUNTIME VALUES ====
 // ===========================================
 
 impl SerializedBjkGraph {
-    pub fn write_to_file(
-        path: impl AsRef<Path>,
-        graph: &BjkGraph,
-        external_param_values: Option<ExternalParameterValues>,
-        positions: Option<SecondaryMap<BjkNodeId, glam::Vec2>>,
-        parameters: Option<Vec<(BjkNodeId, String, BlackjackParameter)>>,
-    ) -> anyhow::Result<()> {
+    pub fn write_to_file(path: impl AsRef<Path>, runtime_data: RuntimeData) -> anyhow::Result<()> {
         let version = SerializationVersion::latest();
-        let data = Self::from_runtime(graph, external_param_values, positions, parameters);
+        let data = Self::from_runtime(runtime_data);
         let mut writer = BufWriter::new(std::fs::File::create(path)?);
         version.to_writer(&mut writer);
         ron::ser::to_writer_pretty(&mut writer, &data, PrettyConfig::default())?;
         Ok(())
     }
 
-    pub fn from_runtime(
-        graph: &BjkGraph,
-        external_param_values: Option<ExternalParameterValues>,
-        positions: Option<SecondaryMap<BjkNodeId, glam::Vec2>>,
-        parameters: Option<Vec<(BjkNodeId, String, BlackjackParameter)>>,
-    ) -> Self {
+    pub fn from_runtime(runtime_data: RuntimeData) -> Self {
+        let RuntimeData {
+            graph,
+            external_parameters,
+            positions,
+            parameters,
+        } = runtime_data;
         let BjkGraph { nodes } = graph;
 
         let mappings = IdMappings {
@@ -225,14 +229,14 @@ impl SerializedBjkGraph {
         let mut serialized_nodes = vec![];
         for (node_id, node) in nodes {
             serialized_nodes.push(SerializedBjkNode::from_runtime_data(
-                node_id, node, &mappings,
+                node_id, &node, &mappings,
             ));
         }
 
         Self {
             nodes: serialized_nodes,
             node_positions: positions.map(|p| SerializedNodePositions::from_runtime(p, &mappings)),
-            external_parameters: external_param_values
+            external_parameters: external_parameters
                 .map(|e| SerializedExternalParameters::from_runtime(e, &mappings)),
             parameter_configs: parameters
                 .map(|p| SerializedParameterConfigs::from_runtime(p, &mappings)),
@@ -487,6 +491,22 @@ impl SerializedDependencyKind {
 // ====================================================
 // ==== RUNTIME DATA GENERATION FROM STORED VALUES ====
 // ====================================================
+
+impl SerializedBjkGraph {
+    pub fn to_runtime_data(self) -> RuntimeData {
+        let graph = BjkGraph {
+            nodes: todo!()
+        };
+
+        // WIP
+        RuntimeData {
+            graph: (),
+            external_parameters: (),
+            positions: (),
+            parameters: (),
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {
