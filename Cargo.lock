@@ -440,6 +440,7 @@ dependencies = [
  "num-traits",
  "profiling",
  "rayon",
+ "ron 0.7.1",
  "rstar",
  "serde",
  "slotmap",

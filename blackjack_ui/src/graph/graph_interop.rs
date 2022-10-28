@@ -83,7 +83,7 @@ pub fn extract_graph_params(
         for input in &node.inputs {
             if let DependencyKind::External = input.kind {
                 let external_param =
-                    ExternalParameter::new(&node.op_name, node_id, &input.name);
+                    ExternalParameter::new(node_id, input.name.clone());
                 let ui_node_id = mapping[node_id];
                 let ui_input = graph[ui_node_id].get_input(&input.name)?;
                 params

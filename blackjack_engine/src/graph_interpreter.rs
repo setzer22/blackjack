@@ -5,11 +5,17 @@ use crate::lua_engine::{ProgramResult, RenderableThing};
 use crate::prelude::*;
 
 #[derive(Debug, PartialEq, Eq, Hash)]
-pub struct ExternalParameter(String);
+pub struct ExternalParameter {
+    pub node_id: BjkNodeId,
+    pub param_name: String,
+}
 
 impl ExternalParameter {
-    pub fn new(op_name: &str, node_id: BjkNodeId, param: &str) -> Self {
-        Self(format!("{op_name}_{}_{param}", node_id.display_id()))
+    pub fn new(node_id: BjkNodeId, param_name: String) -> Self {
+        Self {
+            node_id,
+            param_name,
+        }
     }
 }
 
@@ -82,7 +88,7 @@ pub fn run_node<'lua>(
             }
             crate::graph::DependencyKind::Computed(_) => todo!(),
             crate::graph::DependencyKind::External => {
-                let ext = ExternalParameter::new(&node.op_name, node_id, &input.name);
+                let ext = ExternalParameter::new(node_id, input.name.clone());
                 let val = ctx.external_param_values.0.get(&ext).ok_or_else(|| {
                     anyhow!(
                         "Could not retrieve external parameter named '{}' from node {}",

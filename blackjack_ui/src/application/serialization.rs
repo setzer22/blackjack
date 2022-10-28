@@ -4,7 +4,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-use crate::{prelude::graph::*, prelude::*};
+use crate::{graph::graph_interop, prelude::graph::*, prelude::*};
 use std::path::PathBuf;
 
 use egui_node_graph::PanZoom;
@@ -56,12 +56,23 @@ pub fn save(
     custom_state: &CustomGraphState,
     path: PathBuf,
 ) -> Result<()> {
-    let writer = std::io::BufWriter::new(std::fs::File::create(path)?);
+    let writer = std::io::BufWriter::new(std::fs::File::create(&path)?);
     ron::ser::to_writer_pretty(
         writer,
         &SerializedEditorState::from_state(editor_state, custom_state),
         ron::ser::PrettyConfig::default(),
     )?;
+    let (bjk_graph, mapping) = graph_interop::ui_graph_to_blackjack_graph(&editor_state.graph)?;
+    let external_param_values =
+        graph_interop::extract_graph_params(&editor_state.graph, &bjk_graph, &mapping)?;
+    blackjack_engine::graph::serialization::SerializedBjkGraph::write_to_file(
+        format!("{}.bjk", path.to_str().unwrap().trim_end_matches(".blj")),
+        &bjk_graph,
+        Some(external_param_values),
+        None,
+        None,
+    )?;
+
     Ok(())
 }
 
