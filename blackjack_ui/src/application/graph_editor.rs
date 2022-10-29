@@ -30,7 +30,12 @@ impl GraphEditor {
     pub const ZOOM_LEVEL_MIN: f32 = 0.5;
     pub const ZOOM_LEVEL_MAX: f32 = 10.0;
 
-    pub fn new(renderer: &r3::Renderer, format: r3::TextureFormat, parent_scale: f32) -> Self {
+    pub fn new(
+        renderer: &r3::Renderer,
+        format: r3::TextureFormat,
+        parent_scale: f32,
+        node_definitions: NodeDefinitions,
+    ) -> Self {
         let egui_context = egui::Context::default();
         egui_context.set_visuals(blackjack_graph_theme());
 
@@ -41,7 +46,7 @@ impl GraphEditor {
         Self {
             // Set default zoom to the inverse of ui scale to preserve dpi
             editor_state: graph::GraphEditorState::new(1.0 / parent_scale),
-            custom_state: graph::CustomGraphState::default(),
+            custom_state: graph::CustomGraphState::new(node_definitions),
             egui_context,
             egui_winit_state,
             renderpass: RenderPass::new(&renderer.device, format, 1),

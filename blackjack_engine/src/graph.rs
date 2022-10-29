@@ -4,7 +4,10 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+use std::cell::{Ref, RefCell};
 use std::collections::BTreeMap;
+use std::ops::Deref;
+use std::rc::Rc;
 
 use crate::prelude::*;
 use crate::{lua_engine::lua_stdlib::LVec3, mesh::halfedge::selection::SelectionExpression};
@@ -29,7 +32,10 @@ pub enum DependencyKind {
     Computed(LuaExpression),
     /// Taking the value of an external parameter, from the inputs to the graph
     /// function itself.
-    External,
+    ///
+    /// When promoted, the connection stores the parameter name that will be
+    /// shown to the user of the graph.
+    External { promoted: Option<String> },
     /// Taking the value from another node's outputs.
     Connection { node: BjkNodeId, param_name: String },
 }
@@ -225,9 +231,46 @@ pub struct NodeDefinition {
     pub executable: bool,
 }
 
+#[derive(Default)]
+pub struct NodeDefinitionsInner(BTreeMap<String, NodeDefinition>);
+
 /// A collection of node definitions. This struct is the Rust counterpart to the
 /// node library in Lua.
-pub struct NodeDefinitions(pub BTreeMap<String, NodeDefinition>);
+///
+/// This struct acts like a pointer with multiple ownership and interior
+/// mutability, allowing multiple locations in the codebase to store and receive
+/// updates to the node definitions when hot-reloading detects changes.
+#[derive(Default)]
+pub struct NodeDefinitions {
+    pub inner: Rc<RefCell<NodeDefinitionsInner>>,
+}
+
+impl NodeDefinitions {
+    pub fn new(inner: NodeDefinitionsInner) -> Self {
+        Self {
+            inner: Rc::new(RefCell::new(inner)),
+        }
+    }
+    pub fn share(&self) -> Self {
+        Self {
+            inner: Rc::clone(&self.inner),
+        }
+    }
+    pub fn node_names(&self) -> Vec<String> {
+        self.inner.borrow().0.keys().cloned().collect()
+    }
+    pub fn node_def(&self, op_name: &str) -> Option<impl Deref<Target = NodeDefinition> + '_> {
+        let guard = self.inner.borrow();
+        if guard.0.contains_key(op_name) {
+            Some(Ref::map(guard, |x| x.0.get(op_name).unwrap()))
+        } else {
+            None
+        }
+    }
+    pub fn update(&self, new_data: NodeDefinitionsInner) {
+        *self.inner.borrow_mut() = new_data;
+    }
+}
 
 /// Given a string representing an input definition type (taken from a Lua
 /// file), returns the data type for that parameter.
@@ -339,15 +382,16 @@ impl NodeDefinition {
     }
 
     /// Loads a group of [`NodeDefinitions`] from a Lua table
-    pub fn load_nodes_from_table(table: Table) -> Result<NodeDefinitions> {
-        table
-            .pairs::<String, Table>()
-            .map(|pair| {
-                let (k, v) = pair?;
-                Ok((k.clone(), NodeDefinition::from_lua(k, v)?))
-            })
-            .collect::<Result<_>>()
-            .map(NodeDefinitions)
+    pub fn load_nodes_from_table(table: Table) -> Result<NodeDefinitionsInner> {
+        Ok(NodeDefinitionsInner(
+            table
+                .pairs::<String, Table>()
+                .map(|pair| {
+                    let (k, v) = pair?;
+                    Ok((k.clone(), NodeDefinition::from_lua(k, v)?))
+                })
+                .collect::<Result<_>>()?,
+        ))
     }
 }
 
@@ -383,7 +427,7 @@ impl BjkGraph {
             self.nodes[node_id].inputs.push(InputParameter {
                 name,
                 data_type,
-                kind: DependencyKind::External,
+                kind: DependencyKind::External { promoted: None },
             });
         }
         Ok(())

@@ -81,7 +81,7 @@ pub fn extract_graph_params(
 
     for (node_id, node) in &bjk_graph.nodes {
         for input in &node.inputs {
-            if let DependencyKind::External = input.kind {
+            if let DependencyKind::External { .. } = input.kind {
                 let external_param =
                     ExternalParameter::new(node_id, input.name.clone());
                 let ui_node_id = mapping[node_id];

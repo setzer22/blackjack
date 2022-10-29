@@ -115,6 +115,10 @@ impl RootViewport {
         egui_winit_state.set_max_texture_side(renderer.limits.max_texture_dimension_2d as usize);
         egui_winit_state.set_pixels_per_point(scale_factor as f32);
 
+        // TODO: Hardcoded node libraries path. Read from cmd line?
+        let lua_runtime = LuaRuntime::initialize_with_std("./blackjack_lua/".into())
+            .unwrap_or_else(|err| panic!("Init lua should not fail. {err}"));
+
         RootViewport {
             egui_winit_state,
             egui_context,
@@ -125,16 +129,19 @@ impl RootViewport {
             },
             renderpass: RenderPass::new(&renderer.device, screen_format, 1),
             app_context: ApplicationContext::new(),
-            graph_editor: GraphEditor::new(renderer, screen_format, scale_factor as f32),
+            graph_editor: GraphEditor::new(
+                renderer,
+                screen_format,
+                scale_factor as f32,
+                lua_runtime.node_definitions.share(),
+            ),
             viewport_3d: Viewport3d::new(),
             offscreen_viewports,
             inspector_tabs: InspectorTabs::new(),
             diagnostics_open: false,
             code_viewer_open: false,
             code_viewer_code: None,
-            // TODO: Hardcoded node libraries path. Read from cmd line?
-            lua_runtime: LuaRuntime::initialize_with_std("./blackjack_lua/".into())
-                .unwrap_or_else(|err| panic!("Init lua should not fail. {err}")),
+            lua_runtime,
             mouse_captured_by_split: false,
         }
     }

@@ -86,7 +86,7 @@ impl SerializationVersion {
 #[derive(Serialize, Deserialize)]
 pub enum SerializedDependencyKind {
     Computed(String),
-    External,
+    External { promoted: Option<String> },
     Conection { node_idx: usize, param_name: String },
 }
 
@@ -497,7 +497,9 @@ impl SerializedDependencyKind {
     fn from_runtime_data(kind: &DependencyKind, mappings: &IdMappings) -> Result<Self> {
         match kind {
             DependencyKind::Computed(lua_expr) => Ok(Self::Computed(lua_expr.0.clone())),
-            DependencyKind::External => Ok(Self::External),
+            DependencyKind::External { promoted } => Ok(Self::External {
+                promoted: promoted.clone(),
+            }),
             DependencyKind::Connection { node, param_name } => Ok(Self::Conection {
                 node_idx: mappings.get_idx(*node)?,
                 param_name: param_name.clone(),
@@ -540,7 +542,9 @@ impl SerializedBjkGraph {
                             SerializedDependencyKind::Computed(s) => {
                                 DependencyKind::Computed(LuaExpression(s))
                             }
-                            SerializedDependencyKind::External => DependencyKind::External,
+                            SerializedDependencyKind::External { promoted } => {
+                                DependencyKind::External { promoted }
+                            }
                             SerializedDependencyKind::Conection {
                                 node_idx,
                                 param_name,

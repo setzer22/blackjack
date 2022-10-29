@@ -87,7 +87,7 @@ pub fn run_node<'lua>(
                 )?;
             }
             crate::graph::DependencyKind::Computed(_) => todo!(),
-            crate::graph::DependencyKind::External => {
+            crate::graph::DependencyKind::External { promoted: _ } => {
                 let ext = ExternalParameter::new(node_id, input.name.clone());
                 let val = ctx.external_param_values.0.get(&ext).ok_or_else(|| {
                     anyhow!(

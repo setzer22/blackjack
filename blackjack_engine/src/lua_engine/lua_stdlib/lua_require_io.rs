@@ -4,9 +4,9 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-use std::{borrow::Cow, path::PathBuf};
+use std::{borrow::Cow, path::PathBuf, collections::BTreeMap};
 
-use crate::graph::{NodeDefinition, NodeDefinitions};
+use crate::graph::{NodeDefinition, NodeDefinitions, NodeDefinitionsInner};
 
 pub struct LuaSourceFile {
     pub contents: String,
@@ -106,7 +106,7 @@ impl LuaFileIo for StdLuaFileIo {
 pub fn load_node_definitions(
     lua: &mlua::Lua,
     lua_io: &dyn LuaFileIo,
-) -> anyhow::Result<NodeDefinitions> {
+) -> anyhow::Result<NodeDefinitionsInner> {
     for path in lua_io.find_run_files() {
         let file = lua_io.load_file_absolute(&path)?;
         lua.load(&file).exec()?;

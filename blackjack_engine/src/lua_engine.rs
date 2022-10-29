@@ -86,7 +86,8 @@ impl LuaRuntime {
         let lua = Lua::new();
         let lua_io = Arc::new(lua_io);
         lua_stdlib::load_lua_bindings(&lua, lua_io.clone())?;
-        let node_definitions = load_node_definitions(&lua, lua_io.as_ref())?;
+        let node_definitions = NodeDefinitions::new(load_node_definitions(&lua, lua_io.as_ref())?);
+
         let (watcher, watcher_channel) = {
             let (tx, rx) = mpsc::channel();
             let mut watcher = notify::watcher(tx, Duration::from_secs(1))?;
@@ -124,7 +125,7 @@ impl LuaRuntime {
 
                     // By calling this, all code under $BLACKJACK_LUA/run will
                     // be executed and the node definitions will be reloaded.
-                    self.node_definitions = load_node_definitions(&self.lua, self.lua_io.as_ref())?;
+                    self.node_definitions.update(load_node_definitions(&self.lua, self.lua_io.as_ref())?);
                 }
                 _ => {}
             }

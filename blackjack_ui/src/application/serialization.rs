@@ -7,7 +7,7 @@
 use crate::{graph::graph_interop, prelude::graph::*, prelude::*};
 use std::path::PathBuf;
 
-use blackjack_engine::graph::serialization::RuntimeData;
+use blackjack_engine::graph::{serialization::RuntimeData, NodeDefinitions};
 use egui_node_graph::PanZoom;
 use serde::{Deserialize, Serialize};
 use slotmap::SecondaryMap;
@@ -38,6 +38,7 @@ impl SerializedEditorState {
         let custom_state = CustomGraphState {
             run_side_effect: None,
             active_node: self.active_node,
+            node_definitions: NodeDefinitions::default() // TODO: HACK: This won't work
         };
 
         let mut editor_state = GraphEditorState::new(1.0);

@@ -1141,7 +1141,6 @@ dependencies = [
 [[package]]
 name = "egui_node_graph"
 version = "0.3.0"
-source = "git+https://github.com/setzer22/egui_node_graph?rev=79fbe314826573807fbcd35b2c7c982bfb1c75b6#79fbe314826573807fbcd35b2c7c982bfb1c75b6"
 dependencies = [
  "egui",
  "serde",

@@ -32,7 +32,7 @@ pub type GraphEditorState = egui_node_graph::GraphEditorState<
     NodeData,
     DataTypeUi,
     ValueTypeUi,
-    NodeDefinitionUi,
+    NodeOpName,
     CustomGraphState,
 >;
 
@@ -45,7 +45,7 @@ pub enum CustomNodeResponse {
 }
 
 /// Blackjack-specific global graph state
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct CustomGraphState {
     /// When this option is set by the UI, the side effect encoded by the node
     /// will be executed at the start of the next frame.
@@ -53,6 +53,20 @@ pub struct CustomGraphState {
     /// The currently active node. A program will be compiled to compute the
     /// result of this node and constantly updated in real-time.
     pub active_node: Option<NodeId>,
+    /// A pointer to the node definitions. This is automatically updated when
+    /// the node definitions change during hot reload.
+    #[serde(skip)]
+    pub node_definitions: NodeDefinitions,
+}
+
+impl CustomGraphState {
+    pub fn new(node_definitions: NodeDefinitions) -> Self {
+        Self {
+            node_definitions,
+            run_side_effect: None,
+            active_node: None,
+        }
+    }
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Serialize, Deserialize, Debug)]
@@ -144,15 +158,6 @@ impl NodeDataTrait for NodeData {
     }
 }
 
-pub struct NodeDefinitionsUi<'a>(&'a NodeDefinitions);
-impl<'a> NodeTemplateIter for NodeDefinitionsUi<'a> {
-    type Item = NodeDefinitionUi;
-
-    fn all_kinds(&self) -> Vec<Self::Item> {
-        self.0 .0.values().cloned().map(NodeDefinitionUi).collect()
-    }
-}
-
 /// Blackjack's custom draw node graph function. It defers to egui_node_graph to
 /// draw the graph itself, then interprets any responses it got and applies the
 /// required side effects.
@@ -163,7 +168,8 @@ pub fn draw_node_graph(
     defs: &NodeDefinitions,
 ) {
     egui::CentralPanel::default().show(ctx, |ui| {
-        let responses = editor_state.draw_graph_editor(ui, NodeDefinitionsUi(defs), custom_state);
+        let responses =
+            editor_state.draw_graph_editor(ui, NodeOpNames(defs.node_names()), custom_state);
         for response in responses.node_responses {
             match response {
                 NodeResponse::DeleteNodeFull { node_id, .. } => {
@@ -189,37 +195,52 @@ pub fn draw_node_graph(
     });
 }
 
+pub struct NodeOpNames(Vec<String>);
+impl NodeTemplateIter for NodeOpNames {
+    type Item = NodeOpName;
+
+    fn all_kinds(&self) -> Vec<Self::Item> {
+        self.0.iter().cloned().map(NodeOpName).collect()
+    }
+}
+
 #[derive(Clone, Debug)]
-pub struct NodeDefinitionUi(pub NodeDefinition);
-impl NodeTemplateTrait for NodeDefinitionUi {
+pub struct NodeOpName(String);
+impl NodeTemplateTrait for NodeOpName {
     type NodeData = NodeData;
     type DataType = DataTypeUi;
     type ValueType = ValueTypeUi;
     type UserState = CustomGraphState;
 
-    fn node_finder_label(&self) -> &str {
-        &self.0.label
+    fn node_finder_label(&self, custom_state: &mut CustomGraphState) -> Cow<str> {
+        let node_def = custom_state.node_definitions.node_def(&self.0).unwrap();
+        Cow::Owned(node_def.label.to_string())
     }
 
-    fn node_graph_label(&self) -> String {
-        self.0.label.clone()
+    fn node_graph_label(&self, custom_state: &mut CustomGraphState) -> String {
+        let node_def = custom_state.node_definitions.node_def(&self.0).unwrap();
+        node_def.label.clone()
     }
 
-    fn user_data(&self) -> Self::NodeData {
+    fn user_data(&self, custom_state: &mut CustomGraphState) -> Self::NodeData {
+        let node_def = custom_state.node_definitions.node_def(&self.0).unwrap();
+        // TODO: We shouldn't store `returns` and `is_executable` here.
+        // Everything can be fetched from the op_name
         NodeData {
-            op_name: self.0.op_name.clone(),
-            returns: self.0.returns.clone(),
-            is_executable: self.0.executable,
+            op_name: node_def.op_name.clone(),
+            returns: node_def.returns.clone(),
+            is_executable: node_def.executable,
         }
     }
 
     fn build_node(
         &self,
         graph: &mut egui_node_graph::Graph<Self::NodeData, Self::DataType, Self::ValueType>,
-        _user_state: &mut Self::UserState,
+        custom_state: &mut Self::UserState,
         node_id: egui_node_graph::NodeId,
     ) {
-        for input in &self.0.inputs {
+        let node_def = custom_state.node_definitions.node_def(&self.0).unwrap();
+        for input in &node_def.inputs {
             let input_param_kind = match input.data_type {
                 DataType::Vector => InputParamKind::ConnectionOrConstant,
                 DataType::Scalar => InputParamKind::ConnectionOrConstant,
@@ -271,7 +292,7 @@ impl NodeTemplateTrait for NodeDefinitionUi {
                 true,
             );
         }
-        for output in &self.0.outputs {
+        for output in &node_def.outputs {
             graph.add_output_param(node_id, output.name.clone(), DataTypeUi(output.data_type));
         }
     }
