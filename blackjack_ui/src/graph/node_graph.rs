@@ -10,16 +10,13 @@ use crate::custom_widgets::smart_dragvalue::SmartDragValue;
 use crate::{application::code_viewer::code_edit_ui, prelude::*};
 use egui::RichText;
 use egui_node_graph::{
-    DataTypeTrait, NodeDataTrait, NodeId, NodeResponse, NodeTemplateIter, UserResponseTrait,
-    WidgetValueTrait, InputId,
+    DataTypeTrait, InputId, NodeDataTrait, NodeId, NodeResponse, NodeTemplateIter,
+    UserResponseTrait, WidgetValueTrait,
 };
 use serde::{Deserialize, Serialize};
 
 use blackjack_engine::{
-    graph::{
-        BlackjackParameter, BlackjackValue, DataType, FilePathMode, InputValueConfig,
-        NodeDefinition, NodeDefinitions,
-    },
+    graph::{BlackjackValue, DataType, FilePathMode, InputValueConfig, NodeDefinitions},
     prelude::selection::SelectionExpression,
 };
 

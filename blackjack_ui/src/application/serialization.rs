@@ -79,7 +79,6 @@ pub fn save(
             graph: bjk_graph,
             external_parameters: Some(external_param_values),
             positions: Some(positions),
-            parameter_configs: None,
         },
     )?;
 

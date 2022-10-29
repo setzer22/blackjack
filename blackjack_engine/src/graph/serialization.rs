@@ -1,15 +1,13 @@
 use std::{
     collections::HashMap,
-    fs::{File, OpenOptions},
-    io::{BufRead, BufReader, BufWriter, Read, Write},
+    io::{BufRead, BufWriter, Write},
     path::Path,
-    ptr::write_bytes,
 };
 
 use anyhow::{anyhow, bail, Result};
 use itertools::Itertools;
 use ron::ser::PrettyConfig;
-use serde::{de::Visitor, Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use slotmap::{SecondaryMap, SlotMap};
 
 use crate::{
@@ -18,8 +16,8 @@ use crate::{
 };
 
 use super::{
-    BjkGraph, BjkNode, BjkNodeId, BlackjackParameter, BlackjackValue, DataType, DependencyKind,
-    InputParameter, LuaExpression, Output,
+    BjkGraph, BjkNode, BjkNodeId, BlackjackValue, DataType, DependencyKind, InputParameter,
+    LuaExpression, Output,
 };
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -123,44 +121,6 @@ pub struct SerializedParamLocation {
 }
 
 #[derive(Serialize, Deserialize)]
-pub enum SerializedParameterConfig {
-    // Scalar
-    ScalarDefault(f32),
-    ScalarSoftMin(f32),
-    ScalarSoftMax(f32),
-    ScalarMin(f32),
-    ScalarMax(f32),
-    ScalarNumDecimals(f32),
-
-    // Vector
-    VectorDefault(glam::Vec3),
-
-    // Selection
-    SelectionDefault(String),
-
-    // String (general)
-    StringDefault(String),
-
-    // Enum
-    StringEnumValues(Vec<String>),
-    StringEnumDefaultSelection(u32),
-
-    // FilePath
-    StringFilePathMode(String),
-
-    // Basic string
-    StringMultiline(bool),
-
-    // LuaString
-    StringCode(bool),
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct SerializedParameterConfigs {
-    pub param_values: HashMap<SerializedParamLocation, Vec<SerializedParameterConfig>>,
-}
-
-#[derive(Serialize, Deserialize)]
 pub enum SerializedBlackjackValue {
     Vector(glam::Vec3),
     Scalar(f32),
@@ -178,7 +138,6 @@ pub struct SerializedBjkGraph {
     pub nodes: Vec<SerializedBjkNode>,
     pub node_positions: Option<SerializedNodePositions>,
     pub external_parameters: Option<SerializedExternalParameters>,
-    pub parameter_configs: Option<SerializedParameterConfigs>,
 }
 
 /// Maps slotmap ids to serialized indices.
@@ -215,7 +174,6 @@ pub struct RuntimeData {
     pub graph: BjkGraph,
     pub external_parameters: Option<ExternalParameterValues>,
     pub positions: Option<SecondaryMap<BjkNodeId, glam::Vec2>>,
-    pub parameter_configs: Option<Vec<(BjkNodeId, String, BlackjackParameter)>>,
 }
 
 // ===========================================
@@ -237,7 +195,6 @@ impl SerializedBjkGraph {
             graph,
             external_parameters,
             positions,
-            parameter_configs: parameters,
         } = runtime_data;
         let BjkGraph { nodes } = graph;
 
@@ -261,11 +218,6 @@ impl SerializedBjkGraph {
             } else {
                 None
             },
-            parameter_configs: if let Some(p) = parameters {
-                Some(SerializedParameterConfigs::from_runtime(p, &mappings)?)
-            } else {
-                None
-            },
         })
     }
 }
@@ -280,28 +232,6 @@ impl SerializedNodePositions {
                 .map(|(idx, id)| positions.get(*id).copied().unwrap_or(glam::Vec2::ZERO))
                 .collect::<Vec<_>>(),
         }
-    }
-}
-
-impl SerializedParameterConfigs {
-    fn from_runtime(
-        parameters: Vec<(BjkNodeId, String, BlackjackParameter)>,
-        mapping: &IdMappings,
-    ) -> Result<Self> {
-        Ok(SerializedParameterConfigs {
-            param_values: parameters
-                .into_iter()
-                .map(|(node_id, param_name, param)| {
-                    Ok((
-                        SerializedParamLocation {
-                            node_idx: mapping.get_idx(node_id)?,
-                            param_name,
-                        },
-                        { SerializedParameterConfig::from_runtime_data(param.clone()) },
-                    ))
-                })
-                .collect::<Result<HashMap<_, _>>>()?,
-        })
     }
 }
 
@@ -340,86 +270,6 @@ impl SerializedBlackjackValue {
             BlackjackValue::Selection(s, _) => Some(Self::Selection(s)),
             BlackjackValue::None => None,
         }
-    }
-}
-
-impl SerializedParameterConfig {
-    pub fn from_runtime_data(param: BlackjackParameter) -> Vec<Self> {
-        let mut configs = Vec::<Self>::new();
-
-        macro_rules! add {
-            ($p:path, $e:expr) => {
-                configs.push($p($e))
-            };
-        }
-
-        macro_rules! add_option {
-            ($p:path, $i:ident) => {
-                if let Some(inner) = $i {
-                    configs.push($p(inner));
-                }
-            };
-        }
-
-        use SerializedParameterConfig::*;
-        match param.config {
-            super::InputValueConfig::Vector { default } => {
-                add!(VectorDefault, default);
-            }
-            super::InputValueConfig::Scalar {
-                default,
-                min,
-                max,
-                soft_min,
-                soft_max,
-                num_decimals,
-            } => {
-                add!(ScalarDefault, default);
-                add_option!(ScalarMin, min);
-                add_option!(ScalarMax, min);
-                add_option!(ScalarSoftMin, min);
-                add_option!(ScalarSoftMax, min);
-                add_option!(ScalarNumDecimals, min);
-            }
-            super::InputValueConfig::Selection { default_selection } => {
-                add!(SelectionDefault, default_selection.unparse());
-            }
-            super::InputValueConfig::Enum {
-                values,
-                default_selection,
-            } => {
-                add!(StringEnumValues, values);
-                add_option!(StringEnumDefaultSelection, default_selection);
-            }
-            super::InputValueConfig::FilePath {
-                default_path,
-                file_path_mode,
-            } => {
-                add!(
-                    StringFilePathMode,
-                    match file_path_mode {
-                        crate::graph::FilePathMode::Open => "Open".into(),
-                        crate::graph::FilePathMode::Save => "Save".into(),
-                    }
-                );
-                add_option!(StringDefault, default_path);
-            }
-            super::InputValueConfig::String {
-                multiline,
-                default_text,
-            } => {
-                if multiline {
-                    add!(StringMultiline, true);
-                }
-                add!(StringDefault, default_text);
-            }
-            super::InputValueConfig::LuaString {} => {
-                add!(StringCode, true);
-            }
-            super::InputValueConfig::None => {}
-        }
-
-        configs
     }
 }
 
@@ -579,11 +429,6 @@ impl SerializedBjkGraph {
                 None
             },
             positions: self.node_positions.map(|x| x.to_runtime(&mappings)),
-            parameter_configs: if let Some(c) = self.parameter_configs {
-                Some(c.to_runtime(&mappings)?)
-            } else {
-                None
-            },
         })
     }
 }
@@ -638,43 +483,10 @@ impl SerializedExternalParameters {
     }
 }
 
-impl SerializedParameterConfigs {
-    fn to_runtime(
-        self,
-        mappings: &IdMappings,
-    ) -> Result<Vec<(BjkNodeId, String, BlackjackParameter)>> {
-        let mut result = Vec::new();
-        for (loc, config) in self.param_values {
-            result.push((
-                mappings.get_id(loc.node_idx)?,
-                loc.param_name,
-                // WIP:
-                // - [ ] We need to decide between storing three separate lists
-                // or one unified list for value, config and promoted.
-                //
-                // - [ ] No longer need to store ExternalParameterValues,
-                // because it's redundant information. Remove from RuntimeData.
-                //
-                // - [ ] The ExternalParameterValues can be removed and
-                // converted into a trait. The map of parameters can be fed
-                // directly into the interpreter by implementing this trait.
-                //
-                // ... actually, scratch that. Why do we even need to store
-                // parameter configs? These should be properties of the Lua
-                // nodes, not the graphs!
-                BlackjackParameter {
-                    value: todo!(),
-                    config: todo!(),
-                    promoted_name: todo!(),
-                },
-            ));
-        }
-        Ok(result)
-    }
-}
-
 #[cfg(test)]
 mod tests {
+    use std::{fs::File, io::BufReader};
+
     use super::*;
 
     /// Test reading the serialization version header, plus some data from a
