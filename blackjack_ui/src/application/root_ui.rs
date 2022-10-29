@@ -103,6 +103,7 @@ impl RootViewport {
                 ui,
                 payload.app_context.renderable_thing.as_ref(),
                 &mut payload.graph_editor.editor_state,
+                &mut payload.graph_editor.custom_state,
             ),
             _ => panic!("Invalid split name {}", name),
         }

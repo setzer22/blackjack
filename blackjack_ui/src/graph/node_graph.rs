@@ -281,9 +281,16 @@ impl NodeTemplateTrait for NodeDefinitionUi {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ValueTypeUi(pub BlackjackParameter);
 impl WidgetValueTrait for ValueTypeUi {
+    type UserState = CustomGraphState;
     type Response = CustomNodeResponse;
 
-    fn value_widget(&mut self, param_name: &str, ui: &mut egui::Ui) -> Vec<Self::Response> {
+    fn value_widget(
+        &mut self,
+        param_name: &str,
+        node_id: NodeId,
+        ui: &mut egui::Ui,
+        user_state: &mut CustomGraphState,
+    ) -> Vec<Self::Response> {
         const DRAG_SPEEDS: &[f64] = &[100.0, 10.0, 1.0, 0.1, 0.01, 0.001, 0.0001];
         const DRAG_LABELS: &[&str] = &["100", "10", "1", ".1", ".01", ".001", ".0001"];
 

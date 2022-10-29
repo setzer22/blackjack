@@ -4,7 +4,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-use crate::prelude::*;
+use crate::prelude::{graph::CustomGraphState, *};
 use blackjack_engine::{
     lua_engine::RenderableThing,
     prelude::{selection::SelectionExpression, ChannelKeyType, ChannelValueType, HalfEdgeMesh},
@@ -85,6 +85,7 @@ impl InspectorTabs {
         ui: &mut Ui,
         renderable_thing: Option<&RenderableThing>,
         editor_state: &mut graph::GraphEditorState,
+        custom_state: &mut graph::CustomGraphState,
     ) {
         match renderable_thing {
             Some(RenderableThing::HalfEdgeMesh(mesh)) => {
@@ -104,7 +105,7 @@ impl InspectorTabs {
                 ui.separator();
 
                 match self.current_view {
-                    InspectorTab::Properties => self.properties.ui(ui, editor_state),
+                    InspectorTab::Properties => self.properties.ui(ui, editor_state, custom_state),
                     InspectorTab::Spreadsheet => self.spreadsheet.ui(ui, Some(mesh)),
                     InspectorTab::Debug => self.debug.ui(ui, Some(mesh)),
                 }
@@ -156,12 +157,18 @@ impl PropertiesTab {
         }
     }
 
-    fn ui(&mut self, ui: &mut Ui, editor_state: &mut graph::GraphEditorState) {
+    fn ui(
+        &mut self,
+        ui: &mut Ui,
+        editor_state: &mut graph::GraphEditorState,
+        custom_state: &mut CustomGraphState,
+    ) {
         self.maybe_show_new_promoted_modal(ui.ctx(), editor_state);
 
         let graph = &mut editor_state.graph;
         if let Some(node) = editor_state.selected_node {
             let node = &graph[node];
+            let node_id = node.id;
             let inputs = node.inputs.clone();
             ui.vertical(|ui| {
                 for (param_name, param) in inputs {
@@ -193,7 +200,9 @@ impl PropertiesTab {
                                     param,
                                 })
                             }
-                            graph[param].value.value_widget(&param_name, ui);
+                            graph[param]
+                                .value
+                                .value_widget(&param_name, node_id, ui, custom_state);
                         });
                     }
                 }

@@ -6,17 +6,20 @@ use std::{
     ptr::write_bytes,
 };
 
-use anyhow::{anyhow, bail};
+use anyhow::{anyhow, bail, Result};
 use itertools::Itertools;
 use ron::ser::PrettyConfig;
 use serde::{de::Visitor, Deserialize, Serialize};
-use slotmap::SecondaryMap;
+use slotmap::{SecondaryMap, SlotMap};
 
-use crate::graph_interpreter::{ExternalParameter, ExternalParameterValues};
+use crate::{
+    graph_interpreter::{ExternalParameter, ExternalParameterValues},
+    prelude::selection::SelectionExpression,
+};
 
 use super::{
-    BjkGraph, BjkNode, BjkNodeId, BlackjackParameter, BlackjackValue, DataType, InputParameter,
-    Output,
+    BjkGraph, BjkNode, BjkNodeId, BlackjackParameter, BlackjackValue, DataType, DependencyKind,
+    InputParameter, LuaExpression, Output,
 };
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -184,9 +187,26 @@ type IdToIdx = SecondaryMap<BjkNodeId, usize>;
 /// Maps serialized indices to node ids
 type IdxToId = Vec<BjkNodeId>;
 
+#[derive(Default)]
 struct IdMappings {
     id_to_idx: IdToIdx,
     idx_to_id: IdxToId,
+}
+
+impl IdMappings {
+    pub fn get_id(&self, idx: usize) -> Result<BjkNodeId> {
+        self.idx_to_id
+            .get(idx)
+            .ok_or_else(|| anyhow!("Invalid stored index {idx}"))
+            .copied()
+    }
+
+    pub fn get_idx(&self, id: BjkNodeId) -> Result<usize> {
+        self.id_to_idx
+            .get(id)
+            .ok_or_else(|| anyhow!("Invalid node id {id:?}"))
+            .copied()
+    }
 }
 
 /// This struct represents the runtime data that can be written to, or loaded
@@ -195,7 +215,7 @@ pub struct RuntimeData {
     pub graph: BjkGraph,
     pub external_parameters: Option<ExternalParameterValues>,
     pub positions: Option<SecondaryMap<BjkNodeId, glam::Vec2>>,
-    pub parameters: Option<Vec<(BjkNodeId, String, BlackjackParameter)>>,
+    pub parameter_configs: Option<Vec<(BjkNodeId, String, BlackjackParameter)>>,
 }
 
 // ===========================================
@@ -203,21 +223,21 @@ pub struct RuntimeData {
 // ===========================================
 
 impl SerializedBjkGraph {
-    pub fn write_to_file(path: impl AsRef<Path>, runtime_data: RuntimeData) -> anyhow::Result<()> {
+    pub fn write_to_file(path: impl AsRef<Path>, runtime_data: RuntimeData) -> Result<()> {
         let version = SerializationVersion::latest();
-        let data = Self::from_runtime(runtime_data);
+        let data = Self::from_runtime(runtime_data)?;
         let mut writer = BufWriter::new(std::fs::File::create(path)?);
         version.to_writer(&mut writer);
         ron::ser::to_writer_pretty(&mut writer, &data, PrettyConfig::default())?;
         Ok(())
     }
 
-    pub fn from_runtime(runtime_data: RuntimeData) -> Self {
+    pub fn from_runtime(runtime_data: RuntimeData) -> Result<Self> {
         let RuntimeData {
             graph,
             external_parameters,
             positions,
-            parameters,
+            parameter_configs: parameters,
         } = runtime_data;
         let BjkGraph { nodes } = graph;
 
@@ -230,17 +250,23 @@ impl SerializedBjkGraph {
         for (node_id, node) in nodes {
             serialized_nodes.push(SerializedBjkNode::from_runtime_data(
                 node_id, &node, &mappings,
-            ));
+            )?);
         }
 
-        Self {
+        Ok(Self {
             nodes: serialized_nodes,
             node_positions: positions.map(|p| SerializedNodePositions::from_runtime(p, &mappings)),
-            external_parameters: external_parameters
-                .map(|e| SerializedExternalParameters::from_runtime(e, &mappings)),
-            parameter_configs: parameters
-                .map(|p| SerializedParameterConfigs::from_runtime(p, &mappings)),
-        }
+            external_parameters: if let Some(e) = external_parameters {
+                Some(SerializedExternalParameters::from_runtime(e, &mappings)?)
+            } else {
+                None
+            },
+            parameter_configs: if let Some(p) = parameters {
+                Some(SerializedParameterConfigs::from_runtime(p, &mappings)?)
+            } else {
+                None
+            },
+        })
     }
 }
 
@@ -261,28 +287,21 @@ impl SerializedParameterConfigs {
     fn from_runtime(
         parameters: Vec<(BjkNodeId, String, BlackjackParameter)>,
         mapping: &IdMappings,
-    ) -> Self {
-        SerializedParameterConfigs {
+    ) -> Result<Self> {
+        Ok(SerializedParameterConfigs {
             param_values: parameters
                 .into_iter()
-                .filter_map(|(node_id, param_name, param)| {
-                    if let Some(idx) = mapping.id_to_idx.get(node_id) {
-                        Some((
-                            SerializedParamLocation {
-                                node_idx: *idx,
-                                param_name,
-                            },
-                            { SerializedParameterConfig::from_runtime_data(param.clone()) },
-                        ))
-                    } else {
-                        println!(
-                            "WARNING: Found parameter config for non-existing node {node_id:?}"
-                        );
-                        None
-                    }
+                .map(|(node_id, param_name, param)| {
+                    Ok((
+                        SerializedParamLocation {
+                            node_idx: mapping.get_idx(node_id)?,
+                            param_name,
+                        },
+                        { SerializedParameterConfig::from_runtime_data(param.clone()) },
+                    ))
                 })
-                .collect(),
-        }
+                .collect::<Result<HashMap<_, _>>>()?,
+        })
     }
 }
 
@@ -290,30 +309,25 @@ impl SerializedExternalParameters {
     fn from_runtime(
         external_param_values: ExternalParameterValues,
         mapping: &IdMappings,
-    ) -> SerializedExternalParameters {
-        SerializedExternalParameters {
-            param_values: external_param_values
-                .0
-                .iter()
-                .filter_map(|(loc, value)| {
-                    if let Some(val) = SerializedBlackjackValue::from_runtime(value.clone()) {
-                        let ExternalParameter {
-                            node_id,
-                            param_name,
-                        } = loc;
-                        Some((
-                            SerializedParamLocation {
-                                node_idx: mapping.id_to_idx[*node_id],
-                                param_name: param_name.clone(),
-                            },
-                            val,
-                        ))
-                    } else {
-                        None
-                    }
-                })
-                .collect::<HashMap<_, _>>(),
+    ) -> Result<SerializedExternalParameters> {
+        let mut param_values = HashMap::new();
+        for (loc, value) in external_param_values.0 {
+            if let Some(val) = SerializedBlackjackValue::from_runtime(value.clone()) {
+                let ExternalParameter {
+                    node_id,
+                    param_name,
+                } = loc;
+                param_values.insert(
+                    SerializedParamLocation {
+                        node_idx: mapping.get_idx(node_id)?,
+                        param_name: param_name.clone(),
+                    },
+                    val,
+                );
+            }
         }
+
+        Ok(SerializedExternalParameters { param_values })
     }
 }
 
@@ -410,7 +424,11 @@ impl SerializedParameterConfig {
 }
 
 impl SerializedBjkNode {
-    fn from_runtime_data(node_id: BjkNodeId, node: &BjkNode, mappings: &IdMappings) -> Self {
+    fn from_runtime_data(
+        node_id: BjkNodeId,
+        node: &BjkNode,
+        mappings: &IdMappings,
+    ) -> Result<Self> {
         let BjkNode {
             op_name,
             return_value,
@@ -421,18 +439,18 @@ impl SerializedBjkNode {
         let inputs = inputs
             .iter()
             .map(|input| SerializedInput::from_runtime_data(input, mappings))
-            .collect();
+            .collect::<Result<Vec<_>>>()?;
         let outputs = outputs
             .iter()
             .map(|output| SerializedOutput::from_runtime_data(output, mappings))
             .collect();
 
-        Self {
+        Ok(Self {
             op_name: op_name.clone(),
             return_value: return_value.clone(),
             inputs,
             outputs,
-        }
+        })
     }
 }
 
@@ -449,20 +467,20 @@ fn serialize_data_type(data_type: DataType) -> String {
 }
 
 impl SerializedInput {
-    fn from_runtime_data(input: &super::InputParameter, mappings: &IdMappings) -> Self {
+    fn from_runtime_data(input: &super::InputParameter, mappings: &IdMappings) -> Result<Self> {
         let InputParameter {
             name,
             data_type,
             kind,
         } = input;
 
-        let dependency_kind = SerializedDependencyKind::from_runtime_data(kind, mappings);
+        let dependency_kind = SerializedDependencyKind::from_runtime_data(kind, mappings)?;
 
-        Self {
+        Ok(Self {
             name: name.clone(),
             data_type: serialize_data_type(*data_type),
             kind: dependency_kind,
-        }
+        })
     }
 }
 
@@ -476,14 +494,14 @@ impl SerializedOutput {
     }
 }
 impl SerializedDependencyKind {
-    fn from_runtime_data(kind: &super::DependencyKind, mappings: &IdMappings) -> Self {
+    fn from_runtime_data(kind: &DependencyKind, mappings: &IdMappings) -> Result<Self> {
         match kind {
-            super::DependencyKind::Computed(lua_expr) => Self::Computed(lua_expr.0.clone()),
-            super::DependencyKind::External => Self::External,
-            super::DependencyKind::Connection { node, param_name } => Self::Conection {
-                node_idx: mappings.id_to_idx[*node] as usize,
+            DependencyKind::Computed(lua_expr) => Ok(Self::Computed(lua_expr.0.clone())),
+            DependencyKind::External => Ok(Self::External),
+            DependencyKind::Connection { node, param_name } => Ok(Self::Conection {
+                node_idx: mappings.get_idx(*node)?,
                 param_name: param_name.clone(),
-            },
+            }),
         }
     }
 }
@@ -493,18 +511,161 @@ impl SerializedDependencyKind {
 // ====================================================
 
 impl SerializedBjkGraph {
-    pub fn to_runtime_data(self) -> RuntimeData {
-        let graph = BjkGraph {
-            nodes: todo!()
-        };
+    pub fn to_runtime(self) -> Result<RuntimeData> {
+        let mut rt_nodes = SlotMap::<BjkNodeId, BjkNode>::with_key();
 
-        // WIP
-        RuntimeData {
-            graph: (),
-            external_parameters: (),
-            positions: (),
-            parameters: (),
+        // First pass, generate the mapping and fill in nodes
+        let mut mappings = IdMappings::default();
+        for (idx, node) in self.nodes.iter().enumerate() {
+            let node_id = rt_nodes.insert(BjkNode {
+                op_name: node.op_name.clone(),
+                return_value: node.return_value.clone(),
+                inputs: vec![],
+                outputs: vec![],
+            });
+
+            mappings.idx_to_id.push(node_id);
+            mappings.id_to_idx.insert(node_id, idx);
         }
+
+        // Then, finish initializing the nodes once the mapping is complete
+        for (node, node_id) in self.nodes.into_iter().zip(&mappings.idx_to_id) {
+            let rt_node = &mut rt_nodes[*node_id];
+            for input in node.inputs {
+                if let Some(data_type) = deserialize_data_type(&input.data_type) {
+                    rt_node.inputs.push(InputParameter {
+                        name: input.name,
+                        data_type,
+                        kind: match input.kind {
+                            SerializedDependencyKind::Computed(s) => {
+                                DependencyKind::Computed(LuaExpression(s))
+                            }
+                            SerializedDependencyKind::External => DependencyKind::External,
+                            SerializedDependencyKind::Conection {
+                                node_idx,
+                                param_name,
+                            } => DependencyKind::Connection {
+                                node: mappings.idx_to_id[node_idx],
+                                param_name,
+                            },
+                        },
+                    })
+                } else {
+                    println!("[WARNING] Unkown data type: {}", &input.data_type)
+                }
+            }
+
+            for output in node.outputs {
+                if let Some(data_type) = deserialize_data_type(&output.data_type) {
+                    rt_node.outputs.push(Output {
+                        name: output.name,
+                        data_type,
+                    })
+                } else {
+                    println!("[WARNING] Unkown data type: {}", &output.data_type)
+                }
+            }
+        }
+
+        Ok(RuntimeData {
+            graph: BjkGraph { nodes: rt_nodes },
+            external_parameters: if let Some(e) = self.external_parameters {
+                Some(e.to_runtime(&mappings)?)
+            } else {
+                None
+            },
+            positions: self.node_positions.map(|x| x.to_runtime(&mappings)),
+            parameter_configs: if let Some(c) = self.parameter_configs {
+                Some(c.to_runtime(&mappings)?)
+            } else {
+                None
+            },
+        })
+    }
+}
+
+fn deserialize_data_type(data_type_str: &str) -> Option<DataType> {
+    match data_type_str {
+        "BLJ_VECTOR" => Some(super::DataType::Vector),
+        "BLJ_SCALAR" => Some(super::DataType::Scalar),
+        "BLJ_SELECTION" => Some(super::DataType::Selection),
+        "BLJ_MESH" => Some(super::DataType::Mesh),
+        "BLJ_STRING" => Some(super::DataType::String),
+        "BLJ_HEIGHTMAP" => Some(super::DataType::HeightMap),
+        _ => None,
+    }
+    .to_owned()
+}
+
+impl SerializedNodePositions {
+    fn to_runtime(self, mappings: &IdMappings) -> SecondaryMap<BjkNodeId, glam::Vec2> {
+        self.node_positions
+            .into_iter()
+            .enumerate()
+            .map(|(idx, pos)| (mappings.idx_to_id[idx], pos))
+            .collect()
+    }
+}
+
+impl SerializedExternalParameters {
+    fn to_runtime(self, mappings: &IdMappings) -> Result<ExternalParameterValues> {
+        Ok(ExternalParameterValues(
+            self.param_values
+                .into_iter()
+                .map(|(param, value)| {
+                    Ok((
+                        ExternalParameter {
+                            node_id: mappings.get_id(param.node_idx)?,
+                            param_name: param.param_name,
+                        },
+                        match value {
+                            SerializedBlackjackValue::Vector(x) => BlackjackValue::Vector(x),
+                            SerializedBlackjackValue::Scalar(x) => BlackjackValue::Scalar(x),
+                            SerializedBlackjackValue::String(x) => BlackjackValue::String(x),
+                            SerializedBlackjackValue::Selection(x) => {
+                                let expr = SelectionExpression::parse(&x).ok();
+                                BlackjackValue::Selection(x, expr)
+                            }
+                        },
+                    ))
+                })
+                .collect::<Result<HashMap<_, _>>>()?,
+        ))
+    }
+}
+
+impl SerializedParameterConfigs {
+    fn to_runtime(
+        self,
+        mappings: &IdMappings,
+    ) -> Result<Vec<(BjkNodeId, String, BlackjackParameter)>> {
+        let mut result = Vec::new();
+        for (loc, config) in self.param_values {
+            result.push((
+                mappings.get_id(loc.node_idx)?,
+                loc.param_name,
+                // WIP:
+                // - [ ] We need to decide between storing three separate lists
+                // or one unified list for value, config and promoted.
+                //
+                // - [ ] No longer need to store ExternalParameterValues,
+                // because it's redundant information. Remove from RuntimeData.
+                //
+                // - [ ] The ExternalParameterValues can be removed and
+                // converted into a trait. The map of parameters can be fed
+                // directly into the interpreter by implementing this trait.
+                //
+                // ... actually, scratch that. Why do we even need to store
+                // parameter configs? These should be properties of the Lua
+                // nodes, not the graphs!
+                BlackjackParameter {
+                    value: todo!(),
+                    config: todo!(),
+                    promoted_name: todo!(),
+                },
+            ));
+        }
+        Ok(result)
     }
 }
 
