@@ -106,7 +106,9 @@ impl LuaRuntime {
         })
     }
 
-    pub fn watch_for_changes(&mut self) -> anyhow::Result<()> {
+    /// Watches the lua source folders for changes. Returns true when a change
+    /// was detected and the `NodeDefinitions` were successfully updated.
+    pub fn watch_for_changes(&mut self) -> anyhow::Result<bool> {
         if let Ok(msg) = self.watcher_channel.try_recv() {
             match msg {
                 DebouncedEvent::Create(_)
@@ -125,11 +127,14 @@ impl LuaRuntime {
 
                     // By calling this, all code under $BLACKJACK_LUA/run will
                     // be executed and the node definitions will be reloaded.
-                    self.node_definitions.update(load_node_definitions(&self.lua, self.lua_io.as_ref())?);
+                    self.node_definitions
+                        .update(load_node_definitions(&self.lua, self.lua_io.as_ref())?);
                 }
                 _ => {}
             }
+            Ok(true)
+        } else {
+            Ok(false)
         }
-        Ok(())
     }
 }

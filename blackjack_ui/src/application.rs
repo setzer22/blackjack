@@ -205,8 +205,14 @@ impl RootViewport {
     pub fn update(&mut self, render_ctx: &mut RenderContext, window: &winit::window::Window) {
         let mut actions = vec![];
 
-        if let Err(err) = self.lua_runtime.watch_for_changes() {
-            println!("TODO: {}", err);
+        match self.lua_runtime.watch_for_changes() {
+            Ok(true) => {
+                self.graph_editor.on_node_definitions_update();
+            }
+            Ok(false) => { /* Do nothing */ }
+            Err(err) => {
+                println!("Error while reloading Lua code: {}", err);
+            }
         }
 
         self.graph_editor.update(

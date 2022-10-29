@@ -193,6 +193,57 @@ pub struct InputDefinition {
     pub config: InputValueConfig,
 }
 
+impl InputDefinition {
+    pub fn default_value(&self) -> Result<BlackjackValue> {
+        let default_string = || BlackjackValue::String("".into());
+
+        Ok(match (&self.data_type, &self.config) {
+            (DataType::Vector, InputValueConfig::Vector { default }) => {
+                BlackjackValue::Vector(*default)
+            }
+            (DataType::Scalar, InputValueConfig::Scalar { default, .. }) => {
+                BlackjackValue::Scalar(*default)
+            }
+            (DataType::Selection, InputValueConfig::Selection { default_selection }) => {
+                BlackjackValue::Selection(
+                    default_selection.unparse(),
+                    Some(default_selection.clone()),
+                )
+            }
+            (DataType::Mesh, InputValueConfig::None) => BlackjackValue::None,
+            (
+                DataType::String,
+                InputValueConfig::Enum {
+                    values,
+                    default_selection,
+                },
+            ) => {
+                if let Some(default) = default_selection {
+                    values
+                        .get(*default as usize)
+                        .cloned()
+                        .map(BlackjackValue::String)
+                        .unwrap_or_else(default_string)
+                } else {
+                    default_string()
+                }
+            }
+            (DataType::String, InputValueConfig::FilePath { default_path, .. }) => default_path
+                .as_ref()
+                .cloned()
+                .map(BlackjackValue::String)
+                .unwrap_or_else(default_string),
+            (DataType::String, InputValueConfig::String { default_text, .. }) => {
+                BlackjackValue::String(default_text.clone())
+            }
+            (DataType::String, InputValueConfig::LuaString {}) => default_string(),
+            (DataType::HeightMap, InputValueConfig::None) => BlackjackValue::None,
+            _ => bail!("Invalid `data_type` and `config` combination for `InputDefinition`"),
+            // TODO: REVIEW: Use this code in the UI node_graph.rs too!
+        })
+    }
+}
+
 /// The definition of an output parameter inside the node library
 #[derive(Clone, Debug)]
 pub struct OutputDefinition {

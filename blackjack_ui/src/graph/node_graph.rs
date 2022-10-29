@@ -204,6 +204,25 @@ impl NodeTemplateIter for NodeOpNames {
     }
 }
 
+/// Returns the InputParamKind for each of the blackjack data types. This is
+/// currently hardcoded and nodes are not allowed to customise it.
+pub fn data_type_to_input_param_kind(data_type: DataType) -> InputParamKind {
+    match data_type {
+        DataType::Vector => InputParamKind::ConnectionOrConstant,
+        DataType::Scalar => InputParamKind::ConnectionOrConstant,
+        DataType::Selection => InputParamKind::ConnectionOrConstant,
+        DataType::Mesh => InputParamKind::ConnectionOnly,
+        DataType::HeightMap => InputParamKind::ConnectionOnly,
+        DataType::String => InputParamKind::ConnectionOrConstant,
+    }
+}
+
+/// For now, the "shown inline" property is not customizable and is always set
+/// to "true" by default, unless overriden by the user.
+pub fn default_shown_inline() -> bool {
+    true
+}
+
 #[derive(Clone, Debug)]
 pub struct NodeOpName(String);
 impl NodeTemplateTrait for NodeOpName {
@@ -213,17 +232,26 @@ impl NodeTemplateTrait for NodeOpName {
     type UserState = CustomGraphState;
 
     fn node_finder_label(&self, custom_state: &mut CustomGraphState) -> Cow<str> {
-        let node_def = custom_state.node_definitions.node_def(&self.0).unwrap();
-        Cow::Owned(node_def.label.to_string())
+        if let Some(node_def) = custom_state.node_definitions.node_def(&self.0) {
+            Cow::Owned(node_def.label.to_string())
+        } else {
+            Cow::Owned(format!("⚠ {}", self.0))
+        }
     }
 
     fn node_graph_label(&self, custom_state: &mut CustomGraphState) -> String {
-        let node_def = custom_state.node_definitions.node_def(&self.0).unwrap();
-        node_def.label.clone()
+        if let Some(node_def) = custom_state.node_definitions.node_def(&self.0) {
+            node_def.label.to_string()
+        } else {
+            format!("⚠ {}", self.0)
+        }
     }
 
     fn user_data(&self, custom_state: &mut CustomGraphState) -> Self::NodeData {
-        let node_def = custom_state.node_definitions.node_def(&self.0).unwrap();
+        let node_def = custom_state.node_definitions.node_def(&self.0).expect(
+            "This method is only called when creating a new node.\
+             Definitions can't be outdated at this point.",
+        );
         // TODO: We shouldn't store `returns` and `is_executable` here.
         // Everything can be fetched from the op_name
         NodeData {
@@ -231,6 +259,14 @@ impl NodeTemplateTrait for NodeOpName {
             returns: node_def.returns.clone(),
             is_executable: node_def.executable,
         }
+
+        // WIP: Continuing the refactor, I need to make sure we don't `unwrap`
+        // the node_def here, unless we can prove that's the case. This is
+        // because sometimes we can end up with an outdated node definition.
+        //
+        // The two cases I just did above are unnecessary: We can guarantee node
+        // templates will always be up to date because we regenerate them every
+        // frame. The changes I need to do are in ValueTypeTrait.
     }
 
     fn build_node(
@@ -241,14 +277,7 @@ impl NodeTemplateTrait for NodeOpName {
     ) {
         let node_def = custom_state.node_definitions.node_def(&self.0).unwrap();
         for input in &node_def.inputs {
-            let input_param_kind = match input.data_type {
-                DataType::Vector => InputParamKind::ConnectionOrConstant,
-                DataType::Scalar => InputParamKind::ConnectionOrConstant,
-                DataType::Selection => InputParamKind::ConnectionOrConstant,
-                DataType::Mesh => InputParamKind::ConnectionOnly,
-                DataType::HeightMap => InputParamKind::ConnectionOnly,
-                DataType::String => InputParamKind::ConnectionOrConstant,
-            };
+            let input_param_kind = data_type_to_input_param_kind(input.data_type);
 
             graph.add_input_param(
                 node_id,
@@ -285,7 +314,7 @@ impl NodeTemplateTrait for NodeOpName {
                     InputValueConfig::LuaString {} => BlackjackValue::String("".into()),
                 }),
                 input_param_kind,
-                true,
+                default_shown_inline(),
             );
         }
         for output in &node_def.outputs {
