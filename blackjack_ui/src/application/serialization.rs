@@ -38,7 +38,8 @@ impl SerializedEditorState {
         let custom_state = CustomGraphState {
             run_side_effect: None,
             active_node: self.active_node,
-            node_definitions: NodeDefinitions::default() // TODO: HACK: This won't work
+            node_definitions: NodeDefinitions::default(), // TODO: HACK: This won't work
+            promoted_params: HashMap::default(), // TODO: HACK: This won't work
         };
 
         let mut editor_state = GraphEditorState::new(1.0);

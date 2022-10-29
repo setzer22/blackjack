@@ -88,7 +88,7 @@ pub fn extract_graph_params(
                 let ui_input = graph[ui_node_id].get_input(&input.name)?;
                 params
                     .0
-                    .insert(external_param, graph[ui_input].value.0.value.clone());
+                    .insert(external_param, graph[ui_input].value.0.clone());
             }
         }
     }

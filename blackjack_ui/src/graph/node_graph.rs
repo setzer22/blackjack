@@ -11,7 +11,7 @@ use crate::{application::code_viewer::code_edit_ui, prelude::*};
 use egui::RichText;
 use egui_node_graph::{
     DataTypeTrait, NodeDataTrait, NodeId, NodeResponse, NodeTemplateIter, UserResponseTrait,
-    WidgetValueTrait,
+    WidgetValueTrait, InputId,
 };
 use serde::{Deserialize, Serialize};
 
@@ -57,6 +57,8 @@ pub struct CustomGraphState {
     /// the node definitions change during hot reload.
     #[serde(skip)]
     pub node_definitions: NodeDefinitions,
+
+    pub promoted_params: HashMap<InputId, String>,
 }
 
 impl CustomGraphState {
@@ -65,6 +67,7 @@ impl CustomGraphState {
             node_definitions,
             run_side_effect: None,
             active_node: None,
+            promoted_params: HashMap::default(),
         }
     }
 }
@@ -254,39 +257,35 @@ impl NodeTemplateTrait for NodeOpName {
                 node_id,
                 input.name.clone(),
                 DataTypeUi(input.data_type),
-                ValueTypeUi(BlackjackParameter {
-                    value: match input.config {
-                        InputValueConfig::Enum {
-                            ref values,
-                            default_selection,
-                        } => {
-                            if let Some(i) = default_selection {
-                                BlackjackValue::String(values[i as usize].clone())
-                            } else {
-                                BlackjackValue::String("".into())
-                            }
+                ValueTypeUi(match input.config {
+                    InputValueConfig::Enum {
+                        ref values,
+                        default_selection,
+                    } => {
+                        if let Some(i) = default_selection {
+                            BlackjackValue::String(values[i as usize].clone())
+                        } else {
+                            BlackjackValue::String("".into())
                         }
-                        InputValueConfig::Vector { default } => BlackjackValue::Vector(default),
-                        InputValueConfig::Scalar { default, .. } => BlackjackValue::Scalar(default),
-                        InputValueConfig::Selection {
-                            ref default_selection,
-                        } => BlackjackValue::Selection(
-                            default_selection.unparse(),
-                            Some(default_selection.clone()),
-                        ),
-                        InputValueConfig::FilePath {
-                            ref default_path, ..
-                        } => BlackjackValue::String(
-                            default_path.as_ref().cloned().unwrap_or_else(|| "".into()),
-                        ),
-                        InputValueConfig::String {
-                            ref default_text, ..
-                        } => BlackjackValue::String(default_text.clone()),
-                        InputValueConfig::None => BlackjackValue::None,
-                        InputValueConfig::LuaString {} => BlackjackValue::String("".into()),
-                    },
-                    promoted_name: None,
-                    config: input.config.clone(),
+                    }
+                    InputValueConfig::Vector { default } => BlackjackValue::Vector(default),
+                    InputValueConfig::Scalar { default, .. } => BlackjackValue::Scalar(default),
+                    InputValueConfig::Selection {
+                        ref default_selection,
+                    } => BlackjackValue::Selection(
+                        default_selection.unparse(),
+                        Some(default_selection.clone()),
+                    ),
+                    InputValueConfig::FilePath {
+                        ref default_path, ..
+                    } => BlackjackValue::String(
+                        default_path.as_ref().cloned().unwrap_or_else(|| "".into()),
+                    ),
+                    InputValueConfig::String {
+                        ref default_text, ..
+                    } => BlackjackValue::String(default_text.clone()),
+                    InputValueConfig::None => BlackjackValue::None,
+                    InputValueConfig::LuaString {} => BlackjackValue::String("".into()),
                 }),
                 input_param_kind,
                 true,
@@ -300,10 +299,18 @@ impl NodeTemplateTrait for NodeOpName {
 
 /// The widget value trait is used to determine how to display each [`ValueType`]
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ValueTypeUi(pub BlackjackParameter);
+pub struct ValueTypeUi(pub BlackjackValue);
+
+impl Default for ValueTypeUi {
+    fn default() -> Self {
+        Self(BlackjackValue::None)
+    }
+}
+
 impl WidgetValueTrait for ValueTypeUi {
     type UserState = CustomGraphState;
     type Response = CustomNodeResponse;
+    type NodeData = NodeData;
 
     fn value_widget(
         &mut self,
@@ -311,11 +318,22 @@ impl WidgetValueTrait for ValueTypeUi {
         node_id: NodeId,
         ui: &mut egui::Ui,
         user_state: &mut CustomGraphState,
+        node_data: &NodeData,
     ) -> Vec<Self::Response> {
         const DRAG_SPEEDS: &[f64] = &[100.0, 10.0, 1.0, 0.1, 0.01, 0.001, 0.0001];
         const DRAG_LABELS: &[&str] = &["100", "10", "1", ".1", ".01", ".001", ".0001"];
 
-        match (&mut self.0.value, &self.0.config) {
+        let node_def = user_state
+            .node_definitions
+            .node_def(&node_data.op_name)
+            .unwrap();
+        let input_def = node_def
+            .inputs
+            .iter()
+            .find(|i| i.name == param_name)
+            .unwrap();
+
+        match (&mut self.0, &input_def.config) {
             (BlackjackValue::Vector(vector), InputValueConfig::Vector { .. }) => {
                 ui.label(param_name);
                 ui.horizontal(|ui| {

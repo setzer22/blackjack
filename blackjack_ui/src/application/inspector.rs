@@ -131,6 +131,7 @@ impl PropertiesTab {
         &mut self,
         ctx: &egui::Context,
         editor_state: &mut graph::GraphEditorState,
+        custom_state: &mut graph::CustomGraphState,
     ) {
         let mut should_clear_popup = false;
         if let Some(popup) = &mut self.new_promoted_popup {
@@ -146,7 +147,9 @@ impl PropertiesTab {
                             should_clear_popup = true;
                             // Might've been removed by now. If so, simply ignore.
                             if let Some(input) = editor_state.graph.inputs.get_mut(popup.param) {
-                                input.value.0.promoted_name = Some(popup.name.take());
+                                custom_state
+                                    .promoted_params
+                                    .insert(input.id, popup.name.take());
                             }
                         }
                     });
@@ -163,7 +166,7 @@ impl PropertiesTab {
         editor_state: &mut graph::GraphEditorState,
         custom_state: &mut CustomGraphState,
     ) {
-        self.maybe_show_new_promoted_modal(ui.ctx(), editor_state);
+        self.maybe_show_new_promoted_modal(ui.ctx(), editor_state, custom_state);
 
         let graph = &mut editor_state.graph;
         if let Some(node) = editor_state.selected_node {
@@ -177,7 +180,10 @@ impl PropertiesTab {
                     } else {
                         ui.horizontal(|ui| {
                             tiny_checkbox(ui, &mut graph[param].shown_inline);
-                            if let Some(ref promoted_name) = graph[param].value.0.promoted_name {
+                            let mut defer_remove_promoted_param = None;
+                            if let Some(ref promoted_name) =
+                                custom_state.promoted_params.get(&param)
+                            {
                                 if ui
                                     .button("❌")
                                     .on_hover_text(format!(
@@ -185,7 +191,7 @@ impl PropertiesTab {
                                     ))
                                     .clicked()
                                 {
-                                    graph[param].value.0.promoted_name = None;
+                                    defer_remove_promoted_param = Some(param);
                                 };
                             } else if ui
                                 .button("⤴")
@@ -200,9 +206,20 @@ impl PropertiesTab {
                                     param,
                                 })
                             }
-                            graph[param]
-                                .value
-                                .value_widget(&param_name, node_id, ui, custom_state);
+
+                            if let Some(id) = defer_remove_promoted_param {
+                                custom_state.promoted_params.remove(&id);
+                            }
+
+                            let mut value = std::mem::take(&mut graph[param].value);
+                            value.value_widget(
+                                &param_name,
+                                node_id,
+                                ui,
+                                custom_state,
+                                &graph[node_id].user_data,
+                            );
+                            graph[param].value = value;
                         });
                     }
                 }
