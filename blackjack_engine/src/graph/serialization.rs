@@ -112,7 +112,6 @@ pub struct SerializedBjkNode {
 pub struct SerializedUiData {
     pub node_positions: Vec<glam::Vec2>,
     pub node_order: Vec<usize>,
-    pub active_node: Option<usize>,
     pub pan: glam::Vec2,
     pub zoom: f32,
 }
@@ -139,6 +138,7 @@ pub struct SerializedExternalParameters {
 #[derive(Serialize, Deserialize)]
 pub struct SerializedBjkGraph {
     pub nodes: Vec<SerializedBjkNode>,
+    pub default_node: Option<usize>,
     pub ui_data: Option<SerializedUiData>,
     pub external_parameters: Option<SerializedExternalParameters>,
 }
@@ -196,7 +196,10 @@ impl SerializedBjkGraph {
             graph,
             external_parameters,
         } = runtime_data;
-        let BjkGraph { nodes } = graph;
+        let BjkGraph {
+            nodes,
+            default_node,
+        } = graph;
 
         let mappings = IdMappings {
             id_to_idx: nodes.keys().zip(0..).collect(),
@@ -213,6 +216,7 @@ impl SerializedBjkGraph {
         Ok((
             Self {
                 nodes: serialized_nodes,
+                default_node: default_node.and_then(|x| mappings.get_idx(x).ok()),
                 external_parameters: if let Some(e) = external_parameters {
                     Some(SerializedExternalParameters::from_runtime(e, &mappings)?)
                 } else {
@@ -361,6 +365,10 @@ impl SerializedBjkGraph {
         Ok(ron::de::from_reader(reader)?)
     }
 
+    pub fn load_from_string(s: &str) -> Result<SerializedBjkGraph> {
+        Ok(ron::de::from_str(s)?)
+    }
+
     pub fn to_runtime(self) -> Result<(RuntimeData, Option<SerializedUiData>, IdMappings)> {
         let mut rt_nodes = SlotMap::<BjkNodeId, BjkNode>::with_key();
 
@@ -418,7 +426,10 @@ impl SerializedBjkGraph {
 
         Ok((
             RuntimeData {
-                graph: BjkGraph { nodes: rt_nodes },
+                graph: BjkGraph {
+                    nodes: rt_nodes,
+                    default_node: self.default_node.and_then(|x| mappings.get_id(x).ok()),
+                },
                 external_parameters: if let Some(e) = self.external_parameters {
                     Some(e.to_runtime(&mappings)?)
                 } else {

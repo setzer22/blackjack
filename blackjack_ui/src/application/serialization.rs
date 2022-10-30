@@ -4,19 +4,12 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-use crate::{
-    graph::graph_interop::{self, NodeMapping},
-    prelude::graph::*,
-    prelude::*,
-};
+use crate::{graph::graph_interop, prelude::graph::*, prelude::*};
 use std::path::{Path, PathBuf};
 
-use blackjack_engine::{
-    graph::{
-        serialization::{RuntimeData, SerializedBjkGraph, SerializedUiData},
-        BjkGraph, BjkNodeId, BlackjackValue, DependencyKind, InputParameter, NodeDefinitions,
-    },
-    graph_interpreter::{ExternalParameter, ExternalParameterValues},
+use blackjack_engine::graph::{
+    serialization::{RuntimeData, SerializedBjkGraph, SerializedUiData},
+    DependencyKind, NodeDefinitions,
 };
 use egui_node_graph::PanZoom;
 
@@ -56,7 +49,6 @@ pub fn save(
     serialized.set_ui_data(SerializedUiData {
         node_positions,
         node_order,
-        active_node: custom_state.active_node.map(node_id_to_idx),
         pan: Vec2::new(pan.x, pan.y),
         zoom: editor_state.pan_zoom.zoom,
     });
@@ -131,7 +123,7 @@ pub fn load(
     };
     let custom_state = CustomGraphState {
         run_side_effect: None,
-        active_node: ui_data.active_node.map(idx_to_node_id),
+        active_node: runtime.graph.default_node.map(|x| mapping[x]),
         node_definitions: node_definitions.share(),
         promoted_params,
     };

@@ -6,11 +6,14 @@
 
 use std::ops::Index;
 
-use super::node_graph::{CustomGraphState, Graph, NodeData, DataTypeUi, ValueTypeUi, data_type_to_input_param_kind, default_shown_inline};
+use super::node_graph::{
+    data_type_to_input_param_kind, default_shown_inline, CustomGraphState, DataTypeUi, Graph,
+    NodeData, ValueTypeUi,
+};
 
 use crate::prelude::*;
 use blackjack_engine::{
-    graph::{BjkGraph, BjkNodeId, DependencyKind, NodeDefinitions, BlackjackValue},
+    graph::{BjkGraph, BjkNodeId, BlackjackValue, DependencyKind, NodeDefinitions},
     graph_interpreter::{ExternalParameter, ExternalParameterValues},
 };
 use egui_node_graph::{InputId, NodeId, OutputId};
@@ -48,8 +51,7 @@ pub fn ui_graph_to_blackjack_graph(
     custom_state: &CustomGraphState,
 ) -> Result<(BjkGraph, NodeMapping)> {
     let mut bjk_graph = BjkGraph::new();
-    let mut mapping = SecondaryMap::<NodeId, BjkNodeId>::new();
-    let mut rev_mapping = SecondaryMap::<BjkNodeId, NodeId>::new();
+    let mut mapping = NodeMapping::new();
     let mut input_names = SecondaryMap::<InputId, &str>::new();
     let mut output_names = SecondaryMap::<OutputId, &str>::new();
 
@@ -61,7 +63,6 @@ pub fn ui_graph_to_blackjack_graph(
 
         let bjk_id = bjk_graph.add_node(node.user_data.op_name.clone(), node_def.returns.clone());
         mapping.insert(node_id, bjk_id);
-        rev_mapping.insert(bjk_id, node_id);
 
         for (input_name, input_id) in &node.inputs {
             bjk_graph.add_input(
@@ -88,7 +89,9 @@ pub fn ui_graph_to_blackjack_graph(
         bjk_graph.add_connection(output_node_id, output_name, input_node_id, input_name)?;
     }
 
-    Ok((bjk_graph, NodeMapping(mapping, rev_mapping)))
+    bjk_graph.default_node = custom_state.active_node.map(|x| mapping[x]);
+
+    Ok((bjk_graph, mapping))
 }
 
 pub fn blackjack_graph_to_ui_graph(
@@ -99,7 +102,10 @@ pub fn blackjack_graph_to_ui_graph(
     // Create the graph and the id mappings
     let mut graph = Graph::new();
     let mut mapping = NodeMapping::new();
-    let BjkGraph { nodes: bjk_nodes } = bjk_graph;
+    let BjkGraph {
+        nodes: bjk_nodes,
+        default_node: _,
+    } = bjk_graph;
 
     // Fill in the nodes in a first pass
     for (bjk_node_id, bjk_node) in bjk_nodes {

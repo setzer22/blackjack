@@ -4,7 +4,7 @@ use crate::graph::{BjkGraph, BjkNodeId, BlackjackValue};
 use crate::lua_engine::{ProgramResult, RenderableThing};
 use crate::prelude::*;
 
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct ExternalParameter {
     pub node_id: BjkNodeId,
     pub param_name: String,

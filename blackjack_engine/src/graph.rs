@@ -119,6 +119,8 @@ impl BjkNodeId {
 #[derive(Default)]
 pub struct BjkGraph {
     pub nodes: SlotMap<BjkNodeId, BjkNode>,
+    /// When the graph is run, this is the node that will be executed by default.
+    pub default_node: Option<BjkNodeId>,
 }
 
 /// Specifies the ways in which the file picker dialog for an
@@ -458,6 +460,7 @@ impl BjkGraph {
     pub fn new() -> Self {
         Self {
             nodes: Default::default(),
+            default_node: None,
         }
     }
     /// Adds a new empty node to the graph
