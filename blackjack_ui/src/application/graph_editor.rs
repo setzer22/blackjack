@@ -336,6 +336,8 @@ impl GraphEditor {
             /// The operation for this NodeId is no longer found in the node
             /// definitions.
             RemovedNodeType(NodeId),
+            /// The label for this node has changed.
+            NodeLabelRenamed { node_id: NodeId, new_label: String },
             /// A new input parameter has been added.
             NewInput {
                 node_id: NodeId,
@@ -369,6 +371,13 @@ impl GraphEditor {
 
         for (node_id, node) in &graph.nodes {
             if let Some(node_def) = node_defs.node_def(&node.user_data.op_name) {
+                if node.label != node_def.label {
+                    delayed_ops.push(DelayedOps::NodeLabelRenamed {
+                        new_label: node_def.label.clone(),
+                        node_id,
+                    });
+                }
+
                 // Handle input parameters
                 let mut defined_inputs = HashSet::new();
                 for input in &node_def.inputs {
@@ -440,9 +449,6 @@ impl GraphEditor {
             }
         }
 
-        // TODO: REVIEW: In node_graph.rs, never unwrap when a node_def is not found.
-        // The user might've temporarily removed it!
-
         for op in delayed_ops {
             match op {
                 DelayedOps::RemovedNodeType(_) => {
@@ -502,6 +508,9 @@ impl GraphEditor {
                 }
                 DelayedOps::OutputRemoved { output_id } => {
                     graph.remove_output_param(output_id);
+                }
+                DelayedOps::NodeLabelRenamed { node_id, new_label } => {
+                    graph[node_id].label = new_label;
                 }
             }
         }

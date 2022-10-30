@@ -14,7 +14,9 @@ local primitives = {
     MakeBox = {
         label = "Box",
         op = function(inputs)
-            return { out_mesh = Primitives.cube(inputs.origin, inputs.size) }
+            return {
+                out_mesh = Primitives.cube(inputs.origin, inputs.size),
+            }
         end,
         inputs = {
             P.v3("origin", vector(0, 0, 0)),
@@ -126,7 +128,7 @@ local primitives = {
         op = function(inputs)
             local points = {}
             -- Parse the point list, separated by space
-            for point in inputs.points:gmatch('([^ \n]+)') do
+            for point in inputs.points:gmatch("([^ \n]+)") do
                 table.insert(points, V.from_string(point))
             end
             return { out_mesh = Primitives.polygon(points) }
@@ -144,7 +146,7 @@ local primitives = {
         op = function(inputs)
             local points = {}
             -- Parse the point list, separated by space
-            for point in inputs.points:gmatch('([^ \n]+)') do
+            for point in inputs.points:gmatch("([^ \n]+)") do
                 table.insert(points, V.from_string(point))
             end
             return { out_mesh = Primitives.line_from_points(points) }
@@ -244,7 +246,7 @@ local edit_ops = {
             local out_mesh = inputs.in_mesh:clone()
             Ops.collapse_edge(out_mesh, inputs.edge, inputs.interp)
             return { out_mesh = out_mesh }
-        end
+        end,
     },
     BridgeLoops = {
         label = "Bridge Loops",

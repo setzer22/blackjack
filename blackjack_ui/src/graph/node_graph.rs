@@ -232,19 +232,19 @@ impl NodeTemplateTrait for NodeOpName {
     type UserState = CustomGraphState;
 
     fn node_finder_label(&self, custom_state: &mut CustomGraphState) -> Cow<str> {
-        if let Some(node_def) = custom_state.node_definitions.node_def(&self.0) {
-            Cow::Owned(node_def.label.to_string())
-        } else {
-            Cow::Owned(format!("⚠ {}", self.0))
-        }
+        let node_def = custom_state.node_definitions.node_def(&self.0).expect(
+            "This method is only called when creating a new node.\
+             Definitions can't be outdated at this point.",
+        );
+        Cow::Owned(node_def.label.to_string())
     }
 
     fn node_graph_label(&self, custom_state: &mut CustomGraphState) -> String {
-        if let Some(node_def) = custom_state.node_definitions.node_def(&self.0) {
-            node_def.label.to_string()
-        } else {
-            format!("⚠ {}", self.0)
-        }
+        let node_def = custom_state.node_definitions.node_def(&self.0).expect(
+            "This method is only called when creating a new node.\
+             Definitions can't be outdated at this point.",
+        );
+        node_def.label.clone()
     }
 
     fn user_data(&self, custom_state: &mut CustomGraphState) -> Self::NodeData {
@@ -259,14 +259,6 @@ impl NodeTemplateTrait for NodeOpName {
             returns: node_def.returns.clone(),
             is_executable: node_def.executable,
         }
-
-        // WIP: Continuing the refactor, I need to make sure we don't `unwrap`
-        // the node_def here, unless we can prove that's the case. This is
-        // because sometimes we can end up with an outdated node definition.
-        //
-        // The two cases I just did above are unnecessary: We can guarantee node
-        // templates will always be up to date because we regenerate them every
-        // frame. The changes I need to do are in ValueTypeTrait.
     }
 
     fn build_node(
@@ -275,7 +267,10 @@ impl NodeTemplateTrait for NodeOpName {
         custom_state: &mut Self::UserState,
         node_id: egui_node_graph::NodeId,
     ) {
-        let node_def = custom_state.node_definitions.node_def(&self.0).unwrap();
+        let node_def = custom_state.node_definitions.node_def(&self.0).expect(
+            "This method is only called when creating a new node.\
+             Definitions can't be outdated at this point.",
+        );
         for input in &node_def.inputs {
             let input_param_kind = data_type_to_input_param_kind(input.data_type);
 
@@ -341,7 +336,7 @@ impl WidgetValueTrait for ValueTypeUi {
     fn value_widget(
         &mut self,
         param_name: &str,
-        node_id: NodeId,
+        _node_id: NodeId,
         ui: &mut egui::Ui,
         user_state: &mut CustomGraphState,
         node_data: &NodeData,
@@ -349,15 +344,19 @@ impl WidgetValueTrait for ValueTypeUi {
         const DRAG_SPEEDS: &[f64] = &[100.0, 10.0, 1.0, 0.1, 0.01, 0.001, 0.0001];
         const DRAG_LABELS: &[&str] = &["100", "10", "1", ".1", ".01", ".001", ".0001"];
 
-        let node_def = user_state
-            .node_definitions
-            .node_def(&node_data.op_name)
-            .unwrap();
+        let node_def = user_state.node_definitions.node_def(&node_data.op_name);
         let input_def = node_def
-            .inputs
-            .iter()
-            .find(|i| i.name == param_name)
-            .unwrap();
+            .as_deref()
+            .and_then(|d| d.inputs.iter().find(|i| i.name == param_name));
+
+        // This may happen on rare occasions when the nodes are reloaded and a
+        // parameter that previously existed now doesn't anymore.
+        if input_def.is_none() {
+            ui.label("⚠ not found")
+                .on_hover_text("This node is referencing a parameter that doesn't exist.");
+            return Default::default()
+        }
+        let input_def = input_def.unwrap();
 
         match (&mut self.0, &input_def.config) {
             (BlackjackValue::Vector(vector), InputValueConfig::Vector { .. }) => {
