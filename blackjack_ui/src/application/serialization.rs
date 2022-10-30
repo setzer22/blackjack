@@ -39,7 +39,7 @@ impl SerializedEditorState {
             run_side_effect: None,
             active_node: self.active_node,
             node_definitions: NodeDefinitions::default(), // TODO: HACK: This won't work
-            promoted_params: HashMap::default(), // TODO: HACK: This won't work
+            promoted_params: HashMap::default(),          // TODO: HACK: This won't work
         };
 
         let mut editor_state = GraphEditorState::new(1.0);
@@ -65,7 +65,10 @@ pub fn save(
         &SerializedEditorState::from_state(editor_state, custom_state),
         ron::ser::PrettyConfig::default(),
     )?;
-    let (bjk_graph, mapping) = graph_interop::ui_graph_to_blackjack_graph(&editor_state.graph)?;
+    let (bjk_graph, mapping) = graph_interop::ui_graph_to_blackjack_graph(
+        &editor_state.graph,
+        &custom_state.node_definitions,
+    )?;
     let external_param_values =
         graph_interop::extract_graph_params(&editor_state.graph, &bjk_graph, &mapping)?;
     let positions = editor_state

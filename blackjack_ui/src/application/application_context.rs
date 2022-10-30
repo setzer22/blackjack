@@ -220,7 +220,8 @@ impl ApplicationContext {
         lua_runtime: &LuaRuntime,
         node: NodeId,
     ) -> Result<ProgramResult> {
-        let (bjk_graph, mapping) = graph_interop::ui_graph_to_blackjack_graph(graph)?;
+        let (bjk_graph, mapping) =
+            graph_interop::ui_graph_to_blackjack_graph(graph, &lua_runtime.node_definitions)?;
         let params = graph_interop::extract_graph_params(graph, &bjk_graph, &mapping)?;
         blackjack_engine::graph_interpreter::run_graph(
             &lua_runtime.lua,

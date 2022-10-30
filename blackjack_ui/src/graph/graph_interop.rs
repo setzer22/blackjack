@@ -10,7 +10,7 @@ use super::node_graph::Graph;
 
 use crate::prelude::*;
 use blackjack_engine::{
-    graph::{BjkGraph, BjkNodeId, DependencyKind},
+    graph::{BjkGraph, BjkNodeId, DependencyKind, NodeDefinitions},
     graph_interpreter::{ExternalParameter, ExternalParameterValues},
 };
 use egui_node_graph::{InputId, NodeId, OutputId};
@@ -34,7 +34,10 @@ impl Index<BjkNodeId> for NodeMapping {
     }
 }
 
-pub fn ui_graph_to_blackjack_graph(graph: &Graph) -> Result<(BjkGraph, NodeMapping)> {
+pub fn ui_graph_to_blackjack_graph(
+    graph: &Graph,
+    node_defs: &NodeDefinitions,
+) -> Result<(BjkGraph, NodeMapping)> {
     let mut bjk_graph = BjkGraph::new();
     let mut mapping = SecondaryMap::<NodeId, BjkNodeId>::new();
     let mut rev_mapping = SecondaryMap::<BjkNodeId, NodeId>::new();
@@ -42,9 +45,13 @@ pub fn ui_graph_to_blackjack_graph(graph: &Graph) -> Result<(BjkGraph, NodeMappi
     let mut output_names = SecondaryMap::<OutputId, &str>::new();
 
     for (node_id, node) in &graph.nodes {
+        let node_def = node_defs
+            .node_def(&node.user_data.op_name)
+            .ok_or_else(|| anyhow!("Node definition not found for {}", &node.user_data.op_name))?;
+
         let bjk_id = bjk_graph.add_node(
             node.user_data.op_name.clone(),
-            node.user_data.returns.clone(),
+            node_def.returns.clone(),
         );
         mapping.insert(node_id, bjk_id);
         rev_mapping.insert(bjk_id, node_id);
@@ -82,8 +89,7 @@ pub fn extract_graph_params(
     for (node_id, node) in &bjk_graph.nodes {
         for input in &node.inputs {
             if let DependencyKind::External { .. } = input.kind {
-                let external_param =
-                    ExternalParameter::new(node_id, input.name.clone());
+                let external_param = ExternalParameter::new(node_id, input.name.clone());
                 let ui_node_id = mapping[node_id];
                 let ui_input = graph[ui_node_id].get_input(&input.name)?;
                 params

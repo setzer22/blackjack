@@ -101,8 +101,6 @@ impl UserResponseTrait for CustomNodeResponse {}
 #[derive(Clone, Serialize, Deserialize)]
 pub struct NodeData {
     pub op_name: String,
-    pub returns: Option<String>,
-    pub is_executable: bool,
 }
 impl NodeDataTrait for NodeData {
     type Response = CustomNodeResponse;
@@ -120,6 +118,16 @@ impl NodeDataTrait for NodeData {
     where
         Self::Response: egui_node_graph::UserResponseTrait,
     {
+        let node_def = user_state
+            .node_definitions
+            .node_def(&graph[node_id].user_data.op_name);
+        if node_def.is_none() {
+            ui.label("⚠ no node definition")
+                .on_hover_text("This node is referencing a node definition that doesn't exist.");
+            return Default::default();
+        }
+        let node_def = node_def.unwrap();
+
         let mut responses = Vec::new();
         ui.horizontal(|ui| {
             // Show 'Enable' button for nodes that output a mesh
@@ -148,7 +156,7 @@ impl NodeDataTrait for NodeData {
                 });
             }
             // Show 'Run' button for executable nodes
-            if self.is_executable && ui.button("⛭ Run").clicked() {
+            if node_def.executable && ui.button("⛭ Run").clicked() {
                 responses.push(NodeResponse::User(CustomNodeResponse::RunNodeSideEffect(
                     node_id,
                 )));
@@ -252,12 +260,8 @@ impl NodeTemplateTrait for NodeOpName {
             "This method is only called when creating a new node.\
              Definitions can't be outdated at this point.",
         );
-        // TODO: We shouldn't store `returns` and `is_executable` here.
-        // Everything can be fetched from the op_name
         NodeData {
             op_name: node_def.op_name.clone(),
-            returns: node_def.returns.clone(),
-            is_executable: node_def.executable,
         }
     }
 
@@ -354,7 +358,7 @@ impl WidgetValueTrait for ValueTypeUi {
         if input_def.is_none() {
             ui.label("⚠ not found")
                 .on_hover_text("This node is referencing a parameter that doesn't exist.");
-            return Default::default()
+            return Default::default();
         }
         let input_def = input_def.unwrap();
 
