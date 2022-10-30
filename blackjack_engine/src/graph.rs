@@ -239,7 +239,6 @@ impl InputDefinition {
             (DataType::String, InputValueConfig::LuaString {}) => default_string(),
             (DataType::HeightMap, InputValueConfig::None) => BlackjackValue::None,
             _ => bail!("Invalid `data_type` and `config` combination for `InputDefinition`"),
-            // TODO: REVIEW: Use this code in the UI node_graph.rs too!
         })
     }
 }

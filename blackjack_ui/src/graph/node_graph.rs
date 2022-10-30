@@ -282,36 +282,7 @@ impl NodeTemplateTrait for NodeOpName {
                 node_id,
                 input.name.clone(),
                 DataTypeUi(input.data_type),
-                ValueTypeUi(match input.config {
-                    InputValueConfig::Enum {
-                        ref values,
-                        default_selection,
-                    } => {
-                        if let Some(i) = default_selection {
-                            BlackjackValue::String(values[i as usize].clone())
-                        } else {
-                            BlackjackValue::String("".into())
-                        }
-                    }
-                    InputValueConfig::Vector { default } => BlackjackValue::Vector(default),
-                    InputValueConfig::Scalar { default, .. } => BlackjackValue::Scalar(default),
-                    InputValueConfig::Selection {
-                        ref default_selection,
-                    } => BlackjackValue::Selection(
-                        default_selection.unparse(),
-                        Some(default_selection.clone()),
-                    ),
-                    InputValueConfig::FilePath {
-                        ref default_path, ..
-                    } => BlackjackValue::String(
-                        default_path.as_ref().cloned().unwrap_or_else(|| "".into()),
-                    ),
-                    InputValueConfig::String {
-                        ref default_text, ..
-                    } => BlackjackValue::String(default_text.clone()),
-                    InputValueConfig::None => BlackjackValue::None,
-                    InputValueConfig::LuaString {} => BlackjackValue::String("".into()),
-                }),
+                ValueTypeUi(input.default_value().unwrap_or(BlackjackValue::None)),
                 input_param_kind,
                 default_shown_inline(),
             );
