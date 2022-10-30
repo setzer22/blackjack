@@ -6,7 +6,7 @@
 
 use std::ops::Index;
 
-use super::node_graph::Graph;
+use super::node_graph::{CustomGraphState, Graph};
 
 use crate::prelude::*;
 use blackjack_engine::{
@@ -36,7 +36,7 @@ impl Index<BjkNodeId> for NodeMapping {
 
 pub fn ui_graph_to_blackjack_graph(
     graph: &Graph,
-    node_defs: &NodeDefinitions,
+    custom_state: &CustomGraphState,
 ) -> Result<(BjkGraph, NodeMapping)> {
     let mut bjk_graph = BjkGraph::new();
     let mut mapping = SecondaryMap::<NodeId, BjkNodeId>::new();
@@ -45,19 +45,22 @@ pub fn ui_graph_to_blackjack_graph(
     let mut output_names = SecondaryMap::<OutputId, &str>::new();
 
     for (node_id, node) in &graph.nodes {
-        let node_def = node_defs
+        let node_def = custom_state
+            .node_definitions
             .node_def(&node.user_data.op_name)
             .ok_or_else(|| anyhow!("Node definition not found for {}", &node.user_data.op_name))?;
 
-        let bjk_id = bjk_graph.add_node(
-            node.user_data.op_name.clone(),
-            node_def.returns.clone(),
-        );
+        let bjk_id = bjk_graph.add_node(node.user_data.op_name.clone(), node_def.returns.clone());
         mapping.insert(node_id, bjk_id);
         rev_mapping.insert(bjk_id, node_id);
 
         for (input_name, input_id) in &node.inputs {
-            bjk_graph.add_input(bjk_id, input_name, graph.inputs[*input_id].typ.0)?;
+            bjk_graph.add_input(
+                bjk_id,
+                input_name,
+                graph.inputs[*input_id].typ.0,
+                custom_state.promoted_params.get(input_id).cloned(),
+            )?;
             input_names.insert(*input_id, input_name);
         }
         for (output_name, output_id) in &node.outputs {

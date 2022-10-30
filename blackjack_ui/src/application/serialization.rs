@@ -65,10 +65,8 @@ pub fn save(
         &SerializedEditorState::from_state(editor_state, custom_state),
         ron::ser::PrettyConfig::default(),
     )?;
-    let (bjk_graph, mapping) = graph_interop::ui_graph_to_blackjack_graph(
-        &editor_state.graph,
-        &custom_state.node_definitions,
-    )?;
+    let (bjk_graph, mapping) =
+        graph_interop::ui_graph_to_blackjack_graph(&editor_state.graph, custom_state)?;
     let external_param_values =
         graph_interop::extract_graph_params(&editor_state.graph, &bjk_graph, &mapping)?;
     let positions = editor_state

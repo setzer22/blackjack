@@ -458,6 +458,7 @@ impl BjkGraph {
         node_id: BjkNodeId,
         name: impl ToString,
         data_type: DataType,
+        promoted: Option<String>,
     ) -> Result<()> {
         let name = name.to_string();
         let node = &mut self.nodes[node_id];
@@ -467,7 +468,7 @@ impl BjkGraph {
             self.nodes[node_id].inputs.push(InputParameter {
                 name,
                 data_type,
-                kind: DependencyKind::External { promoted: None },
+                kind: DependencyKind::External { promoted },
             });
         }
         Ok(())

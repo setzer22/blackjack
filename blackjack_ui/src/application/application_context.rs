@@ -217,11 +217,12 @@ impl ApplicationContext {
     pub fn run_node(
         &self,
         graph: &graph::Graph,
+        custom_state: &graph::CustomGraphState,
         lua_runtime: &LuaRuntime,
         node: NodeId,
     ) -> Result<ProgramResult> {
         let (bjk_graph, mapping) =
-            graph_interop::ui_graph_to_blackjack_graph(graph, &lua_runtime.node_definitions)?;
+            graph_interop::ui_graph_to_blackjack_graph(graph, &custom_state)?;
         let params = graph_interop::extract_graph_params(graph, &bjk_graph, &mapping)?;
         blackjack_engine::graph_interpreter::run_graph(
             &lua_runtime.lua,
@@ -239,7 +240,8 @@ impl ApplicationContext {
         lua_runtime: &LuaRuntime,
     ) -> Result<String> {
         if let Some(active) = custom_state.active_node {
-            let program_result = self.run_node(&editor_state.graph, lua_runtime, active)?;
+            let program_result =
+                self.run_node(&editor_state.graph, &custom_state, lua_runtime, active)?;
             self.renderable_thing = program_result.renderable;
             // TODO REVIEW: Remove the whole "code" tab
             Ok("".into())
@@ -258,7 +260,7 @@ impl ApplicationContext {
         if let Some(side_effect) = custom_state.run_side_effect.take() {
             // We ignore the result. The program is only executed to produce a
             // side effect (e.g. exporting a mesh as OBJ)
-            let _ = self.run_node(&editor_state.graph, lua_runtime, side_effect)?;
+            let _ = self.run_node(&editor_state.graph, custom_state, lua_runtime, side_effect)?;
         }
         Ok(())
     }
