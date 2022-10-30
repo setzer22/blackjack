@@ -64,6 +64,11 @@ pub fn run_node<'lua>(
 ) -> Result<()> {
     let node = &graph.nodes[node_id];
 
+    println!(
+        "Running node {node_id:?} with op {}",
+        graph.nodes[node_id].op_name
+    );
+
     // Stores the arguments that will be sent to this node's `op` fn
     let input_map = lua.create_table()?;
 

@@ -215,7 +215,7 @@ impl ApplicationContext {
         node: NodeId,
     ) -> Result<ProgramResult> {
         let (bjk_graph, mapping) =
-            graph_interop::ui_graph_to_blackjack_graph(graph, &custom_state)?;
+            graph_interop::ui_graph_to_blackjack_graph(graph, custom_state)?;
         let params = graph_interop::extract_graph_params(graph, &bjk_graph, &mapping)?;
         blackjack_engine::graph_interpreter::run_graph(
             &lua_runtime.lua,
@@ -234,7 +234,7 @@ impl ApplicationContext {
     ) -> Result<()> {
         if let Some(active) = custom_state.active_node {
             let program_result =
-                self.run_node(&editor_state.graph, &custom_state, lua_runtime, active)?;
+                self.run_node(&editor_state.graph, custom_state, lua_runtime, active)?;
             self.renderable_thing = program_result.renderable;
         } else {
             self.renderable_thing = None;

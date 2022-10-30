@@ -4,10 +4,6 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-#![allow(deprecated)]
-// TODO: This is to make clippy happy
-// Need to fix #[export] -> #[method] later
-
 use blackjack_engine::graph::serialization::RuntimeData;
 use blackjack_engine::graph::serialization::SerializedBjkGraph;
 use blackjack_engine::graph::BjkGraph;
@@ -150,7 +146,7 @@ pub enum UpdateJackResult {
 #[inherit(gd::Resource)]
 pub struct BlackjackApi {}
 
-#[derive(FromVariant, ToVariant)]
+#[derive(FromVariant, ToVariant, Debug)]
 pub struct GdExternalParameter {
     node_id_ffi: u64,
     param_name: String,
@@ -187,23 +183,18 @@ impl BlackjackApi {
         runtime.map_mut(|runtime, _| f(runtime)).ok()?
     }
 
-    #[export]
-    fn ping(&self, _owner: &gd::Resource) -> String {
+    #[method]
+    fn ping(&self) -> String {
         "PONG".into()
     }
 
-    #[export]
-    fn make_jack(&self, _owner: &gd::Resource) -> Option<JackId> {
+    #[method]
+    fn make_jack(&self) -> Option<JackId> {
         Self::with_runtime(|runtime| Some(runtime.jacks.insert(None)))
     }
 
-    #[export]
-    fn set_jack(
-        &mut self,
-        _owner: &gd::Resource,
-        jack_id: JackId,
-        jack: Ref<gd::Resource>,
-    ) -> Option<bool> {
+    #[method]
+    fn set_jack(&mut self, jack_id: JackId, jack: Ref<gd::Resource>) -> Option<bool> {
         Self::with_runtime(|runtime| {
             let jack = unsafe { jack.assume_safe() };
             let contents = match jack.get("contents").dispatch() {
@@ -236,10 +227,9 @@ impl BlackjackApi {
         })
     }
 
-    #[export]
+    #[method]
     fn set_param(
         &mut self,
-        _owner: &gd::Resource,
         jack_id: JackId,
         param: GdExternalParameter,
         new_value: Variant,
@@ -276,16 +266,16 @@ impl BlackjackApi {
         })
     }
 
-    #[export]
-    fn get_params(&mut self, _owner: &gd::Resource, jack_id: JackId) -> Option<Variant> {
+    #[method]
+    fn get_params(&mut self, jack_id: JackId) -> Option<Variant> {
         #[derive(FromVariant, ToVariant)]
         struct ScalarDef {
             label: String,
             addr: GdExternalParameter,
             typ: String,
             val: f32,
-            min: f32,
-            max: f32,
+            min: Option<f32>,
+            max: Option<f32>,
         }
 
         #[derive(FromVariant, ToVariant)]
@@ -353,8 +343,8 @@ impl BlackjackApi {
                                 addr,
                                 typ: "Scalar".into(),
                                 val: *s,
-                                min: min.unwrap_or(-f32::INFINITY),
-                                max: max.unwrap_or(f32::INFINITY),
+                                min: *min,
+                                max: *max,
                             })
                         }
                         (_, BlackjackValue::String(s)) => params.push(GenericDef {
@@ -384,15 +374,15 @@ impl BlackjackApi {
         })
     }
 
-    #[export]
+    #[method]
     fn update_jack(
         &mut self,
-        _owner: &gd::Resource,
         jack_id: JackId,
         materials: Vec<Ref<Material>>,
     ) -> Option<UpdateJackResult> {
         Self::with_runtime(|runtime| {
             let jack = runtime.jacks.get(jack_id)?.as_ref()?;
+
             match blackjack_engine::graph_interpreter::run_graph(
                 &runtime.lua_runtime.lua,
                 &jack.graph,

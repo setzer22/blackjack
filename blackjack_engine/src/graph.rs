@@ -30,6 +30,7 @@ pub struct LuaExpression(pub String);
 
 /// A node has inputs (dependencies) that need to be met. A dependency can be
 /// met in three different ways.
+#[derive(Debug)]
 pub enum DependencyKind {
     /// Taking the value of an external parameter, from the inputs to the graph
     /// function itself.
@@ -85,6 +86,7 @@ impl<'lua> ToLua<'lua> for BlackjackValue {
 
 /// An input parameter in the graph. Inputs represent data dependencies that
 /// need to be met before executing a node.
+#[derive(Debug)]
 pub struct InputParameter {
     pub name: String,
     pub data_type: DataType,
@@ -93,12 +95,14 @@ pub struct InputParameter {
 
 /// An output parameter. Outputs are pieces of data produced by a node, which
 /// can be used to feed into another nodes as inputs.
+#[derive(Debug)]
 pub struct Output {
     pub name: String,
     pub data_type: DataType,
 }
 
 /// A node in the blackjack graph
+#[derive(Debug)]
 pub struct BjkNode {
     pub op_name: String,
     /// When this node is the target of a graph, this stores the name of the
