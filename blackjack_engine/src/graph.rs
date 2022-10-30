@@ -16,7 +16,7 @@ use mlua::{Table, ToLua};
 use serde::{Deserialize, Serialize};
 use slotmap::SlotMap;
 
-/// The core `blj` file format
+/// The core `bjk` file format
 pub mod serialization;
 
 /// Defines helper functions to load old file formats with serde. This allows

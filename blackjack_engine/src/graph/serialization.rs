@@ -42,7 +42,7 @@ impl SerializationVersion {
         // solution was to (ab)use RON's comment support to encode version
         // metadata as a comment on the first line.
         //
-        // This "comment" is just as part of the BLJ file format as the
+        // This "comment" is just as part of the BJK file format as the
         // subsequent RON data, so if a user tampers with it they will corrupt
         // the file, same as if they arbitrarily removed parts of the RON data.
         writeln!(
@@ -300,12 +300,12 @@ impl SerializedBjkNode {
 
 fn serialize_data_type(data_type: DataType) -> String {
     match data_type {
-        super::DataType::Vector => "BLJ_VECTOR",
-        super::DataType::Scalar => "BLJ_SCALAR",
-        super::DataType::Selection => "BLJ_SELECTION",
-        super::DataType::Mesh => "BLJ_MESH",
-        super::DataType::String => "BLJ_STRING",
-        super::DataType::HeightMap => "BLJ_HEIGHTMAP",
+        super::DataType::Vector => "BJK_VECTOR",
+        super::DataType::Scalar => "BJK_SCALAR",
+        super::DataType::Selection => "BJK_SELECTION",
+        super::DataType::Mesh => "BJK_MESH",
+        super::DataType::String => "BJK_STRING",
+        super::DataType::HeightMap => "BJK_HEIGHTMAP",
     }
     .to_owned()
 }
@@ -433,25 +433,15 @@ impl SerializedBjkGraph {
 
 fn deserialize_data_type(data_type_str: &str) -> Option<DataType> {
     match data_type_str {
-        "BLJ_VECTOR" => Some(super::DataType::Vector),
-        "BLJ_SCALAR" => Some(super::DataType::Scalar),
-        "BLJ_SELECTION" => Some(super::DataType::Selection),
-        "BLJ_MESH" => Some(super::DataType::Mesh),
-        "BLJ_STRING" => Some(super::DataType::String),
-        "BLJ_HEIGHTMAP" => Some(super::DataType::HeightMap),
+        "BJK_VECTOR" => Some(super::DataType::Vector),
+        "BJK_SCALAR" => Some(super::DataType::Scalar),
+        "BJK_SELECTION" => Some(super::DataType::Selection),
+        "BJK_MESH" => Some(super::DataType::Mesh),
+        "BJK_STRING" => Some(super::DataType::String),
+        "BJK_HEIGHTMAP" => Some(super::DataType::HeightMap),
         _ => None,
     }
     .to_owned()
-}
-
-impl SerializedUiData {
-    fn to_runtime(self, mappings: &IdMappings) -> SecondaryMap<BjkNodeId, glam::Vec2> {
-        self.node_positions
-            .into_iter()
-            .enumerate()
-            .map(|(idx, pos)| (mappings.idx_to_id[idx], pos))
-            .collect()
-    }
 }
 
 impl SerializedExternalParameters {

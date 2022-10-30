@@ -282,16 +282,6 @@ impl RootViewport {
                 self.graph_editor.custom_state = custom_state;
                 Ok(())
             }
-            AppRootAction::ExportJack(path) => {
-                if let Some(active_node) = self.graph_editor.custom_state.active_node {
-                    // TODO: REVIEW:
-                    let bga = todo!("REWORK JACK ASSET SYSTEM");
-                    // let bga = BlackjackJackAsset { program, params };
-                    let writer = std::io::BufWriter::new(std::fs::File::create(path)?);
-                    ron::ser::to_writer_pretty(writer, &bga, ron::ser::PrettyConfig::default())?;
-                }
-                Ok(())
-            }
         }
     }
 
