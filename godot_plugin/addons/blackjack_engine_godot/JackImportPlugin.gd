@@ -49,7 +49,7 @@ func import(source_file, save_path, options, platform_variants, gen_files):
     if err != OK:
         return err
 
-    var resource = BgaFileResource.new()
+    var resource = load("BgaFileResource.gd").new()
     resource.contents = file.get_as_text()
     
     file.close()

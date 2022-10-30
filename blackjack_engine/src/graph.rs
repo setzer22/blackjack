@@ -19,8 +19,11 @@ use slotmap::SlotMap;
 /// The core `bjk` file format
 pub mod serialization;
 
+// TODO: REVIEW: Most of the serde derives here are no longer necessary. In
+// particular serde_compat can be removed.
+
 /// Defines helper functions to load old file formats with serde. This allows
-/// some variation in the structs types without breaking the `blj` file format.
+/// some variation in the structs types without breaking the `bjk` file format.
 mod serde_compat;
 
 pub struct LuaExpression(pub String);

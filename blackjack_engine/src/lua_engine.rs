@@ -64,11 +64,15 @@ pub struct ProgramResult {
     pub renderable: Option<RenderableThing>,
 }
 
+pub struct LuaFileWatcher {
+    pub watcher: notify::RecommendedWatcher,
+    pub watcher_channel: Receiver<notify::DebouncedEvent>,
+}
+
 pub struct LuaRuntime {
     pub lua: Lua,
     pub node_definitions: NodeDefinitions,
-    pub watcher: notify::RecommendedWatcher,
-    pub watcher_channel: Receiver<notify::DebouncedEvent>,
+    pub file_watcher: Option<LuaFileWatcher>,
     pub lua_io: Arc<dyn LuaFileIo + 'static>,
 }
 
@@ -88,28 +92,33 @@ impl LuaRuntime {
         lua_stdlib::load_lua_bindings(&lua, lua_io.clone())?;
         let node_definitions = NodeDefinitions::new(load_node_definitions(&lua, lua_io.as_ref())?);
 
-        let (watcher, watcher_channel) = {
-            let (tx, rx) = mpsc::channel();
-            let mut watcher = notify::watcher(tx, Duration::from_secs(1))?;
-            watcher
-                .watch(lua_io.base_folder(), notify::RecursiveMode::Recursive)
-                .unwrap();
-            (watcher, rx)
-        };
-
         Ok(LuaRuntime {
             lua,
             node_definitions,
-            watcher,
-            watcher_channel,
+            file_watcher: None,
             lua_io,
         })
+    }
+
+    pub fn start_file_watcher(&mut self) -> Result<()> {
+        let (tx, rx) = mpsc::channel();
+        let mut watcher = notify::watcher(tx, Duration::from_secs(1))?;
+        watcher.watch(self.lua_io.base_folder(), notify::RecursiveMode::Recursive)?;
+        self.file_watcher = Some(LuaFileWatcher {
+            watcher,
+            watcher_channel: rx,
+        });
+        Ok(())
     }
 
     /// Watches the lua source folders for changes. Returns true when a change
     /// was detected and the `NodeDefinitions` were successfully updated.
     pub fn watch_for_changes(&mut self) -> anyhow::Result<bool> {
-        if let Ok(msg) = self.watcher_channel.try_recv() {
+        let file_watcher = self
+            .file_watcher
+            .as_ref()
+            .ok_or_else(|| anyhow!("File watcher was not set up."))?;
+        if let Ok(msg) = file_watcher.watcher_channel.try_recv() {
             match msg {
                 DebouncedEvent::Create(_)
                 | DebouncedEvent::Write(_)

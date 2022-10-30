@@ -114,8 +114,13 @@ impl RootViewport {
         egui_winit_state.set_pixels_per_point(scale_factor as f32);
 
         // TODO: Hardcoded node libraries path. Read from cmd line?
-        let lua_runtime = LuaRuntime::initialize_with_std("./blackjack_lua/".into())
+        let mut lua_runtime = LuaRuntime::initialize_with_std("./blackjack_lua/".into())
             .unwrap_or_else(|err| panic!("Init lua should not fail. {err}"));
+        if !CLI_ARGS.disable_lua_watcher {
+            lua_runtime
+                .start_file_watcher()
+                .expect("Could not start file watcher.");
+        }
 
         RootViewport {
             egui_winit_state,
@@ -201,15 +206,17 @@ impl RootViewport {
     pub fn update(&mut self, render_ctx: &mut RenderContext, window: &winit::window::Window) {
         let mut actions = vec![];
 
-        match self.lua_runtime.watch_for_changes() {
-            Ok(true) => {
-                if let Err(err) = self.graph_editor.on_node_definitions_update() {
-                    println!("Error while updating graph after Lua code reload: {}", err);
+        if !CLI_ARGS.disable_lua_watcher {
+            match self.lua_runtime.watch_for_changes() {
+                Ok(true) => {
+                    if let Err(err) = self.graph_editor.on_node_definitions_update() {
+                        println!("Error while updating graph after Lua code reload: {}", err);
+                    }
                 }
-            }
-            Ok(false) => { /* Do nothing */ }
-            Err(err) => {
-                println!("Error while reloading Lua code: {}", err);
+                Ok(false) => { /* Do nothing */ }
+                Err(err) => {
+                    println!("Error while reloading Lua code: {}", err);
+                }
             }
         }
 

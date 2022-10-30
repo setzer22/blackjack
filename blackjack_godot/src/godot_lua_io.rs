@@ -60,7 +60,7 @@ impl LuaFileIo for GodotLuaIo {
     ) -> anyhow::Result<blackjack_engine::lua_engine::lua_stdlib::LuaSourceFile> {
         let file = gd::File::new();
         file.open(path, gd::File::READ)?;
-        let contents = file.get_as_text();
+        let contents = file.get_as_text(true);
         Ok(LuaSourceFile {
             contents: contents.to_string(),
             name: path.to_string(),
