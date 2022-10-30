@@ -110,8 +110,12 @@ pub struct SerializedBjkNode {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct SerializedNodePositions {
+pub struct SerializedUiData {
     pub node_positions: Vec<glam::Vec2>,
+    pub node_order: Vec<usize>,
+    pub active_node: usize,
+    pub pan: glam::Vec2,
+    pub zoom: f32,
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -136,7 +140,7 @@ pub struct SerializedExternalParameters {
 #[derive(Serialize, Deserialize)]
 pub struct SerializedBjkGraph {
     pub nodes: Vec<SerializedBjkNode>,
-    pub node_positions: Option<SerializedNodePositions>,
+    pub ui_data: Option<SerializedUiData>,
     pub external_parameters: Option<SerializedExternalParameters>,
 }
 
@@ -147,9 +151,9 @@ type IdToIdx = SecondaryMap<BjkNodeId, usize>;
 type IdxToId = Vec<BjkNodeId>;
 
 #[derive(Default)]
-struct IdMappings {
-    id_to_idx: IdToIdx,
-    idx_to_id: IdxToId,
+pub struct IdMappings {
+    pub id_to_idx: IdToIdx,
+    pub idx_to_id: IdxToId,
 }
 
 impl IdMappings {
@@ -173,7 +177,6 @@ impl IdMappings {
 pub struct RuntimeData {
     pub graph: BjkGraph,
     pub external_parameters: Option<ExternalParameterValues>,
-    pub positions: Option<SecondaryMap<BjkNodeId, glam::Vec2>>,
 }
 
 // ===========================================
@@ -181,20 +184,18 @@ pub struct RuntimeData {
 // ===========================================
 
 impl SerializedBjkGraph {
-    pub fn write_to_file(path: impl AsRef<Path>, runtime_data: RuntimeData) -> Result<()> {
+    pub fn write_to_file(&self, path: impl AsRef<Path>) -> Result<()> {
         let version = SerializationVersion::latest();
-        let data = Self::from_runtime(runtime_data)?;
         let mut writer = BufWriter::new(std::fs::File::create(path)?);
         version.to_writer(&mut writer);
-        ron::ser::to_writer_pretty(&mut writer, &data, PrettyConfig::default())?;
+        ron::ser::to_writer_pretty(&mut writer, &self, PrettyConfig::default())?;
         Ok(())
     }
 
-    pub fn from_runtime(runtime_data: RuntimeData) -> Result<Self> {
+    pub fn from_runtime(runtime_data: RuntimeData) -> Result<(Self, IdMappings)> {
         let RuntimeData {
             graph,
             external_parameters,
-            positions,
         } = runtime_data;
         let BjkGraph { nodes } = graph;
 
@@ -210,28 +211,22 @@ impl SerializedBjkGraph {
             )?);
         }
 
-        Ok(Self {
-            nodes: serialized_nodes,
-            node_positions: positions.map(|p| SerializedNodePositions::from_runtime(p, &mappings)),
-            external_parameters: if let Some(e) = external_parameters {
-                Some(SerializedExternalParameters::from_runtime(e, &mappings)?)
-            } else {
-                None
+        Ok((
+            Self {
+                nodes: serialized_nodes,
+                external_parameters: if let Some(e) = external_parameters {
+                    Some(SerializedExternalParameters::from_runtime(e, &mappings)?)
+                } else {
+                    None
+                },
+                ui_data: None,
             },
-        })
+            mappings,
+        ))
     }
-}
 
-impl SerializedNodePositions {
-    fn from_runtime(positions: SecondaryMap<BjkNodeId, glam::Vec2>, mapping: &IdMappings) -> Self {
-        SerializedNodePositions {
-            node_positions: mapping
-                .idx_to_id
-                .iter()
-                .enumerate()
-                .map(|(idx, id)| positions.get(*id).copied().unwrap_or(glam::Vec2::ZERO))
-                .collect::<Vec<_>>(),
-        }
+    pub fn set_ui_data(&mut self, ui_data: SerializedUiData) {
+        self.ui_data = Some(ui_data);
     }
 }
 
@@ -363,7 +358,7 @@ impl SerializedDependencyKind {
 // ====================================================
 
 impl SerializedBjkGraph {
-    pub fn to_runtime(self) -> Result<RuntimeData> {
+    pub fn to_runtime(self) -> Result<(RuntimeData, Option<SerializedUiData>)> {
         let mut rt_nodes = SlotMap::<BjkNodeId, BjkNode>::with_key();
 
         // First pass, generate the mapping and fill in nodes
@@ -421,15 +416,17 @@ impl SerializedBjkGraph {
             }
         }
 
-        Ok(RuntimeData {
-            graph: BjkGraph { nodes: rt_nodes },
-            external_parameters: if let Some(e) = self.external_parameters {
-                Some(e.to_runtime(&mappings)?)
-            } else {
-                None
+        Ok((
+            RuntimeData {
+                graph: BjkGraph { nodes: rt_nodes },
+                external_parameters: if let Some(e) = self.external_parameters {
+                    Some(e.to_runtime(&mappings)?)
+                } else {
+                    None
+                },
             },
-            positions: self.node_positions.map(|x| x.to_runtime(&mappings)),
-        })
+            self.ui_data,
+        ))
     }
 }
 
@@ -446,7 +443,7 @@ fn deserialize_data_type(data_type_str: &str) -> Option<DataType> {
     .to_owned()
 }
 
-impl SerializedNodePositions {
+impl SerializedUiData {
     fn to_runtime(self, mappings: &IdMappings) -> SecondaryMap<BjkNodeId, glam::Vec2> {
         self.node_positions
             .into_iter()

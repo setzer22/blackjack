@@ -12,6 +12,7 @@ use egui_node_graph::PanZoom;
 use serde::{Deserialize, Serialize};
 use slotmap::SecondaryMap;
 
+
 /// We don't serialize the whole editor state. Instead, we serialize just a few
 /// select fields.
 #[derive(Serialize, Deserialize)]
@@ -74,6 +75,7 @@ pub fn save(
         .iter()
         .map(|(node_id, pos2)| (mapping[node_id], glam::Vec2::new(pos2.x, pos2.y)))
         .collect();
+
     blackjack_engine::graph::serialization::SerializedBjkGraph::write_to_file(
         format!("{}.bjk", path.to_str().unwrap().trim_end_matches(".blj")),
         RuntimeData {
