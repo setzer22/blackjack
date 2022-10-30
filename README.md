@@ -45,7 +45,7 @@ git lfs pull
 
 [^1]: Linux users can install `git-lfs` with their distro's package manager (`apt install git-lfs` / `yum install git-lfs` / `pacman -S git-lfs`). MacOS users using homebrew can use `brew install git-lfs`. Other users should follow the [git-lfs install instructions](https://git-lfs.github.com/).
 
-2. From the same folder, run `cargo run` to launch Blackjack.
+2. From the same folder, run `cargo run --bin blackjack_ui` to launch Blackjack.
 
 ### Usage
 Some minimal usage instructions. Please do note that these can and will change frequently during early development:
