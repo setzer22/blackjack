@@ -396,7 +396,10 @@ impl BlackjackApi {
             match blackjack_engine::graph_interpreter::run_graph(
                 &runtime.lua_runtime.lua,
                 &jack.graph,
-                todo!("Final node is not set"),
+                jack.graph
+                    .default_node
+                    .ok_or_else(|| godot_error!("Default node not set for this jack file."))
+                    .ok()?,
                 &jack.params,
             ) {
                 Ok(ProgramResult {
