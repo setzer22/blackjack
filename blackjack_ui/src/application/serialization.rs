@@ -70,6 +70,9 @@ pub fn load(
     path: PathBuf,
     node_definitions: &NodeDefinitions,
 ) -> Result<(GraphEditorState, CustomGraphState)> {
+    // TODO: REVIEW: Should at least move some of this code to graph_interop.rs,
+    // where the other function is.
+
     let serialized = SerializedBjkGraph::load_from_file(&path)?;
     let (runtime, ui_data, id_idx_mappings) = serialized.to_runtime()?;
     if let Some(ui_data) = ui_data {

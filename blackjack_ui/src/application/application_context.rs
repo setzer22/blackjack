@@ -68,15 +68,8 @@ impl ApplicationContext {
         // objects it's drawing and clear those instead.
         render_ctx.clear_objects();
 
-        let mut actions = vec![];
-
-        match self.run_active_node(editor_state, custom_state, lua_runtime) {
-            Ok(code) => {
-                actions.push(AppRootAction::SetCodeViewerCode(code));
-            }
-            Err(err) => {
-                self.paint_errors(egui_ctx, err);
-            }
+        if let Err(err) = self.run_active_node(editor_state, custom_state, lua_runtime) {
+            self.paint_errors(egui_ctx, err);
         };
 
         if let Some(RenderableThing::HalfEdgeMesh(m)) = &self.renderable_thing {
@@ -100,7 +93,7 @@ impl ApplicationContext {
             self.paint_errors(egui_ctx, err);
         }
 
-        actions
+        Vec::new()
     }
 
     pub fn build_and_render_mesh(
@@ -238,17 +231,15 @@ impl ApplicationContext {
         editor_state: &graph::GraphEditorState,
         custom_state: &mut graph::CustomGraphState,
         lua_runtime: &LuaRuntime,
-    ) -> Result<String> {
+    ) -> Result<()> {
         if let Some(active) = custom_state.active_node {
             let program_result =
                 self.run_node(&editor_state.graph, &custom_state, lua_runtime, active)?;
             self.renderable_thing = program_result.renderable;
-            // TODO REVIEW: Remove the whole "code" tab
-            Ok("".into())
         } else {
             self.renderable_thing = None;
-            Ok("".into())
         }
+        Ok(())
     }
 
     pub fn run_side_effects(

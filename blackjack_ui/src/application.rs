@@ -35,8 +35,6 @@ pub struct RootViewport {
     offscreen_viewports: HashMap<OffscreenViewport, AppViewport>,
     inspector_tabs: InspectorTabs,
     diagnostics_open: bool,
-    code_viewer_open: bool,
-    code_viewer_code: Option<String>,
     lua_runtime: LuaRuntime,
     mouse_captured_by_split: bool,
 }
@@ -139,8 +137,6 @@ impl RootViewport {
             offscreen_viewports,
             inspector_tabs: InspectorTabs::new(),
             diagnostics_open: false,
-            code_viewer_open: false,
-            code_viewer_code: None,
             lua_runtime,
             mouse_captured_by_split: false,
         }
@@ -251,7 +247,6 @@ impl RootViewport {
         });
 
         self.diagnostics_ui();
-        self.code_viewer_ui();
 
         actions.extend(self.app_context.update(
             &self.egui_context,
@@ -295,10 +290,6 @@ impl RootViewport {
                     let writer = std::io::BufWriter::new(std::fs::File::create(path)?);
                     ron::ser::to_writer_pretty(writer, &bga, ron::ser::PrettyConfig::default())?;
                 }
-                Ok(())
-            }
-            AppRootAction::SetCodeViewerCode(code) => {
-                self.code_viewer_code = Some(code);
                 Ok(())
             }
         }
