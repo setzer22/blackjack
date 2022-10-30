@@ -86,7 +86,6 @@ pub fn run_node<'lua>(
                     cached_output_map.get::<_, mlua::Value>(param_name.as_str())?,
                 )?;
             }
-            crate::graph::DependencyKind::Computed(_) => todo!(),
             crate::graph::DependencyKind::External { promoted: _ } => {
                 let ext = ExternalParameter::new(node_id, input.name.clone());
                 let val = ctx.external_param_values.0.get(&ext).ok_or_else(|| {

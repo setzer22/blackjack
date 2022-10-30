@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    io::{BufRead, BufWriter, Write},
+    io::{BufRead, BufReader, BufWriter, Write},
     path::Path,
 };
 
@@ -83,7 +83,6 @@ impl SerializationVersion {
 
 #[derive(Serialize, Deserialize)]
 pub enum SerializedDependencyKind {
-    Computed(String),
     External { promoted: Option<String> },
     Conection { node_idx: usize, param_name: String },
 }
@@ -113,7 +112,7 @@ pub struct SerializedBjkNode {
 pub struct SerializedUiData {
     pub node_positions: Vec<glam::Vec2>,
     pub node_order: Vec<usize>,
-    pub active_node: usize,
+    pub active_node: Option<usize>,
     pub pan: glam::Vec2,
     pub zoom: f32,
 }
@@ -341,7 +340,6 @@ impl SerializedOutput {
 impl SerializedDependencyKind {
     fn from_runtime_data(kind: &DependencyKind, mappings: &IdMappings) -> Result<Self> {
         match kind {
-            DependencyKind::Computed(lua_expr) => Ok(Self::Computed(lua_expr.0.clone())),
             DependencyKind::External { promoted } => Ok(Self::External {
                 promoted: promoted.clone(),
             }),
@@ -358,7 +356,12 @@ impl SerializedDependencyKind {
 // ====================================================
 
 impl SerializedBjkGraph {
-    pub fn to_runtime(self) -> Result<(RuntimeData, Option<SerializedUiData>)> {
+    pub fn load_from_file(path: impl AsRef<Path>) -> Result<SerializedBjkGraph> {
+        let reader = BufReader::new(std::fs::File::open(path)?);
+        Ok(ron::de::from_reader(reader)?)
+    }
+
+    pub fn to_runtime(self) -> Result<(RuntimeData, Option<SerializedUiData>, IdMappings)> {
         let mut rt_nodes = SlotMap::<BjkNodeId, BjkNode>::with_key();
 
         // First pass, generate the mapping and fill in nodes
@@ -384,9 +387,6 @@ impl SerializedBjkGraph {
                         name: input.name,
                         data_type,
                         kind: match input.kind {
-                            SerializedDependencyKind::Computed(s) => {
-                                DependencyKind::Computed(LuaExpression(s))
-                            }
                             SerializedDependencyKind::External { promoted } => {
                                 DependencyKind::External { promoted }
                             }
@@ -426,6 +426,7 @@ impl SerializedBjkGraph {
                 },
             },
             self.ui_data,
+            mappings,
         ))
     }
 }

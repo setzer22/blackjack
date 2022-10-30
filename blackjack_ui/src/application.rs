@@ -281,7 +281,8 @@ impl RootViewport {
                 Ok(())
             }
             AppRootAction::Load(path) => {
-                let (editor_state, custom_state) = serialization::load(path)?;
+                let (editor_state, custom_state) =
+                    serialization::load(path, &self.graph_editor.custom_state.node_definitions)?;
                 self.graph_editor.editor_state = editor_state;
                 self.graph_editor.custom_state = custom_state;
                 Ok(())

@@ -28,8 +28,6 @@ pub struct LuaExpression(pub String);
 /// A node has inputs (dependencies) that need to be met. A dependency can be
 /// met in three different ways.
 pub enum DependencyKind {
-    /// Executing an arbitrary lua expression (computed).
-    Computed(LuaExpression),
     /// Taking the value of an external parameter, from the inputs to the graph
     /// function itself.
     ///
@@ -193,11 +191,29 @@ pub struct InputDefinition {
     pub config: InputValueConfig,
 }
 
+impl DataType {
+    /// Returns the default value for this data type. This does not take
+    /// parameter configuration into account. For that, use
+    /// `InputDefinition::default_value`
+    pub fn default_value(&self) -> BlackjackValue {
+        match self {
+            DataType::Vector => BlackjackValue::Vector(Vec3::default()),
+            DataType::Scalar => BlackjackValue::Scalar(0.0),
+            DataType::Selection => {
+                BlackjackValue::Selection("".into(), Some(SelectionExpression::None))
+            }
+            DataType::String => BlackjackValue::String("".into()),
+            DataType::Mesh => BlackjackValue::None,
+            DataType::HeightMap => BlackjackValue::None,
+        }
+    }
+}
+
 impl InputDefinition {
-    pub fn default_value(&self) -> Result<BlackjackValue> {
+    pub fn default_value(&self) -> BlackjackValue {
         let default_string = || BlackjackValue::String("".into());
 
-        Ok(match (&self.data_type, &self.config) {
+        match (&self.data_type, &self.config) {
             (DataType::Vector, InputValueConfig::Vector { default }) => {
                 BlackjackValue::Vector(*default)
             }
@@ -238,8 +254,10 @@ impl InputDefinition {
             }
             (DataType::String, InputValueConfig::LuaString {}) => default_string(),
             (DataType::HeightMap, InputValueConfig::None) => BlackjackValue::None,
-            _ => bail!("Invalid `data_type` and `config` combination for `InputDefinition`"),
-        })
+
+            // Fallback: When config is not valud, return some valid value
+            (data_type, _) => data_type.default_value(),
+        }
     }
 }
 

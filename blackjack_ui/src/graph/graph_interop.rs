@@ -16,11 +16,21 @@ use blackjack_engine::{
 use egui_node_graph::{InputId, NodeId, OutputId};
 use slotmap::SecondaryMap;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct NodeMapping(
     SecondaryMap<NodeId, BjkNodeId>,
     SecondaryMap<BjkNodeId, NodeId>,
 );
+impl NodeMapping {
+    pub fn new() -> Self {
+        Self::default()
+    }
+    pub fn insert(&mut self, node_id: NodeId, bjk_node_id: BjkNodeId) {
+        self.0.insert(node_id, bjk_node_id);
+        self.1.insert(bjk_node_id, node_id);
+    }
+
+}
 impl Index<NodeId> for NodeMapping {
     type Output = BjkNodeId;
     fn index(&self, index: NodeId) -> &Self::Output {

@@ -282,7 +282,7 @@ impl NodeTemplateTrait for NodeOpName {
                 node_id,
                 input.name.clone(),
                 DataTypeUi(input.data_type),
-                ValueTypeUi(input.default_value().unwrap_or(BlackjackValue::None)),
+                ValueTypeUi(input.default_value()),
                 input_param_kind,
                 default_shown_inline(),
             );

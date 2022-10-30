@@ -399,7 +399,7 @@ impl GraphEditor {
                             node_id,
                             param_name: input.name.clone(),
                             data_type: input.data_type,
-                            value: input.default_value()?,
+                            value: input.default_value(),
                         })
                     }
                 }
