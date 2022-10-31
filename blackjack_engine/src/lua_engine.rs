@@ -73,7 +73,9 @@ pub struct ProgramResult {
     /// for gizmos cannot be decided by this crate, since gizmos will generally
     /// want to draw on the screen and blackjack_engine has no dependency on
     /// egui (or any other rendering system).
-    pub active_gizmos: Vec<BlackjackGizmo>,
+    ///
+    /// This will be none when gizmos aren't run.
+    pub updated_gizmos: Option<Vec<BlackjackGizmo>>,
     /// The updated external parameters. Any node may modify its own parameters
     /// when running its gizmo function.
     pub updated_values: ExternalParameterValues,

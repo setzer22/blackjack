@@ -11,6 +11,7 @@ use blackjack_engine::graph::BjkNodeId;
 use blackjack_engine::graph::DependencyKind;
 use blackjack_engine::graph_interpreter::ExternalParameter;
 use blackjack_engine::graph_interpreter::ExternalParameterValues;
+use blackjack_engine::graph_interpreter::GizmoConfig;
 use blackjack_engine::lua_engine::ProgramResult;
 use blackjack_engine::lua_engine::RenderableThing;
 use gdnative::api::Material;
@@ -391,6 +392,8 @@ impl BlackjackApi {
                     .ok_or_else(|| godot_error!("Default node not set for this jack file."))
                     .ok()?,
                 jack.params.clone(),
+                &runtime.lua_runtime.node_definitions,
+                GizmoConfig::IgnoreGizmos,
             ) {
                 Ok(ProgramResult {
                     renderable: Some(RenderableThing::HalfEdgeMesh(mesh)),

@@ -15,7 +15,7 @@ use blackjack_engine::graph::{BlackjackValue, DataType, NodeDefinitions};
 use egui_node_graph::InputParamKind;
 use egui_wgpu::renderer::{RenderPass, ScreenDescriptor};
 
-use super::blackjack_theme;
+use super::{blackjack_theme, root_ui::AppRootAction};
 
 pub struct GraphEditor {
     pub editor_state: graph::GraphEditorState,
@@ -163,7 +163,8 @@ impl GraphEditor {
         parent_scale: f32,
         viewport_rect: egui::Rect,
         node_definitions: &NodeDefinitions,
-    ) {
+    ) -> Vec<AppRootAction> {
+        let mut root_actions = Vec::new();
         self.resize_platform(parent_scale, viewport_rect);
         self.egui_context.input_mut().pixels_per_point = 1.0 / self.zoom_level();
 
@@ -198,12 +199,12 @@ impl GraphEditor {
 
         self.egui_context.begin_frame(egui_input);
 
-        graph::draw_node_graph(
+        root_actions.extend(graph::draw_node_graph(
             &self.egui_context,
             &mut self.editor_state,
             &mut self.custom_state,
             node_definitions,
-        );
+        ));
 
         // Debug mouse pointer position
         // -- This is useful when mouse events are not being interpreted correctly.
@@ -212,6 +213,8 @@ impl GraphEditor {
             ctx.debug_painter()
                 .circle(pos, 5.0, egui::Color32::GREEN, egui::Stroke::none());
         } */
+
+        root_actions
     }
 
     pub fn screen_descriptor(

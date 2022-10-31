@@ -85,6 +85,7 @@ mod tr_gizmo {
     }
 }
 
+#[derive(Clone)]
 pub enum BlackjackGizmo {
     Transform(TransformGizmo),
 }

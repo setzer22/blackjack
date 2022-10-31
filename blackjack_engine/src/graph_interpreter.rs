@@ -1,7 +1,7 @@
-use mlua::ToLua;
+use mlua::{Table, ToLua};
 
 use crate::gizmos::BlackjackGizmo;
-use crate::graph::{BjkGraph, BjkNodeId, BlackjackValue};
+use crate::graph::{BjkGraph, BjkNodeId, BlackjackValue, NodeDefinitions};
 use crate::lua_engine::{ProgramResult, RenderableThing};
 use crate::prelude::*;
 
@@ -28,30 +28,50 @@ pub struct InterpreterContext<'a, 'lua> {
     /// The values for all the external parameters. Mutable reference because
     /// node gizmos may modify these values.
     external_param_values: &'a mut ExternalParameterValues,
-    /// See `active_gizmos` on [`ProgramResult`]
-    active_gizmos: &'a mut Vec<BlackjackGizmo>,
+    node_definitions: &'a NodeDefinitions,
+    target_node: BjkNodeId,
+    gizmos_enabled: bool,
+    gizmo_config: GizmoConfig,
+    gizmo_outputs: &'a mut Vec<BlackjackGizmo>,
+}
+
+pub enum GizmoConfig {
+    IgnoreGizmos,
+    RunGizmosInOut(Vec<BlackjackGizmo>),
+    RinGizmoOut,
 }
 
 pub fn run_graph<'lua>(
     lua: &'lua mlua::Lua,
     graph: &BjkGraph,
-    final_node: BjkNodeId,
+    target_node: BjkNodeId,
     mut external_param_values: ExternalParameterValues,
+    node_definitions: &NodeDefinitions,
+    gizmo_config: GizmoConfig,
 ) -> Result<ProgramResult> {
-    let mut gizmos = Vec::new();
+    let gizmos_enabled = matches!(
+        &gizmo_config,
+        GizmoConfig::RinGizmoOut | GizmoConfig::RunGizmosInOut(_)
+    );
+
+    let mut gizmo_outputs = Vec::new();
     let mut context = InterpreterContext {
         outputs_cache: Default::default(),
         external_param_values: &mut external_param_values,
-        active_gizmos: &mut gizmos,
+        target_node,
+        node_definitions,
+        gizmo_config,
+        gizmo_outputs: &mut gizmo_outputs,
+        gizmos_enabled,
     };
 
     // Ensure the outputs cache is populated.
-    run_node(lua, graph, &mut context, final_node)?;
+    run_node(lua, graph, &mut context, target_node)?;
 
-    let renderable = if let Some(return_value) = &graph.nodes[final_node].return_value {
+    let renderable = if let Some(return_value) = &graph.nodes[target_node].return_value {
         let output = context
             .outputs_cache
-            .get(&final_node)
+            .get(&target_node)
             .expect("Final node should be in the outputs cache");
         Some(RenderableThing::from_lua_value(
             output.get(return_value.as_str())?,
@@ -62,8 +82,12 @@ pub fn run_graph<'lua>(
 
     Ok(ProgramResult {
         renderable,
+        updated_gizmos: if gizmos_enabled {
+            Some(gizmo_outputs)
+        } else {
+            None
+        },
         updated_values: external_param_values,
-        active_gizmos: gizmos,
     })
 }
 
@@ -74,9 +98,14 @@ pub fn run_node<'lua>(
     node_id: BjkNodeId,
 ) -> Result<()> {
     let node = &graph.nodes[node_id];
+    let op_name = &node.op_name;
+    let node_def = ctx
+        .node_definitions
+        .node_def(op_name)
+        .ok_or_else(|| anyhow!("Node definition not found for {op_name}"))?;
 
     // Stores the arguments that will be sent to this node's `op` fn
-    let input_map = lua.create_table()?;
+    let mut input_map = lua.create_table()?;
 
     // Compute the values for dependent nodes and populate the output cache.
     for input in &node.inputs {
@@ -111,19 +140,59 @@ pub fn run_node<'lua>(
         }
     }
 
-    let op_name = &node.op_name;
-    let fn_code = format!(
-        "return function(args) return require('node_library'):callNode('{op_name}', args) end"
-    );
-    let lua_fn: mlua::Function = lua.load(&fn_code).eval()?;
-    let outputs = match lua_fn.call(input_map)? {
+    let node_table = lua
+        .load(&(format!("require('node_library'):getNode('{op_name}')")))
+        .eval::<mlua::Table>()?;
+
+    // We need to cache this so we can take ownership of the gizmos_in below
+    // Run pre-gizmo
+    if ctx.gizmos_enabled && node_id == ctx.target_node && node_def.has_gizmo {
+        match &ctx.gizmo_config {
+            GizmoConfig::RunGizmosInOut(gizmos_in) => {
+                let pre_gizmo_fn: mlua::Function = node_table
+                    .get("pre_gizmo")
+                    .map_err(|err| anyhow!("Node with gizmo should have 'pre_gizmo'. {err}"))?;
+
+                // Patch the input map, running the gizmo function
+                let new_input_map = pre_gizmo_fn
+                    .call::<_, Table>((input_map, gizmos_in.clone().to_lua(lua)))
+                    .map_err(|err| {
+                        anyhow!(
+                            "A node's pre_gizmo callback should return an
+                    updated parameter list as a table. {err}"
+                        )
+                    })?;
+                input_map = new_input_map;
+            }
+            _ => {}
+        }
+    }
+
+    // Run node 'op'
+    let op_fn: mlua::Function = node_table
+        .get("op")
+        .map_err(|err| anyhow!("Node should always have an 'op'. {err}"))?;
+    let outputs = match op_fn.call(input_map)? {
         mlua::Value::Table(t) => t,
         other => {
             bail!("A node's `op` function should always return a table, got {other:?}");
         }
     };
 
-    ctx.outputs_cache.insert(node_id, outputs);
+    ctx.outputs_cache.insert(node_id, outputs.clone());
+
+    // Run post-gizmo
+    if ctx.gizmos_enabled && node_id == ctx.target_node && node_def.has_gizmo {
+        let post_gizmo_fn: mlua::Function = node_table
+            .get("post_gizmo")
+            .map_err(|err| anyhow!("Node with gizmo should have 'post_gizmo'. {err}"))?;
+
+        let gizmos: Vec<BlackjackGizmo> = post_gizmo_fn.call(outputs).map_err(|err| {
+            anyhow!("A node's post_gizmo function should return a sequence of gizmos. {err}")
+        })?;
+
+        *ctx.gizmo_outputs = gizmos;
+    }
 
     Ok(())
 }

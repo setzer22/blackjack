@@ -8,13 +8,14 @@ use crate::graph::graph_interop;
 use crate::prelude::*;
 use anyhow::Error;
 use blackjack_engine::{
+    gizmos::BlackjackGizmo,
+    graph_interpreter::GizmoConfig,
     lua_engine::{LuaRuntime, ProgramResult, RenderableThing},
     prelude::{FaceOverlayBuffers, LineBuffers, PointBuffers, VertexIndexBuffers},
 };
 use egui_node_graph::NodeId;
 
 use super::{
-    gizmo_ui::BlackjackUiGizmo,
     root_ui::AppRootAction,
     viewport_3d::{EdgeDrawMode, FaceDrawMode, Viewport3dSettings},
     viewport_split::SplitTree,
@@ -28,7 +29,7 @@ pub struct ApplicationContext {
     pub renderable_thing: Option<RenderableThing>,
     /// The currently active gizmos. Gizmos are returned by nodes to represent
     /// visual objects that can be used to manipulate its parameters.
-    pub active_gizmos: Vec<Box<dyn BlackjackUiGizmo>>,
+    pub active_gizmos: Option<Vec<BlackjackGizmo>>,
     /// The tree of splits at the center of application. Splits recursively
     /// partition the state either horizontally or vertically. This separation
     /// is dynamic, very similar to Blender's UI model
@@ -39,7 +40,7 @@ impl ApplicationContext {
     pub fn new() -> ApplicationContext {
         ApplicationContext {
             renderable_thing: None,
-            active_gizmos: Vec::new(),
+            active_gizmos: None,
             split_tree: SplitTree::default_tree(),
         }
     }
@@ -68,10 +69,22 @@ impl ApplicationContext {
         // objects it's drawing and clear those instead.
         render_ctx.clear_objects();
 
-        if let Err(err) = self.run_active_node(editor_state, custom_state, lua_runtime) {
+        // Function will set updated gizmos back
+        let gizmos = self.active_gizmos.take();
+        if let Err(err) = self.run_active_node(
+            editor_state,
+            custom_state,
+            if let Some(gizmos) = gizmos {
+                GizmoConfig::RunGizmosInOut(gizmos)
+            } else {
+                GizmoConfig::RinGizmoOut
+            },
+            lua_runtime,
+        ) {
             self.paint_errors(egui_ctx, err);
         };
 
+        // TODO: REVIEW: This is test code, remove it.
         if let Some(RenderableThing::HalfEdgeMesh(m)) = &self.renderable_thing {
             let (s, r, t) = model_matrix.to_scale_rotation_translation();
             blackjack_engine::mesh::halfedge::edit_ops::transform(
@@ -212,16 +225,18 @@ impl ApplicationContext {
         graph: &graph::Graph,
         custom_state: &graph::CustomGraphState,
         lua_runtime: &LuaRuntime,
+        gizmos: GizmoConfig,
         node: NodeId,
     ) -> Result<ProgramResult> {
-        let (bjk_graph, mapping) =
-            graph_interop::ui_graph_to_blackjack_graph(graph, custom_state)?;
+        let (bjk_graph, mapping) = graph_interop::ui_graph_to_blackjack_graph(graph, custom_state)?;
         let params = graph_interop::extract_graph_params(graph, &bjk_graph, &mapping)?;
         blackjack_engine::graph_interpreter::run_graph(
             &lua_runtime.lua,
             &bjk_graph,
             mapping[node],
             params,
+            &lua_runtime.node_definitions,
+            gizmos,
         )
     }
 
@@ -230,12 +245,19 @@ impl ApplicationContext {
         &mut self,
         editor_state: &graph::GraphEditorState,
         custom_state: &mut graph::CustomGraphState,
+        gizmos: GizmoConfig,
         lua_runtime: &LuaRuntime,
     ) -> Result<()> {
         if let Some(active) = custom_state.active_node {
-            let program_result =
-                self.run_node(&editor_state.graph, custom_state, lua_runtime, active)?;
+            let program_result = self.run_node(
+                &editor_state.graph,
+                custom_state,
+                lua_runtime,
+                gizmos,
+                active,
+            )?;
             self.renderable_thing = program_result.renderable;
+            self.active_gizmos = program_result.updated_gizmos;
         } else {
             self.renderable_thing = None;
         }
@@ -251,7 +273,13 @@ impl ApplicationContext {
         if let Some(side_effect) = custom_state.run_side_effect.take() {
             // We ignore the result. The program is only executed to produce a
             // side effect (e.g. exporting a mesh as OBJ)
-            let _ = self.run_node(&editor_state.graph, custom_state, lua_runtime, side_effect)?;
+            let _ = self.run_node(
+                &editor_state.graph,
+                custom_state,
+                lua_runtime,
+                GizmoConfig::IgnoreGizmos,
+                side_effect,
+            )?;
         }
         Ok(())
     }

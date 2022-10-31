@@ -6,6 +6,7 @@
 
 use std::borrow::Cow;
 
+use crate::application::root_ui::AppRootAction;
 use crate::custom_widgets::smart_dragvalue::SmartDragValue;
 use crate::{application::code_viewer::code_edit_ui, prelude::*};
 use egui::RichText;
@@ -174,7 +175,8 @@ pub fn draw_node_graph(
     editor_state: &mut GraphEditorState,
     custom_state: &mut CustomGraphState,
     defs: &NodeDefinitions,
-) {
+) -> Vec<AppRootAction> {
+    let mut root_responses = Vec::new();
     egui::CentralPanel::default().show(ctx, |ui| {
         let responses =
             editor_state.draw_graph_editor(ui, NodeOpNames(defs.node_names()), custom_state);
@@ -190,7 +192,10 @@ pub fn draw_node_graph(
                 }
                 NodeResponse::User(response) => match response {
                     graph::CustomNodeResponse::SetActiveNode(n) => {
-                        custom_state.active_node = Some(n)
+                        custom_state.active_node = Some(n);
+                        // When the active node changes, we want to clear the
+                        // existing gizmos referring to the previous node
+                        root_responses.push(AppRootAction::ClearGizmos);
                     }
                     graph::CustomNodeResponse::ClearActiveNode => custom_state.active_node = None,
                     graph::CustomNodeResponse::RunNodeSideEffect(n) => {
@@ -201,6 +206,7 @@ pub fn draw_node_graph(
             }
         }
     });
+    root_responses
 }
 
 pub struct NodeOpNames(Vec<String>);

@@ -10,6 +10,7 @@ use std::path::PathBuf;
 pub enum AppRootAction {
     Save(PathBuf),
     Load(PathBuf),
+    ClearGizmos,
 }
 
 impl RootViewport {

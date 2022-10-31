@@ -220,12 +220,12 @@ impl RootViewport {
             }
         }
 
-        self.graph_editor.update(
+        actions.extend(self.graph_editor.update(
             window,
             self.screen_descriptor.pixels_per_point,
             self.offscreen_viewports[&OffscreenViewport::GraphEditor].rect,
             &self.lua_runtime.node_definitions,
-        );
+        ));
         self.viewport_3d.update(
             self.screen_descriptor.pixels_per_point,
             self.offscreen_viewports[&OffscreenViewport::Viewport3d].rect,
@@ -280,16 +280,18 @@ impl RootViewport {
                     &self.graph_editor.custom_state,
                     path,
                 )?;
-                Ok(())
             }
             AppRootAction::Load(path) => {
                 let (editor_state, custom_state) =
                     serialization::load(path, &self.graph_editor.custom_state.node_definitions)?;
                 self.graph_editor.editor_state = editor_state;
                 self.graph_editor.custom_state = custom_state;
-                Ok(())
+            }
+            AppRootAction::ClearGizmos => {
+                self.app_context.active_gizmos = None;
             }
         }
+        Ok(())
     }
 
     pub fn render(&mut self, render_ctx: &mut RenderContext) {
