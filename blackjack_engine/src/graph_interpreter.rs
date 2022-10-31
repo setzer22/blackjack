@@ -1,5 +1,3 @@
-use std::any::Any;
-
 use mlua::ToLua;
 
 use crate::gizmos::BlackjackGizmo;
@@ -31,7 +29,7 @@ pub struct InterpreterContext<'a, 'lua> {
     /// node gizmos may modify these values.
     external_param_values: &'a mut ExternalParameterValues,
     /// See `active_gizmos` on [`ProgramResult`]
-    active_gizmos: &'a mut Vec<Box<dyn BlackjackGizmo>>,
+    active_gizmos: &'a mut Vec<BlackjackGizmo>,
 }
 
 pub fn run_graph<'lua>(

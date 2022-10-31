@@ -1,14 +1,8 @@
 use std::any::Any;
 
-use mlua::{Lua, ToLua};
+use mlua::{FromLua, Lua, ToLua};
 
 use crate::prelude::*;
-
-pub trait BlackjackGizmo {
-    fn convert_to_lua<'lua>(&self, lua: &'lua Lua) -> Result<mlua::Value<'lua>>;
-    fn set_from_lua<'lua>(&mut self, lua: &'lua Lua, val: mlua::Value<'lua>) -> Result<()>;
-    fn as_any(&self) -> &dyn Any;
-}
 
 /// A gizmo representing a 3d transformation, allowing to translate, rotate and
 /// scale the manipulated object.
@@ -91,37 +85,42 @@ mod tr_gizmo {
     }
 }
 
-/// The BlackjackGizmo trait is just a trick to allow storing a type-erased
-/// value of `dyn Any + FromLua + ToLua` in an object-safe way. The
-/// implementation is just boilerplate, so all types should implement it with
-/// the macro.
-macro_rules! impl_gizmo_trait {
-    ($struct:ident) => {
-        impl BlackjackGizmo for $struct {
-            fn convert_to_lua<'lua>(&self, lua: &'lua Lua) -> Result<mlua::Value<'lua>> {
-                Ok(self.clone().to_lua(lua)?)
-            }
-
-            fn set_from_lua<'lua>(&mut self, lua: &'lua Lua, val: mlua::Value<'lua>) -> Result<()> {
-                use mlua::FromLua;
-                let new = Self::from_lua(val, lua)?;
-                *self = new;
-                Ok(())
-            }
-
-            fn as_any(&self) -> &dyn Any {
-                self
-            }
-        }
-    };
+pub enum BlackjackGizmo {
+    Transform(TransformGizmo),
 }
 
-// WIP: Seems like this trait thing will work... Now I need to:
-//
-// - [ ] Pass the gizmos over to the UI side
-//
-// - [ ] Have some code that downcasts them and re-casts them as
-// BlackjackGizmoUi trait, which will include methods for each part of the gizmo
-// lifecycle (taking egui and the mesh as paramaters, and so on...)
+/// Boilerplate: Implement FromLua by attempting downcast of each UserData type
+impl<'lua> FromLua<'lua> for BlackjackGizmo {
+    fn from_lua(lua_value: mlua::Value<'lua>, lua: &'lua Lua) -> mlua::Result<Self> {
+        macro_rules! gizmo_type {
+            ($x:ident, $t:ident, $w:ident) => {
+                if $x.is::<$t>() {
+                    return Ok(BlackjackGizmo::$w($x.borrow::<$t>()?.clone()));
+                }
+            };
+        }
 
-impl_gizmo_trait!(TransformGizmo);
+        match lua_value {
+            mlua::Value::UserData(x) => {
+                // NOTE: Add more cases here:
+                gizmo_type!(x, TransformGizmo, Transform);
+            }
+            _ => {}
+        }
+        return mlua::Result::Err(mlua::Error::FromLuaConversionError {
+            from: "Value",
+            to: "BlackjackGizmo",
+            message: Some("Invalid data for blackjack gizmo.".into()),
+        });
+    }
+}
+
+/// Boilerplate: Implement ToLua by deferring to each variant's ToLua
+/// implementation
+impl<'lua> ToLua<'lua> for BlackjackGizmo {
+    fn to_lua(self, lua: &'lua Lua) -> mlua::Result<mlua::Value<'lua>> {
+        match self {
+            BlackjackGizmo::Transform(t) => t.to_lua(lua),
+        }
+    }
+}
