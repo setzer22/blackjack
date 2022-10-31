@@ -1,7 +1,18 @@
+use std::any::Any;
+
+use mlua::{Lua, ToLua};
+
 use crate::prelude::*;
+
+pub trait BlackjackGizmo {
+    fn convert_to_lua<'lua>(&self, lua: &'lua Lua) -> Result<mlua::Value<'lua>>;
+    fn set_from_lua<'lua>(&mut self, lua: &'lua Lua, val: mlua::Value<'lua>) -> Result<()>;
+    fn as_any(&self) -> &dyn Any;
+}
 
 /// A gizmo representing a 3d transformation, allowing to translate, rotate and
 /// scale the manipulated object.
+#[derive(Copy, Clone)]
 pub struct TransformGizmo {
     translation: Vec3,
     rotation: Quat,
@@ -79,3 +90,38 @@ mod tr_gizmo {
         }
     }
 }
+
+/// The BlackjackGizmo trait is just a trick to allow storing a type-erased
+/// value of `dyn Any + FromLua + ToLua` in an object-safe way. The
+/// implementation is just boilerplate, so all types should implement it with
+/// the macro.
+macro_rules! impl_gizmo_trait {
+    ($struct:ident) => {
+        impl BlackjackGizmo for $struct {
+            fn convert_to_lua<'lua>(&self, lua: &'lua Lua) -> Result<mlua::Value<'lua>> {
+                Ok(self.clone().to_lua(lua)?)
+            }
+
+            fn set_from_lua<'lua>(&mut self, lua: &'lua Lua, val: mlua::Value<'lua>) -> Result<()> {
+                use mlua::FromLua;
+                let new = Self::from_lua(val, lua)?;
+                *self = new;
+                Ok(())
+            }
+
+            fn as_any(&self) -> &dyn Any {
+                self
+            }
+        }
+    };
+}
+
+// WIP: Seems like this trait thing will work... Now I need to:
+//
+// - [ ] Pass the gizmos over to the UI side
+//
+// - [ ] Have some code that downcasts them and re-casts them as
+// BlackjackGizmoUi trait, which will include methods for each part of the gizmo
+// lifecycle (taking egui and the mesh as paramaters, and so on...)
+
+impl_gizmo_trait!(TransformGizmo);

@@ -390,7 +390,7 @@ impl BlackjackApi {
                     .default_node
                     .ok_or_else(|| godot_error!("Default node not set for this jack file."))
                     .ok()?,
-                &jack.params,
+                jack.params.clone(),
             ) {
                 Ok(ProgramResult {
                     renderable: Some(RenderableThing::HalfEdgeMesh(mesh)),

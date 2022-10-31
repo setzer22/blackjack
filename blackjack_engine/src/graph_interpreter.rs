@@ -1,5 +1,8 @@
+use std::any::Any;
+
 use mlua::ToLua;
 
+use crate::gizmos::BlackjackGizmo;
 use crate::graph::{BjkGraph, BjkNodeId, BlackjackValue};
 use crate::lua_engine::{ProgramResult, RenderableThing};
 use crate::prelude::*;
@@ -19,23 +22,29 @@ impl ExternalParameter {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct ExternalParameterValues(pub HashMap<ExternalParameter, BlackjackValue>);
 
 pub struct InterpreterContext<'a, 'lua> {
     outputs_cache: HashMap<BjkNodeId, mlua::Table<'lua>>,
-    external_param_values: &'a ExternalParameterValues,
+    /// The values for all the external parameters. Mutable reference because
+    /// node gizmos may modify these values.
+    external_param_values: &'a mut ExternalParameterValues,
+    /// See `active_gizmos` on [`ProgramResult`]
+    active_gizmos: &'a mut Vec<Box<dyn BlackjackGizmo>>,
 }
 
 pub fn run_graph<'lua>(
     lua: &'lua mlua::Lua,
     graph: &BjkGraph,
     final_node: BjkNodeId,
-    external_param_values: &ExternalParameterValues,
+    mut external_param_values: ExternalParameterValues,
 ) -> Result<ProgramResult> {
+    let mut gizmos = Vec::new();
     let mut context = InterpreterContext {
         outputs_cache: Default::default(),
-        external_param_values,
+        external_param_values: &mut external_param_values,
+        active_gizmos: &mut gizmos,
     };
 
     // Ensure the outputs cache is populated.
@@ -53,7 +62,11 @@ pub fn run_graph<'lua>(
         None
     };
 
-    Ok(ProgramResult { renderable })
+    Ok(ProgramResult {
+        renderable,
+        updated_values: external_param_values,
+        active_gizmos: gizmos,
+    })
 }
 
 pub fn run_node<'lua>(
@@ -63,11 +76,6 @@ pub fn run_node<'lua>(
     node_id: BjkNodeId,
 ) -> Result<()> {
     let node = &graph.nodes[node_id];
-
-    println!(
-        "Running node {node_id:?} with op {}",
-        graph.nodes[node_id].op_name
-    );
 
     // Stores the arguments that will be sent to this node's `op` fn
     let input_map = lua.create_table()?;

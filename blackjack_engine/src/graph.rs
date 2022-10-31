@@ -296,6 +296,8 @@ pub struct NodeDefinition {
     /// Executable nodes can be executed once by pressing a button. This mode of
     /// execution is used for things like file exporters.
     pub executable: bool,
+    /// This node has an available interactive gizmo.
+    pub has_gizmo: bool,
 }
 
 #[derive(Default)]
@@ -445,6 +447,8 @@ impl NodeDefinition {
             label: table.get("label")?,
             returns: table.get::<_, Option<String>>("returns")?,
             executable: table.get::<_, Option<bool>>("executable")?.unwrap_or(false),
+            has_gizmo: table.get::<_, mlua::Value>("gizmo_in")? != mlua::Value::Nil
+                && table.get::<_, mlua::Value>("gizmo_out")? != mlua::Value::Nil,
         })
     }
 

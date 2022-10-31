@@ -221,7 +221,7 @@ impl ApplicationContext {
             &lua_runtime.lua,
             &bjk_graph,
             mapping[node],
-            &params,
+            params,
         )
     }
 
