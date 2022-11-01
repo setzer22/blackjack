@@ -138,7 +138,7 @@ pub fn blackjack_graph_to_ui_graph(
                                 node_id: bjk_node_id,
                                 param_name: bjk_input.name.clone(),
                             };
-                            if let Some(val) = ext.0.get(&param) {
+                            if let Some(val) = ext.0.get(param) {
                                 return val.clone();
                             }
                         }
@@ -178,7 +178,7 @@ pub fn blackjack_graph_to_ui_graph(
                 DependencyKind::Connection { node, param_name } => {
                     let out_node_id = mapping[*node];
                     let out_id = graph[out_node_id]
-                        .get_output(&param_name)
+                        .get_output(param_name)
                         .expect("Param should exist, we just added it.");
 
                     let in_node_id = mapping[bjk_node_id];
@@ -217,4 +217,22 @@ pub fn extract_graph_params(
     }
 
     Ok(params)
+}
+
+pub fn set_parameters_from_external_values(
+    graph: &mut Graph,
+    updated_values: ExternalParameterValues,
+    mapping: NodeMapping,
+) -> Result<()> {
+    for (param, value) in updated_values.0 {
+        let node_id = mapping[param.node_id];
+        let input_id = graph[node_id].get_input(&param.param_name)?;
+
+        let input = &mut graph[input_id];
+
+        if input.typ.0.is_valid_value(&value) {
+            graph[input_id].value = ValueTypeUi(value);
+        }
+    }
+    Ok(())
 }

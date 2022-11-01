@@ -63,7 +63,7 @@ pub fn load(
     node_definitions: &NodeDefinitions,
 ) -> Result<(GraphEditorState, CustomGraphState)> {
     let serialized = SerializedBjkGraph::load_from_file(&path)?;
-    let (runtime, ui_data, id_idx_mappings) = serialized.to_runtime()?;
+    let (runtime, ui_data, id_idx_mappings) = serialized.into_runtime()?;
 
     if ui_data.is_none() {
         bail!(

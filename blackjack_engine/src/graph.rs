@@ -61,6 +61,18 @@ impl DataType {
             DataType::Vector | DataType::Scalar | DataType::Selection | DataType::String => false,
         }
     }
+
+    /// Returns whether the given value is valid for this data type
+    pub fn is_valid_value(&self, value: &BlackjackValue) -> bool {
+        match self {
+            DataType::Vector => matches!(value, BlackjackValue::Vector(_)),
+            DataType::Scalar => matches!(value, BlackjackValue::Scalar(_)),
+            DataType::Selection => matches!(value, BlackjackValue::Selection(_,_)),
+            DataType::String => matches!(value, BlackjackValue::String(_)),
+            DataType::Mesh => matches!(value, BlackjackValue::None),
+            DataType::HeightMap => matches!(value, BlackjackValue::None),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

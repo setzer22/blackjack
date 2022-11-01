@@ -4,7 +4,6 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-use blackjack_engine::graph::serialization::RuntimeData;
 use blackjack_engine::graph::serialization::SerializedBjkGraph;
 use blackjack_engine::graph::BjkGraph;
 use blackjack_engine::graph::BjkNodeId;
@@ -158,11 +157,12 @@ impl From<ExternalParameter> for GdExternalParameter {
         use slotmap::Key;
         Self {
             node_id_ffi: p.node_id.data().as_ffi(),
-            param_name: p.param_name.clone(),
+            param_name: p.param_name,
         }
     }
 }
 
+#[allow(clippy::from_over_into)] // can't do this due to orphan rules
 impl Into<ExternalParameter> for GdExternalParameter {
     fn into(self) -> ExternalParameter {
         ExternalParameter {
@@ -206,7 +206,7 @@ impl BlackjackApi {
                 }
             };
             let loaded = SerializedBjkGraph::load_from_string(&contents.to_string())
-                .and_then(|x| x.to_runtime());
+                .and_then(|x| x.into_runtime());
             match loaded {
                 Ok((rt_data, _, _)) => {
                     if let Some(params) = rt_data.external_parameters {

@@ -1,12 +1,10 @@
-use std::any::Any;
-
 use mlua::{FromLua, Lua, ToLua};
 
 use crate::prelude::*;
 
 /// A gizmo representing a 3d transformation, allowing to translate, rotate and
 /// scale the manipulated object.
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct TransformGizmo {
     translation: Vec3,
     rotation: Quat,
@@ -31,6 +29,16 @@ mod tr_gizmo {
         }
     }
 
+    /// Constructs a new transform gizmo representing the identity transform.
+    #[lua(under = "TransformGizmo")]
+    fn default() -> TransformGizmo {
+        TransformGizmo {
+            translation: Vec3::ZERO,
+            rotation: Quat::IDENTITY,
+            scale: Vec3::ONE,
+        }
+    }
+
     #[lua_impl]
     impl TransformGizmo {
         /// Returns the translation of this transform gizmo
@@ -48,7 +56,7 @@ mod tr_gizmo {
         /// Returns the rotation of this transform gizmo, as XYZ euler angles
         #[lua(map = "LVec3(x)")]
         pub fn rotation(&self) -> Vec3 {
-            self.rotation.to_euler(EulerRot::XYZ).into()
+            self.rotation.normalize().to_euler(EulerRot::XYZ).into()
         }
 
         /// Sets the rotation component of this transform gizmo, from XYZ euler angles
@@ -80,19 +88,19 @@ mod tr_gizmo {
             let (s, r, t) = m.to_scale_rotation_translation();
             self.scale = s;
             self.translation = t;
-            self.rotation = Quat::from_euler(EulerRot::XYZ, r.x, r.y, r.z);
+            self.rotation = r;
         }
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum BlackjackGizmo {
     Transform(TransformGizmo),
 }
 
 /// Boilerplate: Implement FromLua by attempting downcast of each UserData type
 impl<'lua> FromLua<'lua> for BlackjackGizmo {
-    fn from_lua(lua_value: mlua::Value<'lua>, lua: &'lua Lua) -> mlua::Result<Self> {
+    fn from_lua(lua_value: mlua::Value<'lua>, _lua: &'lua Lua) -> mlua::Result<Self> {
         macro_rules! gizmo_type {
             ($x:ident, $t:ident, $w:ident) => {
                 if $x.is::<$t>() {
@@ -101,18 +109,15 @@ impl<'lua> FromLua<'lua> for BlackjackGizmo {
             };
         }
 
-        match lua_value {
-            mlua::Value::UserData(x) => {
-                // NOTE: Add more cases here:
-                gizmo_type!(x, TransformGizmo, Transform);
-            }
-            _ => {}
+        if let mlua::Value::UserData(x) = lua_value {
+            // NOTE: Add more cases here:
+            gizmo_type!(x, TransformGizmo, Transform);
         }
-        return mlua::Result::Err(mlua::Error::FromLuaConversionError {
+        mlua::Result::Err(mlua::Error::FromLuaConversionError {
             from: "Value",
             to: "BlackjackGizmo",
             message: Some("Invalid data for blackjack gizmo.".into()),
-        });
+        })
     }
 }
 

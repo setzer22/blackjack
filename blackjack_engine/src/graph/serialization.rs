@@ -16,8 +16,7 @@ use crate::{
 };
 
 use super::{
-    BjkGraph, BjkNode, BjkNodeId, BlackjackValue, DataType, DependencyKind, InputParameter,
-    LuaExpression, Output,
+    BjkGraph, BjkNode, BjkNodeId, BlackjackValue, DataType, DependencyKind, InputParameter, Output,
 };
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -36,7 +35,7 @@ impl SerializationVersion {
         }
     }
 
-    pub fn to_writer(&self, mut w: impl Write) {
+    pub fn to_writer(&self, mut w: impl Write) -> Result<()> {
         // Serde made it very inconvenient to deserialize the version field
         // before attempting to deserialize the whole RON file. A pragmatic
         // solution was to (ab)use RON's comment support to encode version
@@ -49,7 +48,8 @@ impl SerializationVersion {
             w,
             "// BLACKJACK_VERSION_HEADER {} {} {}",
             self.major, self.minor, self.patch
-        );
+        )?;
+        Ok(())
     }
 
     pub fn from_reader(mut r: impl BufRead) -> Result<Self, anyhow::Error> {
@@ -186,7 +186,7 @@ impl SerializedBjkGraph {
     pub fn write_to_file(&self, path: impl AsRef<Path>) -> Result<()> {
         let version = SerializationVersion::latest();
         let mut writer = BufWriter::new(std::fs::File::create(path)?);
-        version.to_writer(&mut writer);
+        version.to_writer(&mut writer)?;
         ron::ser::to_writer_pretty(&mut writer, &self, PrettyConfig::default())?;
         Ok(())
     }
@@ -207,10 +207,8 @@ impl SerializedBjkGraph {
         };
 
         let mut serialized_nodes = vec![];
-        for (node_id, node) in nodes {
-            serialized_nodes.push(SerializedBjkNode::from_runtime_data(
-                node_id, &node, &mappings,
-            )?);
+        for (_node_id, node) in nodes {
+            serialized_nodes.push(SerializedBjkNode::from_runtime_data(&node, &mappings)?);
         }
 
         Ok((
@@ -272,11 +270,7 @@ impl SerializedBlackjackValue {
 }
 
 impl SerializedBjkNode {
-    fn from_runtime_data(
-        node_id: BjkNodeId,
-        node: &BjkNode,
-        mappings: &IdMappings,
-    ) -> Result<Self> {
+    fn from_runtime_data(node: &BjkNode, mappings: &IdMappings) -> Result<Self> {
         let BjkNode {
             op_name,
             return_value,
@@ -290,7 +284,7 @@ impl SerializedBjkNode {
             .collect::<Result<Vec<_>>>()?;
         let outputs = outputs
             .iter()
-            .map(|output| SerializedOutput::from_runtime_data(output, mappings))
+            .map(SerializedOutput::from_runtime_data)
             .collect();
 
         Ok(Self {
@@ -333,7 +327,7 @@ impl SerializedInput {
 }
 
 impl SerializedOutput {
-    fn from_runtime_data(output: &super::Output, mappings: &IdMappings) -> Self {
+    fn from_runtime_data(output: &super::Output) -> Self {
         let Output { name, data_type } = output;
         Self {
             name: name.clone(),
@@ -369,7 +363,7 @@ impl SerializedBjkGraph {
         Ok(ron::de::from_str(s)?)
     }
 
-    pub fn to_runtime(self) -> Result<(RuntimeData, Option<SerializedUiData>, IdMappings)> {
+    pub fn into_runtime(self) -> Result<(RuntimeData, Option<SerializedUiData>, IdMappings)> {
         let mut rt_nodes = SlotMap::<BjkNodeId, BjkNode>::with_key();
 
         // First pass, generate the mapping and fill in nodes
@@ -431,7 +425,7 @@ impl SerializedBjkGraph {
                     default_node: self.default_node.and_then(|x| mappings.get_id(x).ok()),
                 },
                 external_parameters: if let Some(e) = self.external_parameters {
-                    Some(e.to_runtime(&mappings)?)
+                    Some(e.into_runtime(&mappings)?)
                 } else {
                     None
                 },
@@ -456,7 +450,7 @@ fn deserialize_data_type(data_type_str: &str) -> Option<DataType> {
 }
 
 impl SerializedExternalParameters {
-    fn to_runtime(self, mappings: &IdMappings) -> Result<ExternalParameterValues> {
+    fn into_runtime(self, mappings: &IdMappings) -> Result<ExternalParameterValues> {
         Ok(ExternalParameterValues(
             self.param_values
                 .into_iter()
@@ -503,7 +497,7 @@ mod tests {
         };
 
         let mut writer = BufWriter::new(File::create("/tmp/test.ron").unwrap());
-        version.to_writer(writer.get_ref());
+        version.to_writer(writer.get_ref()).unwrap();
         ron::ser::to_writer_pretty(&mut writer, &data, PrettyConfig::default()).unwrap();
 
         drop(writer);

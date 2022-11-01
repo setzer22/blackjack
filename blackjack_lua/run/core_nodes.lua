@@ -357,7 +357,29 @@ local edit_ops = {
         op = function(inputs)
             local out_mesh = inputs.mesh:clone()
             Ops.transform(out_mesh, inputs.translate, inputs.rotate, inputs.scale)
-            return { out_mesh = out_mesh }
+            return {
+                out_mesh = out_mesh,
+            }
+        end,
+        gizmo_in = function(inputs, gizmos)
+            local gizmo = gizmos[1]
+            if gizmo ~= nil then
+                inputs.translate = gizmo:translation()
+                inputs.rotate = gizmo:rotation()
+                inputs.scale = gizmo:scale()
+            end
+            return inputs
+        end,
+        gizmo_out = function(inputs, gizmos, _outputs)
+            if gizmos ~= nil then
+                gizmos[1]:set_translation(inputs.translate)
+                gizmos[1]:set_rotation(inputs.rotate)
+                gizmos[1]:set_scale(inputs.scale)
+                return gizmos
+            else
+                return { TransformGizmo.default() }
+            end
+
         end,
     },
     VertexAttribTransfer = {

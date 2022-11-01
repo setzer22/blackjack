@@ -262,7 +262,6 @@ impl RootViewport {
             render_ctx,
             &self.viewport_3d.settings,
             &self.lua_runtime,
-            self.viewport_3d.model_matrix,
         ));
 
         for action in actions {

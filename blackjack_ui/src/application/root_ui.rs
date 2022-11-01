@@ -62,14 +62,22 @@ impl RootViewport {
         // SplitTree. We should be using some kind of identifier instead
         match name {
             "3d_view" => {
-                payload.viewport_3d.show_ui(
+                if let Err(err) = payload.viewport_3d.show_ui(
                     ui,
                     payload
                         .offscreen_viewports
                         .get_mut(&OffscreenViewport::Viewport3d)
                         .unwrap(),
                     payload.app_context.renderable_thing.as_ref(),
-                );
+                    payload
+                        .app_context
+                        .active_gizmos
+                        .as_deref_mut()
+                        .unwrap_or(&mut []),
+                ) {
+                    // TODO: Do something better for error reporting
+                    println!("Error in viewport: {err}")
+                }
             }
             "graph_editor" => {
                 payload

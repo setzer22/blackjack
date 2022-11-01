@@ -4,7 +4,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-use crate::graph::graph_interop;
+use crate::graph::graph_interop::{self, NodeMapping};
 use crate::prelude::*;
 use anyhow::Error;
 use blackjack_engine::{
@@ -63,7 +63,6 @@ impl ApplicationContext {
         render_ctx: &mut RenderContext,
         viewport_settings: &Viewport3dSettings,
         lua_runtime: &LuaRuntime,
-        model_matrix: Mat4,
     ) -> Vec<AppRootAction> {
         // TODO: Instead of clearing all objects, make the app context own the
         // objects it's drawing and clear those instead.
@@ -83,18 +82,6 @@ impl ApplicationContext {
         ) {
             self.paint_errors(egui_ctx, err);
         };
-
-        // TODO: REVIEW: This is test code, remove it.
-        if let Some(RenderableThing::HalfEdgeMesh(m)) = &self.renderable_thing {
-            let (s, r, t) = model_matrix.to_scale_rotation_translation();
-            blackjack_engine::mesh::halfedge::edit_ops::transform(
-                m,
-                t,
-                Vec3::from(r.to_euler(glam::EulerRot::XYZ)),
-                s,
-            )
-            .expect("This code should not make it to review...");
-        }
 
         if let Err(err) = self.run_side_effects(editor_state, custom_state, lua_runtime) {
             eprintln!(
@@ -227,29 +214,32 @@ impl ApplicationContext {
         lua_runtime: &LuaRuntime,
         gizmos: GizmoConfig,
         node: NodeId,
-    ) -> Result<ProgramResult> {
+    ) -> Result<(ProgramResult, NodeMapping)> {
         let (bjk_graph, mapping) = graph_interop::ui_graph_to_blackjack_graph(graph, custom_state)?;
         let params = graph_interop::extract_graph_params(graph, &bjk_graph, &mapping)?;
-        blackjack_engine::graph_interpreter::run_graph(
-            &lua_runtime.lua,
-            &bjk_graph,
-            mapping[node],
-            params,
-            &lua_runtime.node_definitions,
-            gizmos,
-        )
+        Ok((
+            blackjack_engine::graph_interpreter::run_graph(
+                &lua_runtime.lua,
+                &bjk_graph,
+                mapping[node],
+                params,
+                &lua_runtime.node_definitions,
+                gizmos,
+            )?,
+            mapping,
+        ))
     }
 
     // Returns the compiled lua code
     pub fn run_active_node(
         &mut self,
-        editor_state: &graph::GraphEditorState,
+        editor_state: &mut graph::GraphEditorState,
         custom_state: &mut graph::CustomGraphState,
         gizmos: GizmoConfig,
         lua_runtime: &LuaRuntime,
     ) -> Result<()> {
         if let Some(active) = custom_state.active_node {
-            let program_result = self.run_node(
+            let (program_result, mapping) = self.run_node(
                 &editor_state.graph,
                 custom_state,
                 lua_runtime,
@@ -258,6 +248,14 @@ impl ApplicationContext {
             )?;
             self.renderable_thing = program_result.renderable;
             self.active_gizmos = program_result.updated_gizmos;
+
+            // Running gizmos returns a set of updated values, we need to
+            // refresh the UI graph values with those here.
+            graph_interop::set_parameters_from_external_values(
+                &mut editor_state.graph,
+                program_result.updated_values,
+                mapping,
+            )?;
         } else {
             self.renderable_thing = None;
         }

@@ -4,6 +4,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+use blackjack_engine::gizmos::BlackjackGizmo;
 use blackjack_engine::lua_engine::RenderableThing;
 use winit::event::MouseButton;
 
@@ -11,6 +12,7 @@ use crate::app_window::input::InputSystem;
 use crate::{prelude::*, rendergraph};
 
 use super::app_viewport::AppViewport;
+use super::gizmo_ui::{self, GizmoViewportResponse};
 
 /// A generic lerper
 mod lerp;
@@ -70,8 +72,6 @@ pub struct Viewport3d {
     view_proj_matrix: Mat4,
     view_matrix: Mat4,
     projection_matrix: Mat4,
-    // TODO: Remove this one
-    pub model_matrix: Mat4,
     // True when a mouse drag does not belong to the camera. Such as when
     // dragging a gizmo.
     mouse_captured: bool,
@@ -126,7 +126,6 @@ impl Viewport3d {
             view_proj_matrix: Mat4::default(),
             view_matrix: Mat4::default(),
             projection_matrix: Mat4::default(),
-            model_matrix: Mat4::default(),
             mouse_captured: false,
         }
     }
@@ -252,7 +251,8 @@ impl Viewport3d {
         ui: &mut egui::Ui,
         offscreen_viewport: &mut AppViewport,
         renderable_thing: Option<&RenderableThing>,
-    ) {
+        active_gizmos: &mut [BlackjackGizmo],
+    ) -> Result<()> {
         ui.vertical(|ui| {
             ui.horizontal(|ui| {
                 mesh_visuals_popup(ui, |ui| {
@@ -364,19 +364,32 @@ impl Viewport3d {
                 self.settings.overlay_mode,
             );
 
-            let gizmo = egui_gizmo::Gizmo::new("viewport_gizmo")
-                .view_matrix(self.view_matrix.to_cols_array_2d())
-                .projection_matrix(self.projection_matrix.to_cols_array_2d())
-                .model_matrix(self.model_matrix.to_cols_array_2d())
-                .viewport(self.viewport_rect)
-                .mode(egui_gizmo::GizmoMode::Rotate);
-            if let Some(response) = gizmo.interact(ui) {
-                self.mouse_captured = true;
-                self.model_matrix = Mat4::from_cols_array_2d(&response.transform);
-            } else {
+            for gizmo in active_gizmos {
+                let responses = gizmo_ui::draw_gizmo_ui_viewport(self, ui, gizmo)?;
+
                 self.mouse_captured = false;
+                for response in responses {
+                    match response {
+                        GizmoViewportResponse::MouseDragged => {
+                            self.mouse_captured = true;
+                        }
+                    }
+                }
             }
         }
+        Ok(())
+    }
+
+    pub fn view_matrix(&self) -> Mat4 {
+        self.view_matrix
+    }
+
+    pub fn projection_matrix(&self) -> Mat4 {
+        self.projection_matrix
+    }
+
+    pub fn viewport_rect(&self) -> egui::Rect {
+        self.viewport_rect
     }
 }
 
