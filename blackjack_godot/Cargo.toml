@@ -1,7 +1,13 @@
 [package]
 name = "blackjack_godot"
+description = "A procedural, node-based modelling tool, made in Rust"
+homepage = "https://github.com/setzer22/blackjack"
+repository = "https://github.com/setzer22/blackjack"
 version = "0.1.0"
 edition = "2021"
+license = "MPL-2.0"
+keywords = ["gamedev", "3d", "modelling", "procedural"]
+authors = ["setzer22"]
 
 [lib]
 crate-type = ["lib", "cdylib"]

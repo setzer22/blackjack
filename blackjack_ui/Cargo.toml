@@ -3,11 +3,11 @@ name = "blackjack_ui"
 description = "A procedural, node-based modelling tool, made in Rust"
 homepage = "https://github.com/setzer22/blackjack"
 repository = "https://github.com/setzer22/blackjack"
-license = "MIT"
 version = "0.1.0"
+edition = "2021"
+license = "MPL-2.0"
 keywords = ["gamedev", "3d", "modelling", "procedural"]
 authors = ["setzer22"]
-edition = "2021"
 
 [features]
 tracy = ["profiling/profile-with-tracy"]
