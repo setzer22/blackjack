@@ -5,7 +5,8 @@ use glam::Mat4;
 use super::viewport_3d::Viewport3d;
 
 pub enum GizmoViewportResponse {
-    MouseDragged,
+    CaptureMouse,
+    GizmoIsInteracted,
 }
 
 pub fn draw_gizmo_ui_viewport(
@@ -40,7 +41,8 @@ pub fn draw_gizmo_ui_viewport(
                     TransformGizmoMode::Scale => egui_gizmo::GizmoMode::Scale,
                 });
             if let Some(response) = gizmo.interact(ui) {
-                responses.push(GizmoViewportResponse::MouseDragged);
+                responses.push(GizmoViewportResponse::CaptureMouse);
+                responses.push(GizmoViewportResponse::GizmoIsInteracted);
                 let updated_matrix = Mat4::from_cols_array_2d(&response.transform);
                 transform_gizmo.set_from_matrix(updated_matrix);
             }

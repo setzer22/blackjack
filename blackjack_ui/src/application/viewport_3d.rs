@@ -251,6 +251,7 @@ impl Viewport3d {
         ui: &mut egui::Ui,
         offscreen_viewport: &mut AppViewport,
         renderable_thing: Option<&RenderableThing>,
+        gizmos_changed: &mut bool,
         active_gizmos: &mut [BlackjackGizmo],
     ) -> Result<()> {
         ui.vertical(|ui| {
@@ -364,14 +365,18 @@ impl Viewport3d {
                 self.settings.overlay_mode,
             );
 
+            *gizmos_changed = false;
             for gizmo in active_gizmos {
                 let responses = gizmo_ui::draw_gizmo_ui_viewport(self, ui, gizmo)?;
 
                 self.mouse_captured = false;
                 for response in responses {
                     match response {
-                        GizmoViewportResponse::MouseDragged => {
+                        GizmoViewportResponse::CaptureMouse => {
                             self.mouse_captured = true;
+                        }
+                        GizmoViewportResponse::GizmoIsInteracted => {
+                            *gizmos_changed = true;
                         }
                     }
                 }

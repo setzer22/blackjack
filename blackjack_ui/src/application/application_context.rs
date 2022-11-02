@@ -9,7 +9,7 @@ use crate::prelude::*;
 use anyhow::Error;
 use blackjack_engine::{
     gizmos::BlackjackGizmo,
-    graph_interpreter::GizmoConfig,
+    graph_interpreter::GizmoState,
     lua_engine::{LuaRuntime, ProgramResult, RenderableThing},
     prelude::{FaceOverlayBuffers, LineBuffers, PointBuffers, VertexIndexBuffers},
 };
@@ -30,6 +30,9 @@ pub struct ApplicationContext {
     /// The currently active gizmos. Gizmos are returned by nodes to represent
     /// visual objects that can be used to manipulate its parameters.
     pub active_gizmos: Option<Vec<BlackjackGizmo>>,
+    /// True when the gizmos changed this frame. This is used to tell the engine
+    /// that it needs to adjust graph input parameters to the gizmo values.
+    pub gizmos_changed: bool,
     /// The tree of splits at the center of application. Splits recursively
     /// partition the state either horizontally or vertically. This separation
     /// is dynamic, very similar to Blender's UI model
@@ -41,6 +44,7 @@ impl ApplicationContext {
         ApplicationContext {
             renderable_thing: None,
             active_gizmos: None,
+            gizmos_changed: false,
             split_tree: SplitTree::default_tree(),
         }
     }
@@ -74,9 +78,13 @@ impl ApplicationContext {
             editor_state,
             custom_state,
             if let Some(gizmos) = gizmos {
-                GizmoConfig::RunGizmosInOut(gizmos)
+                if self.gizmos_changed {
+                    GizmoState::GizmosUpdated(gizmos)
+                } else {
+                    GizmoState::GizmosDidntChange(gizmos)
+                }
             } else {
-                GizmoConfig::RinGizmoOut
+                GizmoState::InitGizmos
             },
             lua_runtime,
         ) {
@@ -212,7 +220,7 @@ impl ApplicationContext {
         graph: &graph::Graph,
         custom_state: &graph::CustomGraphState,
         lua_runtime: &LuaRuntime,
-        gizmos: GizmoConfig,
+        gizmo_state: GizmoState,
         node: NodeId,
     ) -> Result<(ProgramResult, NodeMapping)> {
         let (bjk_graph, mapping) = graph_interop::ui_graph_to_blackjack_graph(graph, custom_state)?;
@@ -224,7 +232,7 @@ impl ApplicationContext {
                 mapping[node],
                 params,
                 &lua_runtime.node_definitions,
-                gizmos,
+                gizmo_state,
             )?,
             mapping,
         ))
@@ -235,7 +243,7 @@ impl ApplicationContext {
         &mut self,
         editor_state: &mut graph::GraphEditorState,
         custom_state: &mut graph::CustomGraphState,
-        gizmos: GizmoConfig,
+        gizmo_state: GizmoState,
         lua_runtime: &LuaRuntime,
     ) -> Result<()> {
         if let Some(active) = custom_state.active_node {
@@ -243,7 +251,7 @@ impl ApplicationContext {
                 &editor_state.graph,
                 custom_state,
                 lua_runtime,
-                gizmos,
+                gizmo_state,
                 active,
             )?;
             self.renderable_thing = program_result.renderable;
@@ -275,7 +283,7 @@ impl ApplicationContext {
                 &editor_state.graph,
                 custom_state,
                 lua_runtime,
-                GizmoConfig::IgnoreGizmos,
+                GizmoState::IgnoreGizmos,
                 side_effect,
             )?;
         }

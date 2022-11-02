@@ -31,14 +31,29 @@ pub struct InterpreterContext<'a, 'lua> {
     node_definitions: &'a NodeDefinitions,
     target_node: BjkNodeId,
     gizmos_enabled: bool,
-    gizmo_config: GizmoConfig,
+    gizmo_state: GizmoState,
     gizmo_outputs: &'a mut Vec<BlackjackGizmo>,
 }
 
-pub enum GizmoConfig {
+pub enum GizmoState {
+    /// The interpreter will ignore gizmos
     IgnoreGizmos,
-    RunGizmosInOut(Vec<BlackjackGizmo>),
-    RinGizmoOut,
+    /// The user is currently interacting with a gizmo and the gizmo has changed
+    /// its value. Graph inputs need to be adjusted to the gizmo, and outputs
+    /// will be used to adjust the gizmo.
+    GizmosUpdated(Vec<BlackjackGizmo>),
+    /// There is a valid gizmo, but the user isn't currently interacting with
+    /// it. Graph inputs will not be adjusted, but outputs will be used to
+    /// update the gizmo.
+    GizmosDidntChange(Vec<BlackjackGizmo>),
+    /// There is no valid gizmo yet.
+    InitGizmos,
+}
+
+impl GizmoState {
+    pub fn gizmos_enabled(&self) -> bool {
+        !matches!(self, GizmoState::IgnoreGizmos)
+    }
 }
 
 pub fn run_graph<'lua>(
@@ -47,12 +62,9 @@ pub fn run_graph<'lua>(
     target_node: BjkNodeId,
     mut external_param_values: ExternalParameterValues,
     node_definitions: &NodeDefinitions,
-    gizmo_config: GizmoConfig,
+    gizmo_state: GizmoState,
 ) -> Result<ProgramResult> {
-    let gizmos_enabled = matches!(
-        &gizmo_config,
-        GizmoConfig::RinGizmoOut | GizmoConfig::RunGizmosInOut(_)
-    );
+    let gizmos_enabled = gizmo_state.gizmos_enabled();
 
     let mut gizmo_outputs = Vec::new();
     let mut context = InterpreterContext {
@@ -60,7 +72,7 @@ pub fn run_graph<'lua>(
         external_param_values: &mut external_param_values,
         target_node,
         node_definitions,
-        gizmo_config,
+        gizmo_state,
         gizmo_outputs: &mut gizmo_outputs,
         gizmos_enabled,
     };
@@ -157,7 +169,7 @@ pub fn run_node<'lua>(
 
     // Run pre-gizmo
     if ctx.gizmos_enabled && node_id == ctx.target_node && node_def.has_gizmo {
-        if let GizmoConfig::RunGizmosInOut(gizmos_in) = &ctx.gizmo_config {
+        if let GizmoState::GizmosUpdated(gizmos_in) = &ctx.gizmo_state {
             let gizmo_in_fn: mlua::Function = node_table
                 .get("gizmo_in")
                 .map_err(|err| anyhow!("Node with gizmo should have 'gizmo_in'. {err}"))?;
@@ -216,8 +228,10 @@ pub fn run_node<'lua>(
             .get("gizmo_out")
             .map_err(|err| anyhow!("Node with gizmo should have 'gizmo_out'. {err}"))?;
 
-        let input_gizmos = match &ctx.gizmo_config {
-            GizmoConfig::RunGizmosInOut(gizmos_in) => gizmos_in.clone().to_lua(lua)?,
+        let input_gizmos = match &ctx.gizmo_state {
+            GizmoState::GizmosUpdated(gizmos_in) | GizmoState::GizmosDidntChange(gizmos_in) => {
+                gizmos_in.clone().to_lua(lua)?
+            }
             _ => mlua::Value::Nil,
         };
 
