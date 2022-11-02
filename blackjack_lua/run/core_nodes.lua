@@ -377,9 +377,8 @@ local edit_ops = {
                 gizmos[1]:set_scale(inputs.scale)
                 return gizmos
             else
-                return { TransformGizmo.default() }
+                return { TransformGizmo.new(inputs.translate, inputs.rotate, inputs.scale) }
             end
-
         end,
     },
     VertexAttribTransfer = {

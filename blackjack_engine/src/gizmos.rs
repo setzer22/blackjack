@@ -2,13 +2,21 @@ use mlua::{FromLua, Lua, ToLua};
 
 use crate::prelude::*;
 
+#[derive(Debug, Copy, Clone)]
+pub enum TransformGizmoMode {
+    Translate,
+    Rotate,
+    Scale,
+}
+
 /// A gizmo representing a 3d transformation, allowing to translate, rotate and
 /// scale the manipulated object.
 #[derive(Debug, Copy, Clone)]
 pub struct TransformGizmo {
-    translation: Vec3,
-    rotation: Quat,
-    scale: Vec3,
+    pub translation: Vec3,
+    pub rotation: Quat,
+    pub scale: Vec3,
+    pub gizmo_mode: TransformGizmoMode,
 }
 
 #[blackjack_macros::blackjack_lua_module]
@@ -26,6 +34,7 @@ mod tr_gizmo {
             translation: translation.0,
             rotation: Quat::from_euler(EulerRot::XYZ, rx, ry, rz),
             scale: scale.0,
+            gizmo_mode: TransformGizmoMode::Translate,
         }
     }
 
@@ -36,6 +45,7 @@ mod tr_gizmo {
             translation: Vec3::ZERO,
             rotation: Quat::IDENTITY,
             scale: Vec3::ONE,
+            gizmo_mode: TransformGizmoMode::Translate,
         }
     }
 

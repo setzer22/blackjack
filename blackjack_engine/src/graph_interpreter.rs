@@ -107,6 +107,14 @@ pub fn run_node<'lua>(
     // Stores the arguments that will be sent to this node's `op` fn
     let mut input_map = lua.create_table()?;
 
+    // Used to allow the gizmo_in function to update a node's parameters. This
+    // is None when gizmos don't run to optimize performance
+    let mut referenced_external_params = if ctx.gizmos_enabled {
+        Some(Vec::<ExternalParameter>::new())
+    } else {
+        None
+    };
+
     // Compute the values for dependent nodes and populate the output cache.
     for input in &node.inputs {
         match &input.kind {
@@ -136,6 +144,9 @@ pub fn run_node<'lua>(
                     )
                 })?;
                 input_map.set(input.name.as_str(), val.clone().to_lua(lua)?)?;
+                if let Some(m) = &mut referenced_external_params {
+                    m.push(ext);
+                }
             }
         }
     }
@@ -162,6 +173,27 @@ pub fn run_node<'lua>(
                     )
                 })?;
             input_map = new_input_map;
+
+            // Write the inputs that were returned to lua back to the
+            // external_parameter_values in the context. This will then be sent
+            // as part of the program output, to communicate to the integration
+            // that parameters for a node have changed.
+            let referenced_external_params = referenced_external_params
+                .as_ref()
+                .expect("When gizmos run, this should be defined");
+            for param in referenced_external_params.iter() {
+                let new_val = input_map
+                    .get::<_, BlackjackValue>(param.param_name.clone())
+                    .map_err(|err| {
+                        anyhow!(
+                            "The gizmos_in function modified a parameter in an illegal way: {err}"
+                        )
+                    })?;
+                *ctx.external_param_values
+                    .0
+                    .get_mut(param)
+                    .expect("Should be there") = new_val;
+            }
         }
     }
 

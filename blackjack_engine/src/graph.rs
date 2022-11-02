@@ -12,7 +12,7 @@ use std::rc::Rc;
 use crate::prelude::*;
 use crate::{lua_engine::lua_stdlib::LVec3, mesh::halfedge::selection::SelectionExpression};
 use anyhow::{anyhow, Result};
-use mlua::{Table, ToLua};
+use mlua::{FromLua, Table, ToLua};
 use serde::{Deserialize, Serialize};
 use slotmap::SlotMap;
 
@@ -67,7 +67,7 @@ impl DataType {
         match self {
             DataType::Vector => matches!(value, BlackjackValue::Vector(_)),
             DataType::Scalar => matches!(value, BlackjackValue::Scalar(_)),
-            DataType::Selection => matches!(value, BlackjackValue::Selection(_,_)),
+            DataType::Selection => matches!(value, BlackjackValue::Selection(_, _)),
             DataType::String => matches!(value, BlackjackValue::String(_)),
             DataType::Mesh => matches!(value, BlackjackValue::None),
             DataType::HeightMap => matches!(value, BlackjackValue::None),
@@ -93,6 +93,31 @@ impl<'lua> ToLua<'lua> for BlackjackValue {
             BlackjackValue::Selection(_, sel) => sel.to_lua(lua),
             BlackjackValue::None => Ok(mlua::Value::Nil),
         }
+    }
+}
+
+impl<'lua> FromLua<'lua> for BlackjackValue {
+    fn from_lua(lua_value: mlua::Value<'lua>, _lua: &'lua mlua::Lua) -> mlua::Result<Self> {
+        let type_name = lua_value.type_name();
+        match lua_value {
+            mlua::Value::Nil => return Ok(BlackjackValue::None),
+            mlua::Value::Integer(i) => return Ok(BlackjackValue::Scalar(i as f32)),
+            mlua::Value::Number(n) => return Ok(BlackjackValue::Scalar(n as f32)),
+            mlua::Value::Vector(x, y, z) => return Ok(BlackjackValue::Vector(glam::Vec3::new(x, y, z))),
+            mlua::Value::String(s) => return Ok(BlackjackValue::String(s.to_str()?.into())),
+            mlua::Value::UserData(u) => {
+                if u.is::<SelectionExpression>() {
+                    let sel = u.take::<SelectionExpression>()?;
+                    return Ok(BlackjackValue::Selection(sel.unparse(), Some(sel)))
+                }
+            }
+            _ => {}
+        }
+        Err(mlua::Error::FromLuaConversionError {
+            from: type_name,
+            to: "BlackjackValue",
+            message: Some("Could not convert to blackjack value".into()),
+        })
     }
 }
 
