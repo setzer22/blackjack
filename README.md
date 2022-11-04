@@ -31,9 +31,9 @@ Here are the main goals and philosophy behind blackjack, but note that this show
 - **Error resilience, crash resistance:** When things go wrong, Blackjack will make an effort to *respect your time* as a user and not lose your work. Errors will be clearly communicated and fixing any bugs leading to a crash will take the highest priority.
 
 ## Install and usage
-> **Note:** A crates.io version cannot be published due to unreleased dependencies. Blackjack depends on the bleeding edge version of some crates and requires custom forks for some others. This situation may change once development stabilizes.
+> **Note**: A crates.io version cannot be published due to unreleased dependencies. Blackjack depends on the bleeding edge version of some crates and requires custom forks for some others. This situation may change once development stabilizes.
 
-Here are the steps in order to try out the early development version of Blackjack. Binaries and easier installation methods will be provided in the future. The steps below require a complete Rust toolchain using `cargo`:
+Here are the steps in order to try out the early development version of Blackjack. Binaries and easier installation methods will be provided in the future. The steps below require a complete Rust toolchain using `cargo`, with a minimum supported Rust version (MSRV) of **1.62.0**.
 
 1. Clone this repository, and make sure to download LFS files. In some systems, this may require separately installing a `git-lfs`[^1] package:
 ```bash
