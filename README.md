@@ -49,6 +49,7 @@ git lfs pull
    * Ubuntu/Debian: `sudo apt install libfontconfig-dev`
    * Arch Linux: `sudo pacman -S fontconfig`
    * Fedora: `sudo dnf install fontconfig-devel`
+> **Note**: The `fontconfig` native dependency is temporary, and will no longer be necessary once this upstream issue is fixed: https://github.com/rust-windowing/winit/issues/2373
 
 3. From the same folder, run `cargo run --release --bin blackjack_ui` to launch Blackjack.
 
