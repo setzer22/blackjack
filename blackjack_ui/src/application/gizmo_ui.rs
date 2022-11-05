@@ -57,7 +57,7 @@ pub fn draw_gizmo_ui_viewport(
                 }
             });
 
-            let gizmo = egui_gizmo::Gizmo::new("viewport_gizmo")
+            let gizmo = egui_gizmo::Gizmo::new(unique_id)
                 .view_matrix(viewport.view_matrix().to_cols_array_2d())
                 .projection_matrix(viewport.projection_matrix().to_cols_array_2d())
                 .model_matrix(transform_gizmo.matrix().to_cols_array_2d())
