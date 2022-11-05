@@ -361,25 +361,26 @@ local edit_ops = {
                 out_mesh = out_mesh,
             }
         end,
-        gizmo_in = function(inputs, gizmos)
-            local gizmo = gizmos[1]
-            if gizmo ~= nil then
-                inputs.translate = gizmo:translation()
-                inputs.rotate = gizmo:rotation()
-                inputs.scale = gizmo:scale()
-            end
-            return inputs
-        end,
-        gizmo_out = function(inputs, gizmos, _outputs)
-            if gizmos ~= nil then
+        gizmos = {
+            init = function(inputs, _outputs)
+                return { TransformGizmo.new(inputs.translate, inputs.rotate, inputs.scale) }
+            end,
+            inputs = function(inputs, gizmos)
+                local gizmo = gizmos[1]
+                if gizmo ~= nil then
+                    inputs.translate = gizmo:translation()
+                    inputs.rotate = gizmo:rotation()
+                    inputs.scale = gizmo:scale()
+                end
+                return inputs
+            end,
+            outputs = function(inputs, gizmos, _outputs)
                 gizmos[1]:set_translation(inputs.translate)
                 gizmos[1]:set_rotation(inputs.rotate)
                 gizmos[1]:set_scale(inputs.scale)
                 return gizmos
-            else
-                return { TransformGizmo.new(inputs.translate, inputs.rotate, inputs.scale) }
-            end
-        end,
+            end,
+        },
     },
     VertexAttribTransfer = {
         label = "Vertex attribute transfer",

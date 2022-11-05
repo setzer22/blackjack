@@ -484,8 +484,7 @@ impl NodeDefinition {
             label: table.get("label")?,
             returns: table.get::<_, Option<String>>("returns")?,
             executable: table.get::<_, Option<bool>>("executable")?.unwrap_or(false),
-            has_gizmo: table.get::<_, mlua::Value>("gizmo_in")? != mlua::Value::Nil
-                && table.get::<_, mlua::Value>("gizmo_out")? != mlua::Value::Nil,
+            has_gizmo: table.get::<_, mlua::Value>("gizmos")? != mlua::Value::Nil,
         })
     }
 

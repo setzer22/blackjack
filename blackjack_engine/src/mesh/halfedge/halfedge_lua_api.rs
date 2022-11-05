@@ -331,6 +331,15 @@ mod lua_api {
         #[lua(this = "read_connectivity()", map = "x.to_vec()")]
         pub fn face_edges(&self, face_id: FaceId) -> Vec<HalfEdgeId>;
 
+        #[lua]
+        pub fn face_vertices(&self, face_id: FaceId) -> Result<Vec<VertexId>> {
+            Ok(self
+                .read_connectivity()
+                .at_face(face_id)
+                .vertices()?
+                .to_vec())
+        }
+
         // ==== HALFEDGE GETTERS ====
 
         /// Returns the endpoint positions of the given halfedge `h`.

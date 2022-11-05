@@ -16,6 +16,11 @@ pub struct TransformGizmo {
     pub translation: Vec3,
     pub rotation: Quat,
     pub scale: Vec3,
+
+    pub pre_translation: Vec3,
+    pub pre_rotation: Quat,
+    pub pre_scale: Vec3,
+
     pub gizmo_mode: TransformGizmoMode,
 }
 
@@ -34,6 +39,9 @@ mod tr_gizmo {
             translation: translation.0,
             rotation: Quat::from_euler(EulerRot::XYZ, rx, ry, rz),
             scale: scale.0,
+            pre_translation: translation.0,
+            pre_rotation: Quat::from_euler(EulerRot::XYZ, rx, ry, rz),
+            pre_scale: scale.0,
             gizmo_mode: TransformGizmoMode::Translate,
         }
     }
@@ -45,6 +53,9 @@ mod tr_gizmo {
             translation: Vec3::ZERO,
             rotation: Quat::IDENTITY,
             scale: Vec3::ONE,
+            pre_translation: Vec3::ZERO,
+            pre_rotation: Quat::IDENTITY,
+            pre_scale: Vec3::ONE,
             gizmo_mode: TransformGizmoMode::Translate,
         }
     }
@@ -57,16 +68,34 @@ mod tr_gizmo {
             self.translation
         }
 
+        /// Returns the pre-translation of this transform gizmo
+        #[lua(map = "LVec3(x)")]
+        pub fn pre_translation(&self) -> Vec3 {
+            self.pre_translation
+        }
+
         /// Sets the translation component of this transform gizmo
         #[lua]
         pub fn set_translation(&mut self, tr: LVec3) {
             self.translation = tr.0;
         }
 
+        /// Sets the pre-translation component of this transform gizmo
+        #[lua]
+        pub fn set_pre_translation(&mut self, tr: LVec3) {
+            self.pre_translation = tr.0;
+        }
+
         /// Returns the rotation of this transform gizmo, as XYZ euler angles
         #[lua(map = "LVec3(x)")]
         pub fn rotation(&self) -> Vec3 {
             self.rotation.normalize().to_euler(EulerRot::XYZ).into()
+        }
+
+        /// Returns the pre_rotation of this transform gizmo, as XYZ euler angles
+        #[lua(map = "LVec3(x)")]
+        pub fn pre_rotation(&self) -> Vec3 {
+            self.pre_rotation.normalize().to_euler(EulerRot::XYZ).into()
         }
 
         /// Sets the rotation component of this transform gizmo, from XYZ euler angles
@@ -76,10 +105,23 @@ mod tr_gizmo {
             self.rotation = Quat::from_euler(EulerRot::XYZ, rx, ry, rz);
         }
 
+        /// Sets the rotation component of this transform gizmo, from XYZ euler angles
+        #[lua]
+        pub fn set_pre_rotation(&mut self, rot: LVec3) {
+            let (rx, ry, rz) = rot.0.into();
+            self.pre_rotation = Quat::from_euler(EulerRot::XYZ, rx, ry, rz);
+        }
+
         /// Returns the scale of this transform gizmo
         #[lua(map = "LVec3(x)")]
         pub fn scale(&self) -> Vec3 {
             self.scale
+        }
+
+        /// Returns the scale of this transform gizmo
+        #[lua(map = "LVec3(x)")]
+        pub fn pre_scale(&self) -> Vec3 {
+            self.pre_scale
         }
 
         /// Sets the scale component of this transform gizmo
@@ -88,17 +130,31 @@ mod tr_gizmo {
             self.scale = tr.0;
         }
 
-        /// Returns a transform matrix for this gizmo
-        pub fn matrix(&self) -> Mat4 {
-            Mat4::from_scale_rotation_translation(self.scale, self.rotation, self.translation)
+        /// Sets the pre-scale component of this transform gizmo
+        #[lua]
+        pub fn set_pre_scale(&mut self, tr: LVec3) {
+            self.pre_scale = tr.0;
         }
 
-        /// Sets this gizmo's parameters from an affine transform matrix.
+        /// Returns the full transform matrix for this gizmo, combining the
+        /// transform and pre-transform matrices.
+        pub fn matrix(&self) -> Mat4 {
+            Mat4::from_scale_rotation_translation(
+                self.pre_scale * self.scale,
+                self.pre_rotation * self.rotation,
+                self.pre_translation + self.translation,
+            )
+        }
+
+        /// Sets this gizmo's parameters from an affine transform matrix. The
+        /// given matrix should be an updated version of the one obtained via
+        /// `Self::matrix`. This operation will set the transform after undoing
+        /// any existing pre-transform.
         pub fn set_from_matrix(&mut self, m: Mat4) {
             let (s, r, t) = m.to_scale_rotation_translation();
-            self.scale = s;
-            self.translation = t;
-            self.rotation = r;
+            self.scale = s / self.pre_scale;
+            self.translation = t - self.pre_translation;
+            self.rotation = self.pre_rotation.inverse() * r;
         }
     }
 }

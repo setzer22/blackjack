@@ -212,6 +212,12 @@ impl RootViewport {
                     if let Err(err) = self.graph_editor.on_node_definitions_update() {
                         println!("Error while updating graph after Lua code reload: {}", err);
                     }
+
+                    // Reset gizmo state when code is reloaded. This helps
+                    // interactively develop gizmos, otherwise the init function
+                    // is not run again after reloading.
+                    self.app_context.gizmos_changed = false;
+                    self.app_context.active_gizmos = None;
                 }
                 Ok(false) => { /* Do nothing */ }
                 Err(err) => {
