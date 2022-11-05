@@ -4,7 +4,6 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-use blackjack_engine::gizmos::BlackjackGizmo;
 use blackjack_engine::lua_engine::RenderableThing;
 use winit::event::MouseButton;
 
@@ -12,7 +11,7 @@ use crate::app_window::input::InputSystem;
 use crate::{prelude::*, rendergraph};
 
 use super::app_viewport::AppViewport;
-use super::gizmo_ui::{self, GizmoViewportResponse};
+use super::gizmo_ui::{self, GizmoViewportResponse, UiNodeGizmoStates};
 
 /// A generic lerper
 mod lerp;
@@ -251,8 +250,7 @@ impl Viewport3d {
         ui: &mut egui::Ui,
         offscreen_viewport: &mut AppViewport,
         renderable_thing: Option<&RenderableThing>,
-        gizmos_changed: &mut bool,
-        active_gizmos: &mut [BlackjackGizmo],
+        node_gizmo_states: &mut UiNodeGizmoStates,
     ) -> Result<()> {
         ui.vertical(|ui| {
             ui.horizontal(|ui| {
@@ -365,22 +363,24 @@ impl Viewport3d {
                 self.settings.overlay_mode,
             );
 
-            *gizmos_changed = false;
-            for gizmo in active_gizmos {
-                let responses = gizmo_ui::draw_gizmo_ui_viewport(self, ui, gizmo)?;
+            self.mouse_captured = false;
+            node_gizmo_states.for_each_gizmo_mut(|node_id, gizmo_idx, gizmo| {
+                let responses =
+                    gizmo_ui::draw_gizmo_ui_viewport(self, ui, gizmo, (node_id, gizmo_idx))?;
+                let mut gizmos_changed = false;
 
-                self.mouse_captured = false;
                 for response in responses {
                     match response {
                         GizmoViewportResponse::CaptureMouse => {
                             self.mouse_captured = true;
                         }
                         GizmoViewportResponse::GizmoIsInteracted => {
-                            *gizmos_changed = true;
+                            gizmos_changed = true;
                         }
                     }
                 }
-            }
+                Ok(gizmos_changed)
+            })?;
         }
         Ok(())
     }

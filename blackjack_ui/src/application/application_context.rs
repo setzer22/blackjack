@@ -7,14 +7,15 @@
 use crate::graph::graph_interop::{self, NodeMapping};
 use crate::prelude::*;
 use anyhow::Error;
+
+use blackjack_engine::graph::BjkGraph;
+use blackjack_engine::graph_interpreter::ExternalParameterValues;
 use blackjack_engine::{
-    gizmos::BlackjackGizmo,
-    graph_interpreter::GizmoState,
-    lua_engine::{LuaRuntime, ProgramResult, RenderableThing},
+    lua_engine::{LuaRuntime, RenderableThing},
     prelude::{FaceOverlayBuffers, LineBuffers, PointBuffers, VertexIndexBuffers},
 };
-use egui_node_graph::NodeId;
 
+use super::gizmo_ui::UiNodeGizmoStates;
 use super::{
     root_ui::AppRootAction,
     viewport_3d::{EdgeDrawMode, FaceDrawMode, Viewport3dSettings},
@@ -29,10 +30,7 @@ pub struct ApplicationContext {
     pub renderable_thing: Option<RenderableThing>,
     /// The currently active gizmos. Gizmos are returned by nodes to represent
     /// visual objects that can be used to manipulate its parameters.
-    pub active_gizmos: Option<Vec<BlackjackGizmo>>,
-    /// True when the gizmos changed this frame. This is used to tell the engine
-    /// that it needs to adjust graph input parameters to the gizmo values.
-    pub gizmos_changed: bool,
+    pub node_gizmo_states: UiNodeGizmoStates,
     /// The tree of splits at the center of application. Splits recursively
     /// partition the state either horizontally or vertically. This separation
     /// is dynamic, very similar to Blender's UI model
@@ -40,11 +38,10 @@ pub struct ApplicationContext {
 }
 
 impl ApplicationContext {
-    pub fn new() -> ApplicationContext {
+    pub fn new(gizmo_states: UiNodeGizmoStates) -> ApplicationContext {
         ApplicationContext {
             renderable_thing: None,
-            active_gizmos: None,
-            gizmos_changed: false,
+            node_gizmo_states: gizmo_states,
             split_tree: SplitTree::default_tree(),
         }
     }
@@ -72,22 +69,7 @@ impl ApplicationContext {
         // objects it's drawing and clear those instead.
         render_ctx.clear_objects();
 
-        // Function will set updated gizmos back
-        let gizmos = self.active_gizmos.take();
-        if let Err(err) = self.run_active_node(
-            editor_state,
-            custom_state,
-            if let Some(gizmos) = gizmos {
-                if self.gizmos_changed {
-                    GizmoState::GizmosUpdated(gizmos)
-                } else {
-                    GizmoState::GizmosDidntChange(gizmos)
-                }
-            } else {
-                GizmoState::InitGizmos
-            },
-            lua_runtime,
-        ) {
+        if let Err(err) = self.run_active_node(editor_state, custom_state, lua_runtime) {
             self.paint_errors(egui_ctx, err);
         };
 
@@ -215,27 +197,14 @@ impl ApplicationContext {
         );
     }
 
-    pub fn run_node(
+    pub fn generate_bjk_graph(
         &self,
         graph: &graph::Graph,
         custom_state: &graph::CustomGraphState,
-        lua_runtime: &LuaRuntime,
-        gizmo_state: GizmoState,
-        node: NodeId,
-    ) -> Result<(ProgramResult, NodeMapping)> {
+    ) -> Result<(BjkGraph, NodeMapping, ExternalParameterValues)> {
         let (bjk_graph, mapping) = graph_interop::ui_graph_to_blackjack_graph(graph, custom_state)?;
         let params = graph_interop::extract_graph_params(graph, &bjk_graph, &mapping)?;
-        Ok((
-            blackjack_engine::graph_interpreter::run_graph(
-                &lua_runtime.lua,
-                &bjk_graph,
-                mapping[node],
-                params,
-                &lua_runtime.node_definitions,
-                gizmo_state,
-            )?,
-            mapping,
-        ))
+        Ok((bjk_graph, mapping, params))
     }
 
     // Returns the compiled lua code
@@ -243,19 +212,26 @@ impl ApplicationContext {
         &mut self,
         editor_state: &mut graph::GraphEditorState,
         custom_state: &mut graph::CustomGraphState,
-        gizmo_state: GizmoState,
         lua_runtime: &LuaRuntime,
     ) -> Result<()> {
         if let Some(active) = custom_state.active_node {
-            let (program_result, mapping) = self.run_node(
-                &editor_state.graph,
-                custom_state,
-                lua_runtime,
-                gizmo_state,
-                active,
+            let (bjk_graph, mapping, params) =
+                self.generate_bjk_graph(&editor_state.graph, custom_state)?;
+            let gizmos = self.node_gizmo_states.to_bjk_data(&mapping);
+            let program_result = blackjack_engine::graph_interpreter::run_graph(
+                &lua_runtime.lua,
+                &bjk_graph,
+                mapping[active],
+                params,
+                &lua_runtime.node_definitions,
+                Some(gizmos),
             )?;
+
             self.renderable_thing = program_result.renderable;
-            self.active_gizmos = program_result.updated_gizmos;
+            if let Some(updated_gizmos) = program_result.updated_gizmos {
+                self.node_gizmo_states
+                    .update_gizmos(updated_gizmos, &mapping)?;
+            }
 
             // Running gizmos returns a set of updated values, we need to
             // refresh the UI graph values with those here.
@@ -277,22 +253,19 @@ impl ApplicationContext {
         lua_runtime: &LuaRuntime,
     ) -> Result<()> {
         if let Some(side_effect) = custom_state.run_side_effect.take() {
+            let (bjk_graph, mapping, params) =
+                self.generate_bjk_graph(&editor_state.graph, custom_state)?;
             // We ignore the result. The program is only executed to produce a
             // side effect (e.g. exporting a mesh as OBJ)
-            let _ = self.run_node(
-                &editor_state.graph,
-                custom_state,
-                lua_runtime,
-                GizmoState::IgnoreGizmos,
-                side_effect,
+            let _ = blackjack_engine::graph_interpreter::run_graph(
+                &lua_runtime.lua,
+                &bjk_graph,
+                mapping[side_effect],
+                params,
+                &lua_runtime.node_definitions,
+                None,
             )?;
         }
         Ok(())
-    }
-}
-
-impl Default for ApplicationContext {
-    fn default() -> Self {
-        Self::new()
     }
 }

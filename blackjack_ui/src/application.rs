@@ -18,8 +18,9 @@ use blackjack_engine::lua_engine::LuaRuntime;
 use egui_wgpu::renderer::{RenderPass, ScreenDescriptor};
 
 use self::{
-    app_viewport::AppViewport, application_context::ApplicationContext, graph_editor::GraphEditor,
-    inspector::InspectorTabs, root_ui::AppRootAction, viewport_3d::Viewport3d,
+    app_viewport::AppViewport, application_context::ApplicationContext,
+    gizmo_ui::UiNodeGizmoStates, graph_editor::GraphEditor, inspector::InspectorTabs,
+    root_ui::AppRootAction, viewport_3d::Viewport3d,
 };
 
 pub struct RootViewport {
@@ -122,6 +123,7 @@ impl RootViewport {
                 .expect("Could not start file watcher.");
         }
 
+        let gizmo_state = UiNodeGizmoStates::init();
         RootViewport {
             egui_winit_state,
             egui_context,
@@ -131,12 +133,13 @@ impl RootViewport {
                 pixels_per_point: scale_factor as f32,
             },
             renderpass: RenderPass::new(&renderer.device, screen_format, 1),
-            app_context: ApplicationContext::new(),
+            app_context: ApplicationContext::new(gizmo_state.share()),
             graph_editor: GraphEditor::new(
                 renderer,
                 screen_format,
                 scale_factor as f32,
                 lua_runtime.node_definitions.share(),
+                gizmo_state.share(),
             ),
             viewport_3d: Viewport3d::new(),
             offscreen_viewports,
@@ -216,8 +219,7 @@ impl RootViewport {
                     // Reset gizmo state when code is reloaded. This helps
                     // interactively develop gizmos, otherwise the init function
                     // is not run again after reloading.
-                    self.app_context.gizmos_changed = false;
-                    self.app_context.active_gizmos = None;
+                    self.app_context.node_gizmo_states.reset_for_hot_reload();
                 }
                 Ok(false) => { /* Do nothing */ }
                 Err(err) => {
@@ -226,12 +228,12 @@ impl RootViewport {
             }
         }
 
-        actions.extend(self.graph_editor.update(
+        self.graph_editor.update(
             window,
             self.screen_descriptor.pixels_per_point,
             self.offscreen_viewports[&OffscreenViewport::GraphEditor].rect,
             &self.lua_runtime.node_definitions,
-        ));
+        );
         self.viewport_3d.update(
             self.screen_descriptor.pixels_per_point,
             self.offscreen_viewports[&OffscreenViewport::Viewport3d].rect,
@@ -287,13 +289,13 @@ impl RootViewport {
                 )?;
             }
             AppRootAction::Load(path) => {
-                let (editor_state, custom_state) =
-                    serialization::load(path, &self.graph_editor.custom_state.node_definitions)?;
+                let (editor_state, custom_state) = serialization::load(
+                    path,
+                    &self.graph_editor.custom_state.node_definitions,
+                    &self.graph_editor.custom_state.gizmo_states,
+                )?;
                 self.graph_editor.editor_state = editor_state;
                 self.graph_editor.custom_state = custom_state;
-            }
-            AppRootAction::ClearGizmos => {
-                self.app_context.active_gizmos = None;
             }
         }
         Ok(())

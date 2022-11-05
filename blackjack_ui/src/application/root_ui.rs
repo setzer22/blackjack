@@ -10,7 +10,6 @@ use std::path::PathBuf;
 pub enum AppRootAction {
     Save(PathBuf),
     Load(PathBuf),
-    ClearGizmos,
 }
 
 impl RootViewport {
@@ -69,12 +68,7 @@ impl RootViewport {
                         .get_mut(&OffscreenViewport::Viewport3d)
                         .unwrap(),
                     payload.app_context.renderable_thing.as_ref(),
-                    &mut payload.app_context.gizmos_changed,
-                    payload
-                        .app_context
-                        .active_gizmos
-                        .as_deref_mut()
-                        .unwrap_or(&mut []),
+                    &mut payload.app_context.node_gizmo_states,
                 ) {
                     // TODO: Do something better for error reporting
                     println!("Error in viewport: {err}")

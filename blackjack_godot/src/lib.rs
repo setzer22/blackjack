@@ -10,7 +10,6 @@ use blackjack_engine::graph::BjkNodeId;
 use blackjack_engine::graph::DependencyKind;
 use blackjack_engine::graph_interpreter::ExternalParameter;
 use blackjack_engine::graph_interpreter::ExternalParameterValues;
-use blackjack_engine::graph_interpreter::GizmoState;
 use blackjack_engine::lua_engine::ProgramResult;
 use blackjack_engine::lua_engine::RenderableThing;
 use gdnative::api::Material;
@@ -393,7 +392,7 @@ impl BlackjackApi {
                     .ok()?,
                 jack.params.clone(),
                 &runtime.lua_runtime.node_definitions,
-                GizmoState::IgnoreGizmos,
+                None,
             ) {
                 Ok(ProgramResult {
                     renderable: Some(RenderableThing::HalfEdgeMesh(mesh)),

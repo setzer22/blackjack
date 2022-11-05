@@ -6,7 +6,7 @@
 
 use std::borrow::Cow;
 
-use crate::application::root_ui::AppRootAction;
+use crate::application::gizmo_ui::UiNodeGizmoStates;
 use crate::custom_widgets::smart_dragvalue::SmartDragValue;
 use crate::{application::code_viewer::code_edit_ui, prelude::*};
 use egui::RichText;
@@ -40,10 +40,11 @@ pub enum CustomNodeResponse {
     SetActiveNode(NodeId),
     ClearActiveNode,
     RunNodeSideEffect(NodeId),
+    LockGizmos(NodeId),
+    UnlockGizmos(NodeId),
 }
 
 /// Blackjack-specific global graph state
-#[derive(Serialize, Deserialize)]
 pub struct CustomGraphState {
     /// When this option is set by the UI, the side effect encoded by the node
     /// will be executed at the start of the next frame.
@@ -53,19 +54,21 @@ pub struct CustomGraphState {
     pub active_node: Option<NodeId>,
     /// A pointer to the node definitions. This is automatically updated when
     /// the node definitions change during hot reload.
-    #[serde(skip)]
     pub node_definitions: NodeDefinitions,
 
     pub promoted_params: HashMap<InputId, String>,
+
+    pub gizmo_states: UiNodeGizmoStates,
 }
 
 impl CustomGraphState {
-    pub fn new(node_definitions: NodeDefinitions) -> Self {
+    pub fn new(node_definitions: NodeDefinitions, gizmo_states: UiNodeGizmoStates) -> Self {
         Self {
             node_definitions,
             run_side_effect: None,
             active_node: None,
             promoted_params: HashMap::default(),
+            gizmo_states,
         }
     }
 }
@@ -137,8 +140,8 @@ impl NodeDataTrait for NodeData {
                 .any(|output| output.typ.0.can_be_enabled());
             let is_active = user_state.active_node == Some(node_id);
 
-            if can_be_enabled {
-                ui.horizontal(|ui| {
+            ui.horizontal(|ui| {
+                if can_be_enabled {
                     if !is_active {
                         if ui.button("👁 Set active").clicked() {
                             responses.push(NodeResponse::User(CustomNodeResponse::SetActiveNode(
@@ -154,14 +157,28 @@ impl NodeDataTrait for NodeData {
                             responses.push(NodeResponse::User(CustomNodeResponse::ClearActiveNode));
                         }
                     }
-                });
-            }
-            // Show 'Run' button for executable nodes
-            if node_def.executable && ui.button("⛭ Run").clicked() {
-                responses.push(NodeResponse::User(CustomNodeResponse::RunNodeSideEffect(
-                    node_id,
-                )));
-            }
+                }
+                if node_def.has_gizmo {
+                    if user_state.gizmo_states.is_node_locked(node_id) {
+                        let button =
+                            egui::Button::new(RichText::new("↺ Gizmo").color(egui::Color32::BLACK))
+                                .fill(egui::Color32::GOLD);
+                        if ui.add(button).clicked() {
+                            responses.push(NodeResponse::User(CustomNodeResponse::UnlockGizmos(
+                                node_id,
+                            )))
+                        }
+                    } else if ui.button("↺ Gizmo").clicked() {
+                        responses.push(NodeResponse::User(CustomNodeResponse::LockGizmos(node_id)))
+                    }
+                }
+                // Show 'Run' button for executable nodes
+                if node_def.executable && ui.button("⛭ Run").clicked() {
+                    responses.push(NodeResponse::User(CustomNodeResponse::RunNodeSideEffect(
+                        node_id,
+                    )));
+                }
+            });
         });
         responses
     }
@@ -175,8 +192,7 @@ pub fn draw_node_graph(
     editor_state: &mut GraphEditorState,
     custom_state: &mut CustomGraphState,
     defs: &NodeDefinitions,
-) -> Vec<AppRootAction> {
-    let mut root_responses = Vec::new();
+) {
     egui::CentralPanel::default().show(ctx, |ui| {
         let responses =
             editor_state.draw_graph_editor(ui, NodeOpNames(defs.node_names()), custom_state);
@@ -192,21 +208,36 @@ pub fn draw_node_graph(
                 }
                 NodeResponse::User(response) => match response {
                     graph::CustomNodeResponse::SetActiveNode(n) => {
+                        if let Some(prev_active) = custom_state.active_node {
+                            custom_state.gizmo_states.node_left_active(prev_active);
+                        }
                         custom_state.active_node = Some(n);
                         // When the active node changes, we want to clear the
                         // existing gizmos referring to the previous node
-                        root_responses.push(AppRootAction::ClearGizmos);
+                        custom_state.gizmo_states.node_is_active(n);
                     }
-                    graph::CustomNodeResponse::ClearActiveNode => custom_state.active_node = None,
+                    graph::CustomNodeResponse::ClearActiveNode => {
+                        if let Some(prev_active) = custom_state.active_node {
+                            custom_state.gizmo_states.node_left_active(prev_active);
+                        }
+                        custom_state.active_node = None;
+                    }
                     graph::CustomNodeResponse::RunNodeSideEffect(n) => {
                         custom_state.run_side_effect = Some(n)
+                    }
+                    CustomNodeResponse::LockGizmos(n) => {
+                        custom_state.gizmo_states.lock_gizmos_for(n);
+                    }
+                    CustomNodeResponse::UnlockGizmos(n) => {
+                        custom_state
+                            .gizmo_states
+                            .unlock_gizmos_for(n, custom_state.active_node);
                     }
                 },
                 _ => {}
             }
         }
     });
-    root_responses
 }
 
 pub struct NodeOpNames(Vec<String>);

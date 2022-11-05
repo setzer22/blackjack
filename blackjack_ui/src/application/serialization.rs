@@ -13,6 +13,8 @@ use blackjack_engine::graph::{
 };
 use egui_node_graph::PanZoom;
 
+use super::gizmo_ui::UiNodeGizmoStates;
+
 pub fn save(
     editor_state: &GraphEditorState,
     custom_state: &CustomGraphState,
@@ -61,6 +63,7 @@ pub fn save(
 pub fn load(
     path: PathBuf,
     node_definitions: &NodeDefinitions,
+    gizmo_states: &UiNodeGizmoStates,
 ) -> Result<(GraphEditorState, CustomGraphState)> {
     let serialized = SerializedBjkGraph::load_from_file(&path)?;
     let (runtime, ui_data, id_idx_mappings) = serialized.into_runtime()?;
@@ -125,6 +128,7 @@ pub fn load(
         run_side_effect: None,
         active_node: runtime.graph.default_node.map(|x| mapping[x]),
         node_definitions: node_definitions.share(),
+        gizmo_states: gizmo_states.share(),
         promoted_params,
     };
 

@@ -12,9 +12,10 @@ use std::{
     time::Duration,
 };
 
-use crate::{graph::NodeDefinitions, mesh::heightmap::HeightMap, prelude::*, graph_interpreter::ExternalParameterValues, gizmos::BlackjackGizmo};
+use crate::{graph::{NodeDefinitions, BjkNodeId}, mesh::heightmap::HeightMap, prelude::*, graph_interpreter::ExternalParameterValues, gizmos::BlackjackGizmo};
 use mlua::Lua;
 use notify::{DebouncedEvent, Watcher};
+use slotmap::SecondaryMap;
 
 use self::lua_stdlib::{load_node_definitions, LuaFileIo, StdLuaFileIo};
 
@@ -62,20 +63,10 @@ impl RenderableThing {
 pub struct ProgramResult {
     /// The renderable thing produced by this program to be shown on-screen.
     pub renderable: Option<RenderableThing>,
-    /// The active gizmos requested by graph nodes after an execution of this
-    /// program. If you are implementing an integration, you can ignore this
-    /// field.
-    ///
-    /// This field is stored as Box<dyn Any> because anything can be a gizmo. It
-    /// is up to the receiving site to try to downcast these values to types it
-    /// understands to do its own processing. We choose `Any` instead of any
-    /// other trait, because the common set of features that has to be provided
-    /// for gizmos cannot be decided by this crate, since gizmos will generally
-    /// want to draw on the screen and blackjack_engine has no dependency on
-    /// egui (or any other rendering system).
-    ///
-    /// This will be none when gizmos aren't run.
-    pub updated_gizmos: Option<Vec<BlackjackGizmo>>,
+    /// The gizmos requested by graph nodes after an execution of this program.
+    /// If you are implementing an integration, you can ignore this field. This
+    /// field will be returned as None will be none when gizmos aren't run.
+    pub updated_gizmos: Option<SecondaryMap<BjkNodeId, Vec<BlackjackGizmo>>>,
     /// The updated external parameters. Any node may modify its own parameters
     /// when running its gizmo function.
     pub updated_values: ExternalParameterValues,

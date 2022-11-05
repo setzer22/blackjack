@@ -6,7 +6,7 @@
 
 use super::*;
 use crate::lua_engine::{lua_stdlib::LVec3, ToLuaError};
-use mlua::{FromLua, Function, Lua, ToLua, Value};
+use mlua::{Function, Lua, ToLua, Value};
 
 #[blackjack_macros::blackjack_lua_module]
 #[allow(non_upper_case_globals)]

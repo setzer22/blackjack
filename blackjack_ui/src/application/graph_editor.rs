@@ -14,7 +14,7 @@ use crate::{
 use blackjack_engine::graph::{BlackjackValue, DataType, NodeDefinitions};
 use egui_wgpu::renderer::{RenderPass, ScreenDescriptor};
 
-use super::{blackjack_theme, root_ui::AppRootAction};
+use super::{blackjack_theme, gizmo_ui::UiNodeGizmoStates};
 
 pub struct GraphEditor {
     pub editor_state: graph::GraphEditorState,
@@ -41,6 +41,7 @@ impl GraphEditor {
         format: r3::TextureFormat,
         parent_scale: f32,
         node_definitions: NodeDefinitions,
+        gizmo_states: UiNodeGizmoStates,
     ) -> Self {
         let egui_context = egui::Context::default();
         egui_context.set_visuals(blackjack_graph_theme());
@@ -52,7 +53,7 @@ impl GraphEditor {
         Self {
             // Set default zoom to the inverse of ui scale to preserve dpi
             editor_state: graph::GraphEditorState::new(1.0 / parent_scale),
-            custom_state: graph::CustomGraphState::new(node_definitions),
+            custom_state: graph::CustomGraphState::new(node_definitions, gizmo_states),
             egui_context,
             egui_winit_state,
             renderpass: RenderPass::new(&renderer.device, format, 1),
@@ -162,8 +163,7 @@ impl GraphEditor {
         parent_scale: f32,
         viewport_rect: egui::Rect,
         node_definitions: &NodeDefinitions,
-    ) -> Vec<AppRootAction> {
-        let mut root_actions = Vec::new();
+    ) {
         self.resize_platform(parent_scale, viewport_rect);
         self.egui_context.input_mut().pixels_per_point = 1.0 / self.zoom_level();
 
@@ -198,12 +198,12 @@ impl GraphEditor {
 
         self.egui_context.begin_frame(egui_input);
 
-        root_actions.extend(graph::draw_node_graph(
+        graph::draw_node_graph(
             &self.egui_context,
             &mut self.editor_state,
             &mut self.custom_state,
             node_definitions,
-        ));
+        );
 
         // Debug mouse pointer position
         // -- This is useful when mouse events are not being interpreted correctly.
@@ -212,8 +212,6 @@ impl GraphEditor {
             ctx.debug_painter()
                 .circle(pos, 5.0, egui::Color32::GREEN, egui::Stroke::none());
         } */
-
-        root_actions
     }
 
     pub fn screen_descriptor(
