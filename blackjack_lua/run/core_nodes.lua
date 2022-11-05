@@ -362,10 +362,9 @@ local edit_ops = {
             }
         end,
         gizmos = {
-            init = function(inputs, _outputs)
-                return { TransformGizmo.new(inputs.translate, inputs.rotate, inputs.scale) }
-            end,
-            inputs = function(inputs, gizmos)
+            -- Called when a gizmo has changed in the UI. This function needs to
+            -- set the parameters of the node according to the gizmo.
+            update_params = function(inputs, gizmos)
                 local gizmo = gizmos[1]
                 if gizmo ~= nil then
                     inputs.translate = gizmo:translation()
@@ -374,11 +373,28 @@ local edit_ops = {
                 end
                 return inputs
             end,
-            outputs = function(inputs, gizmos, _outputs)
-                gizmos[1]:set_translation(inputs.translate)
-                gizmos[1]:set_rotation(inputs.rotate)
-                gizmos[1]:set_scale(inputs.scale)
-                return gizmos
+            -- Called before `op`. This function can be used to compute data
+            -- from the input params, before op potentially modifies them.
+            -- Unlike `update_params`, this function is called unconditionally.
+            --
+            -- The outputs from this function will be merged into the `op`'s
+            -- otuputs by the engine.
+            pre_op = function(_inputs)
+                return { banana = "42" }
+            end,
+            -- Called after op. This function must return a list of gizmos for
+            -- this node, to be applied for the next frame. Ghe `gizmos`
+            -- variable will contain the gizmos for the current frame, if any.
+            update_gizmos = function(inputs, gizmos, _outputs)
+                print("banana?", _outputs.banana)
+                if gizmos ~= nil then
+                    gizmos[1]:set_translation(inputs.translate)
+                    gizmos[1]:set_rotation(inputs.rotate)
+                    gizmos[1]:set_scale(inputs.scale)
+                    return gizmos
+                else
+                    return { TransformGizmo.new(inputs.translate, inputs.rotate, inputs.scale) }
+                end
             end,
         },
     },

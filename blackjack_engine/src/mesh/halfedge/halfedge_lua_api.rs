@@ -340,6 +340,30 @@ mod lua_api {
                 .to_vec())
         }
 
+        /// Given a `SelectionExpression`, returns all halfedge ids in this mesh
+        /// matching it.
+        #[lua]
+        pub fn resolve_halfedge_selection_full(
+            &self,
+            selection: &SelectionExpression,
+        ) -> Result<Vec<HalfEdgeId>>;
+
+        /// Given a `SelectionExpression`, returns all vertex ids in this mesh
+        /// matching it.
+        #[lua]
+        pub fn resolve_vertex_selection_full(
+            &self,
+            selection: &SelectionExpression,
+        ) -> Result<Vec<VertexId>>;
+
+        /// Given a `SelectionExpression`, returns all face ids in this mesh
+        /// matching it.
+        #[lua]
+        pub fn resolve_face_selection_full(
+            &self,
+            selection: &SelectionExpression,
+        ) -> Result<Vec<FaceId>>;
+
         // ==== HALFEDGE GETTERS ====
 
         /// Returns the endpoint positions of the given halfedge `h`.

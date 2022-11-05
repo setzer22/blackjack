@@ -39,9 +39,9 @@ mod tr_gizmo {
             translation: translation.0,
             rotation: Quat::from_euler(EulerRot::XYZ, rx, ry, rz),
             scale: scale.0,
-            pre_translation: translation.0,
-            pre_rotation: Quat::from_euler(EulerRot::XYZ, rx, ry, rz),
-            pre_scale: scale.0,
+            pre_translation: Vec3::ZERO,
+            pre_rotation: Quat::IDENTITY,
+            pre_scale: Vec3::ONE,
             gizmo_mode: TransformGizmoMode::Translate,
         }
     }
@@ -152,9 +152,9 @@ mod tr_gizmo {
         /// any existing pre-transform.
         pub fn set_from_matrix(&mut self, m: Mat4) {
             let (s, r, t) = m.to_scale_rotation_translation();
-            self.scale = s / self.pre_scale;
-            self.translation = t - self.pre_translation;
-            self.rotation = self.pre_rotation.inverse() * r;
+            self.scale = s / dbg!(self.pre_scale);
+            self.translation = t - dbg!(self.pre_translation);
+            self.rotation = r * self.pre_rotation.inverse();
         }
     }
 }

@@ -107,7 +107,7 @@ impl<'lua> FromLua<'lua> for BlackjackValue {
             mlua::Value::String(s) => return Ok(BlackjackValue::String(s.to_str()?.into())),
             mlua::Value::UserData(u) => {
                 if u.is::<SelectionExpression>() {
-                    let sel = u.take::<SelectionExpression>()?;
+                    let sel = u.borrow::<SelectionExpression>()?.clone();
                     return Ok(BlackjackValue::Selection(sel.unparse(), Some(sel)))
                 }
             }

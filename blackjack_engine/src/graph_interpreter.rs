@@ -168,42 +168,50 @@ pub fn run_node<'lua>(
         .eval::<mlua::Table>()?;
 
     struct GizmoFns<'lua> {
-        gizmo_init_fn: mlua::Function<'lua>,
-        gizmo_inputs_fn: mlua::Function<'lua>,
-        gizmo_outputs_fn: mlua::Function<'lua>,
+        pre_op_fn: mlua::Function<'lua>,
+        update_params_fn: mlua::Function<'lua>,
+        update_gizmos_fn: mlua::Function<'lua>,
     }
     let gizmo_fns = if ctx.gizmos_enabled && node_id == ctx.target_node && node_def.has_gizmo {
         let gizmos_table: mlua::Table = node_table
             .get("gizmos")
             .map_err(|err| anyhow!("Expected node to have gizmos table. {err}"))?;
+
+        macro_rules! get_fn {
+            ($name:expr) => {
+                gizmos_table
+                    .get($name)
+                    .map_err(|err| anyhow!("Missing '{}' in gizmos table. {err}", $name))?
+            };
+        }
+
         Some(GizmoFns {
-            gizmo_init_fn: gizmos_table
-                .get("init")
-                .map_err(|err| anyhow!("Missing 'init' from gizmos table. {err}"))?,
-            gizmo_inputs_fn: gizmos_table
-                .get("inputs")
-                .map_err(|err| anyhow!("Missing 'inputs' from gizmos table. {err}"))?,
-            gizmo_outputs_fn: gizmos_table
-                .get("outputs")
-                .map_err(|err| anyhow!("Missing 'outputs' from gizmos table. {err}"))?,
+            pre_op_fn: get_fn!("pre_op"),
+            update_params_fn: get_fn!("update_params"),
+            update_gizmos_fn: get_fn!("update_gizmos"),
         })
     } else {
         None
     };
 
+    let mut pre_op_outputs : Option<mlua::Table> = None;
+
     // Run pre-gizmo
     if let Some(GizmoFns {
-        gizmo_inputs_fn, ..
+        pre_op_fn,
+        update_params_fn,
+        ..
     }) = &gizmo_fns
     {
+        // Update params
         if let GizmoState::GizmosUpdated(gizmos_in) = &ctx.gizmo_state {
             // Patch the input map, running the gizmo function
             let input_gizmos = gizmos_in.clone().to_lua(lua)?;
-            let new_input_map = gizmo_inputs_fn
+            let new_input_map = update_params_fn
                 .call::<_, Table>((input_map, input_gizmos))
                 .map_err(|err| {
                     anyhow!(
-                        "A node's gizmo input callback should return an
+                        "A node's update_params gizmo callback should return an
                     updated parameter list as a table. {err}"
                     )
                 })?;
@@ -230,50 +238,53 @@ pub fn run_node<'lua>(
                     .expect("Should be there") = new_val;
             }
         }
+        // Run pre_op
+        pre_op_outputs = Some(pre_op_fn.call(input_map.clone())?);
     }
 
     // Run node 'op'
     let op_fn: mlua::Function = node_table
         .get("op")
         .map_err(|err| anyhow!("Node should always have an 'op'. {err}"))?;
-    let outputs = match op_fn.call(input_map.clone())? {
+    let mut outputs = match op_fn.call(input_map.clone())? {
         mlua::Value::Table(t) => t,
         other => {
             bail!("A node's `op` function should always return a table, got {other:?}");
         }
     };
 
+    // Merge pre_outputs result with the outputs. We merge in a way so that keys
+    // set in 'op' take precedence.
+    if let Some(pre_op_outputs) = pre_op_outputs {
+        for r in outputs.pairs::<mlua::Value, mlua::Value>() {
+            let (k, v) = r?;
+            pre_op_outputs.set(k, v)?;
+        }
+        outputs = pre_op_outputs;
+    }
+
     ctx.outputs_cache.insert(node_id, outputs.clone());
 
     // Run post-gizmo
     if let Some(GizmoFns {
-        gizmo_outputs_fn,
-        gizmo_init_fn,
-        ..
+        update_gizmos_fn, ..
     }) = &gizmo_fns
     {
-        match &ctx.gizmo_state {
-            GizmoState::GizmosUpdated(gizmos_in) | GizmoState::GizmosDidntChange(gizmos_in) => {
-                let input_gizmos = gizmos_in.clone().to_lua(lua)?;
-                *ctx.gizmo_outputs = gizmo_outputs_fn
-                    .call((input_map, input_gizmos, outputs))
-                    .map_err(|err| {
-                        anyhow!(
-                            "A node's gizmo outputs function should
-                             return a sequence of gizmos. {err}"
-                        )
-                    })?
+        let gizmos = match &ctx.gizmo_state {
+            GizmoState::GizmosUpdated(gizmos) | GizmoState::GizmosDidntChange(gizmos) => {
+                gizmos.clone().to_lua(lua)?
             }
-            GizmoState::InitGizmos => {
-                *ctx.gizmo_outputs = gizmo_init_fn.call((input_map, outputs)).map_err(|err| {
-                    anyhow!(
-                        "A node's gizmo_out function should
-                             return a sequence of gizmos. {err}"
-                    )
-                })?
-            }
-            _ => {}
+            GizmoState::InitGizmos => mlua::Value::Nil,
+            GizmoState::IgnoreGizmos => unreachable!(),
         };
+        *ctx.gizmo_outputs = update_gizmos_fn
+            .call((input_map, gizmos, outputs))
+            .map_err(|err| {
+                anyhow!(
+                    "A node's gizmo outputs function should
+                             return a sequence of gizmos. {err}"
+                )
+            })?;
     }
 
     Ok(())
