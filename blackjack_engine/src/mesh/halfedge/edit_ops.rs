@@ -1933,13 +1933,13 @@ pub fn edit_geometry(
         .fold(Vec3::ZERO, |v, v2| v + v2)
         / vertices.len() as f32;
 
-    let transform_matrix = Mat4::from_translation(-centroid)
+    let transform_matrix = Mat4::from_translation(centroid)
         * Mat4::from_scale_rotation_translation(
             scale,
             Quat::from_euler(EulerRot::XYZ, rotate.x, rotate.y, rotate.z),
             translate,
         )
-        * Mat4::from_translation(centroid);
+        * Mat4::from_translation(-centroid);
 
     for v in vertices {
         pos[v] = transform_matrix.transform_point3(pos[v]);

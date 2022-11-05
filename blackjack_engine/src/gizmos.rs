@@ -152,8 +152,8 @@ mod tr_gizmo {
         /// any existing pre-transform.
         pub fn set_from_matrix(&mut self, m: Mat4) {
             let (s, r, t) = m.to_scale_rotation_translation();
-            self.scale = s / dbg!(self.pre_scale);
-            self.translation = t - dbg!(self.pre_translation);
+            self.scale = s / self.pre_scale;
+            self.translation = t - self.pre_translation;
             self.rotation = r * self.pre_rotation.inverse();
         }
     }

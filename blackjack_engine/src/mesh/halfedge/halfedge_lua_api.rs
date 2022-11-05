@@ -6,7 +6,7 @@
 
 use super::*;
 use crate::lua_engine::{lua_stdlib::LVec3, ToLuaError};
-use mlua::{Function, Lua, ToLua, Value};
+use mlua::{FromLua, Function, Lua, ToLua, Value};
 
 #[blackjack_macros::blackjack_lua_module]
 #[allow(non_upper_case_globals)]
@@ -378,6 +378,14 @@ mod lua_api {
         #[lua]
         pub fn halfedge_vertex_id(&self, h: HalfEdgeId) -> Result<VertexId> {
             Ok(self.read_connectivity().at_halfedge(h).vertex().try_end()?)
+        }
+
+        #[lua]
+        pub fn halfedge_vertices(&self, halfedge_id: HalfEdgeId) -> Result<(VertexId, VertexId)> {
+            Ok(self
+                .read_connectivity()
+                .at_halfedge(halfedge_id)
+                .src_dst_pair()?)
         }
 
         // ==== OPS ====

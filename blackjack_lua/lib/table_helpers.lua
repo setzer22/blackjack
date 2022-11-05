@@ -16,4 +16,12 @@ TableHelpers.reverse = function(t)
     return t
 end
 
+--- Concatenates `t2` at the end of the sequential part of `t1`.
+TableHelpers.concat = function(t1, t2)
+    for i=1,#t2 do
+        t1[#t1+1] = t2[i]
+    end
+    return t1
+end
+
 return TableHelpers

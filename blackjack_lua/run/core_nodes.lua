@@ -6,6 +6,7 @@
 
 local P = require("params")
 local V = require("vector_math")
+local T = require("table_helpers")
 local NodeLibrary = require("node_library")
 local load_function = require("utils").load_function
 
@@ -219,7 +220,7 @@ local edit_ops = {
         inputs = {
             P.mesh("in_mesh"),
             P.selection("faces"),
-            P.scalar("amount", { default = 0.0, min = 0.0, soft_max = 1.0 }),
+            P.scalar("amount", { default = 0.0 }),
         },
         outputs = {
             P.mesh("out_mesh"),
@@ -379,14 +380,11 @@ local edit_ops = {
             --
             -- The outputs from this function will be merged into the `op`'s
             -- otuputs by the engine.
-            pre_op = function(_inputs)
-                return { banana = "42" }
-            end,
+            pre_op = function(_inputs) return {} end,
             -- Called after op. This function must return a list of gizmos for
             -- this node, to be applied for the next frame. Ghe `gizmos`
             -- variable will contain the gizmos for the current frame, if any.
             update_gizmos = function(inputs, gizmos, _outputs)
-                print("banana?", _outputs.banana)
                 if gizmos ~= nil then
                     gizmos[1]:set_translation(inputs.translate)
                     gizmos[1]:set_rotation(inputs.rotate)
@@ -625,7 +623,7 @@ local edit_ops = {
         returns = "out_mesh",
         inputs = {
             P.mesh("mesh"),
-            P.enum("geometry", { "Vertex", "Face", "HalfEdge" }),
+            P.enum("geometry", { "Vertex", "Face", "Halfedge" }),
             P.selection("selection"),
             P.v3("translate", vector(0, 0, 0)),
             P.v3("rotate", vector(0, 0, 0)),
@@ -633,6 +631,57 @@ local edit_ops = {
         },
         outputs = {
             P.mesh("out_mesh"),
+        },
+        gizmos = {
+            update_params = function(inputs, gizmos)
+                local gizmo = gizmos[1]
+                if gizmo ~= nil then
+                    inputs.translate = gizmo:translation()
+                    inputs.rotate = gizmo:rotation()
+                    inputs.scale = gizmo:scale()
+                end
+                return inputs
+            end,
+            pre_op = function(inputs)
+                local mesh = inputs.mesh
+                local vertices = {}
+                if inputs.geometry == "Vertex" then
+                    vertices = mesh:resolve_vertex_selection_full(inputs.selection)
+                elseif inputs.geometry == "Face" then
+                    for _, face in mesh:resolve_face_selection_full(inputs.selection) do
+                        T.concat(vertices, mesh:face_vertices(face))
+                    end
+                elseif inputs.geometry == "Halfedge" then
+                    for _, edge in mesh:resolve_halfedge_selection_full(inputs.selection) do
+                        local x, y = mesh:halfedge_vertices(edge)
+                        table.insert(vertices, x)
+                        table.insert(vertices, y)
+                    end
+                end
+
+                local midpoint = vector(0,0,0)
+                local npoints = 0
+                for _, vertex in vertices do
+                    midpoint = midpoint + mesh:vertex_position(vertex)
+                    npoints = npoints + 1
+                end
+                midpoint = midpoint / npoints
+
+                return { gizmo_midpoint = midpoint }
+            end,
+            update_gizmos = function(inputs, gizmos, outputs)
+                local gizmo
+                if gizmos == nil then
+                    gizmo = TransformGizmo.default()
+                else
+                    gizmo = gizmos[1]
+                end
+                gizmo:set_translation(inputs.translate)
+                gizmo:set_rotation(inputs.rotate)
+                gizmo:set_scale(inputs.scale)
+                gizmo:set_pre_translation(outputs.gizmo_midpoint)
+                return { gizmo }
+            end,
         },
     },
 }
