@@ -153,6 +153,9 @@ impl UiNodeGizmoStates {
         let mut inner = self.inner.borrow_mut();
         let mut current_focus = inner.current_focus;
         for (node_id, ui_state) in &mut inner.gizmos {
+            // Reset flag for this frame. Set if any of the gizmos for this node is interacted.
+            ui_state.gizmo_state.gizmos_changed = false;
+
             for (idx, g) in ui_state
                 .gizmo_state
                 .active_gizmos
@@ -164,7 +167,7 @@ impl UiNodeGizmoStates {
                 if ui_state.visible {
                     let has_focus = current_focus.is_some_and_(|x| x.0 == node_id && x.1 == idx);
                     let interacted = f(node_id, idx, g, has_focus)?;
-                    ui_state.gizmo_state.gizmos_changed = interacted;
+                    ui_state.gizmo_state.gizmos_changed |= interacted;
                     if interacted {
                         current_focus = Some((node_id, idx));
                     }

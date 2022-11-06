@@ -100,8 +100,15 @@ pub fn load(
         .map(|(idx, pos)| (idx_to_node_id(idx), egui::pos2(pos.x, pos.y)))
         .collect();
 
+    let active_node = runtime.graph.default_node.map(|x| mapping[x]);
+
     // Restore locked gizmo state
     gizmo_states.restore_locked_nodes(ui_data.locked_gizmo_nodes.iter_cpy().map(idx_to_node_id));
+    if let Some(n) = active_node {
+        // Make sure to enable the gizmo for the current active node, in case it
+        // wasn't locked.
+        gizmo_states.node_is_active(n);
+    }
 
     let mut promoted_params = HashMap::default();
     for (bjk_node_id, bjk_node) in &runtime.graph.nodes {
@@ -133,7 +140,7 @@ pub fn load(
     };
     let custom_state = CustomGraphState {
         run_side_effect: None,
-        active_node: runtime.graph.default_node.map(|x| mapping[x]),
+        active_node,
         node_definitions: node_definitions.share(),
         gizmo_states: gizmo_states.share(),
         promoted_params,

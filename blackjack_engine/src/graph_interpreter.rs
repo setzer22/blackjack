@@ -208,8 +208,6 @@ pub fn run_node<'lua>(
         Ok(Vec::new())
     })()?;
 
-    // TODO: Make sure we don't rely on push order in gizmo_outs below!!!
-    //
     // When a gizmo affects parameters, the gizmo will be disabled if all the
     // parameters are connected. Nodes can return nil from the `affected_params`
     // function to disable this behavior.
