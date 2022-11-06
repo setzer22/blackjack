@@ -36,7 +36,6 @@ func set_value_externally(val):
 
 func _on_LineEdit_text_changed(new_text):
     if new_text.is_valid_float():
-        # WIP: This doesn't seem to be changing anything?
         var new_val = float(new_text)
         $Label2.text = new_text
         emit_signal("on_changed", new_val)
