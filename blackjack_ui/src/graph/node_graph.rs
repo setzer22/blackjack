@@ -354,8 +354,10 @@ impl WidgetValueTrait for ValueTypeUi {
         user_state: &mut CustomGraphState,
         node_data: &NodeData,
     ) -> Vec<Self::Response> {
-        const DRAG_SPEEDS: &[f64] = &[100.0, 10.0, 1.0, 0.1, 0.01, 0.001, 0.0001];
-        const DRAG_LABELS: &[&str] = &["100", "10", "1", ".1", ".01", ".001", ".0001"];
+        const FLOAT_DRAG_SPEEDS: &[f64] = &[100.0, 10.0, 1.0, 0.1, 0.01, 0.001, 0.0001];
+        const FLOAT_DRAG_LABELS: &[&str] = &["100", "10", "1", ".1", ".01", ".001", ".0001"];
+        const INT_DRAG_SPEEDS: &[f64] = &[100.0, 10.0, 1.0];
+        const INT_DRAG_LABELS: &[&str] = &["100", "10", "1"];
 
         let node_def = user_state.node_definitions.node_def(&node_data.op_name);
         let input_def = node_def
@@ -377,19 +379,19 @@ impl WidgetValueTrait for ValueTypeUi {
                 ui.horizontal(|ui| {
                     ui.label("x");
                     ui.add(
-                        SmartDragValue::new(&mut vector.x, DRAG_SPEEDS, DRAG_LABELS)
+                        SmartDragValue::new(&mut vector.x, FLOAT_DRAG_SPEEDS, FLOAT_DRAG_LABELS)
                             .speed(1.0)
                             .decimals(5),
                     );
                     ui.label("y");
                     ui.add(
-                        SmartDragValue::new(&mut vector.y, DRAG_SPEEDS, DRAG_LABELS)
+                        SmartDragValue::new(&mut vector.y, FLOAT_DRAG_SPEEDS, FLOAT_DRAG_LABELS)
                             .speed(1.0)
                             .decimals(5),
                     );
                     ui.label("z");
                     ui.add(
-                        SmartDragValue::new(&mut vector.z, DRAG_SPEEDS, DRAG_LABELS)
+                        SmartDragValue::new(&mut vector.z, FLOAT_DRAG_SPEEDS, FLOAT_DRAG_LABELS)
                             .speed(1.0)
                             .decimals(5),
                     );
@@ -406,20 +408,33 @@ impl WidgetValueTrait for ValueTypeUi {
                     ..
                 },
             ) => {
+                let is_int = *num_decimals == Some(0);
+                let drag_speeds = if is_int {
+                    INT_DRAG_SPEEDS
+                } else {
+                    FLOAT_DRAG_SPEEDS
+                };
+                let drag_labels = if is_int {
+                    INT_DRAG_LABELS
+                } else {
+                    FLOAT_DRAG_LABELS
+                };
+                let mut drag_value = SmartDragValue::new(value, drag_speeds, drag_labels)
+                    .speed(1.0)
+                    .clamp_range_hard(
+                        min.unwrap_or(f32::NEG_INFINITY)..=max.unwrap_or(f32::INFINITY),
+                    )
+                    .clamp_range_soft(
+                        soft_min.unwrap_or(f32::NEG_INFINITY)..=soft_max.unwrap_or(f32::INFINITY),
+                    )
+                    .decimals(num_decimals.unwrap_or(5) as usize);
+                if is_int {
+                    drag_value = drag_value.default_range_index(2);
+                }
+
                 ui.horizontal(|ui| {
                     ui.label(param_name);
-                    ui.add(
-                        SmartDragValue::new(value, DRAG_SPEEDS, DRAG_LABELS)
-                            .speed(1.0)
-                            .clamp_range_hard(
-                                min.unwrap_or(f32::NEG_INFINITY)..=max.unwrap_or(f32::INFINITY),
-                            )
-                            .clamp_range_soft(
-                                soft_min.unwrap_or(f32::NEG_INFINITY)
-                                    ..=soft_max.unwrap_or(f32::INFINITY),
-                            )
-                            .decimals(num_decimals.unwrap_or(5) as usize),
-                    )
+                    ui.add(drag_value)
                 });
             }
             (BlackjackValue::String(string), InputValueConfig::Enum { values, .. }) => {

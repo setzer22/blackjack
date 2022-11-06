@@ -39,6 +39,7 @@ pub struct SmartDragValue<'a, 'b> {
     hard_range: RangeInclusive<f64>,
     decimals: usize,
     side: RangeSelectorSide,
+    default_range_index: Option<usize>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -167,6 +168,7 @@ impl<'a, 'b> SmartDragValue<'a, 'b> {
             decimals: 2,
             ranges: Ranges::new(speeds, labels),
             side: RangeSelectorSide::Right,
+            default_range_index: None,
         }
     }
 
@@ -234,6 +236,13 @@ impl<'a, 'b> SmartDragValue<'a, 'b> {
     /// Draw the range selector to the given `side` of the DragValue
     pub fn side(mut self, side: RangeSelectorSide) -> Self {
         self.side = side;
+        self
+    }
+
+    /// The range selector will show the middle value by default. This setting
+    /// can be used to override that and choose a different default index.
+    pub fn default_range_index(mut self, index: usize) -> Self {
+        self.default_range_index = Some(index);
         self
     }
 
@@ -317,6 +326,7 @@ impl<'a, 'b> Widget for SmartDragValue<'a, 'b> {
             decimals,
             ranges,
             side,
+            default_range_index,
         } = self;
 
         let id = ui.next_auto_id();
@@ -374,7 +384,7 @@ impl<'a, 'b> Widget for SmartDragValue<'a, 'b> {
             }
 
             if let Ok(parsed_value) = value_text.parse() {
-                let parsed_value = clamp_to_range(parsed_value, hard_range);
+                let parsed_value = clamp_to_range(parsed_value, hard_range.clone());
                 set(&mut get_set_value, parsed_value);
             }
             if ui.input().key_pressed(Key::Enter) {
@@ -418,7 +428,8 @@ impl<'a, 'b> Widget for SmartDragValue<'a, 'b> {
                     // slider, which provides better UX: The range they picked
                     // was probably a good one.
                     if local_state.selected_row.is_none() {
-                        local_state.selected_row = Some(ranges.len() / 2);
+                        local_state.selected_row =
+                            Some(default_range_index.unwrap_or(ranges.len() / 2));
                     }
                     local_state.lower_soft_limit = value <= *soft_range.start();
                     local_state.upper_soft_limit = value >= *soft_range.end();
@@ -503,13 +514,18 @@ impl<'a, 'b> Widget for SmartDragValue<'a, 'b> {
                 if change != 0.0 {
                     let new_value = value + speed * change;
                     let new_value = emath::round_to_decimals(new_value, auto_decimals);
-                    let new_value = clamp_to_range(new_value, hard_range);
+                    let new_value = clamp_to_range(new_value, hard_range.clone());
                     set(&mut get_set_value, new_value);
                 }
             }
 
             response
         };
+
+        // HACK: Sometimes the value can be out of range for a frame without
+        // this. I don't know what causes it but this fixes it.
+        let value = get(&mut get_set_value);
+        set(&mut get_set_value, clamp_to_range(value, hard_range));
 
         response.changed = get(&mut get_set_value) != old_value;
 

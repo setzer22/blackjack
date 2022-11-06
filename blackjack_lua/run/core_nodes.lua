@@ -7,6 +7,7 @@
 local P = require("params")
 local V = require("vector_math")
 local T = require("table_helpers")
+local Gz = require("gizmo_helpers")
 local NodeLibrary = require("node_library")
 local load_function = require("utils").load_function
 
@@ -26,6 +27,7 @@ local primitives = {
         outputs = {
             P.mesh("out_mesh"),
         },
+        gizmos = Gz.tweak_points({ "origin" }),
         returns = "out_mesh",
     },
     MakeQuad = {
@@ -44,12 +46,15 @@ local primitives = {
         outputs = {
             P.mesh("out_mesh"),
         },
+        gizmos = Gz.tweak_points({ "center" }),
         returns = "out_mesh",
     },
     MakeCircle = {
         label = "Circle",
         op = function(inputs)
-            return { out_mesh = Primitives.circle(inputs.center, inputs.radius, inputs.num_vertices) }
+            return {
+                out_mesh = Primitives.circle(inputs.center, inputs.radius, inputs.num_vertices),
+            }
         end,
         inputs = {
             P.v3("center", vector(0, 0, 0)),
@@ -59,12 +64,20 @@ local primitives = {
         outputs = {
             P.mesh("out_mesh"),
         },
+        gizmos = Gz.tweak_points({ "center" }),
         returns = "out_mesh",
     },
     MakeUVSphere = {
         label = "UV Sphere",
         op = function(inputs)
-            return { out_mesh = Primitives.uv_sphere(inputs.center, inputs.radius, inputs.segments, inputs.rings) }
+            return {
+                out_mesh = Primitives.uv_sphere(
+                    inputs.center,
+                    inputs.radius,
+                    inputs.segments,
+                    inputs.rings
+                ),
+            }
         end,
         inputs = {
             P.v3("center", vector(0, 0, 0)),
@@ -75,12 +88,15 @@ local primitives = {
         outputs = {
             P.mesh("out_mesh"),
         },
+        gizmos = Gz.tweak_points({ "center" }),
         returns = "out_mesh",
     },
     MakeLine = {
         label = "Line",
         op = function(inputs)
-            return { out_mesh = Primitives.line(inputs.start_point, inputs.end_point, inputs.segments) }
+            return {
+                out_mesh = Primitives.line(inputs.start_point, inputs.end_point, inputs.segments),
+            }
         end,
         inputs = {
             P.v3("start_point", vector(0, 0, 0)),
@@ -90,6 +106,7 @@ local primitives = {
         outputs = {
             P.mesh("out_mesh"),
         },
+        gizmos = Gz.tweak_points({ "start_point", "end_point" }),
         returns = "out_mesh",
     },
     MakeTerrain = {
@@ -318,7 +335,11 @@ local edit_ops = {
                 return { out_mesh = inputs.mesh:clone() }
             else
                 return {
-                    out_mesh = Ops.subdivide(inputs.mesh, inputs.iterations, inputs.technique == "catmull-clark"),
+                    out_mesh = Ops.subdivide(
+                        inputs.mesh,
+                        inputs.iterations,
+                        inputs.technique == "catmull-clark"
+                    ),
                 }
             end
         end,
@@ -380,7 +401,9 @@ local edit_ops = {
             --
             -- The outputs from this function will be merged into the `op`'s
             -- otuputs by the engine.
-            pre_op = function(_inputs) return {} end,
+            pre_op = function(_inputs)
+                return {}
+            end,
             -- Called after op. This function must return a list of gizmos for
             -- this node, to be applied for the next frame. Ghe `gizmos`
             -- variable will contain the gizmos for the current frame, if any.
@@ -391,8 +414,16 @@ local edit_ops = {
                     gizmos[1]:set_scale(inputs.scale)
                     return gizmos
                 else
-                    return { TransformGizmo.new(inputs.translate, inputs.rotate, inputs.scale) }
+                    return {
+                        TransformGizmo.new(inputs.translate, inputs.rotate, inputs.scale),
+                    }
                 end
+            end,
+            --- Should return a list of parameter name lists, informing the
+            --- engine of which params are affected by each gizmo. If all the
+            --- parameters have incoming connections, this gizmo will be skipped.
+            affected_params = function()
+                return { { "translate", "rotate", "scale" } }
             end,
         },
     },
@@ -538,7 +569,13 @@ local edit_ops = {
     ExtrudeAlongCurve = {
         label = "Extrude along curve",
         op = function(inputs)
-            return { out_mesh = Ops.extrude_along_curve(inputs.backbone, inputs.cross_section, inputs.flip) }
+            return {
+                out_mesh = Ops.extrude_along_curve(
+                    inputs.backbone,
+                    inputs.cross_section,
+                    inputs.flip
+                ),
+            }
         end,
         inputs = {
             P.mesh("backbone"),
@@ -617,7 +654,14 @@ local edit_ops = {
         op = function(inputs)
             local kty = parse_ch_key(inputs.geometry)
             local out_mesh = inputs.mesh:clone()
-            Ops.edit_geometry(out_mesh, kty, inputs.selection, inputs.translate, inputs.rotate, inputs.scale)
+            Ops.edit_geometry(
+                out_mesh,
+                kty,
+                inputs.selection,
+                inputs.translate,
+                inputs.rotate,
+                inputs.scale
+            )
             return { out_mesh = out_mesh }
         end,
         returns = "out_mesh",
@@ -659,7 +703,7 @@ local edit_ops = {
                     end
                 end
 
-                local midpoint = vector(0,0,0)
+                local midpoint = vector(0, 0, 0)
                 local npoints = 0
                 for _, vertex in vertices do
                     midpoint = midpoint + mesh:vertex_position(vertex)
@@ -790,7 +834,26 @@ local export = {
     },
 }
 
+-- Miscelaneous nodes
+local misc = {
+    -- A point, returning a single vector shows a tweakable gizmo
+    Point = {
+        label = "Point",
+        inputs = {
+            P.v3("point", vector(0, 0, 0)),
+        },
+        outputs = {
+            P.v3("point"),
+        },
+        op = function(inputs)
+            return { point = inputs.point }
+        end,
+        gizmos = Gz.tweak_points({ "point" }),
+    },
+}
+
 NodeLibrary:addNodes(primitives)
 NodeLibrary:addNodes(edit_ops)
 NodeLibrary:addNodes(math_nodes)
 NodeLibrary:addNodes(export)
+NodeLibrary:addNodes(misc)
