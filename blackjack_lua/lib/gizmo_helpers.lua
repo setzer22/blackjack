@@ -24,7 +24,10 @@ GizmoHelpers.tweak_points = function(point_params)
                     gizmo:set_translation(inputs[point_param])
                     return gizmo
                 else
-                    return TransformGizmo.new(inputs[point_param], vector(0, 0, 0), vector(1, 1, 1))
+                    local new_gizmo = TransformGizmo.new(inputs[point_param], vector(0, 0, 0), vector(1, 1, 1))
+                    new_gizmo:set_enable_rotation(false)
+                    new_gizmo:set_enable_scale(false)
+                    return new_gizmo
                 end
             end,
             affected_params = function()

@@ -70,13 +70,19 @@ pub fn draw_gizmo_ui_viewport(
             if has_focus {
                 ui.allocate_ui_at_rect(viewport.viewport_rect().shrink(10.0), |ui| {
                     gizmo_label(ui);
-                    if ui.button("Move (G)").clicked() || ui.input().key_pressed(egui::Key::G) {
+                    if transform_gizmo.translation_enabled && ui.button("Move (G)").clicked()
+                        || ui.input().key_pressed(egui::Key::G)
+                    {
                         transform_gizmo.gizmo_mode = TransformGizmoMode::Translate;
                     }
-                    if ui.button("Rotate (R)").clicked() || ui.input().key_pressed(egui::Key::R) {
+                    if transform_gizmo.rotation_enabled && ui.button("Rotate (R)").clicked()
+                        || ui.input().key_pressed(egui::Key::R)
+                    {
                         transform_gizmo.gizmo_mode = TransformGizmoMode::Rotate;
                     }
-                    if ui.button("Scale (S)").clicked() || ui.input().key_pressed(egui::Key::S) {
+                    if transform_gizmo.scale_enabled && ui.button("Scale (S)").clicked()
+                        || ui.input().key_pressed(egui::Key::S)
+                    {
                         transform_gizmo.gizmo_mode = TransformGizmoMode::Scale;
                     }
                 });

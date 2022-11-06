@@ -21,6 +21,10 @@ pub struct TransformGizmo {
     pub pre_rotation: Quat,
     pub pre_scale: Vec3,
 
+    pub translation_enabled: bool,
+    pub rotation_enabled: bool,
+    pub scale_enabled: bool,
+
     pub gizmo_mode: TransformGizmoMode,
 }
 
@@ -43,6 +47,9 @@ mod tr_gizmo {
             pre_rotation: Quat::IDENTITY,
             pre_scale: Vec3::ONE,
             gizmo_mode: TransformGizmoMode::Translate,
+            translation_enabled: true,
+            rotation_enabled: true,
+            scale_enabled: true,
         }
     }
 
@@ -57,6 +64,9 @@ mod tr_gizmo {
             pre_rotation: Quat::IDENTITY,
             pre_scale: Vec3::ONE,
             gizmo_mode: TransformGizmoMode::Translate,
+            translation_enabled: true,
+            rotation_enabled: true,
+            scale_enabled: true,
         }
     }
 
@@ -134,6 +144,24 @@ mod tr_gizmo {
         #[lua]
         pub fn set_pre_scale(&mut self, tr: LVec3) {
             self.pre_scale = tr.0;
+        }
+
+        /// Enables or disables the translation portion of the gizmo
+        #[lua]
+        pub fn set_enable_translation(&mut self, locked: bool) {
+            self.translation_enabled = locked;
+        }
+
+        /// Enables or disables the rotation portion of the gizmo
+        #[lua]
+        pub fn set_enable_rotation(&mut self, locked: bool) {
+            self.rotation_enabled = locked;
+        }
+
+        /// Enables or disables the scale portion of the gizmo
+        #[lua]
+        pub fn set_enable_scale(&mut self, locked: bool) {
+            self.scale_enabled = locked;
         }
 
         /// Returns the full transform matrix for this gizmo, combining the
