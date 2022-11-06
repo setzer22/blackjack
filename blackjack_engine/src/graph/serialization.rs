@@ -114,6 +114,8 @@ pub struct SerializedUiData {
     pub node_order: Vec<usize>,
     pub pan: glam::Vec2,
     pub zoom: f32,
+    #[serde(default)]
+    pub locked_gizmo_nodes: Vec<usize>,
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Hash)]

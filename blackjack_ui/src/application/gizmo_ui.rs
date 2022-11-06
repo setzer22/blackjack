@@ -278,4 +278,20 @@ impl UiNodeGizmoStates {
             inner.current_focus = None;
         }
     }
+
+    pub fn get_all_locked_nodes(&self) -> Vec<NodeId> {
+        let mut locked = vec![];
+        for (node_id, ui_state) in &self.inner.borrow().gizmos {
+            if ui_state.locked {
+                locked.push(node_id);
+            }
+        }
+        locked
+    }
+
+    pub fn restore_locked_nodes(&self, locked_nodes: impl Iterator<Item = NodeId>) {
+        for locked in locked_nodes {
+            self.lock_gizmos_for(locked);
+        }
+    }
 }

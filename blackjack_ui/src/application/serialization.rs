@@ -48,9 +48,17 @@ pub fn save(
         .collect();
     let pan = editor_state.pan_zoom.pan;
 
+    let locked_gizmo_nodes = custom_state
+        .gizmo_states
+        .get_all_locked_nodes()
+        .iter_cpy()
+        .map(node_id_to_idx)
+        .collect();
+
     serialized.set_ui_data(SerializedUiData {
         node_positions,
         node_order,
+        locked_gizmo_nodes,
         pan: Vec2::new(pan.x, pan.y),
         zoom: editor_state.pan_zoom.zoom,
     });
@@ -83,11 +91,7 @@ pub fn load(
     )?;
     let idx_to_node_id = |idx| mapping[id_idx_mappings.get_id(idx).expect("Should exist")];
 
-    let node_order = ui_data
-        .node_order
-        .iter()
-        .map(|idx| idx_to_node_id(*idx))
-        .collect();
+    let node_order = ui_data.node_order.iter_cpy().map(idx_to_node_id).collect();
 
     let node_positions = ui_data
         .node_positions
@@ -95,6 +99,9 @@ pub fn load(
         .enumerate()
         .map(|(idx, pos)| (idx_to_node_id(idx), egui::pos2(pos.x, pos.y)))
         .collect();
+
+    // Restore locked gizmo state
+    gizmo_states.restore_locked_nodes(ui_data.locked_gizmo_nodes.iter_cpy().map(idx_to_node_id));
 
     let mut promoted_params = HashMap::default();
     for (bjk_node_id, bjk_node) in &runtime.graph.nodes {
