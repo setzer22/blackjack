@@ -1,6 +1,7 @@
 use std::{cell::RefCell, hash::Hash, rc::Rc};
 
 use anyhow::Result;
+use blackjack_commons::utils::OptionExt;
 use blackjack_engine::{
     gizmos::{BlackjackGizmo, TransformGizmoMode},
     graph::BjkNodeId,
@@ -160,9 +161,7 @@ impl UiNodeGizmoStates {
             {
                 // Skip running for invisible gizmos
                 if ui_state.visible {
-                    let has_focus = current_focus
-                        .map(|x| x.0 == node_id && x.1 == idx)
-                        .unwrap_or(false);
+                    let has_focus = current_focus.is_some_and_(|x| x.0 == node_id && x.1 == idx);
                     let interacted = f(node_id, idx, g, has_focus)?;
                     ui_state.gizmo_state.gizmos_changed = interacted;
                     if interacted {
@@ -204,7 +203,7 @@ impl UiNodeGizmoStates {
             println!("Was not locked, removing gizmo state");
             inner.gizmos.remove(n);
         }
-        if inner.current_focus.map(|x| x.0 == n).unwrap_or(false) {
+        if inner.current_focus.is_some_and_(|x| x.0 == n) {
             inner.current_focus = None;
         }
     }
@@ -250,9 +249,9 @@ impl UiNodeGizmoStates {
 
     pub fn unlock_gizmos_for(&self, n: NodeId, active: Option<NodeId>) {
         let mut inner = self.inner.borrow_mut();
-        if active.map(|a| a != n).unwrap_or(true) {
+        if active.is_none_or_(|a| *a != n) {
             inner.gizmos.remove(n);
-            if inner.current_focus.map(|x| x.0 == n).unwrap_or(false) {
+            if inner.current_focus.is_some_and_(|x| x.0 == n) {
                 inner.current_focus = None;
             }
         } else if let Some(ui_state) = inner.gizmos.get_mut(n) {
@@ -269,11 +268,14 @@ impl UiNodeGizmoStates {
     }
 
     pub fn is_node_locked(&self, n: NodeId) -> bool {
-        self.inner
-            .borrow()
-            .gizmos
-            .get(n)
-            .map(|x| x.locked)
-            .unwrap_or(false)
+        self.inner.borrow().gizmos.get(n).is_some_and_(|x| x.locked)
+    }
+
+    pub fn node_deleted(&mut self, node_id: NodeId) {
+        let mut inner = self.inner.borrow_mut();
+        inner.gizmos.remove(node_id);
+        if inner.current_focus.is_some_and_(|x| x.0 == node_id) {
+            inner.current_focus = None;
+        }
     }
 }

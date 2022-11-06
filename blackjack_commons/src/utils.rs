@@ -98,6 +98,34 @@ type BranchIteratorOutput<It, OutA, OutB> = BranchIterator<
     It,
 >;
 
+/// Extension trait for `Option`.
+///
+/// NOTE: Functions use a final underscore to avoid colliding with stdlib
+/// functions that will be stabilized in the future.
+pub trait OptionExt<T> {
+    fn as_option(&self) -> &Option<T>;
+    /// Returns `true` if the option is a [`Some`] and the value inside of it
+    /// matches a predicate.
+    ///
+    /// NOTE: This function is currently unstable but will be available in the
+    /// stdlib once #![feature(is_some_with)] hits stable.
+    fn is_some_and_(&self, f: impl FnOnce(&T) -> bool) -> bool {
+        matches!(self.as_option(), Some(x) if f(x))
+    }
+
+    /// Returns true if the function is a [`None`] or when the value inside
+    /// matches a predicate.
+    fn is_none_or_(&self, f: impl FnOnce(&T) -> bool) -> bool {
+        let this = self.as_option();
+        this.is_none() || f(this.as_ref().unwrap())
+    }
+}
+impl<T> OptionExt<T> for Option<T> {
+    fn as_option(&self) -> &Option<T> {
+        self
+    }
+}
+
 #[test]
 pub fn test() {
     fn tuple_windows(circular: bool) -> impl Iterator<Item = (i32, i32)> {

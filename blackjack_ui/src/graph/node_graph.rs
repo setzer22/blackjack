@@ -205,6 +205,7 @@ pub fn draw_node_graph(
                     if custom_state.run_side_effect == Some(node_id) {
                         custom_state.run_side_effect = None;
                     }
+                    custom_state.gizmo_states.node_deleted(node_id);
                 }
                 NodeResponse::User(response) => match response {
                     graph::CustomNodeResponse::SetActiveNode(n) => {
