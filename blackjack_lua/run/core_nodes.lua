@@ -157,6 +157,46 @@ local primitives = {
         },
         returns = "out_mesh",
     },
+    MakeCone = {
+        label = "Cone",
+        op = function (inputs)
+            return {
+                out_mesh = Primitives.cone(
+                    inputs.center, 
+                    inputs.bottom_radius,
+                    inputs.top_radius,
+                    inputs.height, 
+                    inputs.num_vertices)
+            }
+        end,
+        inputs = {
+            P.v3("center", vector(0, 0, 0)),
+            P.scalar("bottom_radius", { default = 1.0, min = 0.0 }),
+            P.scalar("top_radius", { default = 0.0, min = 0.0 }),
+            P.scalar("height", { default = 1.0, min = 0.0 }),
+            P.scalar_int("num_vertices", { default = 8, min = 3, soft_max = 32 }),
+        },
+        outputs = {
+            P.mesh("out_mesh"),
+        },
+        returns = "out_mesh",
+    },
+    MakeCylinder = {
+        label = "Cylinder",
+        op = function (inputs)
+            return {out_mesh = Primitives.cylinder(inputs.center, inputs.radius, inputs.height, inputs.num_vertices)}
+        end,
+        inputs = {
+            P.v3("center", vector(0, 0, 0)),
+            P.scalar("radius", { default = 1.0, min = 0.0 }),
+            P.scalar("height", { default = 1.0, min = 0.0 }),
+            P.scalar_int("num_vertices", { default = 8, min = 3, soft_max = 32 }),
+        },
+        outputs = {
+            P.mesh("out_mesh"),
+        },
+        returns = "out_mesh"
+    },
 }
 
 local function parse_ch_key(s)
