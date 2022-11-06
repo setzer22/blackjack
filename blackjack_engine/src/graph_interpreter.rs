@@ -156,9 +156,17 @@ pub fn run_node<'lua>(
         pre_op_fn: mlua::Function<'lua>,
         update_params_fn: mlua::Function<'lua>,
         update_gizmos_fn: mlua::Function<'lua>,
+        affected_params_fn: mlua::Function<'lua>,
     }
 
-    let mut gizmo_data = (|| -> Result<_> {
+    struct GizmoDescriptor<'lua> {
+        gizmos_changed: bool,
+        data: Option<BlackjackGizmo>,
+        fns: GizmoFns<'lua>,
+    }
+
+    // The data for each of the input gizmos. If this is the empty vec, then gizmos are disabled.
+    let mut gizmo_descriptors: Vec<GizmoDescriptor> = (|| -> Result<_> {
         if node_def.has_gizmo {
             if let Some(gizmos_state) = &mut ctx.gizmo_state {
                 // NOTE: We remove the input slotmap because each node only
@@ -169,79 +177,101 @@ pub fn run_node<'lua>(
                         .get("gizmos")
                         .map_err(|err| anyhow!("Expected node to have gizmos table. {err}"))?;
 
-                    macro_rules! get_fn {
-                        ($name:expr) => {
-                            gizmos_table.get($name).map_err(|err| {
-                                anyhow!("Missing '{}' in gizmos table. {err}", $name)
-                            })?
-                        };
-                    }
+                    let mut gizmo_descriptors = Vec::<GizmoDescriptor>::new();
+                    for (i, gizmo_descr) in
+                        gizmos_table.sequence_values::<mlua::Table>().enumerate()
+                    {
+                        let gizmo_descr = gizmo_descr?;
+                        macro_rules! get_fn {
+                            ($name:expr) => {
+                                gizmo_descr.get($name).map_err(|err| {
+                                    anyhow!("Missing '{}' in gizmos table. {err}", $name)
+                                })?
+                            };
+                        }
 
-                    return Ok(Some((
-                        gizmo_data,
-                        GizmoFns {
-                            pre_op_fn: get_fn!("pre_op"),
-                            update_params_fn: get_fn!("update_params"),
-                            update_gizmos_fn: get_fn!("update_gizmos"),
-                        },
-                    )));
+                        gizmo_descriptors.push(GizmoDescriptor {
+                            data: gizmo_data.active_gizmos.as_ref().map(|v| v[i].clone()),
+                            gizmos_changed: gizmo_data.gizmos_changed,
+                            fns: GizmoFns {
+                                pre_op_fn: get_fn!("pre_op"),
+                                update_params_fn: get_fn!("update_params"),
+                                update_gizmos_fn: get_fn!("update_gizmos"),
+                                affected_params_fn: get_fn!("affected_params"),
+                            },
+                        });
+                    }
+                    return Ok(gizmo_descriptors);
                 }
             }
         }
-        Ok(None)
+        Ok(Vec::new())
     })()?;
 
-    let mut pre_op_outputs: Option<mlua::Table> = None;
-
     // Run pre-gizmo
-    if let Some((
-        GizmoState {
-            active_gizmos: Some(gizmos_in),
+    for gz_descr in &gizmo_descriptors {
+        if let GizmoDescriptor {
             gizmos_changed: true,
-        },
-        GizmoFns {
-            update_params_fn, ..
-        },
-    )) = &gizmo_data
-    {
-        // Update params
-        // Patch the input map, running the gizmo function
-        let input_gizmos = gizmos_in.clone().to_lua(lua)?;
-        let new_input_map = update_params_fn
-            .call::<_, Table>((input_map, input_gizmos))
-            .map_err(|err| {
-                anyhow!(
-                    "A node's update_params gizmo callback should return an
-                    updated parameter list as a table. {err}"
-                )
-            })?;
-        input_map = new_input_map;
-
-        // Write the inputs that were returned to lua back to the
-        // external_parameter_values in the context. This will then be sent
-        // as part of the program output, to communicate to the integration
-        // that parameters for a node have changed.
-        let referenced_external_params = referenced_external_params
-            .as_ref()
-            .expect("When gizmos run, this should be defined");
-        for param in referenced_external_params.iter() {
-            let new_val = input_map
-                .get::<_, BlackjackValue>(param.param_name.clone())
+            data: Some(gizmo_in),
+            fns: GizmoFns {
+                update_params_fn, ..
+            },
+        } = gz_descr
+        {
+            // Update params
+            // Patch the input map, running the gizmo function
+            let input_gizmo = gizmo_in.clone().to_lua(lua)?;
+            let new_input_map = update_params_fn
+                .call::<_, Table>((input_map, input_gizmo))
                 .map_err(|err| {
                     anyhow!(
-                        "The gizmos input function modified a parameter in an illegal way: {err}"
+                        "A node's update_params gizmo callback should return an
+                    updated parameter list as a table. {err}"
                     )
                 })?;
-            *ctx.external_param_values
-                .0
-                .get_mut(param)
-                .expect("Should be there") = new_val;
+            input_map = new_input_map;
+
+            // Write the inputs that were returned to lua back to the
+            // external_parameter_values in the context. This will then be sent
+            // as part of the program output, to communicate to the integration
+            // that parameters for a node have changed.
+            let referenced_external_params = referenced_external_params
+                .as_ref()
+                .expect("When gizmos run, this should be defined");
+            for param in referenced_external_params.iter() {
+                let new_val = input_map
+                    .get::<_, BlackjackValue>(param.param_name.clone())
+                    .map_err(|err| {
+                        anyhow!(
+                        "The gizmos input function modified a parameter in an illegal way: {err}"
+                    )
+                    })?;
+                *ctx.external_param_values
+                    .0
+                    .get_mut(param)
+                    .expect("Should be there") = new_val;
+            }
         }
     }
 
-    if let Some((_, GizmoFns { pre_op_fn, .. })) = &gizmo_data {
+    /// Performs a shallow merge between t2 and t1. This overwrites existing
+    /// keys in t1, by getting values from t2. Keys are not removed from t2, and
+    /// in that case, references may be duplicated.
+    fn merge_into(t1: &mut mlua::Table, t2: mlua::Table) -> Result<()> {
+        for r in t2.pairs::<mlua::Value, mlua::Value>() {
+            let (k, v) = r?;
+            t1.set(k, v)?;
+        }
+        Ok(())
+    }
+
+    let mut pre_op_outputs: mlua::Table = lua.create_table()?;
+    for gz_descr in &gizmo_descriptors {
         // Run pre_op
-        pre_op_outputs = Some(pre_op_fn.call(input_map.clone())?);
+        merge_into(
+            &mut pre_op_outputs,
+            gz_descr.fns.pre_op_fn.call(input_map.clone())?,
+        )?;
     }
 
     // Run node 'op'
@@ -257,42 +287,35 @@ pub fn run_node<'lua>(
 
     // Merge pre_outputs result with the outputs. We merge in a way so that keys
     // set in 'op' take precedence.
-    if let Some(pre_op_outputs) = pre_op_outputs {
-        for r in outputs.pairs::<mlua::Value, mlua::Value>() {
-            let (k, v) = r?;
-            pre_op_outputs.set(k, v)?;
-        }
-        outputs = pre_op_outputs;
-    }
+    merge_into(&mut outputs, pre_op_outputs)?;
 
     ctx.outputs_cache.insert(node_id, outputs.clone());
 
     // Run post-gizmo
-    if let Some((
-        gizmo_state,
-        GizmoFns {
-            update_gizmos_fn, ..
-        },
-    )) = &mut gizmo_data
-    {
-        let gizmos = gizmo_state
-            .active_gizmos
+    for gz_descr in &mut gizmo_descriptors {
+        let gizmo = gz_descr
+            .data
             .as_mut()
-            .map(|gs| gs.clone().to_lua(lua))
+            .map(|gz| gz.clone().to_lua(lua))
             .transpose()?
             .unwrap_or(mlua::Value::Nil);
 
-        ctx.gizmo_outputs.insert(
-            node_id,
-            update_gizmos_fn
-                .call((input_map, gizmos, outputs))
-                .map_err(|err| {
-                    anyhow!(
-                        "A node's gizmo outputs function should
+        let updated_gizmo: BlackjackGizmo = gz_descr
+            .fns
+            .update_gizmos_fn
+            .call((input_map.clone(), gizmo, outputs.clone()))
+            .map_err(|err| {
+                anyhow!(
+                    "A node's gizmo outputs function should
                              return a sequence of gizmos. {err}"
-                    )
-                })?,
-        );
+                )
+            })?;
+
+        ctx.gizmo_outputs
+            .entry(node_id)
+            .unwrap()
+            .or_default()
+            .push(updated_gizmo);
     }
 
     Ok(())
