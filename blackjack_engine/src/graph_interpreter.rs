@@ -256,8 +256,7 @@ pub fn run_node<'lua>(
                 .call::<_, Table>((input_map, input_gizmo))
                 .map_err(|err| {
                     anyhow!(
-                        "A node's update_params gizmo callback should return an
-                    updated parameter list as a table. {err}"
+                        "A node's update_params gizmo callback should return an updated parameter list as a table. {err}"
                     )
                 })?;
             input_map = new_input_map;
@@ -340,10 +339,7 @@ pub fn run_node<'lua>(
                     .update_gizmos_fn
                     .call::<_, BlackjackGizmo>((input_map.clone(), gizmo, outputs.clone()))
                     .map_err(|err| {
-                        anyhow!(
-                            "A node's gizmo outputs function should
-                             return a sequence of gizmos. {err}"
-                        )
+                        anyhow!("A node's gizmo outputs function should return a new gizmo. {err}")
                     })
             })
             .transpose()?;

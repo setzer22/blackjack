@@ -716,7 +716,7 @@ local edit_ops = {
                     gizmo:set_rotation(inputs.rotate)
                     gizmo:set_scale(inputs.scale)
                     gizmo:set_pre_translation(outputs.gizmo_midpoint)
-                    return { gizmo }
+                    return gizmo
                 end,
                 affected_params = function()
                     return { "translate", "rotate", "scale" }
