@@ -27,7 +27,7 @@ local primitives = {
         outputs = {
             P.mesh("out_mesh"),
         },
-        gizmos = Gz.tweak_points({ "origin" }),
+        gizmos = { Gz.tweak_point("origin") },
         returns = "out_mesh",
     },
     MakeQuad = {
@@ -46,7 +46,7 @@ local primitives = {
         outputs = {
             P.mesh("out_mesh"),
         },
-        gizmos = Gz.tweak_points({ "center" }),
+        gizmos = { Gz.tweak_point("center") },
         returns = "out_mesh",
     },
     MakeCircle = {
@@ -64,7 +64,7 @@ local primitives = {
         outputs = {
             P.mesh("out_mesh"),
         },
-        gizmos = Gz.tweak_points({ "center" }),
+        gizmos = { Gz.tweak_point("center") },
         returns = "out_mesh",
     },
     MakeUVSphere = {
@@ -88,7 +88,7 @@ local primitives = {
         outputs = {
             P.mesh("out_mesh"),
         },
-        gizmos = Gz.tweak_points({ "center" }),
+        gizmos = { Gz.tweak_point("center") },
         returns = "out_mesh",
     },
     MakeLine = {
@@ -106,7 +106,7 @@ local primitives = {
         outputs = {
             P.mesh("out_mesh"),
         },
-        gizmos = Gz.tweak_points({ "start_point", "end_point" }),
+        gizmos = { Gz.tweak_point("start_point"), Gz.tweak_point("end_point") },
         returns = "out_mesh",
     },
     MakeTerrain = {
@@ -179,14 +179,15 @@ local primitives = {
     },
     MakeCone = {
         label = "Cone",
-        op = function (inputs)
+        op = function(inputs)
             return {
                 out_mesh = Primitives.cone(
-                    inputs.center, 
+                    inputs.center,
                     inputs.bottom_radius,
                     inputs.top_radius,
-                    inputs.height, 
-                    inputs.num_vertices)
+                    inputs.height,
+                    inputs.num_vertices
+                ),
             }
         end,
         inputs = {
@@ -199,13 +200,20 @@ local primitives = {
         outputs = {
             P.mesh("out_mesh"),
         },
-        gizmos = Gz.tweak_points({ "center" }),
+        gizmos = { Gz.tweak_point("center") },
         returns = "out_mesh",
     },
     MakeCylinder = {
         label = "Cylinder",
-        op = function (inputs)
-            return {out_mesh = Primitives.cylinder(inputs.center, inputs.radius, inputs.height, inputs.num_vertices)}
+        op = function(inputs)
+            return {
+                out_mesh = Primitives.cylinder(
+                    inputs.center,
+                    inputs.radius,
+                    inputs.height,
+                    inputs.num_vertices
+                ),
+            }
         end,
         inputs = {
             P.v3("center", vector(0, 0, 0)),
@@ -216,8 +224,8 @@ local primitives = {
         outputs = {
             P.mesh("out_mesh"),
         },
-        gizmos = Gz.tweak_points({ "center" }),
-        returns = "out_mesh"
+        gizmos = { Gz.tweak_point("center") },
+        returns = "out_mesh",
     },
 }
 
@@ -425,46 +433,7 @@ local edit_ops = {
                 out_mesh = out_mesh,
             }
         end,
-        gizmos = {
-            {
-                -- Called when a gizmo has changed in the UI. This function needs to
-                -- set the parameters of the node according to the gizmo.
-                update_params = function(inputs, gizmo)
-                    inputs.translate = gizmo:translation()
-                    inputs.rotate = gizmo:rotation()
-                    inputs.scale = gizmo:scale()
-                    return inputs
-                end,
-                -- Called before `op`. This function can be used to compute data
-                -- from the input params, before op potentially modifies them.
-                -- Unlike `update_params`, this function is called unconditionally.
-                --
-                -- The outputs from this function will be merged into the `op`'s
-                -- otuputs by the engine.
-                pre_op = function(_inputs)
-                    return {}
-                end,
-                -- Called after op. This function must return a list of gizmos for
-                -- this node, to be applied for the next frame. Ghe `gizmos`
-                -- variable will contain the gizmos for the current frame, if any.
-                update_gizmos = function(inputs, gizmo, _outputs)
-                    if gizmo ~= nil then
-                        gizmo:set_translation(inputs.translate)
-                        gizmo:set_rotation(inputs.rotate)
-                        gizmo:set_scale(inputs.scale)
-                        return gizmo
-                    else
-                        return TransformGizmo.new(inputs.translate, inputs.rotate, inputs.scale)
-                    end
-                end,
-                --- Should return a list of parameter name lists, informing the
-                --- engine of which params are affected by each gizmo. If all the
-                --- parameters have incoming connections, this gizmo will be skipped.
-                affected_params = function()
-                    return { "translate", "rotate", "scale" }
-                end,
-            },
-        },
+        gizmos = { Gz.tweak_transform("translate", "rotate", "scale") },
     },
     VertexAttribTransfer = {
         label = "Vertex attribute transfer",
@@ -691,8 +660,37 @@ local edit_ops = {
     EditGeometry = {
         label = "Edit Geometry",
         op = function(inputs)
-            local kty = parse_ch_key(inputs.geometry)
             local out_mesh = inputs.mesh:clone()
+
+            -- Gizmo computation: Compute the midpoint of the group of vertices
+            -- being edited. This will be use to compute the gizmo pre-transform.
+            if inputs.__gizmos_enabled ~= nil then
+                local vertices = {}
+                if inputs.geometry == "Vertex" then
+                    vertices = out_mesh:resolve_vertex_selection_full(inputs.selection)
+                elseif inputs.geometry == "Face" then
+                    for _, face in out_mesh:resolve_face_selection_full(inputs.selection) do
+                        T.concat(vertices, out_mesh:face_vertices(face))
+                    end
+                elseif inputs.geometry == "Halfedge" then
+                    for _, edge in out_mesh:resolve_halfedge_selection_full(inputs.selection) do
+                        local x, y = out_mesh:halfedge_vertices(edge)
+                        table.insert(vertices, x)
+                        table.insert(vertices, y)
+                    end
+                end
+
+                local midpoint = vector(0, 0, 0)
+                local npoints = 0
+                for _, vertex in vertices do
+                    midpoint = midpoint + out_mesh:vertex_position(vertex)
+                    npoints = npoints + 1
+                end
+                inputs.gizmo_midpoint = midpoint / npoints
+            end
+
+            -- Call the actual op
+            local kty = parse_ch_key(inputs.geometry)
             Ops.edit_geometry(
                 out_mesh,
                 kty,
@@ -701,6 +699,7 @@ local edit_ops = {
                 inputs.rotate,
                 inputs.scale
             )
+
             return { out_mesh = out_mesh }
         end,
         returns = "out_mesh",
@@ -716,54 +715,12 @@ local edit_ops = {
             P.mesh("out_mesh"),
         },
         gizmos = {
-            {
-                update_params = function(inputs, gizmo)
-                    inputs.translate = gizmo:translation()
-                    inputs.rotate = gizmo:rotation()
-                    inputs.scale = gizmo:scale()
-                    return inputs
-                end,
-                pre_op = function(inputs)
-                    local mesh = inputs.mesh
-                    local vertices = {}
-                    if inputs.geometry == "Vertex" then
-                        vertices = mesh:resolve_vertex_selection_full(inputs.selection)
-                    elseif inputs.geometry == "Face" then
-                        for _, face in mesh:resolve_face_selection_full(inputs.selection) do
-                            T.concat(vertices, mesh:face_vertices(face))
-                        end
-                    elseif inputs.geometry == "Halfedge" then
-                        for _, edge in mesh:resolve_halfedge_selection_full(inputs.selection) do
-                            local x, y = mesh:halfedge_vertices(edge)
-                            table.insert(vertices, x)
-                            table.insert(vertices, y)
-                        end
-                    end
-
-                    local midpoint = vector(0, 0, 0)
-                    local npoints = 0
-                    for _, vertex in vertices do
-                        midpoint = midpoint + mesh:vertex_position(vertex)
-                        npoints = npoints + 1
-                    end
-                    midpoint = midpoint / npoints
-
-                    return { gizmo_midpoint = midpoint }
-                end,
-                update_gizmos = function(inputs, gizmo, outputs)
-                    if gizmo == nil then
-                        gizmo = TransformGizmo.default()
-                    end
-                    gizmo:set_translation(inputs.translate)
-                    gizmo:set_rotation(inputs.rotate)
-                    gizmo:set_scale(inputs.scale)
-                    gizmo:set_pre_translation(outputs.gizmo_midpoint)
-                    return gizmo
-                end,
-                affected_params = function()
-                    return { "translate", "rotate", "scale" }
-                end,
-            },
+            Gz.tweak_transform(
+                "translate",
+                "rotate",
+                "scale",
+                { pre_translation_param = "gizmo_midpoint" }
+            ),
         },
     },
 }
@@ -886,7 +843,7 @@ local misc = {
         op = function(inputs)
             return { point = inputs.point }
         end,
-        gizmos = Gz.tweak_points({ "point" }),
+        gizmos = { Gz.tweak_point("point") },
     },
 }
 

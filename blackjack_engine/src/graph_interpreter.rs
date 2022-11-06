@@ -148,12 +148,19 @@ pub fn run_node<'lua>(
         }
     }
 
+    // This special value is injected into the inputs to signal nodes that the
+    // gizmos are being processed. This is useful to let nodes optimize out
+    // parts of the computation when they're running on a game engine.
+    if ctx.gizmo_state.is_some() {
+        input_map.set("__gizmos_enabled", true)?;
+    }
+
+
     let node_table = lua
         .load(&(format!("require('node_library'):getNode('{op_name}')")))
         .eval::<mlua::Table>()?;
 
     struct GizmoFns<'lua> {
-        pre_op_fn: mlua::Function<'lua>,
         update_params_fn: mlua::Function<'lua>,
         update_gizmos_fn: mlua::Function<'lua>,
         affected_params_fn: mlua::Function<'lua>,
@@ -194,7 +201,6 @@ pub fn run_node<'lua>(
                             data: gizmo_data.active_gizmos.as_ref().map(|v| v[i].clone()),
                             gizmos_changed: gizmo_data.gizmos_changed,
                             fns: GizmoFns {
-                                pre_op_fn: get_fn!("pre_op"),
                                 update_params_fn: get_fn!("update_params"),
                                 update_gizmos_fn: get_fn!("update_gizmos"),
                                 affected_params_fn: get_fn!("affected_params"),
@@ -282,42 +288,16 @@ pub fn run_node<'lua>(
         }
     }
 
-    /// Performs a shallow merge between t2 and t1. This overwrites existing
-    /// keys in t1, by getting values from t2. Keys are not removed from t2, and
-    /// in that case, references may be duplicated.
-    fn merge_into(t1: &mut mlua::Table, t2: mlua::Table) -> Result<()> {
-        for r in t2.pairs::<mlua::Value, mlua::Value>() {
-            let (k, v) = r?;
-            t1.set(k, v)?;
-        }
-        Ok(())
-    }
-
-    let mut pre_op_outputs: mlua::Table = lua.create_table()?;
-    for (gz_descr, enabled) in gizmo_descriptors.iter().zip(&enabled_gizmos) {
-        if *enabled {
-            // Run pre_op
-            merge_into(
-                &mut pre_op_outputs,
-                gz_descr.fns.pre_op_fn.call(input_map.clone())?,
-            )?;
-        }
-    }
-
     // Run node 'op'
     let op_fn: mlua::Function = node_table
         .get("op")
         .map_err(|err| anyhow!("Node should always have an 'op'. {err}"))?;
-    let mut outputs = match op_fn.call(input_map.clone())? {
+    let outputs = match op_fn.call(input_map.clone())? {
         mlua::Value::Table(t) => t,
         other => {
             bail!("A node's `op` function should always return a table, got {other:?}");
         }
     };
-
-    // Merge pre_outputs result with the outputs. We merge in a way so that keys
-    // set in 'op' take precedence.
-    merge_into(&mut outputs, pre_op_outputs)?;
 
     ctx.outputs_cache.insert(node_id, outputs.clone());
 
