@@ -15,8 +15,13 @@ use crate::graph::graph_interop::NodeMapping;
 use super::viewport_3d::Viewport3d;
 
 pub struct UiGizmoState {
+    /// The gizmo state from `blackjack_engine`.
     pub gizmo_state: GizmoState,
+    /// The user has manually locked the gizmos for this node in the user interface
     pub locked: bool,
+    /// When false, the gizmo is enabled for this node, but the node didn't run
+    /// during the following frame, so the gizmo won't be shown.
+    pub visible: bool,
 }
 
 /// Stores the gizmo state for each node in the graph. This structure references
@@ -120,7 +125,10 @@ impl UiNodeGizmoStates {
                 .flatten()
                 .enumerate()
             {
-                ui_state.gizmo_state.gizmos_changed = f(node_id, idx, g)?;
+                // Skip running for invisible gizmos
+                if ui_state.visible {
+                    ui_state.gizmo_state.gizmos_changed = f(node_id, idx, g)?;
+                }
             }
         }
         Ok(())
@@ -133,9 +141,17 @@ impl UiNodeGizmoStates {
         mapping: &NodeMapping,
     ) -> Result<()> {
         let mut gizmos = self.gizmos.borrow_mut();
+
+        // Reset the visible flag for all the nodes. We set it back if we had an
+        // update for this node during the update.
+        for (_, ui_state) in &mut *gizmos {
+            ui_state.visible = false;
+        }
+
         for (node_id, ui_state) in &mut *gizmos {
             if let Some(updated) = updated_gizmos.remove(mapping[node_id]) {
                 ui_state.gizmo_state.active_gizmos = Some(updated);
+                ui_state.visible = true;
             }
         }
         Ok(())
@@ -157,6 +173,7 @@ impl UiNodeGizmoStates {
                 UiGizmoState {
                     gizmo_state: GizmoState::default(),
                     locked: false,
+                    visible: true,
                 },
             );
         }
@@ -174,6 +191,7 @@ impl UiNodeGizmoStates {
                     UiGizmoState {
                         gizmo_state: GizmoState::default(),
                         locked: true,
+                        visible: true,
                     },
                 );
             }

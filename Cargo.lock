@@ -1106,7 +1106,8 @@ dependencies = [
 
 [[package]]
 name = "egui-gizmo"
-version = "0.8.0"
+version = "0.8.1"
+source = "git+https://github.com/setzer22/egui-gizmo?rev=a3415a075fc2b2ecd3b26cdef9cb7c1857d77478#a3415a075fc2b2ecd3b26cdef9cb7c1857d77478"
 dependencies = [
  "egui",
  "glam",
@@ -1141,6 +1142,7 @@ dependencies = [
 [[package]]
 name = "egui_node_graph"
 version = "0.3.0"
+source = "git+https://github.com/setzer22/egui_node_graph?rev=8706908d13b8a42e22784afe17fbc3a2ead13047#8706908d13b8a42e22784afe17fbc3a2ead13047"
 dependencies = [
  "egui",
  "serde",

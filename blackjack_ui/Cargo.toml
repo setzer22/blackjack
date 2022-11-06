@@ -18,23 +18,18 @@ blackjack_commons = { path = "../blackjack_commons" }
 blackjack_engine = { path = "../blackjack_engine" }
 
 # Git dependencies
-# TODO: RESTORE!!!
-# egui_node_graph = { git = "https://github.com/setzer22/egui_node_graph", rev = "0ab08bd9cad77756a581d17ae1307d36ad9eb7ef", features = [
-    # "persistence",
-# ] }
-egui_node_graph = { path = "../../egui_node_graph/egui_node_graph", features = [
+egui_node_graph = { git = "https://github.com/setzer22/egui_node_graph", rev = "8706908d13b8a42e22784afe17fbc3a2ead13047", features = [
     "persistence",
 ] }
 rend3 = { git = "https://github.com/Cakefish/rend3.git", rev = "dbdfc32264a1fcab3a15c698c4fc474344f10aab" }
 rend3-routine = { git = "https://github.com/Cakefish/rend3.git", rev = "dbdfc32264a1fcab3a15c698c4fc474344f10aab" }
 glsl-include = { git = "https://github.com/setzer22/glsl-include", rev = "d9b1ade" }
+egui-gizmo = { git = "https://github.com/setzer22/egui-gizmo", rev = "a3415a075fc2b2ecd3b26cdef9cb7c1857d77478" }
 
 # Crates.io crates
 egui-winit = { version = "0.19" }
 egui-wgpu = { version = "0.19" }
 egui = { version = "0.19", features = ["persistence"] }
-# egui-gizmo = "0.8.0"
-egui-gizmo = { path = "../../egui-gizmo" }
 glam = { version = "0.21.2", features = ["serde", "bytemuck"] }
 env_logger = { version = "0.9", default-features = false, features = [
     "termcolor",
