@@ -74,14 +74,17 @@ impl Quad {
 
 pub struct Circle;
 impl Circle {
-    pub fn build(center: Vec3, radius: f32, num_vertices: usize) -> HalfEdgeMesh {
+    pub fn make_verts(center: Vec3, radius: f32, num_vertices: usize) -> Vec<Vec3> {
         let angle_delta = (2.0 * PI) / num_vertices as f32;
-        let verts = (0..num_vertices)
+        (0..num_vertices)
             .map(|i| {
                 let q = Quat::from_rotation_y(angle_delta * i as f32);
                 q * (Vec3::Z * radius) + center
             })
-            .collect_vec();
+            .collect_vec()
+    }
+    pub fn build(center: Vec3, radius: f32, num_vertices: usize) -> HalfEdgeMesh {
+        let verts = Self::make_verts(center, radius, num_vertices);
         let polygon = (0..num_vertices).collect_vec();
 
         HalfEdgeMesh::build_from_polygons(&verts, &[&polygon])
@@ -260,6 +263,80 @@ impl Polygon {
     }
 }
 
+pub struct Cone;
+impl Cone {
+    pub fn build(
+        center: Vec3,
+        top_radius: f32,
+        bottom_radius: f32,
+        height: f32,
+        num_vertices: usize,
+    ) -> HalfEdgeMesh {
+        // Not using an epsilon, may be useful for to keep multiple verts at the point using small values.
+        if top_radius.abs() <= 1e-5 {
+            Self::build_cone(center, bottom_radius, height, num_vertices)
+        } else {
+            Self::build_truncated_cone(center, top_radius, bottom_radius, height, num_vertices)
+        }
+    }
+    pub fn build_cone(
+        center: Vec3,
+        bottom_radius: f32,
+        height: f32,
+        num_vertices: usize,
+    ) -> HalfEdgeMesh {
+        let v_offset = Vec3::new(0.0, height / 2.0, 0.0);
+        let mut verts = Circle::make_verts(center - v_offset, bottom_radius, num_vertices);
+        verts.push(center + v_offset);
+
+        let side_faces = (0..num_vertices)
+            .map(|v| [v, (v + 1) % num_vertices, num_vertices])
+            .collect_vec();
+        let bottom_face = (0..num_vertices).rev().collect_vec();
+        let mut faces = vec![bottom_face.as_slice()];
+        faces.extend(side_faces.iter().map(|x| x.as_slice()));
+
+        HalfEdgeMesh::build_from_polygons(&verts, &faces)
+            .expect("Cone construction should not fail.")
+    }
+    pub fn build_truncated_cone(
+        center: Vec3,
+        top_radius: f32,
+        bottom_radius: f32,
+        height: f32,
+        num_vertices: usize,
+    ) -> HalfEdgeMesh {
+        let v_offset = Vec3::new(0.0, height / 2.0, 0.0);
+        let mut verts = Circle::make_verts(center - v_offset, bottom_radius, num_vertices);
+        verts.extend(Circle::make_verts(
+            center + v_offset,
+            top_radius,
+            num_vertices,
+        ));
+
+        let side_faces = (0..num_vertices)
+            .map(|v| {
+                let v2 = (v + 1) % num_vertices;
+                [v, v2, num_vertices + v2, num_vertices + v]
+            })
+            .collect_vec();
+        let bottom_face = (0..num_vertices).rev().collect_vec();
+        let top_face = (num_vertices..(2 * num_vertices)).collect_vec();
+        let mut faces = vec![bottom_face.as_slice(), top_face.as_slice()];
+        faces.extend(side_faces.iter().map(|x| x.as_slice()));
+
+        HalfEdgeMesh::build_from_polygons(&verts, &faces)
+            .expect("Truncated Cone construction should not fail.")
+    }
+}
+
+struct Cylinder;
+impl Cylinder {
+    pub fn build(center: Vec3, radius: f32, height: f32, num_vertices: usize) -> HalfEdgeMesh {
+        Cone::build_truncated_cone(center, radius, radius, height, num_vertices)
+    }
+}
+
 #[blackjack_macros::blackjack_lua_module]
 mod lua_api {
     use super::*;
@@ -283,6 +360,31 @@ mod lua_api {
     #[lua(under = "Primitives")]
     fn circle(center: LVec3, radius: f32, num_vertices: f32) -> HalfEdgeMesh {
         Circle::build_open(center.0, radius, num_vertices as usize)
+    }
+
+    /// Creates a truncated cone with the given `center`, `bottom_radius`, `top_radius`,
+    /// `height`, and `num_vertices` around its radius. A `top_radius` of 0 will make a standard cone.
+    #[lua(under = "Primitives")]
+    fn cone(
+        center: LVec3,
+        bottom_radius: f32,
+        top_radius: f32,
+        height: f32,
+        num_vertices: f32,
+    ) -> HalfEdgeMesh {
+        Cone::build(
+            center.0,
+            top_radius,
+            bottom_radius,
+            height,
+            num_vertices as usize,
+        )
+    }
+
+    /// Creates a cylinder with the given `center`, `radius`, `height`, and `num_vertices around its radius`.
+    #[lua(under = "Primitives")]
+    fn cylinder(center: LVec3, radius: f32, height: f32, num_vertices: f32) -> HalfEdgeMesh {
+        Cylinder::build(center.0, radius, height, num_vertices as usize)
     }
 
     /// Creates a UV-sphere with given `center` and `radius`. The `rings` and
@@ -310,5 +412,24 @@ mod lua_api {
     #[lua(under = "Primitives")]
     fn polygon(points: Vec<LVec3>) -> Result<HalfEdgeMesh> {
         Polygon::build_from_points(LVec3::cast_vector(points))
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    #[test]
+    fn test_cone() {
+        let cone = Cone::build(Vec3::ZERO, 0.0, 1.0, 1.0, 8);
+        assert_eq!(cone.read_connectivity().vertices.len(), 9);
+
+        Cone::build(Vec3::ZERO, 1.0, 2.0, 1.0, 8);
+        Cone::build_cone(Vec3::ZERO, 1.0, 1.0, 8);
+        Cone::build_truncated_cone(Vec3::ZERO, 1.0, 2.0, 1.0, 8);
+    }
+
+    #[test]
+    fn test_cylinder() {
+        Cylinder::build(Vec3::ZERO, 1.0, 1.0, 8);
     }
 }
