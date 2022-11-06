@@ -59,7 +59,6 @@ dependencies = [
  "cfg-if 1.0.0",
  "getrandom 0.2.7",
  "once_cell",
- "serde",
  "version_check",
 ]
 
@@ -440,7 +439,7 @@ dependencies = [
  "num-traits",
  "profiling",
  "rayon",
- "ron 0.7.1",
+ "ron",
  "rstar",
  "serde",
  "slotmap",
@@ -461,7 +460,7 @@ dependencies = [
  "mlua",
  "once_cell",
  "parking_lot",
- "ron 0.7.1",
+ "ron",
  "serde",
  "slotmap",
 ]
@@ -512,9 +511,8 @@ dependencies = [
  "rend3",
  "rend3-routine",
  "rfd",
- "ron 0.7.1",
+ "ron",
  "rstar",
- "serde",
  "slotmap",
  "smallvec",
  "spin_sleep",
@@ -1099,8 +1097,6 @@ dependencies = [
  "ahash 0.8.0",
  "epaint",
  "nohash-hasher",
- "ron 0.8.0",
- "serde",
  "tracing",
 ]
 
@@ -1145,7 +1141,6 @@ version = "0.3.0"
 source = "git+https://github.com/setzer22/egui_node_graph?rev=8706908d13b8a42e22784afe17fbc3a2ead13047#8706908d13b8a42e22784afe17fbc3a2ead13047"
 dependencies = [
  "egui",
- "serde",
  "slotmap",
  "smallvec",
  "thiserror",
@@ -1163,7 +1158,6 @@ version = "0.19.0"
 source = "git+https://github.com/setzer22/egui?branch=egui_0_19_plus_pr_2051#45d9c8f7ceded048631c8fc73f748bfd53b8cef4"
 dependencies = [
  "bytemuck",
- "serde",
 ]
 
 [[package]]
@@ -1233,7 +1227,6 @@ dependencies = [
  "emath",
  "nohash-hasher",
  "parking_lot",
- "serde",
 ]
 
 [[package]]
@@ -3322,17 +3315,6 @@ name = "ron"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "88073939a61e5b7680558e6be56b419e208420c2adb92be54921fa6b72283f1a"
-dependencies = [
- "base64",
- "bitflags",
- "serde",
-]
-
-[[package]]
-name = "ron"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "300a51053b1cb55c80b7a9fde4120726ddf25ca241a1cbb926626f62fb136bff"
 dependencies = [
  "base64",
  "bitflags",

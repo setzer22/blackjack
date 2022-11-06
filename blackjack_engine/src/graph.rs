@@ -13,18 +13,10 @@ use crate::prelude::*;
 use crate::{lua_engine::lua_stdlib::LVec3, mesh::halfedge::selection::SelectionExpression};
 use anyhow::{anyhow, Result};
 use mlua::{FromLua, Table, ToLua};
-use serde::{Deserialize, Serialize};
 use slotmap::SlotMap;
 
 /// The core `bjk` file format
 pub mod serialization;
-
-// TODO: REVIEW: Most of the serde derives here are no longer necessary. In
-// particular serde_compat can be removed.
-
-/// Defines helper functions to load old file formats with serde. This allows
-/// some variation in the structs types without breaking the `bjk` file format.
-mod serde_compat;
 
 pub struct LuaExpression(pub String);
 
@@ -43,7 +35,7 @@ pub enum DependencyKind {
 }
 
 /// The data types available for graph parameters
-#[derive(Copy, Clone, PartialEq, Eq, Serialize, Deserialize, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum DataType {
     Vector,
     Scalar,
@@ -75,7 +67,7 @@ impl DataType {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub enum BlackjackValue {
     Vector(glam::Vec3),
     Scalar(f32),
@@ -171,17 +163,13 @@ pub struct BjkGraph {
 
 /// Specifies the ways in which the file picker dialog for an
 /// `InputValueConfig::FilePath` can work.
-#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone)]
 pub enum FilePathMode {
     /// The file picker will only let the user select an existing file
     Open,
     /// The file picker will let the user choose a new file or an existing one,
     /// with an overwrite warning.
     Save,
-}
-
-fn default_file_path_mode() -> FilePathMode {
-    FilePathMode::Save // Kept for backwards compatibility
 }
 
 /// The settings to describe an input value in a node template. This information
@@ -193,22 +181,17 @@ fn default_file_path_mode() -> FilePathMode {
 /// validation information. There is not a 1:1 correspondence between data types
 /// and config variants. Some variants (e.g. `Enum`, `FilePath`) are special cases
 /// of some datatype (i.e. `String`).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub enum InputValueConfig {
     Vector {
         default: glam::Vec3,
     },
     Scalar {
         default: f32,
-        #[serde(deserialize_with = "serde_compat::de_option_or_f32")]
         min: Option<f32>,
-        #[serde(deserialize_with = "serde_compat::de_option_or_f32")]
         max: Option<f32>,
-        #[serde(default)]
         soft_min: Option<f32>,
-        #[serde(default)]
         soft_max: Option<f32>,
-        #[serde(default)]
         num_decimals: Option<u32>,
     },
     Selection {
@@ -220,7 +203,6 @@ pub enum InputValueConfig {
     },
     FilePath {
         default_path: Option<String>,
-        #[serde(default = "default_file_path_mode")]
         file_path_mode: FilePathMode,
     },
     String {

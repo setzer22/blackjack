@@ -14,8 +14,6 @@ use egui_node_graph::{
     DataTypeTrait, InputId, NodeDataTrait, NodeId, NodeResponse, NodeTemplateIter,
     UserResponseTrait, WidgetValueTrait,
 };
-use serde::{Deserialize, Serialize};
-
 use blackjack_engine::{
     graph::{BlackjackValue, DataType, FilePathMode, InputValueConfig, NodeDefinitions},
     prelude::selection::SelectionExpression,
@@ -73,7 +71,7 @@ impl CustomGraphState {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Serialize, Deserialize, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub struct DataTypeUi(pub DataType); // Prevents orphan rules
 impl DataTypeTrait<CustomGraphState> for DataTypeUi {
     fn data_type_color(&self, _user_state: &mut CustomGraphState) -> egui::Color32 {
@@ -102,7 +100,7 @@ impl DataTypeTrait<CustomGraphState> for DataTypeUi {
 impl UserResponseTrait for CustomNodeResponse {}
 
 /// The node data trait can be used to insert a custom UI inside nodes
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone)]
 pub struct NodeData {
     pub op_name: String,
 }
@@ -332,7 +330,7 @@ impl NodeTemplateTrait for NodeOpName {
 }
 
 /// The widget value trait is used to determine how to display each [`ValueType`]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct ValueTypeUi(pub BlackjackValue);
 
 impl Default for ValueTypeUi {
