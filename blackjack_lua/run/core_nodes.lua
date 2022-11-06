@@ -199,6 +199,7 @@ local primitives = {
         outputs = {
             P.mesh("out_mesh"),
         },
+        gizmos = Gz.tweak_points({ "center" }),
         returns = "out_mesh",
     },
     MakeCylinder = {
@@ -215,6 +216,7 @@ local primitives = {
         outputs = {
             P.mesh("out_mesh"),
         },
+        gizmos = Gz.tweak_points({ "center" }),
         returns = "out_mesh"
     },
 }
