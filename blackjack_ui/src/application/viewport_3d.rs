@@ -366,24 +366,32 @@ impl Viewport3d {
             );
 
             self.mouse_captured = false;
-            node_gizmo_states.iterate_gizmos_for_drawing(|node_id, gizmo_idx, gizmo, has_focus| {
-                let node = &graph_editor.editor_state.graph[node_id];
-                let responses =
-                    gizmo_ui::draw_gizmo_ui_viewport(self, ui, gizmo, (node_id, gizmo_idx), node, has_focus)?;
-                let mut gizmos_changed = false;
+            node_gizmo_states.iterate_gizmos_for_drawing(
+                |node_id, gizmo_idx, gizmo, has_focus| {
+                    let node = &graph_editor.editor_state.graph[node_id];
+                    let responses = gizmo_ui::draw_gizmo_ui_viewport(
+                        self,
+                        ui,
+                        gizmo,
+                        (node_id, gizmo_idx),
+                        node,
+                        has_focus,
+                    )?;
+                    let mut gizmos_changed = false;
 
-                for response in responses {
-                    match response {
-                        GizmoViewportResponse::CaptureMouse => {
-                            self.mouse_captured = true;
-                        }
-                        GizmoViewportResponse::GizmoIsInteracted => {
-                            gizmos_changed = true;
+                    for response in responses {
+                        match response {
+                            GizmoViewportResponse::CaptureMouse => {
+                                self.mouse_captured = true;
+                            }
+                            GizmoViewportResponse::GizmoIsInteracted => {
+                                gizmos_changed = true;
+                            }
                         }
                     }
-                }
-                Ok(gizmos_changed)
-            })?;
+                    Ok(gizmos_changed)
+                },
+            )?;
         }
         Ok(())
     }

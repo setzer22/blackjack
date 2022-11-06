@@ -1218,12 +1218,7 @@ pub fn bridge_chains_ui(
     Ok(())
 }
 
-pub fn transform(
-    mesh: &HalfEdgeMesh,
-    translate: Vec3,
-    rotate: Vec3,
-    scale: Vec3,
-) -> Result<()> {
+pub fn transform(mesh: &HalfEdgeMesh, translate: Vec3, rotate: Vec3, scale: Vec3) -> Result<()> {
     let mut positions = mesh.write_positions();
     let conn = mesh.read_connectivity();
 

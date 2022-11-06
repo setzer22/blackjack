@@ -12,7 +12,13 @@ use std::{
     time::Duration,
 };
 
-use crate::{graph::{NodeDefinitions, BjkNodeId}, mesh::heightmap::HeightMap, prelude::*, graph_interpreter::ExternalParameterValues, gizmos::BlackjackGizmo};
+use crate::{
+    gizmos::BlackjackGizmo,
+    graph::{BjkNodeId, NodeDefinitions},
+    graph_interpreter::ExternalParameterValues,
+    mesh::heightmap::HeightMap,
+    prelude::*,
+};
 use mlua::Lua;
 use notify::{DebouncedEvent, Watcher};
 use slotmap::SecondaryMap;

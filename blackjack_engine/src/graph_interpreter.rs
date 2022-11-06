@@ -155,7 +155,6 @@ pub fn run_node<'lua>(
         input_map.set("__gizmos_enabled", true)?;
     }
 
-
     let node_table = lua
         .load(&(format!("require('node_library'):getNode('{op_name}')")))
         .eval::<mlua::Table>()?;
