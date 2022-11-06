@@ -112,6 +112,7 @@ pub fn draw_gizmo_ui_viewport(
                 transform_gizmo.set_from_matrix(updated_matrix);
             }
         }
+        BlackjackGizmo::None => {}
     }
 
     Ok(responses)
@@ -200,7 +201,6 @@ impl UiNodeGizmoStates {
     pub fn node_left_active(&self, n: NodeId) {
         let mut inner = self.inner.borrow_mut();
         if let Some(UiGizmoState { locked: false, .. }) = inner.gizmos.get(n) {
-            println!("Was not locked, removing gizmo state");
             inner.gizmos.remove(n);
         }
         if inner.current_focus.is_some_and_(|x| x.0 == n) {

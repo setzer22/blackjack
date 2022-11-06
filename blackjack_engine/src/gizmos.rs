@@ -162,6 +162,9 @@ mod tr_gizmo {
 #[derive(Clone, Debug)]
 pub enum BlackjackGizmo {
     Transform(TransformGizmo),
+    // This special value is sometimes returned by the UI to indicate a gizmo
+    // wasn't initialized. No gizmo should be rendered for this value.
+    None,
 }
 
 /// Boilerplate: Implement FromLua by attempting downcast of each UserData type
@@ -193,6 +196,9 @@ impl<'lua> ToLua<'lua> for BlackjackGizmo {
     fn to_lua(self, lua: &'lua Lua) -> mlua::Result<mlua::Value<'lua>> {
         match self {
             BlackjackGizmo::Transform(t) => t.to_lua(lua),
+            // The special gizmo value "None" is encoded as nil. Lua functions
+            // know that the nil value represents an uninitialized gizmo.
+            BlackjackGizmo::None => Ok(mlua::Value::Nil),
         }
     }
 }

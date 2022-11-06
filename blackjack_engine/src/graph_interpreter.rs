@@ -208,15 +208,46 @@ pub fn run_node<'lua>(
         Ok(Vec::new())
     })()?;
 
+    // TODO: Make sure we don't rely on push order in gizmo_outs below!!!
+    //
+    // When a gizmo affects parameters, the gizmo will be disabled if all the
+    // parameters are connected. Nodes can return nil from the `affected_params`
+    // function to disable this behavior.
+    let enabled_gizmos = gizmo_descriptors
+        .iter()
+        .map(|descr| {
+            if let Some(affected_params) = descr
+                .fns
+                .affected_params_fn
+                .call::<_, Option<Vec<String>>>(())?
+            {
+                for input in node.inputs.iter() {
+                    if affected_params.contains(&input.name) {
+                        match &input.kind {
+                            crate::graph::DependencyKind::External { .. } => return Ok(true),
+                            crate::graph::DependencyKind::Connection { .. } => {}
+                        }
+                    }
+                }
+                Ok(false)
+            } else {
+                Ok(true)
+            }
+        })
+        .collect::<Result<Vec<bool>>>()?;
+
     // Run pre-gizmo
-    for gz_descr in &gizmo_descriptors {
-        if let GizmoDescriptor {
-            gizmos_changed: true,
-            data: Some(gizmo_in),
-            fns: GizmoFns {
-                update_params_fn, ..
+    for it in gizmo_descriptors.iter().zip(&enabled_gizmos) {
+        if let (
+            GizmoDescriptor {
+                gizmos_changed: true,
+                data: Some(gizmo_in),
+                fns: GizmoFns {
+                    update_params_fn, ..
+                },
             },
-        } = gz_descr
+            true,
+        ) = it
         {
             // Update params
             // Patch the input map, running the gizmo function
@@ -266,12 +297,14 @@ pub fn run_node<'lua>(
     }
 
     let mut pre_op_outputs: mlua::Table = lua.create_table()?;
-    for gz_descr in &gizmo_descriptors {
-        // Run pre_op
-        merge_into(
-            &mut pre_op_outputs,
-            gz_descr.fns.pre_op_fn.call(input_map.clone())?,
-        )?;
+    for (gz_descr, enabled) in gizmo_descriptors.iter().zip(&enabled_gizmos) {
+        if *enabled {
+            // Run pre_op
+            merge_into(
+                &mut pre_op_outputs,
+                gz_descr.fns.pre_op_fn.call(input_map.clone())?,
+            )?;
+        }
     }
 
     // Run node 'op'
@@ -292,30 +325,36 @@ pub fn run_node<'lua>(
     ctx.outputs_cache.insert(node_id, outputs.clone());
 
     // Run post-gizmo
-    for gz_descr in &mut gizmo_descriptors {
-        let gizmo = gz_descr
-            .data
-            .as_mut()
-            .map(|gz| gz.clone().to_lua(lua))
-            .transpose()?
-            .unwrap_or(mlua::Value::Nil);
+    for (gz_descr, enabled) in gizmo_descriptors.iter_mut().zip(&enabled_gizmos) {
+        let updated_gizmo = enabled
+            .then(|| -> anyhow::Result<_> {
+                let gizmo = gz_descr
+                    .data
+                    .as_mut()
+                    .map(|gz| gz.clone().to_lua(lua))
+                    .transpose()?
+                    .unwrap_or(mlua::Value::Nil);
 
-        let updated_gizmo: BlackjackGizmo = gz_descr
-            .fns
-            .update_gizmos_fn
-            .call((input_map.clone(), gizmo, outputs.clone()))
-            .map_err(|err| {
-                anyhow!(
-                    "A node's gizmo outputs function should
+                gz_descr
+                    .fns
+                    .update_gizmos_fn
+                    .call::<_, BlackjackGizmo>((input_map.clone(), gizmo, outputs.clone()))
+                    .map_err(|err| {
+                        anyhow!(
+                            "A node's gizmo outputs function should
                              return a sequence of gizmos. {err}"
-                )
-            })?;
-
+                        )
+                    })
+            })
+            .transpose()?;
         ctx.gizmo_outputs
             .entry(node_id)
             .unwrap()
             .or_default()
-            .push(updated_gizmo);
+            // When gizmos are disabled, we push a `None` value. This will be
+            // converted into `nil` when that gizmo is enabled again and its
+            // value is pushed to Lua.
+            .push(updated_gizmo.unwrap_or(BlackjackGizmo::None));
     }
 
     Ok(())

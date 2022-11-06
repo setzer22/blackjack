@@ -10,7 +10,7 @@ local GizmoHelpers = {}
 --- returns a gizmo description that will allow tweaking each of these points.
 GizmoHelpers.tweak_points = function(point_params)
     local gizmo_descriptors = {}
-    for i, point_param in point_params do
+    for _, point_param in point_params do
         local gizmo_descr = {
             update_params = function(inputs, gizmo)
                 inputs[point_param] = gizmo:translation()
