@@ -6,11 +6,12 @@ use blackjack_engine::{
     graph::BjkNodeId,
     graph_interpreter::GizmoState,
 };
-use egui_node_graph::NodeId;
+use egui_gizmo::GizmoVisuals;
+use egui_node_graph::{Node, NodeId};
 use glam::Mat4;
 use slotmap::SecondaryMap;
 
-use crate::graph::graph_interop::NodeMapping;
+use crate::{graph::graph_interop::NodeMapping, prelude::graph::NodeData};
 
 use super::viewport_3d::Viewport3d;
 
@@ -32,7 +33,15 @@ pub struct UiGizmoState {
 /// by multiple places in the UI simultaneously, since both the graph and the
 /// viewport need to access it regularly.
 pub struct UiNodeGizmoStates {
-    pub gizmos: Rc<RefCell<SecondaryMap<NodeId, UiGizmoState>>>,
+    inner: Rc<RefCell<UiNodeGizmoStatesInner>>,
+}
+
+#[derive(Default)]
+struct UiNodeGizmoStatesInner {
+    gizmos: SecondaryMap<NodeId, UiGizmoState>,
+    /// The gizmo that was last interacted with. This is the one that receives
+    /// input shortcuts and shows buttons on the screen.
+    current_focus: Option<(NodeId, usize)>,
 }
 
 pub enum GizmoViewportResponse {
@@ -45,28 +54,51 @@ pub fn draw_gizmo_ui_viewport(
     ui: &mut egui::Ui,
     gizmo: &mut BlackjackGizmo,
     unique_id: impl Hash,
+    node: &Node<NodeData>,
+    has_focus: bool,
 ) -> Result<Vec<GizmoViewportResponse>> {
     let mut responses = Vec::new();
 
+    let gizmo_label = |ui: &mut egui::Ui| {
+        use slotmap::Key;
+        ui.label(format!("{} ({:?})", node.label, node.id.data()));
+    };
+
     match gizmo {
         BlackjackGizmo::Transform(transform_gizmo) => {
-            ui.allocate_ui_at_rect(viewport.viewport_rect().shrink(10.0), |ui| {
-                if ui.button("Move (G)").clicked() || ui.input().key_pressed(egui::Key::G) {
-                    transform_gizmo.gizmo_mode = TransformGizmoMode::Translate;
-                }
-                if ui.button("Rotate (R)").clicked() || ui.input().key_pressed(egui::Key::R) {
-                    transform_gizmo.gizmo_mode = TransformGizmoMode::Rotate;
-                }
-                if ui.button("Scale (S)").clicked() || ui.input().key_pressed(egui::Key::S) {
-                    transform_gizmo.gizmo_mode = TransformGizmoMode::Scale;
-                }
-            });
+            if has_focus {
+                ui.allocate_ui_at_rect(viewport.viewport_rect().shrink(10.0), |ui| {
+                    gizmo_label(ui);
+                    if ui.button("Move (G)").clicked() || ui.input().key_pressed(egui::Key::G) {
+                        transform_gizmo.gizmo_mode = TransformGizmoMode::Translate;
+                    }
+                    if ui.button("Rotate (R)").clicked() || ui.input().key_pressed(egui::Key::R) {
+                        transform_gizmo.gizmo_mode = TransformGizmoMode::Rotate;
+                    }
+                    if ui.button("Scale (S)").clicked() || ui.input().key_pressed(egui::Key::S) {
+                        transform_gizmo.gizmo_mode = TransformGizmoMode::Scale;
+                    }
+                });
+            }
+
+            let mut visuals = GizmoVisuals::default();
+            visuals.gizmo_size *= 0.8;
+            if !has_focus {
+                visuals.gizmo_size *= 0.8;
+                visuals.stroke_width *= 0.8;
+                visuals.inactive_alpha *= 0.6;
+                visuals.highlight_alpha *= 0.6;
+            } else {
+                visuals.inactive_alpha *= 1.2;
+                visuals.highlight_alpha *= 1.2;
+            }
 
             let gizmo = egui_gizmo::Gizmo::new(unique_id)
                 .view_matrix(viewport.view_matrix().to_cols_array_2d())
                 .projection_matrix(viewport.projection_matrix().to_cols_array_2d())
                 .model_matrix(transform_gizmo.matrix().to_cols_array_2d())
                 .viewport(viewport.viewport_rect())
+                .visuals(visuals)
                 .mode(match transform_gizmo.gizmo_mode {
                     TransformGizmoMode::Translate => egui_gizmo::GizmoMode::Translate,
                     TransformGizmoMode::Rotate => egui_gizmo::GizmoMode::Rotate,
@@ -87,37 +119,38 @@ pub fn draw_gizmo_ui_viewport(
 impl UiNodeGizmoStates {
     pub fn init() -> Self {
         Self {
-            gizmos: Default::default(),
+            inner: Default::default(),
         }
     }
 
     pub fn share(&self) -> Self {
         Self {
-            gizmos: Rc::clone(&self.gizmos),
+            inner: Rc::clone(&self.inner),
         }
     }
 
     /// Returns a map suitable to be sent to blackjack_engine's run_node function
     pub fn to_bjk_data(&self, mapping: &NodeMapping) -> SecondaryMap<BjkNodeId, GizmoState> {
         let mut result = SecondaryMap::new();
-        let gizmos = self.gizmos.borrow();
-        for (node_id, gizmo_ui) in &*gizmos {
+        let inner = &self.inner.borrow();
+        for (node_id, gizmo_ui) in &inner.gizmos {
             result.insert(mapping[node_id], gizmo_ui.gizmo_state.clone());
         }
         result
     }
 
-    /// Executes the provided fallible function for each of the active gizmos
-    /// for every node in the graph.
+    /// Executes the provided fallible function for each of the active and
+    /// visible gizmos for every node in the graph.
     ///
     /// The provided callback `f` must return a boolean indicating whether the
     /// specific gizmo was interacted with during the frame.
-    pub fn for_each_gizmo_mut(
+    pub fn iterate_gizmos_for_drawing(
         &mut self,
-        mut f: impl FnMut(NodeId, usize, &mut BlackjackGizmo) -> Result<bool>,
+        mut f: impl FnMut(NodeId, usize, &mut BlackjackGizmo, bool) -> Result<bool>,
     ) -> Result<()> {
-        let mut gizmos = self.gizmos.borrow_mut();
-        for (node_id, ui_state) in &mut *gizmos {
+        let mut inner = self.inner.borrow_mut();
+        let mut current_focus = inner.current_focus;
+        for (node_id, ui_state) in &mut inner.gizmos {
             for (idx, g) in ui_state
                 .gizmo_state
                 .active_gizmos
@@ -127,10 +160,18 @@ impl UiNodeGizmoStates {
             {
                 // Skip running for invisible gizmos
                 if ui_state.visible {
-                    ui_state.gizmo_state.gizmos_changed = f(node_id, idx, g)?;
+                    let has_focus = current_focus
+                        .map(|x| x.0 == node_id && x.1 == idx)
+                        .unwrap_or(false);
+                    let interacted = f(node_id, idx, g, has_focus)?;
+                    ui_state.gizmo_state.gizmos_changed = interacted;
+                    if interacted {
+                        current_focus = Some((node_id, idx));
+                    }
                 }
             }
         }
+        inner.current_focus = current_focus;
         Ok(())
     }
 
@@ -140,15 +181,15 @@ impl UiNodeGizmoStates {
         mut updated_gizmos: SecondaryMap<BjkNodeId, Vec<BlackjackGizmo>>,
         mapping: &NodeMapping,
     ) -> Result<()> {
-        let mut gizmos = self.gizmos.borrow_mut();
+        let mut inner = self.inner.borrow_mut();
 
         // Reset the visible flag for all the nodes. We set it back if we had an
         // update for this node during the update.
-        for (_, ui_state) in &mut *gizmos {
+        for (_, ui_state) in &mut inner.gizmos {
             ui_state.visible = false;
         }
 
-        for (node_id, ui_state) in &mut *gizmos {
+        for (node_id, ui_state) in &mut inner.gizmos {
             if let Some(updated) = updated_gizmos.remove(mapping[node_id]) {
                 ui_state.gizmo_state.active_gizmos = Some(updated);
                 ui_state.visible = true;
@@ -158,17 +199,20 @@ impl UiNodeGizmoStates {
     }
 
     pub fn node_left_active(&self, n: NodeId) {
-        let mut gizmos = self.gizmos.borrow_mut();
-        if let Some(UiGizmoState { locked: false, .. }) = gizmos.get(n) {
+        let mut inner = self.inner.borrow_mut();
+        if let Some(UiGizmoState { locked: false, .. }) = inner.gizmos.get(n) {
             println!("Was not locked, removing gizmo state");
-            gizmos.remove(n);
+            inner.gizmos.remove(n);
+        }
+        if inner.current_focus.map(|x| x.0 == n).unwrap_or(false) {
+            inner.current_focus = None;
         }
     }
 
     pub fn node_is_active(&self, n: NodeId) {
-        let mut gizmos = self.gizmos.borrow_mut();
-        if gizmos.get(n).is_none() {
-            gizmos.insert(
+        let mut inner = self.inner.borrow_mut();
+        if inner.gizmos.get(n).is_none() {
+            inner.gizmos.insert(
                 n,
                 UiGizmoState {
                     gizmo_state: GizmoState::default(),
@@ -177,16 +221,21 @@ impl UiNodeGizmoStates {
                 },
             );
         }
+        // We use 0 here, because it's a good default, since many nodes show a
+        // single gizmo. Even if the node returned a 0-length gizmo list, that
+        // won't cause an OOB access. The focus would behave as if it was None
+        // in that case.
+        inner.current_focus = Some((n, 0));
     }
 
     pub fn lock_gizmos_for(&self, n: NodeId) {
-        let mut gizmos = self.gizmos.borrow_mut();
-        match gizmos.get_mut(n) {
+        let mut inner = self.inner.borrow_mut();
+        match inner.gizmos.get_mut(n) {
             Some(ui_state) => {
                 ui_state.locked = true;
             }
             None => {
-                gizmos.insert(
+                inner.gizmos.insert(
                     n,
                     UiGizmoState {
                         gizmo_state: GizmoState::default(),
@@ -196,26 +245,33 @@ impl UiNodeGizmoStates {
                 );
             }
         }
+        inner.current_focus = Some((n, 0));
     }
 
     pub fn unlock_gizmos_for(&self, n: NodeId, active: Option<NodeId>) {
-        let mut gizmos = self.gizmos.borrow_mut();
+        let mut inner = self.inner.borrow_mut();
         if active.map(|a| a != n).unwrap_or(true) {
-            gizmos.remove(n);
-        } else if let Some(ui_state) = gizmos.get_mut(n) {
+            inner.gizmos.remove(n);
+            if inner.current_focus.map(|x| x.0 == n).unwrap_or(false) {
+                inner.current_focus = None;
+            }
+        } else if let Some(ui_state) = inner.gizmos.get_mut(n) {
             ui_state.locked = false;
         }
     }
 
     pub fn reset_for_hot_reload(&self) {
-        for (_, gizmo) in &mut *self.gizmos.borrow_mut() {
+        let mut inner = self.inner.borrow_mut();
+        for (_, gizmo) in &mut inner.gizmos {
             gizmo.gizmo_state = GizmoState::default();
         }
+        inner.current_focus = None;
     }
 
     pub fn is_node_locked(&self, n: NodeId) -> bool {
-        self.gizmos
+        self.inner
             .borrow()
+            .gizmos
             .get(n)
             .map(|x| x.locked)
             .unwrap_or(false)

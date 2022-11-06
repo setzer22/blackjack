@@ -68,6 +68,7 @@ impl RootViewport {
                         .get_mut(&OffscreenViewport::Viewport3d)
                         .unwrap(),
                     payload.app_context.renderable_thing.as_ref(),
+                    &payload.graph_editor,
                     &mut payload.app_context.node_gizmo_states,
                 ) {
                     // TODO: Do something better for error reporting

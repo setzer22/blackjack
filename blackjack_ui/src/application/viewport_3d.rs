@@ -12,6 +12,7 @@ use crate::{prelude::*, rendergraph};
 
 use super::app_viewport::AppViewport;
 use super::gizmo_ui::{self, GizmoViewportResponse, UiNodeGizmoStates};
+use super::graph_editor::GraphEditor;
 
 /// A generic lerper
 mod lerp;
@@ -250,6 +251,7 @@ impl Viewport3d {
         ui: &mut egui::Ui,
         offscreen_viewport: &mut AppViewport,
         renderable_thing: Option<&RenderableThing>,
+        graph_editor: &GraphEditor,
         node_gizmo_states: &mut UiNodeGizmoStates,
     ) -> Result<()> {
         ui.vertical(|ui| {
@@ -364,9 +366,10 @@ impl Viewport3d {
             );
 
             self.mouse_captured = false;
-            node_gizmo_states.for_each_gizmo_mut(|node_id, gizmo_idx, gizmo| {
+            node_gizmo_states.iterate_gizmos_for_drawing(|node_id, gizmo_idx, gizmo, has_focus| {
+                let node = &graph_editor.editor_state.graph[node_id];
                 let responses =
-                    gizmo_ui::draw_gizmo_ui_viewport(self, ui, gizmo, (node_id, gizmo_idx))?;
+                    gizmo_ui::draw_gizmo_ui_viewport(self, ui, gizmo, (node_id, gizmo_idx), node, has_focus)?;
                 let mut gizmos_changed = false;
 
                 for response in responses {
