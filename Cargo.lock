@@ -59,7 +59,6 @@ dependencies = [
  "cfg-if 1.0.0",
  "getrandom 0.2.7",
  "once_cell",
- "serde",
  "version_check",
 ]
 
@@ -411,7 +410,7 @@ name = "blackjack_commons"
 version = "0.1.0"
 dependencies = [
  "float-ord",
- "glam 0.21.3",
+ "glam",
  "itertools",
  "smallvec",
 ]
@@ -428,7 +427,7 @@ dependencies = [
  "derive_more",
  "dyn-clone",
  "float-ord",
- "glam 0.21.3",
+ "glam",
  "inventory",
  "itertools",
  "mlua",
@@ -440,6 +439,7 @@ dependencies = [
  "num-traits",
  "profiling",
  "rayon",
+ "ron",
  "rstar",
  "serde",
  "slotmap",
@@ -455,12 +455,12 @@ dependencies = [
  "anyhow",
  "blackjack_engine",
  "gdnative",
- "glam 0.21.3",
+ "glam",
  "lazy_static",
  "mlua",
  "once_cell",
  "parking_lot",
- "ron 0.7.1",
+ "ron",
  "serde",
  "slotmap",
 ]
@@ -488,12 +488,13 @@ dependencies = [
  "derive_more",
  "dyn-clone",
  "egui",
+ "egui-gizmo",
  "egui-wgpu",
  "egui-winit",
  "egui_node_graph",
  "env_logger",
  "float-ord",
- "glam 0.21.3",
+ "glam",
  "glsl-include",
  "image 0.24.4",
  "itertools",
@@ -510,9 +511,8 @@ dependencies = [
  "rend3",
  "rend3-routine",
  "rfd",
- "ron 0.7.1",
+ "ron",
  "rstar",
- "serde",
  "slotmap",
  "smallvec",
  "spin_sleep",
@@ -1097,9 +1097,16 @@ dependencies = [
  "ahash 0.8.0",
  "epaint",
  "nohash-hasher",
- "ron 0.8.0",
- "serde",
  "tracing",
+]
+
+[[package]]
+name = "egui-gizmo"
+version = "0.8.1"
+source = "git+https://github.com/setzer22/egui-gizmo?rev=a3415a075fc2b2ecd3b26cdef9cb7c1857d77478#a3415a075fc2b2ecd3b26cdef9cb7c1857d77478"
+dependencies = [
+ "egui",
+ "glam",
 ]
 
 [[package]]
@@ -1131,10 +1138,9 @@ dependencies = [
 [[package]]
 name = "egui_node_graph"
 version = "0.3.0"
-source = "git+https://github.com/setzer22/egui_node_graph?rev=75308d0e72dd604339cd864173ca31f1bc7a3fc7#75308d0e72dd604339cd864173ca31f1bc7a3fc7"
+source = "git+https://github.com/setzer22/egui_node_graph?rev=8706908d13b8a42e22784afe17fbc3a2ead13047#8706908d13b8a42e22784afe17fbc3a2ead13047"
 dependencies = [
  "egui",
- "serde",
  "slotmap",
  "smallvec",
  "thiserror",
@@ -1152,7 +1158,6 @@ version = "0.19.0"
 source = "git+https://github.com/setzer22/egui?branch=egui_0_19_plus_pr_2051#45d9c8f7ceded048631c8fc73f748bfd53b8cef4"
 dependencies = [
  "bytemuck",
- "serde",
 ]
 
 [[package]]
@@ -1222,7 +1227,6 @@ dependencies = [
  "emath",
  "nohash-hasher",
  "parking_lot",
- "serde",
 ]
 
 [[package]]
@@ -1530,9 +1534,9 @@ dependencies = [
 
 [[package]]
 name = "gdnative"
-version = "0.10.1"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4906b3b53db577dc8889779ab3f3885330da77e5524d87a684fd67e0ea000d38"
+checksum = "fb1bd3d60d6ec0ea7a2d411760c65b91c0a3413f1d974be29587ad22c1b55c92"
 dependencies = [
  "gdnative-bindings",
  "gdnative-core",
@@ -1541,9 +1545,9 @@ dependencies = [
 
 [[package]]
 name = "gdnative-bindings"
-version = "0.10.1"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b60ea424a3c68b4e8991b69456f2c327265462b70e0d8c57a6096457c966980"
+checksum = "b78ec23b0cc8c80d0671e3d7f83d22eb64a89d54162a2ecd25c051949b2926b1"
 dependencies = [
  "gdnative-core",
  "gdnative_bindings_generator",
@@ -1552,9 +1556,9 @@ dependencies = [
 
 [[package]]
 name = "gdnative-core"
-version = "0.10.1"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8046a46ae854e1773a90c917924dd5048dbc8a1ed59b7deb4c03eb5c984f5cda"
+checksum = "a6161074816da73747d1b5f8e378f2326eaa677b4603b04f8fb4f6b02cabdcbe"
 dependencies = [
  "ahash 0.8.0",
  "approx",
@@ -1562,7 +1566,7 @@ dependencies = [
  "bitflags",
  "gdnative-impl-proc-macros",
  "gdnative-sys",
- "glam 0.20.5",
+ "glam",
  "indexmap",
  "libc",
  "once_cell",
@@ -1571,9 +1575,9 @@ dependencies = [
 
 [[package]]
 name = "gdnative-derive"
-version = "0.10.1"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9cde9ac9d6d3c6918739506a5e80907bb25dcee5bf3597e002256d35f6572529"
+checksum = "8f7bcb2d777797c900e9d119f3c5df4103eead22beacf561abd3d501c65a3c81"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1582,9 +1586,9 @@ dependencies = [
 
 [[package]]
 name = "gdnative-impl-proc-macros"
-version = "0.10.1"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "40f3f0af08634792e613aabdbc74fb3af360af9dbd985ab36ef81ce787f92f93"
+checksum = "d9da318c32936217e83702d01dfe108545785cce11833e9991c2e7b7888c90de"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1593,9 +1597,9 @@ dependencies = [
 
 [[package]]
 name = "gdnative-sys"
-version = "0.10.1"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e816ffa3fa62fd2f26f4162520690682f94016ff417b80281cf2a7c00f02475"
+checksum = "e572a677fcaf5e922c490e8f4a88f756a8d2a0b929fedd893793c22bcea914d1"
 dependencies = [
  "bindgen",
  "libc",
@@ -1607,9 +1611,9 @@ dependencies = [
 
 [[package]]
 name = "gdnative_bindings_generator"
-version = "0.10.1"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "45c3f73f060789b1ac94e775cc0c2277a9e7968b80745cbf8dd08e68e95ef2f0"
+checksum = "513388095128fee3360b9fae469383edcd424eaac1d6777c1dac66fcbddc4e84"
 dependencies = [
  "heck",
  "miniserde",
@@ -1694,12 +1698,6 @@ name = "gimli"
 version = "0.26.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "22030e2c5a68ec659fde1e949a745124b48e6fa8b045b7ed5bd1fe4ccc5c4e5d"
-
-[[package]]
-name = "glam"
-version = "0.20.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f43e957e744be03f5801a55472f593d43fabdebf25a4585db250f04d86b1675f"
 
 [[package]]
 name = "glam"
@@ -3210,7 +3208,7 @@ dependencies = [
  "bumpalo",
  "bytemuck",
  "flume",
- "glam 0.21.3",
+ "glam",
  "indexmap",
  "list-any",
  "log",
@@ -3239,7 +3237,7 @@ dependencies = [
  "bitflags",
  "bytemuck",
  "flume",
- "glam 0.21.3",
+ "glam",
  "include_dir",
  "log",
  "ordered-float",
@@ -3256,7 +3254,7 @@ version = "0.3.0"
 source = "git+https://github.com/Cakefish/rend3.git?rev=dbdfc32264a1fcab3a15c698c4fc474344f10aab#dbdfc32264a1fcab3a15c698c4fc474344f10aab"
 dependencies = [
  "bitflags",
- "glam 0.21.3",
+ "glam",
  "thiserror",
  "wgpu-types",
 ]
@@ -3317,17 +3315,6 @@ name = "ron"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "88073939a61e5b7680558e6be56b419e208420c2adb92be54921fa6b72283f1a"
-dependencies = [
- "base64",
- "bitflags",
- "serde",
-]
-
-[[package]]
-name = "ron"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "300a51053b1cb55c80b7a9fde4120726ddf25ca241a1cbb926626f62fb136bff"
 dependencies = [
  "base64",
  "bitflags",

@@ -4,35 +4,38 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+use std::cell::{Ref, RefCell};
 use std::collections::BTreeMap;
+use std::ops::Deref;
+use std::rc::Rc;
 
 use crate::prelude::*;
 use crate::{lua_engine::lua_stdlib::LVec3, mesh::halfedge::selection::SelectionExpression};
 use anyhow::{anyhow, Result};
-use mlua::{Table, ToLua};
-use serde::{Deserialize, Serialize};
+use mlua::{FromLua, Table, ToLua};
 use slotmap::SlotMap;
 
-/// Defines helper functions to load old file formats with serde. This allows
-/// some variation in the structs types without breaking the `blj` file format.
-mod serde_compat;
+/// The core `bjk` file format
+pub mod serialization;
 
 pub struct LuaExpression(pub String);
 
 /// A node has inputs (dependencies) that need to be met. A dependency can be
 /// met in three different ways.
+#[derive(Debug)]
 pub enum DependencyKind {
-    /// Executing an arbitrary lua expression (computed).
-    Computed(LuaExpression),
     /// Taking the value of an external parameter, from the inputs to the graph
     /// function itself.
-    External,
+    ///
+    /// When promoted, the connection stores the parameter name that will be
+    /// shown to the user of the graph.
+    External { promoted: Option<String> },
     /// Taking the value from another node's outputs.
     Connection { node: BjkNodeId, param_name: String },
 }
 
 /// The data types available for graph parameters
-#[derive(Copy, Clone, PartialEq, Eq, Serialize, Deserialize, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum DataType {
     Vector,
     Scalar,
@@ -50,25 +53,27 @@ impl DataType {
             DataType::Vector | DataType::Scalar | DataType::Selection | DataType::String => false,
         }
     }
+
+    /// Returns whether the given value is valid for this data type
+    pub fn is_valid_value(&self, value: &BlackjackValue) -> bool {
+        match self {
+            DataType::Vector => matches!(value, BlackjackValue::Vector(_)),
+            DataType::Scalar => matches!(value, BlackjackValue::Scalar(_)),
+            DataType::Selection => matches!(value, BlackjackValue::Selection(_, _)),
+            DataType::String => matches!(value, BlackjackValue::String(_)),
+            DataType::Mesh => matches!(value, BlackjackValue::None),
+            DataType::HeightMap => matches!(value, BlackjackValue::None),
+        }
+    }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub enum BlackjackValue {
     Vector(glam::Vec3),
     Scalar(f32),
     String(String),
     Selection(String, Option<SelectionExpression>),
     None,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BlackjackParameter {
-    pub value: BlackjackValue,
-    pub config: InputValueConfig,
-    /// Stores the name of the promoted parameter, if this parameter is
-    /// promoted. A promoted parameter will be visible on external editors, such
-    /// as the ones offered by game engine integrations.
-    pub promoted_name: Option<String>,
 }
 
 impl<'lua> ToLua<'lua> for BlackjackValue {
@@ -83,8 +88,36 @@ impl<'lua> ToLua<'lua> for BlackjackValue {
     }
 }
 
+impl<'lua> FromLua<'lua> for BlackjackValue {
+    fn from_lua(lua_value: mlua::Value<'lua>, _lua: &'lua mlua::Lua) -> mlua::Result<Self> {
+        let type_name = lua_value.type_name();
+        match lua_value {
+            mlua::Value::Nil => return Ok(BlackjackValue::None),
+            mlua::Value::Integer(i) => return Ok(BlackjackValue::Scalar(i as f32)),
+            mlua::Value::Number(n) => return Ok(BlackjackValue::Scalar(n as f32)),
+            mlua::Value::Vector(x, y, z) => {
+                return Ok(BlackjackValue::Vector(glam::Vec3::new(x, y, z)))
+            }
+            mlua::Value::String(s) => return Ok(BlackjackValue::String(s.to_str()?.into())),
+            mlua::Value::UserData(u) => {
+                if u.is::<SelectionExpression>() {
+                    let sel = u.borrow::<SelectionExpression>()?.clone();
+                    return Ok(BlackjackValue::Selection(sel.unparse(), Some(sel)));
+                }
+            }
+            _ => {}
+        }
+        Err(mlua::Error::FromLuaConversionError {
+            from: type_name,
+            to: "BlackjackValue",
+            message: Some("Could not convert to blackjack value".into()),
+        })
+    }
+}
+
 /// An input parameter in the graph. Inputs represent data dependencies that
 /// need to be met before executing a node.
+#[derive(Debug)]
 pub struct InputParameter {
     pub name: String,
     pub data_type: DataType,
@@ -93,12 +126,14 @@ pub struct InputParameter {
 
 /// An output parameter. Outputs are pieces of data produced by a node, which
 /// can be used to feed into another nodes as inputs.
+#[derive(Debug)]
 pub struct Output {
     pub name: String,
     pub data_type: DataType,
 }
 
 /// A node in the blackjack graph
+#[derive(Debug)]
 pub struct BjkNode {
     pub op_name: String,
     /// When this node is the target of a graph, this stores the name of the
@@ -122,21 +157,19 @@ impl BjkNodeId {
 #[derive(Default)]
 pub struct BjkGraph {
     pub nodes: SlotMap<BjkNodeId, BjkNode>,
+    /// When the graph is run, this is the node that will be executed by default.
+    pub default_node: Option<BjkNodeId>,
 }
 
 /// Specifies the ways in which the file picker dialog for an
 /// `InputValueConfig::FilePath` can work.
-#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone)]
 pub enum FilePathMode {
     /// The file picker will only let the user select an existing file
     Open,
     /// The file picker will let the user choose a new file or an existing one,
     /// with an overwrite warning.
     Save,
-}
-
-fn default_file_path_mode() -> FilePathMode {
-    FilePathMode::Save // Kept for backwards compatibility
 }
 
 /// The settings to describe an input value in a node template. This information
@@ -148,22 +181,17 @@ fn default_file_path_mode() -> FilePathMode {
 /// validation information. There is not a 1:1 correspondence between data types
 /// and config variants. Some variants (e.g. `Enum`, `FilePath`) are special cases
 /// of some datatype (i.e. `String`).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub enum InputValueConfig {
     Vector {
         default: glam::Vec3,
     },
     Scalar {
         default: f32,
-        #[serde(deserialize_with = "serde_compat::de_option_or_f32")]
         min: Option<f32>,
-        #[serde(deserialize_with = "serde_compat::de_option_or_f32")]
         max: Option<f32>,
-        #[serde(default)]
         soft_min: Option<f32>,
-        #[serde(default)]
         soft_max: Option<f32>,
-        #[serde(default)]
         num_decimals: Option<u32>,
     },
     Selection {
@@ -175,7 +203,6 @@ pub enum InputValueConfig {
     },
     FilePath {
         default_path: Option<String>,
-        #[serde(default = "default_file_path_mode")]
         file_path_mode: FilePathMode,
     },
     String {
@@ -192,6 +219,76 @@ pub struct InputDefinition {
     pub name: String,
     pub data_type: DataType,
     pub config: InputValueConfig,
+}
+
+impl DataType {
+    /// Returns the default value for this data type. This does not take
+    /// parameter configuration into account. For that, use
+    /// `InputDefinition::default_value`
+    pub fn default_value(&self) -> BlackjackValue {
+        match self {
+            DataType::Vector => BlackjackValue::Vector(Vec3::default()),
+            DataType::Scalar => BlackjackValue::Scalar(0.0),
+            DataType::Selection => {
+                BlackjackValue::Selection("".into(), Some(SelectionExpression::None))
+            }
+            DataType::String => BlackjackValue::String("".into()),
+            DataType::Mesh => BlackjackValue::None,
+            DataType::HeightMap => BlackjackValue::None,
+        }
+    }
+}
+
+impl InputDefinition {
+    pub fn default_value(&self) -> BlackjackValue {
+        let default_string = || BlackjackValue::String("".into());
+
+        match (&self.data_type, &self.config) {
+            (DataType::Vector, InputValueConfig::Vector { default }) => {
+                BlackjackValue::Vector(*default)
+            }
+            (DataType::Scalar, InputValueConfig::Scalar { default, .. }) => {
+                BlackjackValue::Scalar(*default)
+            }
+            (DataType::Selection, InputValueConfig::Selection { default_selection }) => {
+                BlackjackValue::Selection(
+                    default_selection.unparse(),
+                    Some(default_selection.clone()),
+                )
+            }
+            (DataType::Mesh, InputValueConfig::None) => BlackjackValue::None,
+            (
+                DataType::String,
+                InputValueConfig::Enum {
+                    values,
+                    default_selection,
+                },
+            ) => {
+                if let Some(default) = default_selection {
+                    values
+                        .get(*default as usize)
+                        .cloned()
+                        .map(BlackjackValue::String)
+                        .unwrap_or_else(default_string)
+                } else {
+                    default_string()
+                }
+            }
+            (DataType::String, InputValueConfig::FilePath { default_path, .. }) => default_path
+                .as_ref()
+                .cloned()
+                .map(BlackjackValue::String)
+                .unwrap_or_else(default_string),
+            (DataType::String, InputValueConfig::String { default_text, .. }) => {
+                BlackjackValue::String(default_text.clone())
+            }
+            (DataType::String, InputValueConfig::LuaString {}) => default_string(),
+            (DataType::HeightMap, InputValueConfig::None) => BlackjackValue::None,
+
+            // Fallback: When config is not valud, return some valid value
+            (data_type, _) => data_type.default_value(),
+        }
+    }
 }
 
 /// The definition of an output parameter inside the node library
@@ -220,11 +317,50 @@ pub struct NodeDefinition {
     /// Executable nodes can be executed once by pressing a button. This mode of
     /// execution is used for things like file exporters.
     pub executable: bool,
+    /// This node has an available interactive gizmo.
+    pub has_gizmo: bool,
 }
+
+#[derive(Default)]
+pub struct NodeDefinitionsInner(BTreeMap<String, NodeDefinition>);
 
 /// A collection of node definitions. This struct is the Rust counterpart to the
 /// node library in Lua.
-pub struct NodeDefinitions(pub BTreeMap<String, NodeDefinition>);
+///
+/// This struct acts like a pointer with multiple ownership and interior
+/// mutability, allowing multiple locations in the codebase to store and receive
+/// updates to the node definitions when hot-reloading detects changes.
+#[derive(Default)]
+pub struct NodeDefinitions {
+    pub inner: Rc<RefCell<NodeDefinitionsInner>>,
+}
+
+impl NodeDefinitions {
+    pub fn new(inner: NodeDefinitionsInner) -> Self {
+        Self {
+            inner: Rc::new(RefCell::new(inner)),
+        }
+    }
+    pub fn share(&self) -> Self {
+        Self {
+            inner: Rc::clone(&self.inner),
+        }
+    }
+    pub fn node_names(&self) -> Vec<String> {
+        self.inner.borrow().0.keys().cloned().collect()
+    }
+    pub fn node_def(&self, op_name: &str) -> Option<impl Deref<Target = NodeDefinition> + '_> {
+        let guard = self.inner.borrow();
+        if guard.0.contains_key(op_name) {
+            Some(Ref::map(guard, |x| x.0.get(op_name).unwrap()))
+        } else {
+            None
+        }
+    }
+    pub fn update(&self, new_data: NodeDefinitionsInner) {
+        *self.inner.borrow_mut() = new_data;
+    }
+}
 
 /// Given a string representing an input definition type (taken from a Lua
 /// file), returns the data type for that parameter.
@@ -332,19 +468,21 @@ impl NodeDefinition {
             label: table.get("label")?,
             returns: table.get::<_, Option<String>>("returns")?,
             executable: table.get::<_, Option<bool>>("executable")?.unwrap_or(false),
+            has_gizmo: table.get::<_, mlua::Value>("gizmos")? != mlua::Value::Nil,
         })
     }
 
     /// Loads a group of [`NodeDefinitions`] from a Lua table
-    pub fn load_nodes_from_table(table: Table) -> Result<NodeDefinitions> {
-        table
-            .pairs::<String, Table>()
-            .map(|pair| {
-                let (k, v) = pair?;
-                Ok((k.clone(), NodeDefinition::from_lua(k, v)?))
-            })
-            .collect::<Result<_>>()
-            .map(NodeDefinitions)
+    pub fn load_nodes_from_table(table: Table) -> Result<NodeDefinitionsInner> {
+        Ok(NodeDefinitionsInner(
+            table
+                .pairs::<String, Table>()
+                .map(|pair| {
+                    let (k, v) = pair?;
+                    Ok((k.clone(), NodeDefinition::from_lua(k, v)?))
+                })
+                .collect::<Result<_>>()?,
+        ))
     }
 }
 
@@ -353,6 +491,7 @@ impl BjkGraph {
     pub fn new() -> Self {
         Self {
             nodes: Default::default(),
+            default_node: None,
         }
     }
     /// Adds a new empty node to the graph
@@ -371,6 +510,7 @@ impl BjkGraph {
         node_id: BjkNodeId,
         name: impl ToString,
         data_type: DataType,
+        promoted: Option<String>,
     ) -> Result<()> {
         let name = name.to_string();
         let node = &mut self.nodes[node_id];
@@ -380,7 +520,7 @@ impl BjkGraph {
             self.nodes[node_id].inputs.push(InputParameter {
                 name,
                 data_type,
-                kind: DependencyKind::External,
+                kind: DependencyKind::External { promoted },
             });
         }
         Ok(())

@@ -1218,12 +1218,7 @@ pub fn bridge_chains_ui(
     Ok(())
 }
 
-pub fn transform(
-    mesh: &mut HalfEdgeMesh,
-    translate: Vec3,
-    rotate: Vec3,
-    scale: Vec3,
-) -> Result<()> {
+pub fn transform(mesh: &HalfEdgeMesh, translate: Vec3, rotate: Vec3, scale: Vec3) -> Result<()> {
     let mut positions = mesh.write_positions();
     let conn = mesh.read_connectivity();
 
@@ -1532,7 +1527,7 @@ pub fn copy_to_points(points: &HalfEdgeMesh, cpy_mesh: &HalfEdgeMesh) -> Result<
         drop(cpy_instance_conn);
         drop(instance_idx_ch);
 
-        transform(&mut cpy_instance, position_ch[v], rotate, scale)?;
+        transform(&cpy_instance, position_ch[v], rotate, scale)?;
         result.merge_with(&cpy_instance);
     }
 
@@ -1933,13 +1928,13 @@ pub fn edit_geometry(
         .fold(Vec3::ZERO, |v, v2| v + v2)
         / vertices.len() as f32;
 
-    let transform_matrix = Mat4::from_translation(-centroid)
+    let transform_matrix = Mat4::from_translation(centroid)
         * Mat4::from_scale_rotation_translation(
             scale,
             Quat::from_euler(EulerRot::XYZ, rotate.x, rotate.y, rotate.z),
             translate,
         )
-        * Mat4::from_translation(centroid);
+        * Mat4::from_translation(-centroid);
 
     for v in vertices {
         pos[v] = transform_matrix.transform_point3(pos[v]);

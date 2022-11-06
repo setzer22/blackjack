@@ -331,6 +331,39 @@ mod lua_api {
         #[lua(this = "read_connectivity()", map = "x.to_vec()")]
         pub fn face_edges(&self, face_id: FaceId) -> Vec<HalfEdgeId>;
 
+        #[lua]
+        pub fn face_vertices(&self, face_id: FaceId) -> Result<Vec<VertexId>> {
+            Ok(self
+                .read_connectivity()
+                .at_face(face_id)
+                .vertices()?
+                .to_vec())
+        }
+
+        /// Given a `SelectionExpression`, returns all halfedge ids in this mesh
+        /// matching it.
+        #[lua]
+        pub fn resolve_halfedge_selection_full(
+            &self,
+            selection: &SelectionExpression,
+        ) -> Result<Vec<HalfEdgeId>>;
+
+        /// Given a `SelectionExpression`, returns all vertex ids in this mesh
+        /// matching it.
+        #[lua]
+        pub fn resolve_vertex_selection_full(
+            &self,
+            selection: &SelectionExpression,
+        ) -> Result<Vec<VertexId>>;
+
+        /// Given a `SelectionExpression`, returns all face ids in this mesh
+        /// matching it.
+        #[lua]
+        pub fn resolve_face_selection_full(
+            &self,
+            selection: &SelectionExpression,
+        ) -> Result<Vec<FaceId>>;
+
         // ==== HALFEDGE GETTERS ====
 
         /// Returns the endpoint positions of the given halfedge `h`.
@@ -345,6 +378,14 @@ mod lua_api {
         #[lua]
         pub fn halfedge_vertex_id(&self, h: HalfEdgeId) -> Result<VertexId> {
             Ok(self.read_connectivity().at_halfedge(h).vertex().try_end()?)
+        }
+
+        #[lua]
+        pub fn halfedge_vertices(&self, halfedge_id: HalfEdgeId) -> Result<(VertexId, VertexId)> {
+            Ok(self
+                .read_connectivity()
+                .at_halfedge(halfedge_id)
+                .src_dst_pair()?)
         }
 
         // ==== OPS ====

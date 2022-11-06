@@ -4,10 +4,13 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-#![allow(deprecated)]
-// TODO: This is to make clippy happy
-// Need to fix #[export] -> #[method] later
-
+use blackjack_engine::graph::serialization::SerializedBjkGraph;
+use blackjack_engine::graph::BjkGraph;
+use blackjack_engine::graph::BjkNodeId;
+use blackjack_engine::graph::DependencyKind;
+use blackjack_engine::graph_interpreter::ExternalParameter;
+use blackjack_engine::graph_interpreter::ExternalParameterValues;
+use blackjack_engine::lua_engine::ProgramResult;
 use blackjack_engine::lua_engine::RenderableThing;
 use gdnative::api::Material;
 use slotmap::KeyData;
@@ -17,8 +20,6 @@ use std::sync::atomic::AtomicBool;
 
 use blackjack_engine::graph::BlackjackValue;
 use blackjack_engine::graph::InputValueConfig;
-use blackjack_engine::graph_compiler::BlackjackJackAsset;
-use blackjack_engine::graph_compiler::ExternalParamAddr;
 use blackjack_engine::lua_engine::LuaRuntime;
 use blackjack_engine::mesh::halfedge::HalfEdgeMesh;
 use blackjack_engine::prelude::selection::SelectionExpression;
@@ -46,6 +47,11 @@ impl ToVariant for JackId {
     fn to_variant(&self) -> Variant {
         self.0.as_ffi().to_variant()
     }
+}
+
+pub struct BlackjackJackAsset {
+    graph: BjkGraph,
+    params: ExternalParameterValues,
 }
 
 /// A singleton node that manages the lifetime for all the loaded jacks. This
@@ -139,6 +145,32 @@ pub enum UpdateJackResult {
 #[inherit(gd::Resource)]
 pub struct BlackjackApi {}
 
+#[derive(FromVariant, ToVariant, Debug)]
+pub struct GdExternalParameter {
+    node_id_ffi: u64,
+    param_name: String,
+}
+
+impl From<ExternalParameter> for GdExternalParameter {
+    fn from(p: ExternalParameter) -> Self {
+        use slotmap::Key;
+        Self {
+            node_id_ffi: p.node_id.data().as_ffi(),
+            param_name: p.param_name,
+        }
+    }
+}
+
+#[allow(clippy::from_over_into)] // can't do this due to orphan rules
+impl Into<ExternalParameter> for GdExternalParameter {
+    fn into(self) -> ExternalParameter {
+        ExternalParameter {
+            node_id: BjkNodeId::from(KeyData::from_ffi(self.node_id_ffi)),
+            param_name: self.param_name,
+        }
+    }
+}
+
 #[methods]
 impl BlackjackApi {
     fn new(_owner: &gd::Resource) -> Self {
@@ -151,23 +183,18 @@ impl BlackjackApi {
         runtime.map_mut(|runtime, _| f(runtime)).ok()?
     }
 
-    #[export]
-    fn ping(&self, _owner: &gd::Resource) -> String {
+    #[method]
+    fn ping(&self) -> String {
         "PONG".into()
     }
 
-    #[export]
-    fn make_jack(&self, _owner: &gd::Resource) -> Option<JackId> {
+    #[method]
+    fn make_jack(&self) -> Option<JackId> {
         Self::with_runtime(|runtime| Some(runtime.jacks.insert(None)))
     }
 
-    #[export]
-    fn set_jack(
-        &mut self,
-        _owner: &gd::Resource,
-        jack_id: JackId,
-        jack: Ref<gd::Resource>,
-    ) -> Option<bool> {
+    #[method]
+    fn set_jack(&mut self, jack_id: JackId, jack: Ref<gd::Resource>) -> Option<bool> {
         Self::with_runtime(|runtime| {
             let jack = unsafe { jack.assume_safe() };
             let contents = match jack.get("contents").dispatch() {
@@ -177,24 +204,40 @@ impl BlackjackApi {
                     return None;
                 }
             };
-            let loaded: BlackjackJackAsset = ron::from_str(&contents.to_string()).ok()?;
-            *runtime.jacks.get_mut(jack_id)? = Some(loaded);
-            Some(true)
+            let loaded = SerializedBjkGraph::load_from_string(&contents.to_string())
+                .and_then(|x| x.into_runtime());
+            match loaded {
+                Ok((rt_data, _, _)) => {
+                    if let Some(params) = rt_data.external_parameters {
+                        *runtime.jacks.get_mut(jack_id)? = Some(BlackjackJackAsset {
+                            graph: rt_data.graph,
+                            params,
+                        });
+                        Some(true)
+                    } else {
+                        godot_error!("Could not load jack. No external parameters found in file.");
+                        None
+                    }
+                }
+                Err(err) => {
+                    godot_error!("Failed to load Jack from file: {err}");
+                    None
+                }
+            }
         })
     }
 
-    #[export]
+    #[method]
     fn set_param(
         &mut self,
-        _owner: &gd::Resource,
         jack_id: JackId,
-        param_name: String,
+        param: GdExternalParameter,
         new_value: Variant,
     ) -> Option<bool> {
         Self::with_runtime(|runtime| {
             let jack = runtime.jacks.get_mut(jack_id)?.as_mut()?;
-            let value = jack.params.get_mut(&ExternalParamAddr(param_name))?;
-            match &mut value.value {
+            let mut value = jack.params.0.get_mut(&param.into())?;
+            match &mut value {
                 blackjack_engine::graph::BlackjackValue::Vector(v) => {
                     let new_v = new_value.try_to::<Vector3>().ok()?;
                     *v = Vec3::new(new_v.x, new_v.y, new_v.z);
@@ -223,22 +266,22 @@ impl BlackjackApi {
         })
     }
 
-    #[export]
-    fn get_params(&mut self, _owner: &gd::Resource, jack_id: JackId) -> Option<Variant> {
+    #[method]
+    fn get_params(&mut self, jack_id: JackId) -> Option<Variant> {
         #[derive(FromVariant, ToVariant)]
         struct ScalarDef {
             label: String,
-            addr: String,
+            addr: GdExternalParameter,
             typ: String,
             val: f32,
-            min: f32,
-            max: f32,
+            min: Option<f32>,
+            max: Option<f32>,
         }
 
         #[derive(FromVariant, ToVariant)]
         struct GenericDef {
             label: String,
-            addr: String,
+            addr: GdExternalParameter,
             typ: String,
             val: Variant,
         }
@@ -249,12 +292,45 @@ impl BlackjackApi {
             #[allow(unused_mut)]
             let mut params = VariantArray::new();
 
-            for (param_addr, value) in jack.params.iter() {
-                if let Some(param_name) = &value.promoted_name {
-                    let label = param_name.clone();
-                    let addr = param_addr.0.clone();
+            let node_definitions = &runtime.lua_runtime.node_definitions;
+            for (param_addr, value) in jack.params.0.iter() {
+                let node = &jack.graph.nodes[param_addr.node_id];
+                let node_def = node_definitions.node_def(&node.op_name);
+                if node_def.is_none() {
+                    godot_error!(
+                        "Could not get parameters for Jack. No node definition found for {}",
+                        node.op_name
+                    );
+                    return None;
+                }
+                let node_def = node_def.unwrap();
+                let param_def = node_def
+                    .inputs
+                    .iter()
+                    .find(|i| i.name == param_addr.param_name);
+                if param_def.is_none() {
+                    godot_error!(
+                        "Could not get parameters for Jack. No parameter {} found for node {:?}",
+                        param_addr.param_name,
+                        param_addr.node_id,
+                    );
+                }
+                let param_def = param_def.unwrap();
 
-                    match (&value.config, &value.value) {
+                let promoted = node
+                    .inputs
+                    .iter()
+                    .find(|x| x.name == param_addr.param_name)
+                    .and_then(|x| match &x.kind {
+                        DependencyKind::External { promoted } => promoted.clone(),
+                        _ => None,
+                    });
+
+                if let Some(param_name) = &promoted {
+                    let label = param_name.clone();
+                    let addr: GdExternalParameter = param_addr.clone().into();
+
+                    match (&param_def.config, &value) {
                         (_, BlackjackValue::Vector(v)) => params.push(GenericDef {
                             label,
                             addr,
@@ -267,8 +343,8 @@ impl BlackjackApi {
                                 addr,
                                 typ: "Scalar".into(),
                                 val: *s,
-                                min: min.unwrap_or(-f32::INFINITY),
-                                max: max.unwrap_or(f32::INFINITY),
+                                min: *min,
+                                max: *max,
                             })
                         }
                         (_, BlackjackValue::String(s)) => params.push(GenericDef {
@@ -298,21 +374,30 @@ impl BlackjackApi {
         })
     }
 
-    #[export]
+    #[method]
     fn update_jack(
         &mut self,
-        _owner: &gd::Resource,
         jack_id: JackId,
         materials: Vec<Ref<Material>>,
     ) -> Option<UpdateJackResult> {
         Self::with_runtime(|runtime| {
             let jack = runtime.jacks.get(jack_id)?.as_ref()?;
-            match blackjack_engine::lua_engine::run_program(
+
+            match blackjack_engine::graph_interpreter::run_graph(
                 &runtime.lua_runtime.lua,
-                &jack.program.lua_program,
-                &jack.params,
+                &jack.graph,
+                jack.graph
+                    .default_node
+                    .ok_or_else(|| godot_error!("Default node not set for this jack file."))
+                    .ok()?,
+                jack.params.clone(),
+                &runtime.lua_runtime.node_definitions,
+                None,
             ) {
-                Ok(RenderableThing::HalfEdgeMesh(mesh)) => {
+                Ok(ProgramResult {
+                    renderable: Some(RenderableThing::HalfEdgeMesh(mesh)),
+                    ..
+                }) => {
                     let godot_mesh = halfedge_to_godot_mesh(&mesh, materials).unwrap();
                     Some(UpdateJackResult::Ok(godot_mesh))
                 }

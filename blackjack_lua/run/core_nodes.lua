@@ -6,6 +6,8 @@
 
 local P = require("params")
 local V = require("vector_math")
+local T = require("table_helpers")
+local Gz = require("gizmo_helpers")
 local NodeLibrary = require("node_library")
 local load_function = require("utils").load_function
 
@@ -14,7 +16,9 @@ local primitives = {
     MakeBox = {
         label = "Box",
         op = function(inputs)
-            return { out_mesh = Primitives.cube(inputs.origin, inputs.size) }
+            return {
+                out_mesh = Primitives.cube(inputs.origin, inputs.size),
+            }
         end,
         inputs = {
             P.v3("origin", vector(0, 0, 0)),
@@ -23,6 +27,7 @@ local primitives = {
         outputs = {
             P.mesh("out_mesh"),
         },
+        gizmos = { Gz.tweak_point("origin") },
         returns = "out_mesh",
     },
     MakeQuad = {
@@ -41,12 +46,15 @@ local primitives = {
         outputs = {
             P.mesh("out_mesh"),
         },
+        gizmos = { Gz.tweak_point("center") },
         returns = "out_mesh",
     },
     MakeCircle = {
         label = "Circle",
         op = function(inputs)
-            return { out_mesh = Primitives.circle(inputs.center, inputs.radius, inputs.num_vertices) }
+            return {
+                out_mesh = Primitives.circle(inputs.center, inputs.radius, inputs.num_vertices),
+            }
         end,
         inputs = {
             P.v3("center", vector(0, 0, 0)),
@@ -56,12 +64,20 @@ local primitives = {
         outputs = {
             P.mesh("out_mesh"),
         },
+        gizmos = { Gz.tweak_point("center") },
         returns = "out_mesh",
     },
     MakeUVSphere = {
         label = "UV Sphere",
         op = function(inputs)
-            return { out_mesh = Primitives.uv_sphere(inputs.center, inputs.radius, inputs.segments, inputs.rings) }
+            return {
+                out_mesh = Primitives.uv_sphere(
+                    inputs.center,
+                    inputs.radius,
+                    inputs.segments,
+                    inputs.rings
+                ),
+            }
         end,
         inputs = {
             P.v3("center", vector(0, 0, 0)),
@@ -72,12 +88,15 @@ local primitives = {
         outputs = {
             P.mesh("out_mesh"),
         },
+        gizmos = { Gz.tweak_point("center") },
         returns = "out_mesh",
     },
     MakeLine = {
         label = "Line",
         op = function(inputs)
-            return { out_mesh = Primitives.line(inputs.start_point, inputs.end_point, inputs.segments) }
+            return {
+                out_mesh = Primitives.line(inputs.start_point, inputs.end_point, inputs.segments),
+            }
         end,
         inputs = {
             P.v3("start_point", vector(0, 0, 0)),
@@ -87,6 +106,7 @@ local primitives = {
         outputs = {
             P.mesh("out_mesh"),
         },
+        gizmos = { Gz.tweak_point("start_point"), Gz.tweak_point("end_point") },
         returns = "out_mesh",
     },
     MakeTerrain = {
@@ -126,7 +146,7 @@ local primitives = {
         op = function(inputs)
             local points = {}
             -- Parse the point list, separated by space
-            for point in inputs.points:gmatch('([^ \n]+)') do
+            for point in inputs.points:gmatch("([^ \n]+)") do
                 table.insert(points, V.from_string(point))
             end
             return { out_mesh = Primitives.polygon(points) }
@@ -144,7 +164,7 @@ local primitives = {
         op = function(inputs)
             local points = {}
             -- Parse the point list, separated by space
-            for point in inputs.points:gmatch('([^ \n]+)') do
+            for point in inputs.points:gmatch("([^ \n]+)") do
                 table.insert(points, V.from_string(point))
             end
             return { out_mesh = Primitives.line_from_points(points) }
@@ -159,14 +179,15 @@ local primitives = {
     },
     MakeCone = {
         label = "Cone",
-        op = function (inputs)
+        op = function(inputs)
             return {
                 out_mesh = Primitives.cone(
-                    inputs.center, 
+                    inputs.center,
                     inputs.bottom_radius,
                     inputs.top_radius,
-                    inputs.height, 
-                    inputs.num_vertices)
+                    inputs.height,
+                    inputs.num_vertices
+                ),
             }
         end,
         inputs = {
@@ -179,12 +200,20 @@ local primitives = {
         outputs = {
             P.mesh("out_mesh"),
         },
+        gizmos = { Gz.tweak_point("center") },
         returns = "out_mesh",
     },
     MakeCylinder = {
         label = "Cylinder",
-        op = function (inputs)
-            return {out_mesh = Primitives.cylinder(inputs.center, inputs.radius, inputs.height, inputs.num_vertices)}
+        op = function(inputs)
+            return {
+                out_mesh = Primitives.cylinder(
+                    inputs.center,
+                    inputs.radius,
+                    inputs.height,
+                    inputs.num_vertices
+                ),
+            }
         end,
         inputs = {
             P.v3("center", vector(0, 0, 0)),
@@ -195,7 +224,8 @@ local primitives = {
         outputs = {
             P.mesh("out_mesh"),
         },
-        returns = "out_mesh"
+        gizmos = { Gz.tweak_point("center") },
+        returns = "out_mesh",
     },
 }
 
@@ -257,7 +287,7 @@ local edit_ops = {
         inputs = {
             P.mesh("in_mesh"),
             P.selection("faces"),
-            P.scalar("amount", { default = 0.0, min = 0.0, soft_max = 1.0 }),
+            P.scalar("amount", { default = 0.0 }),
         },
         outputs = {
             P.mesh("out_mesh"),
@@ -284,7 +314,7 @@ local edit_ops = {
             local out_mesh = inputs.in_mesh:clone()
             Ops.collapse_edge(out_mesh, inputs.edge, inputs.interp)
             return { out_mesh = out_mesh }
-        end
+        end,
     },
     BridgeLoops = {
         label = "Bridge Loops",
@@ -355,7 +385,11 @@ local edit_ops = {
                 return { out_mesh = inputs.mesh:clone() }
             else
                 return {
-                    out_mesh = Ops.subdivide(inputs.mesh, inputs.iterations, inputs.technique == "catmull-clark"),
+                    out_mesh = Ops.subdivide(
+                        inputs.mesh,
+                        inputs.iterations,
+                        inputs.technique == "catmull-clark"
+                    ),
                 }
             end
         end,
@@ -395,8 +429,11 @@ local edit_ops = {
         op = function(inputs)
             local out_mesh = inputs.mesh:clone()
             Ops.transform(out_mesh, inputs.translate, inputs.rotate, inputs.scale)
-            return { out_mesh = out_mesh }
+            return {
+                out_mesh = out_mesh,
+            }
         end,
+        gizmos = { Gz.tweak_transform("translate", "rotate", "scale") },
     },
     VertexAttribTransfer = {
         label = "Vertex attribute transfer",
@@ -540,7 +577,13 @@ local edit_ops = {
     ExtrudeAlongCurve = {
         label = "Extrude along curve",
         op = function(inputs)
-            return { out_mesh = Ops.extrude_along_curve(inputs.backbone, inputs.cross_section, inputs.flip) }
+            return {
+                out_mesh = Ops.extrude_along_curve(
+                    inputs.backbone,
+                    inputs.cross_section,
+                    inputs.flip
+                ),
+            }
         end,
         inputs = {
             P.mesh("backbone"),
@@ -617,15 +660,52 @@ local edit_ops = {
     EditGeometry = {
         label = "Edit Geometry",
         op = function(inputs)
-            local kty = parse_ch_key(inputs.geometry)
             local out_mesh = inputs.mesh:clone()
-            Ops.edit_geometry(out_mesh, kty, inputs.selection, inputs.translate, inputs.rotate, inputs.scale)
+
+            -- Gizmo computation: Compute the midpoint of the group of vertices
+            -- being edited. This will be use to compute the gizmo pre-transform.
+            if inputs.__gizmos_enabled ~= nil then
+                local vertices = {}
+                if inputs.geometry == "Vertex" then
+                    vertices = out_mesh:resolve_vertex_selection_full(inputs.selection)
+                elseif inputs.geometry == "Face" then
+                    for _, face in out_mesh:resolve_face_selection_full(inputs.selection) do
+                        T.concat(vertices, out_mesh:face_vertices(face))
+                    end
+                elseif inputs.geometry == "Halfedge" then
+                    for _, edge in out_mesh:resolve_halfedge_selection_full(inputs.selection) do
+                        local x, y = out_mesh:halfedge_vertices(edge)
+                        table.insert(vertices, x)
+                        table.insert(vertices, y)
+                    end
+                end
+
+                local midpoint = vector(0, 0, 0)
+                local npoints = 0
+                for _, vertex in vertices do
+                    midpoint = midpoint + out_mesh:vertex_position(vertex)
+                    npoints = npoints + 1
+                end
+                inputs.gizmo_midpoint = midpoint / npoints
+            end
+
+            -- Call the actual op
+            local kty = parse_ch_key(inputs.geometry)
+            Ops.edit_geometry(
+                out_mesh,
+                kty,
+                inputs.selection,
+                inputs.translate,
+                inputs.rotate,
+                inputs.scale
+            )
+
             return { out_mesh = out_mesh }
         end,
         returns = "out_mesh",
         inputs = {
             P.mesh("mesh"),
-            P.enum("geometry", { "Vertex", "Face", "HalfEdge" }),
+            P.enum("geometry", { "Vertex", "Face", "Halfedge" }),
             P.selection("selection"),
             P.v3("translate", vector(0, 0, 0)),
             P.v3("rotate", vector(0, 0, 0)),
@@ -633,6 +713,14 @@ local edit_ops = {
         },
         outputs = {
             P.mesh("out_mesh"),
+        },
+        gizmos = {
+            Gz.tweak_transform(
+                "translate",
+                "rotate",
+                "scale",
+                { pre_translation_param = "gizmo_midpoint" }
+            ),
         },
     },
 }
@@ -741,7 +829,26 @@ local export = {
     },
 }
 
+-- Miscelaneous nodes
+local misc = {
+    -- A point, returning a single vector shows a tweakable gizmo
+    Point = {
+        label = "Point",
+        inputs = {
+            P.v3("point", vector(0, 0, 0)),
+        },
+        outputs = {
+            P.v3("point"),
+        },
+        op = function(inputs)
+            return { point = inputs.point }
+        end,
+        gizmos = { Gz.tweak_point("point") },
+    },
+}
+
 NodeLibrary:addNodes(primitives)
 NodeLibrary:addNodes(edit_ops)
 NodeLibrary:addNodes(math_nodes)
 NodeLibrary:addNodes(export)
+NodeLibrary:addNodes(misc)

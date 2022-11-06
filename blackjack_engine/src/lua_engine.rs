@@ -13,11 +13,15 @@ use std::{
 };
 
 use crate::{
-    graph::NodeDefinitions, graph_compiler::ExternalParameterValues, mesh::heightmap::HeightMap,
+    gizmos::BlackjackGizmo,
+    graph::{BjkNodeId, NodeDefinitions},
+    graph_interpreter::ExternalParameterValues,
+    mesh::heightmap::HeightMap,
     prelude::*,
 };
-use mlua::{Function, Lua};
+use mlua::Lua;
 use notify::{DebouncedEvent, Watcher};
+use slotmap::SecondaryMap;
 
 use self::lua_stdlib::{load_node_definitions, LuaFileIo, StdLuaFileIo};
 
@@ -45,50 +49,44 @@ pub enum RenderableThing {
     HeightMap(HeightMap),
 }
 
-pub fn run_program<'lua>(
-    lua: &'lua Lua,
-    lua_program: &str,
-    input: &ExternalParameterValues,
-) -> Result<RenderableThing> {
-    lua.load(lua_program).exec()?;
-    let values = input.make_input_table(lua)?;
-    let entry_point: Function = lua.globals().get("main")?;
-    let result = entry_point
-        .call::<_, mlua::AnyUserData>(values)
-        .map_err(|err| anyhow!("{}", err))?;
-
-    if result.is::<HalfEdgeMesh>() {
-        Ok(RenderableThing::HalfEdgeMesh(result.take()?))
-    } else if result.is::<HeightMap>() {
-        Ok(RenderableThing::HeightMap(result.take()?))
-    } else {
-        Err(anyhow::anyhow!(
-            "Object {result:?} is not a renderable thing"
-        ))
+impl RenderableThing {
+    pub fn from_lua_value(renderable: mlua::Value<'_>) -> Result<Self> {
+        match renderable {
+            mlua::Value::UserData(renderable) if renderable.is::<HalfEdgeMesh>() => {
+                Ok(RenderableThing::HalfEdgeMesh(renderable.take()?))
+            }
+            mlua::Value::UserData(renderable) if renderable.is::<HeightMap>() => {
+                Ok(RenderableThing::HeightMap(renderable.take()?))
+            }
+            _ => {
+                bail!("Object {renderable:?} is not a thing we can render.")
+            }
+        }
     }
 }
 
-/// Like `run_program`, but does not return anything and only runs the code for
-/// its side effects
-pub fn run_program_side_effects<'lua>(
-    lua: &'lua Lua,
-    lua_program: &str,
-    input: &ExternalParameterValues,
-) -> Result<()> {
-    lua.load(lua_program).exec()?;
-    let values = input.make_input_table(lua)?;
-    let entry_point: Function = lua.globals().get("main")?;
-    entry_point
-        .call::<_, mlua::Value>(values)
-        .map_err(|err| anyhow!("{}", err))?;
-    Ok(())
+/// The result of an invocation to a lua program.
+pub struct ProgramResult {
+    /// The renderable thing produced by this program to be shown on-screen.
+    pub renderable: Option<RenderableThing>,
+    /// The gizmos requested by graph nodes after an execution of this program.
+    /// If you are implementing an integration, you can ignore this field. This
+    /// field will be returned as None will be none when gizmos aren't run.
+    pub updated_gizmos: Option<SecondaryMap<BjkNodeId, Vec<BlackjackGizmo>>>,
+    /// The updated external parameters. Any node may modify its own parameters
+    /// when running its gizmo function.
+    pub updated_values: ExternalParameterValues,
+}
+
+pub struct LuaFileWatcher {
+    pub watcher: notify::RecommendedWatcher,
+    pub watcher_channel: Receiver<notify::DebouncedEvent>,
 }
 
 pub struct LuaRuntime {
     pub lua: Lua,
     pub node_definitions: NodeDefinitions,
-    pub watcher: notify::RecommendedWatcher,
-    pub watcher_channel: Receiver<notify::DebouncedEvent>,
+    pub file_watcher: Option<LuaFileWatcher>,
     pub lua_io: Arc<dyn LuaFileIo + 'static>,
 }
 
@@ -106,27 +104,35 @@ impl LuaRuntime {
         let lua = Lua::new();
         let lua_io = Arc::new(lua_io);
         lua_stdlib::load_lua_bindings(&lua, lua_io.clone())?;
-        let node_definitions = load_node_definitions(&lua, lua_io.as_ref())?;
-        let (watcher, watcher_channel) = {
-            let (tx, rx) = mpsc::channel();
-            let mut watcher = notify::watcher(tx, Duration::from_secs(1))?;
-            watcher
-                .watch(lua_io.base_folder(), notify::RecursiveMode::Recursive)
-                .unwrap();
-            (watcher, rx)
-        };
+        let node_definitions = NodeDefinitions::new(load_node_definitions(&lua, lua_io.as_ref())?);
 
         Ok(LuaRuntime {
             lua,
             node_definitions,
-            watcher,
-            watcher_channel,
+            file_watcher: None,
             lua_io,
         })
     }
 
-    pub fn watch_for_changes(&mut self) -> anyhow::Result<()> {
-        if let Ok(msg) = self.watcher_channel.try_recv() {
+    pub fn start_file_watcher(&mut self) -> Result<()> {
+        let (tx, rx) = mpsc::channel();
+        let mut watcher = notify::watcher(tx, Duration::from_secs(1))?;
+        watcher.watch(self.lua_io.base_folder(), notify::RecursiveMode::Recursive)?;
+        self.file_watcher = Some(LuaFileWatcher {
+            watcher,
+            watcher_channel: rx,
+        });
+        Ok(())
+    }
+
+    /// Watches the lua source folders for changes. Returns true when a change
+    /// was detected and the `NodeDefinitions` were successfully updated.
+    pub fn watch_for_changes(&mut self) -> anyhow::Result<bool> {
+        let file_watcher = self
+            .file_watcher
+            .as_ref()
+            .ok_or_else(|| anyhow!("File watcher was not set up."))?;
+        if let Ok(msg) = file_watcher.watcher_channel.try_recv() {
             match msg {
                 DebouncedEvent::Create(_)
                 | DebouncedEvent::Write(_)
@@ -144,11 +150,14 @@ impl LuaRuntime {
 
                     // By calling this, all code under $BLACKJACK_LUA/run will
                     // be executed and the node definitions will be reloaded.
-                    self.node_definitions = load_node_definitions(&self.lua, self.lua_io.as_ref())?;
+                    self.node_definitions
+                        .update(load_node_definitions(&self.lua, self.lua_io.as_ref())?);
                 }
                 _ => {}
             }
+            Ok(true)
+        } else {
+            Ok(false)
         }
-        Ok(())
     }
 }

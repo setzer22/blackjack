@@ -7,19 +7,18 @@
 use crate::prelude::*;
 use std::ops::Range;
 
-use serde::{Deserialize, Serialize};
 use slotmap::SlotMap;
 
 use std::fmt::Write;
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SelectionFragment {
     Group(String),
     Range(Range<u32>),
     Single(u32),
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SelectionExpression {
     All,
     None,

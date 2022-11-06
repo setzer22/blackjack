@@ -14,12 +14,13 @@ use crate::{
         point_cloud_routine::PointCloudRoutine, wireframe_routine::WireframeRoutine,
     },
 };
-use blackjack_engine::{graph_compiler::BlackjackJackAsset, lua_engine::LuaRuntime};
+use blackjack_engine::lua_engine::LuaRuntime;
 use egui_wgpu::renderer::{RenderPass, ScreenDescriptor};
 
 use self::{
-    app_viewport::AppViewport, application_context::ApplicationContext, graph_editor::GraphEditor,
-    inspector::InspectorTabs, root_ui::AppRootAction, viewport_3d::Viewport3d,
+    app_viewport::AppViewport, application_context::ApplicationContext,
+    gizmo_ui::UiNodeGizmoStates, graph_editor::GraphEditor, inspector::InspectorTabs,
+    root_ui::AppRootAction, viewport_3d::Viewport3d,
 };
 
 pub struct RootViewport {
@@ -35,8 +36,6 @@ pub struct RootViewport {
     offscreen_viewports: HashMap<OffscreenViewport, AppViewport>,
     inspector_tabs: InspectorTabs,
     diagnostics_open: bool,
-    code_viewer_open: bool,
-    code_viewer_code: Option<String>,
     lua_runtime: LuaRuntime,
     mouse_captured_by_split: bool,
 }
@@ -44,6 +43,9 @@ pub struct RootViewport {
 /// The application context is state that is global to an instance of blackjack.
 /// The currently open file and any data that is not per-viewport goes here.
 pub mod application_context;
+
+/// The gizmo logic specific to blackjack_ui
+pub mod gizmo_ui;
 
 /// The graph editor viewport. Shows an inner egui instance with zooming /
 /// panning functionality.
@@ -112,6 +114,16 @@ impl RootViewport {
         egui_winit_state.set_max_texture_side(renderer.limits.max_texture_dimension_2d as usize);
         egui_winit_state.set_pixels_per_point(scale_factor as f32);
 
+        // TODO: Hardcoded node libraries path. Read from cmd line?
+        let mut lua_runtime = LuaRuntime::initialize_with_std("./blackjack_lua/".into())
+            .unwrap_or_else(|err| panic!("Init lua should not fail. {err}"));
+        if !CLI_ARGS.disable_lua_watcher {
+            lua_runtime
+                .start_file_watcher()
+                .expect("Could not start file watcher.");
+        }
+
+        let gizmo_state = UiNodeGizmoStates::init();
         RootViewport {
             egui_winit_state,
             egui_context,
@@ -121,17 +133,19 @@ impl RootViewport {
                 pixels_per_point: scale_factor as f32,
             },
             renderpass: RenderPass::new(&renderer.device, screen_format, 1),
-            app_context: ApplicationContext::new(),
-            graph_editor: GraphEditor::new(renderer, screen_format, scale_factor as f32),
+            app_context: ApplicationContext::new(gizmo_state.share()),
+            graph_editor: GraphEditor::new(
+                renderer,
+                screen_format,
+                scale_factor as f32,
+                lua_runtime.node_definitions.share(),
+                gizmo_state.share(),
+            ),
             viewport_3d: Viewport3d::new(),
             offscreen_viewports,
             inspector_tabs: InspectorTabs::new(),
             diagnostics_open: false,
-            code_viewer_open: false,
-            code_viewer_code: None,
-            // TODO: Hardcoded node libraries path. Read from cmd line?
-            lua_runtime: LuaRuntime::initialize_with_std("./blackjack_lua/".into())
-                .unwrap_or_else(|err| panic!("Init lua should not fail. {err}")),
+            lua_runtime,
             mouse_captured_by_split: false,
         }
     }
@@ -195,8 +209,23 @@ impl RootViewport {
     pub fn update(&mut self, render_ctx: &mut RenderContext, window: &winit::window::Window) {
         let mut actions = vec![];
 
-        if let Err(err) = self.lua_runtime.watch_for_changes() {
-            println!("TODO: {}", err);
+        if !CLI_ARGS.disable_lua_watcher {
+            match self.lua_runtime.watch_for_changes() {
+                Ok(true) => {
+                    if let Err(err) = self.graph_editor.on_node_definitions_update() {
+                        println!("Error while updating graph after Lua code reload: {}", err);
+                    }
+
+                    // Reset gizmo state when code is reloaded. This helps
+                    // interactively develop gizmos, otherwise the init function
+                    // is not run again after reloading.
+                    self.app_context.node_gizmo_states.reset_for_hot_reload();
+                }
+                Ok(false) => { /* Do nothing */ }
+                Err(err) => {
+                    println!("Error while reloading Lua code: {}", err);
+                }
+            }
         }
 
         self.graph_editor.update(
@@ -233,7 +262,6 @@ impl RootViewport {
         });
 
         self.diagnostics_ui();
-        self.code_viewer_ui();
 
         actions.extend(self.app_context.update(
             &self.egui_context,
@@ -259,32 +287,18 @@ impl RootViewport {
                     &self.graph_editor.custom_state,
                     path,
                 )?;
-                Ok(())
             }
             AppRootAction::Load(path) => {
-                let (editor_state, custom_state) = serialization::load(path)?;
+                let (editor_state, custom_state) = serialization::load(
+                    path,
+                    &self.graph_editor.custom_state.node_definitions,
+                    &self.graph_editor.custom_state.gizmo_states,
+                )?;
                 self.graph_editor.editor_state = editor_state;
                 self.graph_editor.custom_state = custom_state;
-                Ok(())
-            }
-            AppRootAction::ExportJack(path) => {
-                if let Some(active_node) = self.graph_editor.custom_state.active_node {
-                    let (program, params) = self.app_context.compile_program(
-                        &self.graph_editor.editor_state,
-                        active_node,
-                        false,
-                    )?;
-                    let bga = BlackjackJackAsset { program, params };
-                    let writer = std::io::BufWriter::new(std::fs::File::create(path)?);
-                    ron::ser::to_writer_pretty(writer, &bga, ron::ser::PrettyConfig::default())?;
-                }
-                Ok(())
-            }
-            AppRootAction::SetCodeViewerCode(code) => {
-                self.code_viewer_code = Some(code);
-                Ok(())
             }
         }
+        Ok(())
     }
 
     pub fn render(&mut self, render_ctx: &mut RenderContext) {

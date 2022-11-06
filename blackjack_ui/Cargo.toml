@@ -19,18 +19,17 @@ blackjack_commons = { path = "../blackjack_commons" }
 blackjack_engine = { path = "../blackjack_engine" }
 
 # Git dependencies
-egui_node_graph = { git = "https://github.com/setzer22/egui_node_graph", rev = "75308d0e72dd604339cd864173ca31f1bc7a3fc7", features = [
-    "persistence",
-] }
+egui_node_graph = { git = "https://github.com/setzer22/egui_node_graph", rev = "8706908d13b8a42e22784afe17fbc3a2ead13047"}
 rend3 = { git = "https://github.com/Cakefish/rend3.git", rev = "dbdfc32264a1fcab3a15c698c4fc474344f10aab" }
 rend3-routine = { git = "https://github.com/Cakefish/rend3.git", rev = "dbdfc32264a1fcab3a15c698c4fc474344f10aab" }
 glsl-include = { git = "https://github.com/setzer22/glsl-include", rev = "d9b1ade" }
+egui-gizmo = { git = "https://github.com/setzer22/egui-gizmo", rev = "a3415a075fc2b2ecd3b26cdef9cb7c1857d77478" }
 
 # Crates.io crates
 egui-winit = { version = "0.19" }
 egui-wgpu = { version = "0.19" }
-egui = { version = "0.19", features = ["persistence"] }
-glam = { version = "0.21.2", features = ["serde", "bytemuck"] }
+egui = { version = "0.19" }
+glam = { version = "0.21.2", features = ["bytemuck"] }
 env_logger = { version = "0.9", default-features = false, features = [
     "termcolor",
     "atty",
@@ -38,18 +37,17 @@ env_logger = { version = "0.9", default-features = false, features = [
 winit = { version = "0.27.2" }
 wgpu = "0.13"
 pollster = "0.2"
-smallvec = { version = "1.7.0", features = ["serde"] }
+smallvec = { version = "1.7.0" }
 itertools = "0.10"
 anyhow = { version = "1.0", features = ["backtrace"] }
 bytemuck = { version = "1.7", features = ["derive"] }
-serde = { version = "1.0", features = ["derive"] }
 ron = "0.7"
 rfd = { version = "0.9.1", default-features = false, features = ["xdg-portal"] }
 float-ord = "0.3.2"
 spin_sleep = "1.0.0"
 rayon = "1.5.1"
 nonmax = "0.5"
-slotmap = { version = "1.0", features = ["serde"] }
+slotmap = { version = "1.0" }
 num-traits = "0.2.14"
 atomic_float = "0.1"
 profiling = { version = "1.0" }

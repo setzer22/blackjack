@@ -164,11 +164,6 @@ pub fn split_vertex(
             h_incoming_end
         };
 
-        if dbg {
-            dbg!(incoming.iter().position(|x| *x == h_r_v).unwrap());
-            dbg!(incoming.iter().position(|x| *x == h_l_v).unwrap());
-        }
-
         let incoming_hs: SVec<HalfEdgeId> = (h_incoming_start + 1..h_incoming_end)
             .map(|x| x % incoming.len())
             .map(|idx| incoming[idx])

@@ -4,16 +4,18 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-use crate::graph::graph_interop;
+use crate::graph::graph_interop::{self, NodeMapping};
 use crate::prelude::*;
 use anyhow::Error;
+
+use blackjack_engine::graph::BjkGraph;
+use blackjack_engine::graph_interpreter::ExternalParameterValues;
 use blackjack_engine::{
-    graph_compiler::{compile_graph, CompiledProgram, ExternalParameterValues},
     lua_engine::{LuaRuntime, RenderableThing},
     prelude::{FaceOverlayBuffers, LineBuffers, PointBuffers, VertexIndexBuffers},
 };
-use egui_node_graph::NodeId;
 
+use super::gizmo_ui::UiNodeGizmoStates;
 use super::{
     root_ui::AppRootAction,
     viewport_3d::{EdgeDrawMode, FaceDrawMode, Viewport3dSettings},
@@ -26,6 +28,9 @@ pub struct ApplicationContext {
     /// - The graph generates a program that produces it.
     /// - The 3d viewport renders it.
     pub renderable_thing: Option<RenderableThing>,
+    /// The currently active gizmos. Gizmos are returned by nodes to represent
+    /// visual objects that can be used to manipulate its parameters.
+    pub node_gizmo_states: UiNodeGizmoStates,
     /// The tree of splits at the center of application. Splits recursively
     /// partition the state either horizontally or vertically. This separation
     /// is dynamic, very similar to Blender's UI model
@@ -33,9 +38,10 @@ pub struct ApplicationContext {
 }
 
 impl ApplicationContext {
-    pub fn new() -> ApplicationContext {
+    pub fn new(gizmo_states: UiNodeGizmoStates) -> ApplicationContext {
         ApplicationContext {
             renderable_thing: None,
+            node_gizmo_states: gizmo_states,
             split_tree: SplitTree::default_tree(),
         }
     }
@@ -63,16 +69,10 @@ impl ApplicationContext {
         // objects it's drawing and clear those instead.
         render_ctx.clear_objects();
 
-        let mut actions = vec![];
-
-        match self.run_active_node(editor_state, custom_state, lua_runtime) {
-            Ok(code) => {
-                actions.push(AppRootAction::SetCodeViewerCode(code));
-            }
-            Err(err) => {
-                self.paint_errors(egui_ctx, err);
-            }
+        if let Err(err) = self.run_active_node(editor_state, custom_state, lua_runtime) {
+            self.paint_errors(egui_ctx, err);
         };
+
         if let Err(err) = self.run_side_effects(editor_state, custom_state, lua_runtime) {
             eprintln!(
                 "There was an errror executing side effect: {err}\nBacktrace:\n----------\n{}",
@@ -83,7 +83,7 @@ impl ApplicationContext {
             self.paint_errors(egui_ctx, err);
         }
 
-        actions
+        Vec::new()
     }
 
     pub fn build_and_render_mesh(
@@ -197,40 +197,53 @@ impl ApplicationContext {
         );
     }
 
-    pub fn compile_program<'lua>(
-        &'lua self,
-        editor_state: &'lua graph::GraphEditorState,
-        node: NodeId,
-        is_side_effect: bool,
-    ) -> Result<(CompiledProgram, ExternalParameterValues)> {
-        let (bjk_graph, mapping) = graph_interop::ui_graph_to_blackjack_graph(&editor_state.graph)?;
-        let final_node = mapping[node];
-        let program = compile_graph(&bjk_graph, final_node, is_side_effect)?;
-        let params = graph_interop::extract_graph_params(&editor_state.graph, &mapping, &program)?;
-
-        Ok((program, params))
+    pub fn generate_bjk_graph(
+        &self,
+        graph: &graph::Graph,
+        custom_state: &graph::CustomGraphState,
+    ) -> Result<(BjkGraph, NodeMapping, ExternalParameterValues)> {
+        let (bjk_graph, mapping) = graph_interop::ui_graph_to_blackjack_graph(graph, custom_state)?;
+        let params = graph_interop::extract_graph_params(graph, &bjk_graph, &mapping)?;
+        Ok((bjk_graph, mapping, params))
     }
 
     // Returns the compiled lua code
     pub fn run_active_node(
         &mut self,
-        editor_state: &graph::GraphEditorState,
+        editor_state: &mut graph::GraphEditorState,
         custom_state: &mut graph::CustomGraphState,
         lua_runtime: &LuaRuntime,
-    ) -> Result<String> {
+    ) -> Result<()> {
         if let Some(active) = custom_state.active_node {
-            let (program, params) = self.compile_program(editor_state, active, false)?;
-            let mesh = blackjack_engine::lua_engine::run_program(
+            let (bjk_graph, mapping, params) =
+                self.generate_bjk_graph(&editor_state.graph, custom_state)?;
+            let gizmos = self.node_gizmo_states.to_bjk_data(&mapping);
+            let program_result = blackjack_engine::graph_interpreter::run_graph(
                 &lua_runtime.lua,
-                &program.lua_program,
-                &params,
+                &bjk_graph,
+                mapping[active],
+                params,
+                &lua_runtime.node_definitions,
+                Some(gizmos),
             )?;
-            self.renderable_thing = Some(mesh);
-            Ok(program.lua_program)
+
+            self.renderable_thing = program_result.renderable;
+            if let Some(updated_gizmos) = program_result.updated_gizmos {
+                self.node_gizmo_states
+                    .update_gizmos(updated_gizmos, &mapping)?;
+            }
+
+            // Running gizmos returns a set of updated values, we need to
+            // refresh the UI graph values with those here.
+            graph_interop::set_parameters_from_external_values(
+                &mut editor_state.graph,
+                program_result.updated_values,
+                mapping,
+            )?;
         } else {
             self.renderable_thing = None;
-            Ok("".into())
         }
+        Ok(())
     }
 
     pub fn run_side_effects(
@@ -240,21 +253,19 @@ impl ApplicationContext {
         lua_runtime: &LuaRuntime,
     ) -> Result<()> {
         if let Some(side_effect) = custom_state.run_side_effect.take() {
-            let (program, params) = self.compile_program(editor_state, side_effect, true)?;
+            let (bjk_graph, mapping, params) =
+                self.generate_bjk_graph(&editor_state.graph, custom_state)?;
             // We ignore the result. The program is only executed to produce a
             // side effect (e.g. exporting a mesh as OBJ)
-            blackjack_engine::lua_engine::run_program_side_effects(
+            let _ = blackjack_engine::graph_interpreter::run_graph(
                 &lua_runtime.lua,
-                &program.lua_program,
-                &params,
+                &bjk_graph,
+                mapping[side_effect],
+                params,
+                &lua_runtime.node_definitions,
+                None,
             )?;
         }
         Ok(())
-    }
-}
-
-impl Default for ApplicationContext {
-    fn default() -> Self {
-        Self::new()
     }
 }

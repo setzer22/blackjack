@@ -6,21 +6,17 @@
 
 use std::borrow::Cow;
 
+use crate::application::gizmo_ui::UiNodeGizmoStates;
 use crate::custom_widgets::smart_dragvalue::SmartDragValue;
 use crate::{application::code_viewer::code_edit_ui, prelude::*};
+use blackjack_engine::{
+    graph::{BlackjackValue, DataType, FilePathMode, InputValueConfig, NodeDefinitions},
+    prelude::selection::SelectionExpression,
+};
 use egui::RichText;
 use egui_node_graph::{
-    DataTypeTrait, NodeDataTrait, NodeId, NodeResponse, NodeTemplateIter, UserResponseTrait,
-    WidgetValueTrait,
-};
-use serde::{Deserialize, Serialize};
-
-use blackjack_engine::{
-    graph::{
-        BlackjackParameter, BlackjackValue, DataType, FilePathMode, InputValueConfig,
-        NodeDefinition, NodeDefinitions,
-    },
-    prelude::selection::SelectionExpression,
+    DataTypeTrait, InputId, NodeDataTrait, NodeId, NodeResponse, NodeTemplateIter,
+    UserResponseTrait, WidgetValueTrait,
 };
 
 use egui_node_graph::{InputParamKind, NodeTemplateTrait};
@@ -32,7 +28,7 @@ pub type GraphEditorState = egui_node_graph::GraphEditorState<
     NodeData,
     DataTypeUi,
     ValueTypeUi,
-    NodeDefinitionUi,
+    NodeOpName,
     CustomGraphState,
 >;
 
@@ -42,10 +38,11 @@ pub enum CustomNodeResponse {
     SetActiveNode(NodeId),
     ClearActiveNode,
     RunNodeSideEffect(NodeId),
+    LockGizmos(NodeId),
+    UnlockGizmos(NodeId),
 }
 
 /// Blackjack-specific global graph state
-#[derive(Default, Serialize, Deserialize)]
 pub struct CustomGraphState {
     /// When this option is set by the UI, the side effect encoded by the node
     /// will be executed at the start of the next frame.
@@ -53,9 +50,28 @@ pub struct CustomGraphState {
     /// The currently active node. A program will be compiled to compute the
     /// result of this node and constantly updated in real-time.
     pub active_node: Option<NodeId>,
+    /// A pointer to the node definitions. This is automatically updated when
+    /// the node definitions change during hot reload.
+    pub node_definitions: NodeDefinitions,
+
+    pub promoted_params: HashMap<InputId, String>,
+
+    pub gizmo_states: UiNodeGizmoStates,
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Serialize, Deserialize, Debug)]
+impl CustomGraphState {
+    pub fn new(node_definitions: NodeDefinitions, gizmo_states: UiNodeGizmoStates) -> Self {
+        Self {
+            node_definitions,
+            run_side_effect: None,
+            active_node: None,
+            promoted_params: HashMap::default(),
+            gizmo_states,
+        }
+    }
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub struct DataTypeUi(pub DataType); // Prevents orphan rules
 impl DataTypeTrait<CustomGraphState> for DataTypeUi {
     fn data_type_color(&self, _user_state: &mut CustomGraphState) -> egui::Color32 {
@@ -84,11 +100,9 @@ impl DataTypeTrait<CustomGraphState> for DataTypeUi {
 impl UserResponseTrait for CustomNodeResponse {}
 
 /// The node data trait can be used to insert a custom UI inside nodes
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone)]
 pub struct NodeData {
     pub op_name: String,
-    pub returns: Option<String>,
-    pub is_executable: bool,
 }
 impl NodeDataTrait for NodeData {
     type Response = CustomNodeResponse;
@@ -106,6 +120,16 @@ impl NodeDataTrait for NodeData {
     where
         Self::Response: egui_node_graph::UserResponseTrait,
     {
+        let node_def = user_state
+            .node_definitions
+            .node_def(&graph[node_id].user_data.op_name);
+        if node_def.is_none() {
+            ui.label("⚠ no node definition")
+                .on_hover_text("This node is referencing a node definition that doesn't exist.");
+            return Default::default();
+        }
+        let node_def = node_def.unwrap();
+
         let mut responses = Vec::new();
         ui.horizontal(|ui| {
             // Show 'Enable' button for nodes that output a mesh
@@ -114,8 +138,8 @@ impl NodeDataTrait for NodeData {
                 .any(|output| output.typ.0.can_be_enabled());
             let is_active = user_state.active_node == Some(node_id);
 
-            if can_be_enabled {
-                ui.horizontal(|ui| {
+            ui.horizontal(|ui| {
+                if can_be_enabled {
                     if !is_active {
                         if ui.button("👁 Set active").clicked() {
                             responses.push(NodeResponse::User(CustomNodeResponse::SetActiveNode(
@@ -131,25 +155,30 @@ impl NodeDataTrait for NodeData {
                             responses.push(NodeResponse::User(CustomNodeResponse::ClearActiveNode));
                         }
                     }
-                });
-            }
-            // Show 'Run' button for executable nodes
-            if self.is_executable && ui.button("⛭ Run").clicked() {
-                responses.push(NodeResponse::User(CustomNodeResponse::RunNodeSideEffect(
-                    node_id,
-                )));
-            }
+                }
+                if node_def.has_gizmo {
+                    if user_state.gizmo_states.is_node_locked(node_id) {
+                        let button =
+                            egui::Button::new(RichText::new("↺ Gizmo").color(egui::Color32::BLACK))
+                                .fill(egui::Color32::GOLD);
+                        if ui.add(button).clicked() {
+                            responses.push(NodeResponse::User(CustomNodeResponse::UnlockGizmos(
+                                node_id,
+                            )))
+                        }
+                    } else if ui.button("↺ Gizmo").clicked() {
+                        responses.push(NodeResponse::User(CustomNodeResponse::LockGizmos(node_id)))
+                    }
+                }
+                // Show 'Run' button for executable nodes
+                if node_def.executable && ui.button("⛭ Run").clicked() {
+                    responses.push(NodeResponse::User(CustomNodeResponse::RunNodeSideEffect(
+                        node_id,
+                    )));
+                }
+            });
         });
         responses
-    }
-}
-
-pub struct NodeDefinitionsUi<'a>(&'a NodeDefinitions);
-impl<'a> NodeTemplateIter for NodeDefinitionsUi<'a> {
-    type Item = NodeDefinitionUi;
-
-    fn all_kinds(&self) -> Vec<Self::Item> {
-        self.0 .0.values().cloned().map(NodeDefinitionUi).collect()
     }
 }
 
@@ -163,7 +192,8 @@ pub fn draw_node_graph(
     defs: &NodeDefinitions,
 ) {
     egui::CentralPanel::default().show(ctx, |ui| {
-        let responses = editor_state.draw_graph_editor(ui, NodeDefinitionsUi(defs), custom_state);
+        let responses =
+            editor_state.draw_graph_editor(ui, NodeOpNames(defs.node_names()), custom_state);
         for response in responses.node_responses {
             match response {
                 NodeResponse::DeleteNodeFull { node_id, .. } => {
@@ -173,14 +203,34 @@ pub fn draw_node_graph(
                     if custom_state.run_side_effect == Some(node_id) {
                         custom_state.run_side_effect = None;
                     }
+                    custom_state.gizmo_states.node_deleted(node_id);
                 }
                 NodeResponse::User(response) => match response {
                     graph::CustomNodeResponse::SetActiveNode(n) => {
-                        custom_state.active_node = Some(n)
+                        if let Some(prev_active) = custom_state.active_node {
+                            custom_state.gizmo_states.node_left_active(prev_active);
+                        }
+                        custom_state.active_node = Some(n);
+                        // When the active node changes, we want to clear the
+                        // existing gizmos referring to the previous node
+                        custom_state.gizmo_states.node_is_active(n);
                     }
-                    graph::CustomNodeResponse::ClearActiveNode => custom_state.active_node = None,
+                    graph::CustomNodeResponse::ClearActiveNode => {
+                        if let Some(prev_active) = custom_state.active_node {
+                            custom_state.gizmo_states.node_left_active(prev_active);
+                        }
+                        custom_state.active_node = None;
+                    }
                     graph::CustomNodeResponse::RunNodeSideEffect(n) => {
                         custom_state.run_side_effect = Some(n)
+                    }
+                    CustomNodeResponse::LockGizmos(n) => {
+                        custom_state.gizmo_states.lock_gizmos_for(n);
+                    }
+                    CustomNodeResponse::UnlockGizmos(n) => {
+                        custom_state
+                            .gizmo_states
+                            .unlock_gizmos_for(n, custom_state.active_node);
                     }
                 },
                 _ => {}
@@ -189,123 +239,157 @@ pub fn draw_node_graph(
     });
 }
 
+pub struct NodeOpNames(Vec<String>);
+impl NodeTemplateIter for NodeOpNames {
+    type Item = NodeOpName;
+
+    fn all_kinds(&self) -> Vec<Self::Item> {
+        self.0.iter().cloned().map(NodeOpName).collect()
+    }
+}
+
+/// Returns the InputParamKind for each of the blackjack data types. This is
+/// currently hardcoded and nodes are not allowed to customise it.
+pub fn data_type_to_input_param_kind(data_type: DataType) -> InputParamKind {
+    match data_type {
+        DataType::Vector => InputParamKind::ConnectionOrConstant,
+        DataType::Scalar => InputParamKind::ConnectionOrConstant,
+        DataType::Selection => InputParamKind::ConnectionOrConstant,
+        DataType::Mesh => InputParamKind::ConnectionOnly,
+        DataType::HeightMap => InputParamKind::ConnectionOnly,
+        DataType::String => InputParamKind::ConnectionOrConstant,
+    }
+}
+
+/// For now, the "shown inline" property is not customizable and is always set
+/// to "true" by default, unless overriden by the user.
+pub fn default_shown_inline() -> bool {
+    true
+}
+
 #[derive(Clone, Debug)]
-pub struct NodeDefinitionUi(pub NodeDefinition);
-impl NodeTemplateTrait for NodeDefinitionUi {
+pub struct NodeOpName(String);
+impl NodeTemplateTrait for NodeOpName {
     type NodeData = NodeData;
     type DataType = DataTypeUi;
     type ValueType = ValueTypeUi;
     type UserState = CustomGraphState;
 
-    fn node_finder_label(&self) -> &str {
-        &self.0.label
+    fn node_finder_label(&self, custom_state: &mut CustomGraphState) -> Cow<str> {
+        let node_def = custom_state.node_definitions.node_def(&self.0).expect(
+            "This method is only called when creating a new node.\
+             Definitions can't be outdated at this point.",
+        );
+        Cow::Owned(node_def.label.to_string())
     }
 
-    fn node_graph_label(&self) -> String {
-        self.0.label.clone()
+    fn node_graph_label(&self, custom_state: &mut CustomGraphState) -> String {
+        let node_def = custom_state.node_definitions.node_def(&self.0).expect(
+            "This method is only called when creating a new node.\
+             Definitions can't be outdated at this point.",
+        );
+        node_def.label.clone()
     }
 
-    fn user_data(&self) -> Self::NodeData {
+    fn user_data(&self, custom_state: &mut CustomGraphState) -> Self::NodeData {
+        let node_def = custom_state.node_definitions.node_def(&self.0).expect(
+            "This method is only called when creating a new node.\
+             Definitions can't be outdated at this point.",
+        );
         NodeData {
-            op_name: self.0.op_name.clone(),
-            returns: self.0.returns.clone(),
-            is_executable: self.0.executable,
+            op_name: node_def.op_name.clone(),
         }
     }
 
     fn build_node(
         &self,
         graph: &mut egui_node_graph::Graph<Self::NodeData, Self::DataType, Self::ValueType>,
-        _user_state: &mut Self::UserState,
+        custom_state: &mut Self::UserState,
         node_id: egui_node_graph::NodeId,
     ) {
-        for input in &self.0.inputs {
-            let input_param_kind = match input.data_type {
-                DataType::Vector => InputParamKind::ConnectionOrConstant,
-                DataType::Scalar => InputParamKind::ConnectionOrConstant,
-                DataType::Selection => InputParamKind::ConnectionOrConstant,
-                DataType::Mesh => InputParamKind::ConnectionOnly,
-                DataType::HeightMap => InputParamKind::ConnectionOnly,
-                DataType::String => InputParamKind::ConnectionOrConstant,
-            };
+        let node_def = custom_state.node_definitions.node_def(&self.0).expect(
+            "This method is only called when creating a new node.\
+             Definitions can't be outdated at this point.",
+        );
+        for input in &node_def.inputs {
+            let input_param_kind = data_type_to_input_param_kind(input.data_type);
 
             graph.add_input_param(
                 node_id,
                 input.name.clone(),
                 DataTypeUi(input.data_type),
-                ValueTypeUi(BlackjackParameter {
-                    value: match input.config {
-                        InputValueConfig::Enum {
-                            ref values,
-                            default_selection,
-                        } => {
-                            if let Some(i) = default_selection {
-                                BlackjackValue::String(values[i as usize].clone())
-                            } else {
-                                BlackjackValue::String("".into())
-                            }
-                        }
-                        InputValueConfig::Vector { default } => BlackjackValue::Vector(default),
-                        InputValueConfig::Scalar { default, .. } => BlackjackValue::Scalar(default),
-                        InputValueConfig::Selection {
-                            ref default_selection,
-                        } => BlackjackValue::Selection(
-                            default_selection.unparse(),
-                            Some(default_selection.clone()),
-                        ),
-                        InputValueConfig::FilePath {
-                            ref default_path, ..
-                        } => BlackjackValue::String(
-                            default_path.as_ref().cloned().unwrap_or_else(|| "".into()),
-                        ),
-                        InputValueConfig::String {
-                            ref default_text, ..
-                        } => BlackjackValue::String(default_text.clone()),
-                        InputValueConfig::None => BlackjackValue::None,
-                        InputValueConfig::LuaString {} => BlackjackValue::String("".into()),
-                    },
-                    promoted_name: None,
-                    config: input.config.clone(),
-                }),
+                ValueTypeUi(input.default_value()),
                 input_param_kind,
-                true,
+                default_shown_inline(),
             );
         }
-        for output in &self.0.outputs {
+        for output in &node_def.outputs {
             graph.add_output_param(node_id, output.name.clone(), DataTypeUi(output.data_type));
         }
     }
 }
 
 /// The widget value trait is used to determine how to display each [`ValueType`]
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ValueTypeUi(pub BlackjackParameter);
+#[derive(Debug, Clone)]
+pub struct ValueTypeUi(pub BlackjackValue);
+
+impl Default for ValueTypeUi {
+    fn default() -> Self {
+        Self(BlackjackValue::None)
+    }
+}
+
 impl WidgetValueTrait for ValueTypeUi {
+    type UserState = CustomGraphState;
     type Response = CustomNodeResponse;
+    type NodeData = NodeData;
 
-    fn value_widget(&mut self, param_name: &str, ui: &mut egui::Ui) -> Vec<Self::Response> {
-        const DRAG_SPEEDS: &[f64] = &[100.0, 10.0, 1.0, 0.1, 0.01, 0.001, 0.0001];
-        const DRAG_LABELS: &[&str] = &["100", "10", "1", ".1", ".01", ".001", ".0001"];
+    fn value_widget(
+        &mut self,
+        param_name: &str,
+        _node_id: NodeId,
+        ui: &mut egui::Ui,
+        user_state: &mut CustomGraphState,
+        node_data: &NodeData,
+    ) -> Vec<Self::Response> {
+        const FLOAT_DRAG_SPEEDS: &[f64] = &[100.0, 10.0, 1.0, 0.1, 0.01, 0.001, 0.0001];
+        const FLOAT_DRAG_LABELS: &[&str] = &["100", "10", "1", ".1", ".01", ".001", ".0001"];
+        const INT_DRAG_SPEEDS: &[f64] = &[100.0, 10.0, 1.0];
+        const INT_DRAG_LABELS: &[&str] = &["100", "10", "1"];
 
-        match (&mut self.0.value, &self.0.config) {
+        let node_def = user_state.node_definitions.node_def(&node_data.op_name);
+        let input_def = node_def
+            .as_deref()
+            .and_then(|d| d.inputs.iter().find(|i| i.name == param_name));
+
+        // This may happen on rare occasions when the nodes are reloaded and a
+        // parameter that previously existed now doesn't anymore.
+        if input_def.is_none() {
+            ui.label("⚠ not found")
+                .on_hover_text("This node is referencing a parameter that doesn't exist.");
+            return Default::default();
+        }
+        let input_def = input_def.unwrap();
+
+        match (&mut self.0, &input_def.config) {
             (BlackjackValue::Vector(vector), InputValueConfig::Vector { .. }) => {
                 ui.label(param_name);
                 ui.horizontal(|ui| {
                     ui.label("x");
                     ui.add(
-                        SmartDragValue::new(&mut vector.x, DRAG_SPEEDS, DRAG_LABELS)
+                        SmartDragValue::new(&mut vector.x, FLOAT_DRAG_SPEEDS, FLOAT_DRAG_LABELS)
                             .speed(1.0)
                             .decimals(5),
                     );
                     ui.label("y");
                     ui.add(
-                        SmartDragValue::new(&mut vector.y, DRAG_SPEEDS, DRAG_LABELS)
+                        SmartDragValue::new(&mut vector.y, FLOAT_DRAG_SPEEDS, FLOAT_DRAG_LABELS)
                             .speed(1.0)
                             .decimals(5),
                     );
                     ui.label("z");
                     ui.add(
-                        SmartDragValue::new(&mut vector.z, DRAG_SPEEDS, DRAG_LABELS)
+                        SmartDragValue::new(&mut vector.z, FLOAT_DRAG_SPEEDS, FLOAT_DRAG_LABELS)
                             .speed(1.0)
                             .decimals(5),
                     );
@@ -322,20 +406,33 @@ impl WidgetValueTrait for ValueTypeUi {
                     ..
                 },
             ) => {
+                let is_int = *num_decimals == Some(0);
+                let drag_speeds = if is_int {
+                    INT_DRAG_SPEEDS
+                } else {
+                    FLOAT_DRAG_SPEEDS
+                };
+                let drag_labels = if is_int {
+                    INT_DRAG_LABELS
+                } else {
+                    FLOAT_DRAG_LABELS
+                };
+                let mut drag_value = SmartDragValue::new(value, drag_speeds, drag_labels)
+                    .speed(1.0)
+                    .clamp_range_hard(
+                        min.unwrap_or(f32::NEG_INFINITY)..=max.unwrap_or(f32::INFINITY),
+                    )
+                    .clamp_range_soft(
+                        soft_min.unwrap_or(f32::NEG_INFINITY)..=soft_max.unwrap_or(f32::INFINITY),
+                    )
+                    .decimals(num_decimals.unwrap_or(5) as usize);
+                if is_int {
+                    drag_value = drag_value.default_range_index(2);
+                }
+
                 ui.horizontal(|ui| {
                     ui.label(param_name);
-                    ui.add(
-                        SmartDragValue::new(value, DRAG_SPEEDS, DRAG_LABELS)
-                            .speed(1.0)
-                            .clamp_range_hard(
-                                min.unwrap_or(f32::NEG_INFINITY)..=max.unwrap_or(f32::INFINITY),
-                            )
-                            .clamp_range_soft(
-                                soft_min.unwrap_or(f32::NEG_INFINITY)
-                                    ..=soft_max.unwrap_or(f32::INFINITY),
-                            )
-                            .decimals(num_decimals.unwrap_or(5) as usize),
-                    )
+                    ui.add(drag_value)
                 });
             }
             (BlackjackValue::String(string), InputValueConfig::Enum { values, .. }) => {

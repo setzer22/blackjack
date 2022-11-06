@@ -4,11 +4,17 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-use crate::{app_window::input::viewport_relative_position, prelude::*};
-use blackjack_engine::graph::NodeDefinitions;
+use crate::{
+    app_window::input::viewport_relative_position,
+    prelude::{
+        graph::{data_type_to_input_param_kind, default_shown_inline, DataTypeUi, ValueTypeUi},
+        *,
+    },
+};
+use blackjack_engine::graph::{BlackjackValue, DataType, NodeDefinitions};
 use egui_wgpu::renderer::{RenderPass, ScreenDescriptor};
 
-use super::blackjack_theme;
+use super::{blackjack_theme, gizmo_ui::UiNodeGizmoStates};
 
 pub struct GraphEditor {
     pub editor_state: graph::GraphEditorState,
@@ -30,7 +36,13 @@ impl GraphEditor {
     pub const ZOOM_LEVEL_MIN: f32 = 0.5;
     pub const ZOOM_LEVEL_MAX: f32 = 10.0;
 
-    pub fn new(renderer: &r3::Renderer, format: r3::TextureFormat, parent_scale: f32) -> Self {
+    pub fn new(
+        renderer: &r3::Renderer,
+        format: r3::TextureFormat,
+        parent_scale: f32,
+        node_definitions: NodeDefinitions,
+        gizmo_states: UiNodeGizmoStates,
+    ) -> Self {
         let egui_context = egui::Context::default();
         egui_context.set_visuals(blackjack_graph_theme());
 
@@ -41,7 +53,7 @@ impl GraphEditor {
         Self {
             // Set default zoom to the inverse of ui scale to preserve dpi
             editor_state: graph::GraphEditorState::new(1.0 / parent_scale),
-            custom_state: graph::CustomGraphState::default(),
+            custom_state: graph::CustomGraphState::new(node_definitions, gizmo_states),
             egui_context,
             egui_winit_state,
             renderpass: RenderPass::new(&renderer.device, format, 1),
@@ -309,5 +321,200 @@ impl GraphEditor {
         );
 
         Some(render_target)
+    }
+
+    /// Updates the graph after the node definitions were updated. This
+    /// reconciles the state stored in the graph with any changes in the Lua
+    /// code, such as newly added parameters, removed parameters or other kinds
+    /// of changes.
+    pub fn on_node_definitions_update(&mut self) -> Result<()> {
+        let node_defs = self.custom_state.node_definitions.share();
+        let graph = &mut self.editor_state.graph;
+
+        use egui_node_graph::{InputId, NodeId, OutputId};
+        enum DelayedOps {
+            /// The operation for this NodeId is no longer found in the node
+            /// definitions.
+            RemovedNodeType(NodeId),
+            /// The label for this node has changed.
+            NodeLabelRenamed { node_id: NodeId, new_label: String },
+            /// A new input parameter has been added.
+            NewInput {
+                node_id: NodeId,
+                param_name: String,
+                data_type: DataType,
+                value: BlackjackValue,
+            },
+            /// The DataType for an input has changed
+            InputChangedType {
+                input_id: InputId,
+                new_type: DataType,
+            },
+            /// An input parameter was removed
+            InputRemoved { input_id: InputId },
+            /// A new output parameter has been added.
+            NewOutput {
+                node_id: NodeId,
+                param_name: String,
+                data_type: DataType,
+            },
+            /// The DataType for an output has changed
+            OutputChangedType {
+                output_id: OutputId,
+                new_type: DataType,
+            },
+            /// An output parameter was removed
+            OutputRemoved { output_id: OutputId },
+        }
+
+        let mut delayed_ops = vec![];
+
+        for (node_id, node) in &graph.nodes {
+            if let Some(node_def) = node_defs.node_def(&node.user_data.op_name) {
+                if node.label != node_def.label {
+                    delayed_ops.push(DelayedOps::NodeLabelRenamed {
+                        new_label: node_def.label.clone(),
+                        node_id,
+                    });
+                }
+
+                // Handle input parameters
+                let mut defined_inputs = HashSet::new();
+                for input in &node_def.inputs {
+                    defined_inputs.insert(&input.name);
+
+                    if let Some((_, input_id)) = graph[node_id]
+                        .inputs
+                        .iter()
+                        .find(|(i_name, _)| i_name == &input.name)
+                    {
+                        if graph[*input_id].typ.0 != input.data_type {
+                            delayed_ops.push(DelayedOps::InputChangedType {
+                                input_id: *input_id,
+                                new_type: input.data_type,
+                            })
+                        }
+                    } else {
+                        delayed_ops.push(DelayedOps::NewInput {
+                            node_id,
+                            param_name: input.name.clone(),
+                            data_type: input.data_type,
+                            value: input.default_value(),
+                        })
+                    }
+                }
+
+                for (input_name, input_id) in &graph[node_id].inputs {
+                    if !defined_inputs.contains(&input_name) {
+                        delayed_ops.push(DelayedOps::InputRemoved {
+                            input_id: *input_id,
+                        })
+                    }
+                }
+
+                // Handle output parameters
+                let mut defined_outputs = HashSet::new();
+                for output in &node_def.outputs {
+                    defined_outputs.insert(&output.name);
+
+                    if let Some((_, output_id)) = graph[node_id]
+                        .outputs
+                        .iter()
+                        .find(|(o_name, _)| o_name == &output.name)
+                    {
+                        if graph[*output_id].typ.0 != output.data_type {
+                            delayed_ops.push(DelayedOps::OutputChangedType {
+                                output_id: *output_id,
+                                new_type: output.data_type,
+                            })
+                        }
+                    } else {
+                        delayed_ops.push(DelayedOps::NewOutput {
+                            node_id,
+                            param_name: output.name.clone(),
+                            data_type: output.data_type,
+                        })
+                    }
+                }
+
+                for (output_name, output_id) in &graph[node_id].outputs {
+                    if !defined_outputs.contains(&output_name) {
+                        delayed_ops.push(DelayedOps::OutputRemoved {
+                            output_id: *output_id,
+                        })
+                    }
+                }
+            } else {
+                delayed_ops.push(DelayedOps::RemovedNodeType(node_id));
+            }
+        }
+
+        for op in delayed_ops {
+            match op {
+                DelayedOps::RemovedNodeType(_) => {
+                    // We don't do anything if the node definition does not exist
+                    // for this node. Sometimes the user may screw up and remove a
+                    // node definition, but we want to keep the old data around for
+                    // when they fix their Lua code, otherwise they may blow their
+                    // entire graph.
+                    //
+                    // We still keep this around in case we later want to
+                    // implement some corrective action, or throw some kind of
+                    // warning.
+                }
+                DelayedOps::NewInput {
+                    node_id,
+                    param_name,
+                    data_type,
+                    value,
+                } => {
+                    graph.add_input_param(
+                        node_id,
+                        param_name,
+                        DataTypeUi(data_type),
+                        ValueTypeUi(value),
+                        data_type_to_input_param_kind(data_type),
+                        default_shown_inline(),
+                    );
+                }
+                DelayedOps::InputChangedType { input_id, new_type } => {
+                    graph.remove_connection(input_id);
+                    graph[input_id].typ = DataTypeUi(new_type);
+                }
+                DelayedOps::InputRemoved { input_id } => {
+                    graph.remove_input_param(input_id);
+                }
+                DelayedOps::NewOutput {
+                    node_id,
+                    param_name,
+                    data_type,
+                } => {
+                    graph.add_output_param(node_id, param_name, DataTypeUi(data_type));
+                }
+                DelayedOps::OutputChangedType {
+                    output_id,
+                    new_type,
+                } => {
+                    let inputs = graph
+                        .connections
+                        .iter()
+                        .filter(|(_, o)| **o == output_id)
+                        .map(|(i, _)| i)
+                        .collect_vec();
+                    for input in inputs {
+                        graph.remove_connection(input);
+                    }
+                    graph[output_id].typ = DataTypeUi(new_type);
+                }
+                DelayedOps::OutputRemoved { output_id } => {
+                    graph.remove_output_param(output_id);
+                }
+                DelayedOps::NodeLabelRenamed { node_id, new_label } => {
+                    graph[node_id].label = new_label;
+                }
+            }
+        }
+
+        Ok(())
     }
 }
