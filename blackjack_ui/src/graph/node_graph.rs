@@ -9,14 +9,14 @@ use std::borrow::Cow;
 use crate::application::gizmo_ui::UiNodeGizmoStates;
 use crate::custom_widgets::smart_dragvalue::SmartDragValue;
 use crate::{application::code_viewer::code_edit_ui, prelude::*};
+use blackjack_engine::{
+    graph::{BlackjackValue, DataType, FilePathMode, InputValueConfig, NodeDefinitions},
+    prelude::selection::SelectionExpression,
+};
 use egui::RichText;
 use egui_node_graph::{
     DataTypeTrait, InputId, NodeDataTrait, NodeId, NodeResponse, NodeTemplateIter,
     UserResponseTrait, WidgetValueTrait,
-};
-use blackjack_engine::{
-    graph::{BlackjackValue, DataType, FilePathMode, InputValueConfig, NodeDefinitions},
-    prelude::selection::SelectionExpression,
 };
 
 use egui_node_graph::{InputParamKind, NodeTemplateTrait};
