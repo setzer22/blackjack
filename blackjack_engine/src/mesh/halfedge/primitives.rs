@@ -272,7 +272,6 @@ impl Cone {
         height: f32,
         num_vertices: usize,
     ) -> HalfEdgeMesh {
-        // Not using an epsilon, may be useful for to keep multiple verts at the point using small values.
         if top_radius.abs() <= 1e-5 {
             Self::build_cone(center, bottom_radius, height, num_vertices)
         } else {
@@ -358,8 +357,13 @@ mod lua_api {
     /// Creates an open circle (polyline) with given `center`, `radius` and
     /// `num_vertices`.
     #[lua(under = "Primitives")]
-    fn circle(center: LVec3, radius: f32, num_vertices: f32) -> HalfEdgeMesh {
-        Circle::build_open(center.0, radius, num_vertices as usize)
+    fn circle(center: LVec3, radius: f32, num_vertices: f32, filled: bool) -> HalfEdgeMesh {
+        if filled {
+            Circle::build(center.0, radius, num_vertices as usize)
+        }
+        else {
+            Circle::build_open(center.0, radius, num_vertices as usize)
+        }
     }
 
     /// Creates a truncated cone with the given `center`, `bottom_radius`, `top_radius`,
