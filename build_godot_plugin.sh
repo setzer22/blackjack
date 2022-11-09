@@ -4,7 +4,7 @@ cargo build --release -p blackjack_godot
 mkdir -p target/
 cp -r godot_plugin target/
 cp -r blackjack_lua target/godot_plugin
-cp target/release/libblackjack_godot.so target/godot_plugin/addons/blackjack_engine_godot/
+cp target/release/libblackjack_godot.so target/godot_plugin/addons/blackjack_engine_godot/libblackjack_godot_linux.so
 
 cd target/godot_plugin
 rm target/blackjack_engine_godot.zip
