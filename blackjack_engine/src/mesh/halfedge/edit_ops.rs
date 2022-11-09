@@ -2308,4 +2308,27 @@ pub mod lua_fns {
 
         Ok(v)
     }
+
+    #[lua(under = "Ops")]
+    pub fn cut_face(
+        mesh: &mut HalfEdgeMesh,
+        a: SelectionExpression,
+        b: SelectionExpression,
+    ) -> Result<HalfEdgeId> {
+        macro_rules! get_selection {
+            ($sel:expr) => {
+                mesh.resolve_vertex_selection_full(&$sel)?
+                    .get(0)
+                    .copied()
+                    .ok_or_else(|| anyhow::anyhow!("Empty selection"))?
+            };
+        }
+
+        let a = get_selection!(a);
+        let b = get_selection!(b);
+
+        let h = super::cut_face(&mut mesh.write_connectivity(), a, b)?;
+
+        Ok(h)
+    }
 }

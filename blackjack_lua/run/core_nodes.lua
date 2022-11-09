@@ -411,6 +411,23 @@ local edit_ops = {
             return { out_mesh = out_mesh }
         end,
     },
+    CutFace = {
+        label = "Cut Face",
+        inputs = {
+            P.mesh("in_mesh"),
+            P.selection("a"),
+            P.selection("b"),
+        },
+        outputs = {
+            P.mesh("out_mesh"),
+        },
+        returns = "out_mesh",
+        op = function(inputs)
+            local out_mesh = inputs.in_mesh:clone()
+            Ops.cut_face(out_mesh, inputs.a, inputs.b)
+            return { out_mesh = out_mesh }
+        end,
+    },
     SetNormals = {
         label = "Set Normals",
         inputs = {
