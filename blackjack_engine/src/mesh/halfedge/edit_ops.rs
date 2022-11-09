@@ -2286,4 +2286,26 @@ pub mod lua_fns {
         positions[v] = vpos;
         Ok(v)
     }
+
+    #[lua(under = "Ops")]
+    pub fn divide_edge(
+        mesh: &mut HalfEdgeMesh,
+        edge: SelectionExpression,
+        interpolation: f32,
+    ) -> Result<VertexId> {
+        let edge = mesh
+            .resolve_halfedge_selection_full(&edge)?
+            .iter_cpy()
+            .next()
+            .ok_or_else(|| anyhow!("No edge selected"))?;
+
+        let v = super::divide_edge(
+            &mut mesh.write_connectivity(),
+            &mut mesh.write_positions(),
+            edge,
+            interpolation,
+        )?;
+
+        Ok(v)
+    }
 }
