@@ -2286,7 +2286,6 @@ pub mod lua_fns {
         positions[v] = vpos;
         Ok(v)
     }
-    
 
     #[lua(under = "Ops")]
     pub fn divide_edge(
@@ -2299,11 +2298,14 @@ pub mod lua_fns {
             .iter_cpy()
             .next()
             .ok_or_else(|| anyhow!("No edge selected"))?;
-        
-        
-        
-        let v = super::divide_edge(&mut mesh.write_connectivity(), &mut mesh.write_positions(), edge, interpolation)?;
-        
+
+        let v = super::divide_edge(
+            &mut mesh.write_connectivity(),
+            &mut mesh.write_positions(),
+            edge,
+            interpolation,
+        )?;
+
         Ok(v)
     }
 }
