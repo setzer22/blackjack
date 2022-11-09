@@ -2289,7 +2289,7 @@ pub mod lua_fns {
     
 
     #[lua(under = "Ops")]
-    pub fn subdivide_edge(
+    pub fn divide_edge(
         mesh: &mut HalfEdgeMesh,
         edge: SelectionExpression,
         interpolation: f32,

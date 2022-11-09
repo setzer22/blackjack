@@ -395,7 +395,7 @@ local edit_ops = {
         end,
     },
     SubdivideEdge = {
-        label = "Subdivide Edge",
+        label = "Divide Edge",
         inputs = { 
             P.mesh("in_mesh"),
             P.selection("edge"),
@@ -407,7 +407,7 @@ local edit_ops = {
         returns = "out_mesh",
         op = function(inputs)
             local out_mesh = inputs.in_mesh:clone()
-            Ops.subdivide_edge(out_mesh, inputs.edge, inputs.interp)
+            Ops.divide_edge(out_mesh, inputs.edge, inputs.interp)
             return { out_mesh = out_mesh }
         end,
     },
