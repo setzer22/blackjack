@@ -228,6 +228,30 @@ local primitives = {
         gizmos = { Gz.tweak_point("center") },
         returns = "out_mesh",
     },
+    MakeCatenary = {
+        label = "Catenary",
+        op = function(inputs)
+            return {
+                out_mesh = Primitives.catenary(
+                    inputs.start_point,
+                    inputs.end_point,
+                    inputs.sag,
+                    inputs.segments
+                ),
+            }
+        end,
+        inputs = {
+            P.v3("start_point", vector(0, 0, 0)),
+            P.v3("end_point", vector(1, 0, 0)),
+            P.scalar("sag", { default = 1.0, min = 0.001}),
+            P.scalar_int("segments", { default = 8, min = 1, soft_max = 32 })
+        },
+        outputs = {
+            P.mesh("out_mesh"),
+        },
+        gizmos = { Gz.tweak_point("start_point"), Gz.tweak_point("end_point") },
+        returns = "out_mesh",
+    },
 }
 
 local function parse_ch_key(s)

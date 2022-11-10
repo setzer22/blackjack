@@ -336,6 +336,53 @@ impl Cylinder {
     }
 }
 
+fn catenary(x: f32, a: f32) -> f32 {
+    a * (x / a).cosh()
+}
+
+fn catenary_dx(x: f32, a: f32) -> f32 {
+    (x / a).sinh()
+}
+
+/// Curve of a hanging chain, rope, or wire. https://en.wikipedia.org/wiki/Catenary
+struct Catenary;
+impl Catenary {
+    const NEWTON_ITERS: u32 = 10;
+
+    pub fn build(start: Vec3, end: Vec3, sag: f32, segments: u32) -> HalfEdgeMesh {
+        let dx = start.xz().distance(end.xz());
+        let dy = start.y - end.y;
+        // Re-parameterize to make it easier to control. Invert because at low tension values
+        // the curve droops to negative infinity, scale by dx so that the curve looks the same as
+        // you move the endpoints apart.
+        let tension = dx / sag;
+
+        // No direct formula to figure out where to put the two points on the curve to match
+        // differences in height, approximate with Newton's method.
+        let mut x_off = -dx / 2.0;
+        for _ in 0..Self::NEWTON_ITERS {
+            let error = catenary(x_off, tension) - catenary(x_off + dx, tension) - dy;
+            let d_error = catenary_dx(x_off, tension) - catenary_dx(x_off + dx, tension);
+            x_off -= error / d_error;
+        }
+        let x_off = x_off;
+
+        let y_off = start.y - catenary(x_off, tension);
+
+        let position = |i| match i {
+            0 => start,
+            i if i == segments => end,
+            i => {
+                let t = (i as f32) / (segments as f32);
+                let xz = start.xz().lerp(end.xz(), t);
+                let y = catenary((t * dx) + x_off, tension) + y_off;
+                Vec3::new(xz.x, y, xz.y)
+            }
+        };
+        Line::build(position, segments)
+    }
+}
+
 #[blackjack_macros::blackjack_lua_module]
 mod lua_api {
     use super::*;
@@ -360,8 +407,7 @@ mod lua_api {
     fn circle(center: LVec3, radius: f32, num_vertices: f32, filled: bool) -> HalfEdgeMesh {
         if filled {
             Circle::build(center.0, radius, num_vertices as usize)
-        }
-        else {
+        } else {
             Circle::build_open(center.0, radius, num_vertices as usize)
         }
     }
@@ -412,6 +458,14 @@ mod lua_api {
         Line::build_from_points(LVec3::cast_vector(points))
     }
 
+    /// Creates a catenary curve, the curve followed by a chain or rope hanging between two points,
+    /// between `start` and `end` split into a number of `segments`. `sag` adjusts how much the curve sags,
+    /// higher values make the curve hang lower, lower values make it closer to a straight line.
+    #[lua(under = "Primitives")]
+    fn catenary(start: LVec3, end: LVec3, sag: f32, segments: u32) -> HalfEdgeMesh {
+        Catenary::build(start.0, end.0, sag, segments)
+    }
+
     /// Creates a single polygon from a given set of points.
     #[lua(under = "Primitives")]
     fn polygon(points: Vec<LVec3>) -> Result<HalfEdgeMesh> {
@@ -425,7 +479,7 @@ mod test {
     #[test]
     fn test_cone() {
         let cone = Cone::build(Vec3::ZERO, 0.0, 1.0, 1.0, 8);
-        assert_eq!(cone.read_connectivity().vertices.len(), 9);
+        assert_eq!(cone.read_connectivity().num_vertices(), 9);
 
         Cone::build(Vec3::ZERO, 1.0, 2.0, 1.0, 8);
         Cone::build_cone(Vec3::ZERO, 1.0, 1.0, 8);
@@ -435,5 +489,17 @@ mod test {
     #[test]
     fn test_cylinder() {
         Cylinder::build(Vec3::ZERO, 1.0, 1.0, 8);
+    }
+
+    #[test]
+    fn test_catenary() {
+        let start = Vec3::ZERO;
+        let end = Vec3::new(0.0, 1.0, 1.0);
+        let curve = Catenary::build(start, end, 1.0, 8);
+        assert_eq!(curve.read_connectivity().num_vertices(), 9);
+        let pos = curve.read_positions();
+        // Want to have the exact endpoints and not ones computed from the curve.
+        assert!(pos.iter().map(|x| x.1).contains(&start));
+        assert!(pos.iter().map(|x| x.1).contains(&end));
     }
 }
