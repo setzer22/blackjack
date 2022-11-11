@@ -227,6 +227,29 @@ local primitives = {
         gizmos = { Gz.tweak_point("center") },
         returns = "out_mesh",
     },
+    MakeGrid = {
+        label = "Points grid",
+        op = function(inputs)
+            return {
+                out_mesh = Primitives.grid(
+                    inputs.x,
+                    inputs.y,
+                    inputs.spacing_x, 
+                    inputs.spacing_y
+                )
+            }
+        end,
+        inputs = {
+            P.scalar_int("x", { default = 3, min = 2, soft_max = 32 }),
+            P.scalar_int("y", { default = 3, min = 2, soft_max = 32 }),
+            P.scalar("spacing_x", {default = 1.0, min = 1.0 }),
+            P.scalar("spacing_y", {default = 1.0, min = 1.0 }),
+        },
+        outputs = {
+            P.mesh("out_mesh"),
+        },
+        returns = "out_mesh",
+    }
 }
 
 local function parse_ch_key(s)
