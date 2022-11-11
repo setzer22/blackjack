@@ -164,23 +164,56 @@ impl UVSphere {
 
 pub struct Line;
 impl Line {
-    pub fn build(position: impl Fn(u32) -> Vec3, segments: u32) -> HalfEdgeMesh {
-        let mesh = HalfEdgeMesh::new();
+    pub fn build(position: &impl Fn(u32) -> Vec3, segments: u32) -> HalfEdgeMesh {
+        let tangent = |i| {
+            match i {
+                0 => position(1) - position(0),
+                i if i == segments => position(segments) - position(segments - 1),
+                i => {
+                    let n1 = (position(i) - position(i - 1)).normalize();
+                    let n2 = (position(i + 1) - position(i)).normalize();
+                    n1 + n2
+                }
+            }
+            .normalize()
+        };
+        let normal = |i| tangent(i).any_orthonormal_vector();
+        Self::build_with_normals(&position, &normal, &tangent, segments)
+    }
+
+    pub fn build_with_normals(
+        position: &impl Fn(u32) -> Vec3,
+        normal: &impl Fn(u32) -> Vec3,
+        tangent: &impl Fn(u32) -> Vec3,
+        segments: u32,
+    ) -> HalfEdgeMesh {
+        if segments == 0 {
+            return HalfEdgeMesh::build_from_polygons::<usize, &[usize]>(&[position(0)], &[]).unwrap();
+        }
+        let mut mesh = HalfEdgeMesh::new();
+        let tangent_channel_id = mesh.channels.ensure_channel::<VertexId, Vec3>("tangent");
+        let normal_channel_id = mesh.channels.ensure_channel::<VertexId, Vec3>("normal");
         let mut conn = mesh.write_connectivity();
         let mut pos = mesh.write_positions();
+        let mut norm = mesh
+            .channels
+            .write_channel(normal_channel_id)
+            .expect("normal channel to exist");
+        let mut tang = mesh
+            .channels
+            .write_channel(tangent_channel_id)
+            .expect("tangent channel to exist");
 
         let mut forward_halfedges = SVec::new();
         let mut backward_halfedges = SVec::new();
 
-        //let mut v = conn.alloc_vertex(&mut pos, start, None);
         let mut v = conn.alloc_vertex(&mut pos, position(0), None);
+        norm[v] = normal(0);
+        tang[v] = tangent(0);
         for i in 1..=segments {
-            let w = conn.alloc_vertex(
-                &mut pos,
-                //start.lerp(end, (i + 1) as f32 / segments as f32),
-                position(i),
-                None,
-            );
+            let w = conn.alloc_vertex(&mut pos, position(i), None);
+            norm[w] = normal(i);
+            tang[w] = tangent(i);
 
             let h_v_w = conn.alloc_halfedge(HalfEdge {
                 twin: None,
@@ -238,16 +271,21 @@ impl Line {
 
         drop(conn);
         drop(pos);
+        drop(norm);
+        drop(tang);
 
         mesh
     }
 
     pub fn build_straight_line(start: Vec3, end: Vec3, segments: u32) -> HalfEdgeMesh {
-        Self::build(|i| start.lerp(end, i as f32 / segments as f32), segments)
+        Self::build(&|i| start.lerp(end, i as f32 / segments as f32), segments)
     }
 
     pub fn build_from_points(points: Vec<Vec3>) -> HalfEdgeMesh {
-        Self::build(|i| points[i as usize], points.len() as u32 - 1)
+        match points.len() {
+            0 => HalfEdgeMesh::new(),
+            len => Self::build(&|i| points[i as usize], len as u32 - 1),
+        }
     }
 }
 
@@ -379,7 +417,22 @@ impl Catenary {
                 Vec3::new(xz.x, y, xz.y)
             }
         };
-        Line::build(position, segments)
+        let dxz = end.xz() - start.xz();
+        let tangent = |i| {
+            let t = (i as f32) / (segments as f32);
+            // Partial derivative dy/dt of the curve
+            let y = dx * catenary_dx((t * dx) + x_off, tension);
+            Vec3::new(dxz.x, y, dxz.y).normalize()
+        };
+        let normal = |i| {
+            let t = (i as f32) / (segments as f32);
+            // Copied off of wolfram, no idea how you derive this.
+            // Supposed to be d/dt of tangent(i), including the normalize.
+            let tangent_x = -((t * dx + x_off) / tension).tanh();
+            let y = 1.0 / ((t * dx + x_off) / tension).cosh();
+            Vec3::new(tangent_x * dxz.x, y, tangent_x * dxz.y).normalize()
+        };
+        Line::build_with_normals(&position, &normal, &tangent, segments)
     }
 }
 
@@ -501,5 +554,13 @@ mod test {
         // Want to have the exact endpoints and not ones computed from the curve.
         assert!(pos.iter().map(|x| x.1).contains(&start));
         assert!(pos.iter().map(|x| x.1).contains(&end));
+    }
+
+    #[test]
+    fn test_line_from_points() {
+        // Too few points can cause problems with normal/tangent calculations
+        Line::build_from_points(vec![]);
+        Line::build_from_points(vec![Vec3::ZERO]);
+        Line::build_from_points(vec![Vec3::ZERO, Vec3::Y]);
     }
 }
