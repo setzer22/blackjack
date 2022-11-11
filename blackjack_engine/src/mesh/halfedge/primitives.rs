@@ -188,7 +188,8 @@ impl Line {
         segments: u32,
     ) -> HalfEdgeMesh {
         if segments == 0 {
-            return HalfEdgeMesh::build_from_polygons::<usize, &[usize]>(&[position(0)], &[]).unwrap();
+            return HalfEdgeMesh::build_from_polygons::<usize, &[usize]>(&[position(0)], &[])
+                .unwrap();
         }
         let mut mesh = HalfEdgeMesh::new();
         let tangent_channel_id = mesh.channels.ensure_channel::<VertexId, Vec3>("tangent");
