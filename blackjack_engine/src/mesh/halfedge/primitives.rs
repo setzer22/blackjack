@@ -339,20 +339,19 @@ impl Cylinder {
 
 pub struct Grid;
 impl Grid {
-    pub fn build(x: u32, y: u32, spacing: f32) -> HalfEdgeMesh {
+    pub fn build(x: u32, y: u32, spacing_x: f32, spacing_y: f32) -> HalfEdgeMesh {
         let mesh = HalfEdgeMesh::new();
         let mut conn = mesh.write_connectivity();
         let mut pos = mesh.write_positions();
 
-        let mut vertices = Vec::<Vec3>::new();
         for i in 0..x {
             for j in 0..y {
-                vertices.push(Vec3::new(i as f32 * spacing, j as f32 * spacing, 0.0))
+                conn.alloc_vertex(
+                    &mut pos,
+                    Vec3::new(i as f32 * spacing_x, j as f32 * spacing_y, 0.0),
+                    None,
+                );
             }
-        }
-
-        for v in vertices {
-            conn.alloc_vertex(&mut pos, v, None);
         }
 
         drop(conn);
@@ -441,8 +440,8 @@ mod lua_api {
 
     ///Creates a point cloud arranged in a grid
     #[lua(under = "Primitives")]
-    fn grid(x: u32, y: u32, spacing: f32) -> Result<HalfEdgeMesh> {
-        Ok(Grid::build(x, y, spacing))
+    fn grid(x: u32, y: u32, spacing_x: f32, spacing_y: f32) -> Result<HalfEdgeMesh> {
+        Ok(Grid::build(x, y, spacing_x, spacing_y))
     }
 }
 
