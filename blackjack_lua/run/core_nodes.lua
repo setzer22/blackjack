@@ -228,6 +228,29 @@ local primitives = {
         gizmos = { Gz.tweak_point("center") },
         returns = "out_mesh",
     },
+    MakeGrid = {
+        label = "Points grid",
+        op = function(inputs)
+            return {
+                out_mesh = Primitives.grid(
+                    inputs.x,
+                    inputs.y,
+                    inputs.spacing_x, 
+                    inputs.spacing_y
+                )
+            }
+        end,
+        inputs = {
+            P.scalar_int("x", { default = 3, min = 2, soft_max = 32 }),
+            P.scalar_int("y", { default = 3, min = 2, soft_max = 32 }),
+            P.scalar("spacing_x", {default = 1.0, min = 1.0 }),
+            P.scalar("spacing_y", {default = 1.0, min = 1.0 }),
+        },
+        outputs = {
+            P.mesh("out_mesh"),
+        },
+        returns = "out_mesh",
+    },
     MakeCatenary = {
         label = "Catenary",
         op = function(inputs)
@@ -417,6 +440,40 @@ local edit_ops = {
                     ),
                 }
             end
+        end,
+    },
+    SubdivideEdge = {
+        label = "Divide Edge",
+        inputs = { 
+            P.mesh("in_mesh"),
+            P.selection("edge"),
+            P.scalar("interp", { default = 0.5, soft_min = 0.0, soft_max = 1.0 }),
+        },
+        outputs = {
+            P.mesh("out_mesh"),
+        },
+        returns = "out_mesh",
+        op = function(inputs)
+            local out_mesh = inputs.in_mesh:clone()
+            Ops.divide_edge(out_mesh, inputs.edge, inputs.interp)
+            return { out_mesh = out_mesh }
+        end,
+    },
+    CutFace = {
+        label = "Cut Face",
+        inputs = {
+            P.mesh("in_mesh"),
+            P.selection("a"),
+            P.selection("b"),
+        },
+        outputs = {
+            P.mesh("out_mesh"),
+        },
+        returns = "out_mesh",
+        op = function(inputs)
+            local out_mesh = inputs.in_mesh:clone()
+            Ops.cut_face(out_mesh, inputs.a, inputs.b)
+            return { out_mesh = out_mesh }
         end,
     },
     SetNormals = {

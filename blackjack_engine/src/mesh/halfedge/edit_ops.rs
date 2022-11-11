@@ -2286,4 +2286,49 @@ pub mod lua_fns {
         positions[v] = vpos;
         Ok(v)
     }
+
+    #[lua(under = "Ops")]
+    pub fn divide_edge(
+        mesh: &mut HalfEdgeMesh,
+        edge: SelectionExpression,
+        interpolation: f32,
+    ) -> Result<VertexId> {
+        let edge = mesh
+            .resolve_halfedge_selection_full(&edge)?
+            .iter_cpy()
+            .next()
+            .ok_or_else(|| anyhow!("No edge selected"))?;
+
+        let v = super::divide_edge(
+            &mut mesh.write_connectivity(),
+            &mut mesh.write_positions(),
+            edge,
+            interpolation,
+        )?;
+
+        Ok(v)
+    }
+
+    #[lua(under = "Ops")]
+    pub fn cut_face(
+        mesh: &mut HalfEdgeMesh,
+        a: SelectionExpression,
+        b: SelectionExpression,
+    ) -> Result<HalfEdgeId> {
+        macro_rules! get_selection {
+            ($sel:expr) => {
+                mesh.resolve_vertex_selection_full(&$sel)?
+                    .get(0)
+                    .copied()
+                    .ok_or_else(|| anyhow::anyhow!("Empty selection"))?
+            };
+        }
+
+        let a = get_selection!(a);
+        let b = get_selection!(b);
+
+        let h = super::cut_face(&mut mesh.write_connectivity(), a, b)?;
+
+        Ok(h)
+    }
 }
