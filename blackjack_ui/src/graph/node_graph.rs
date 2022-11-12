@@ -7,6 +7,7 @@
 use std::borrow::Cow;
 
 use crate::application::gizmo_ui::UiNodeGizmoStates;
+use crate::application::serialization;
 use crate::custom_widgets::smart_dragvalue::SmartDragValue;
 use crate::{application::code_viewer::code_edit_ui, prelude::*};
 use blackjack_engine::{
@@ -236,6 +237,16 @@ pub fn draw_node_graph(
                 _ => {}
             }
         }
+
+        if ui.input().key_released(egui::Key::C) && ui.input().modifiers.ctrl {
+            if !editor_state.selected_nodes.is_empty() {
+                println!("Copy!");
+            }
+
+        } else if ui.input().key_released(egui::Key::V) && ui.input().modifiers.ctrl {
+            println!("Paste!")
+        }
+
     });
 }
 
