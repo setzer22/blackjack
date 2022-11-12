@@ -7,7 +7,6 @@
 use std::borrow::Cow;
 
 use crate::application::gizmo_ui::UiNodeGizmoStates;
-use crate::application::serialization;
 use crate::custom_widgets::smart_dragvalue::SmartDragValue;
 use crate::{application::code_viewer::code_edit_ui, prelude::*};
 use blackjack_engine::{

@@ -129,7 +129,8 @@ pub fn load(
         graph,
         node_order,
         connection_in_progress: None,
-        selected_node: None,
+        selected_nodes: Default::default(),
+        ongoing_box_selection: None,
         node_positions,
         node_finder: None,
         pan_zoom: PanZoom {
