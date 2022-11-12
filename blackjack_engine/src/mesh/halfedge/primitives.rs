@@ -410,7 +410,8 @@ fn catenary_dx(x: f32, a: f32) -> f32 {
 /// Curve of a hanging chain, rope, or wire. https://en.wikipedia.org/wiki/Catenary
 struct Catenary;
 impl Catenary {
-    const NEWTON_ITERS: u32 = 10;
+    const MAX_ERR: f32 = 1e-2;
+    const NEWTON_ITERS: u32 = 20;
 
     pub fn build(start: Vec3, end: Vec3, sag: f32, segments: u32) -> HalfEdgeMesh {
         let dx = start.xz().distance(end.xz());
@@ -423,12 +424,15 @@ impl Catenary {
         // No direct formula to figure out where to put the two points on the curve to match
         // differences in height, approximate with Newton's method.
         let mut x_off = -dx / 2.0;
+        let error = |x_off| catenary(x_off, tension) - catenary(x_off + dx, tension) - dy;
         for _ in 0..Self::NEWTON_ITERS {
-            let error = catenary(x_off, tension) - catenary(x_off + dx, tension) - dy;
             let d_error = catenary_dx(x_off, tension) - catenary_dx(x_off + dx, tension);
-            x_off -= error / d_error;
+            x_off -= error(x_off) / d_error;
         }
         let x_off = x_off;
+        if x_off.is_nan() || error(x_off).abs() > Self::MAX_ERR {
+            return Line::build_straight_line(start, end, segments);
+        }
 
         let y_off = start.y - catenary(x_off, tension);
 
@@ -449,14 +453,7 @@ impl Catenary {
             let y = dx * catenary_dx((t * dx) + x_off, tension);
             Vec3::new(dxz.x, y, dxz.y).normalize()
         };
-        let normal = |i| {
-            let t = (i as f32) / (segments as f32);
-            // Copied off of wolfram, no idea how you derive this.
-            // Supposed to be d/dt of tangent(i), including the normalize.
-            let tangent_x = -((t * dx + x_off) / tension).tanh();
-            let y = 1.0 / ((t * dx + x_off) / tension).cosh();
-            Vec3::new(tangent_x * dxz.x, y, tangent_x * dxz.y).normalize()
-        };
+        let normal = |i| Vec3::Y.reject_from_normalized(tangent(i));
         Line::build_with_normals(&position, &normal, &tangent, segments)
     }
 }
