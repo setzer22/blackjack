@@ -53,13 +53,14 @@ local primitives = {
         label = "Circle",
         op = function(inputs)
             return {
-                out_mesh = Primitives.circle(inputs.center, inputs.radius, inputs.num_vertices),
+                out_mesh = Primitives.circle(inputs.center, inputs.radius, inputs.num_vertices, inputs.fill == "N-Gon"),
             }
         end,
         inputs = {
             P.v3("center", vector(0, 0, 0)),
             P.scalar("radius", { default = 1.0, min = 0.0 }),
             P.scalar_int("num_vertices", { default = 8, min = 3, soft_max = 32 }),
+            P.enum("fill", {"None", "N-Gon"}, 0)
         },
         outputs = {
             P.mesh("out_mesh"),
@@ -249,7 +250,31 @@ local primitives = {
             P.mesh("out_mesh"),
         },
         returns = "out_mesh",
-    }
+    },
+    MakeCatenary = {
+        label = "Catenary",
+        op = function(inputs)
+            return {
+                out_mesh = Primitives.catenary(
+                    inputs.start_point,
+                    inputs.end_point,
+                    inputs.sag,
+                    inputs.segments
+                ),
+            }
+        end,
+        inputs = {
+            P.v3("start_point", vector(0, 0, 0)),
+            P.v3("end_point", vector(1, 0, 0)),
+            P.scalar("sag", { default = 1.0, min = 0.001}),
+            P.scalar_int("segments", { default = 8, min = 1, soft_max = 32 })
+        },
+        outputs = {
+            P.mesh("out_mesh"),
+        },
+        gizmos = { Gz.tweak_point("start_point"), Gz.tweak_point("end_point") },
+        returns = "out_mesh",
+    },
 }
 
 local function parse_ch_key(s)

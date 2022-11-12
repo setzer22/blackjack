@@ -164,23 +164,57 @@ impl UVSphere {
 
 pub struct Line;
 impl Line {
-    pub fn build(position: impl Fn(u32) -> Vec3, segments: u32) -> HalfEdgeMesh {
-        let mesh = HalfEdgeMesh::new();
+    pub fn build(position: &impl Fn(u32) -> Vec3, segments: u32) -> HalfEdgeMesh {
+        let tangent = |i| {
+            match i {
+                0 => position(1) - position(0),
+                i if i == segments => position(segments) - position(segments - 1),
+                i => {
+                    let n1 = (position(i) - position(i - 1)).normalize();
+                    let n2 = (position(i + 1) - position(i)).normalize();
+                    n1 + n2
+                }
+            }
+            .normalize()
+        };
+        let normal = |i| tangent(i).any_orthonormal_vector();
+        Self::build_with_normals(&position, &normal, &tangent, segments)
+    }
+
+    pub fn build_with_normals(
+        position: &impl Fn(u32) -> Vec3,
+        normal: &impl Fn(u32) -> Vec3,
+        tangent: &impl Fn(u32) -> Vec3,
+        segments: u32,
+    ) -> HalfEdgeMesh {
+        if segments == 0 {
+            return HalfEdgeMesh::build_from_polygons::<usize, &[usize]>(&[position(0)], &[])
+                .unwrap();
+        }
+        let mut mesh = HalfEdgeMesh::new();
+        let tangent_channel_id = mesh.channels.ensure_channel::<VertexId, Vec3>("tangent");
+        let normal_channel_id = mesh.channels.ensure_channel::<VertexId, Vec3>("normal");
         let mut conn = mesh.write_connectivity();
         let mut pos = mesh.write_positions();
+        let mut norm = mesh
+            .channels
+            .write_channel(normal_channel_id)
+            .expect("normal channel to exist");
+        let mut tang = mesh
+            .channels
+            .write_channel(tangent_channel_id)
+            .expect("tangent channel to exist");
 
         let mut forward_halfedges = SVec::new();
         let mut backward_halfedges = SVec::new();
 
-        //let mut v = conn.alloc_vertex(&mut pos, start, None);
         let mut v = conn.alloc_vertex(&mut pos, position(0), None);
+        norm[v] = normal(0);
+        tang[v] = tangent(0);
         for i in 1..=segments {
-            let w = conn.alloc_vertex(
-                &mut pos,
-                //start.lerp(end, (i + 1) as f32 / segments as f32),
-                position(i),
-                None,
-            );
+            let w = conn.alloc_vertex(&mut pos, position(i), None);
+            norm[w] = normal(i);
+            tang[w] = tangent(i);
 
             let h_v_w = conn.alloc_halfedge(HalfEdge {
                 twin: None,
@@ -238,16 +272,21 @@ impl Line {
 
         drop(conn);
         drop(pos);
+        drop(norm);
+        drop(tang);
 
         mesh
     }
 
     pub fn build_straight_line(start: Vec3, end: Vec3, segments: u32) -> HalfEdgeMesh {
-        Self::build(|i| start.lerp(end, i as f32 / segments as f32), segments)
+        Self::build(&|i| start.lerp(end, i as f32 / segments as f32), segments)
     }
 
     pub fn build_from_points(points: Vec<Vec3>) -> HalfEdgeMesh {
-        Self::build(|i| points[i as usize], points.len() as u32 - 1)
+        match points.len() {
+            0 => HalfEdgeMesh::new(),
+            len => Self::build(&|i| points[i as usize], len as u32 - 1),
+        }
     }
 }
 
@@ -272,7 +311,6 @@ impl Cone {
         height: f32,
         num_vertices: usize,
     ) -> HalfEdgeMesh {
-        // Not using an epsilon, may be useful for to keep multiple verts at the point using small values.
         if top_radius.abs() <= 1e-5 {
             Self::build_cone(center, bottom_radius, height, num_vertices)
         } else {
@@ -361,6 +399,65 @@ impl Grid {
     }
 }
 
+fn catenary(x: f32, a: f32) -> f32 {
+    a * (x / a).cosh()
+}
+
+fn catenary_dx(x: f32, a: f32) -> f32 {
+    (x / a).sinh()
+}
+
+/// Curve of a hanging chain, rope, or wire. https://en.wikipedia.org/wiki/Catenary
+struct Catenary;
+impl Catenary {
+    const MAX_ERR: f32 = 1e-2;
+    const NEWTON_ITERS: u32 = 20;
+
+    pub fn build(start: Vec3, end: Vec3, sag: f32, segments: u32) -> HalfEdgeMesh {
+        let dx = start.xz().distance(end.xz());
+        let dy = start.y - end.y;
+        // Re-parameterize to make it easier to control. Invert because at low tension values
+        // the curve droops to negative infinity, scale by dx so that the curve looks the same as
+        // you move the endpoints apart.
+        let tension = dx / sag;
+
+        // No direct formula to figure out where to put the two points on the curve to match
+        // differences in height, approximate with Newton's method.
+        let mut x_off = -dx / 2.0;
+        let error = |x_off| catenary(x_off, tension) - catenary(x_off + dx, tension) - dy;
+        for _ in 0..Self::NEWTON_ITERS {
+            let d_error = catenary_dx(x_off, tension) - catenary_dx(x_off + dx, tension);
+            x_off -= error(x_off) / d_error;
+        }
+        let x_off = x_off;
+        if x_off.is_nan() || error(x_off).abs() > Self::MAX_ERR {
+            return Line::build_straight_line(start, end, segments);
+        }
+
+        let y_off = start.y - catenary(x_off, tension);
+
+        let position = |i| match i {
+            0 => start,
+            i if i == segments => end,
+            i => {
+                let t = (i as f32) / (segments as f32);
+                let xz = start.xz().lerp(end.xz(), t);
+                let y = catenary((t * dx) + x_off, tension) + y_off;
+                Vec3::new(xz.x, y, xz.y)
+            }
+        };
+        let dxz = end.xz() - start.xz();
+        let tangent = |i| {
+            let t = (i as f32) / (segments as f32);
+            // Partial derivative dy/dt of the curve
+            let y = dx * catenary_dx((t * dx) + x_off, tension);
+            Vec3::new(dxz.x, y, dxz.y).normalize()
+        };
+        let normal = |i| Vec3::Y.reject_from_normalized(tangent(i));
+        Line::build_with_normals(&position, &normal, &tangent, segments)
+    }
+}
+
 #[blackjack_macros::blackjack_lua_module]
 mod lua_api {
     use super::*;
@@ -382,8 +479,12 @@ mod lua_api {
     /// Creates an open circle (polyline) with given `center`, `radius` and
     /// `num_vertices`.
     #[lua(under = "Primitives")]
-    fn circle(center: LVec3, radius: f32, num_vertices: f32) -> HalfEdgeMesh {
-        Circle::build_open(center.0, radius, num_vertices as usize)
+    fn circle(center: LVec3, radius: f32, num_vertices: f32, filled: bool) -> HalfEdgeMesh {
+        if filled {
+            Circle::build(center.0, radius, num_vertices as usize)
+        } else {
+            Circle::build_open(center.0, radius, num_vertices as usize)
+        }
     }
 
     /// Creates a truncated cone with the given `center`, `bottom_radius`, `top_radius`,
@@ -432,6 +533,14 @@ mod lua_api {
         Line::build_from_points(LVec3::cast_vector(points))
     }
 
+    /// Creates a catenary curve, the curve followed by a chain or rope hanging between two points,
+    /// between `start` and `end` split into a number of `segments`. `sag` adjusts how much the curve sags,
+    /// higher values make the curve hang lower, lower values make it closer to a straight line.
+    #[lua(under = "Primitives")]
+    fn catenary(start: LVec3, end: LVec3, sag: f32, segments: u32) -> HalfEdgeMesh {
+        Catenary::build(start.0, end.0, sag, segments)
+    }
+
     /// Creates a single polygon from a given set of points.
     #[lua(under = "Primitives")]
     fn polygon(points: Vec<LVec3>) -> Result<HalfEdgeMesh> {
@@ -451,7 +560,7 @@ mod test {
     #[test]
     fn test_cone() {
         let cone = Cone::build(Vec3::ZERO, 0.0, 1.0, 1.0, 8);
-        assert_eq!(cone.read_connectivity().vertices.len(), 9);
+        assert_eq!(cone.read_connectivity().num_vertices(), 9);
 
         Cone::build(Vec3::ZERO, 1.0, 2.0, 1.0, 8);
         Cone::build_cone(Vec3::ZERO, 1.0, 1.0, 8);
@@ -461,5 +570,25 @@ mod test {
     #[test]
     fn test_cylinder() {
         Cylinder::build(Vec3::ZERO, 1.0, 1.0, 8);
+    }
+
+    #[test]
+    fn test_catenary() {
+        let start = Vec3::ZERO;
+        let end = Vec3::new(0.0, 1.0, 1.0);
+        let curve = Catenary::build(start, end, 1.0, 8);
+        assert_eq!(curve.read_connectivity().num_vertices(), 9);
+        let pos = curve.read_positions();
+        // Want to have the exact endpoints and not ones computed from the curve.
+        assert!(pos.iter().map(|x| x.1).contains(&start));
+        assert!(pos.iter().map(|x| x.1).contains(&end));
+    }
+
+    #[test]
+    fn test_line_from_points() {
+        // Too few points can cause problems with normal/tangent calculations
+        Line::build_from_points(vec![]);
+        Line::build_from_points(vec![Vec3::ZERO]);
+        Line::build_from_points(vec![Vec3::ZERO, Vec3::Y]);
     }
 }
