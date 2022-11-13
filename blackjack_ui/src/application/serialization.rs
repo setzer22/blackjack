@@ -8,7 +8,9 @@ use crate::{graph::graph_interop, prelude::graph::*, prelude::*};
 use std::path::{Path, PathBuf};
 
 use blackjack_engine::graph::{
-    serialization::{RuntimeData, SerializedBjkGraph, SerializedUiData},
+    serialization::{
+        RuntimeData, SerializedBjkGraph, SerializedBjkSnippet, SerializedUiData, SnippetRuntimeData,
+    },
     DependencyKind, NodeDefinitions,
 };
 use egui_node_graph::PanZoom;
@@ -148,4 +150,49 @@ pub fn load(
     };
 
     Ok((editor_state, custom_state))
+}
+
+pub fn to_clipboard(
+    editor_state: &GraphEditorState,
+    custom_state: &CustomGraphState,
+    nodes: &[NodeId],
+) -> Result<String> {
+    let (bjk_graph, mapping) =
+        graph_interop::ui_graph_to_blackjack_graph(&editor_state.graph, custom_state)?;
+    let external_param_values =
+        graph_interop::extract_graph_params(&editor_state.graph, &bjk_graph, &mapping)?;
+    let (mut snippet, id_map) = SerializedBjkSnippet::from_runtime(
+        SnippetRuntimeData {
+            nodes: bjk_graph.nodes,
+            external_parameters: Some(external_param_values),
+        },
+        nodes.iter_cpy().map(|x| mapping[x]).collect_vec(),
+    )?;
+
+    let node_id_to_idx =
+        |id: NodeId| -> usize { id_map.get_idx(mapping[id]).expect("Id should exist") };
+
+    let mut positions = editor_state
+        .node_positions
+        .iter()
+        .filter(|(n, _)| nodes.contains(n));
+    let (_, first_n_pos) = positions
+        .next()
+        .ok_or_else(|| anyhow!("Cannot copy an empty selection"))?;
+    let mut aabb = egui::Rect::from_min_max(*first_n_pos, *first_n_pos);
+    for (_, pos) in positions {
+        aabb.extend_with(*pos);
+    }
+
+    let origin = aabb.left_top() - editor_state.pan_zoom.pan;
+    snippet.set_node_relative_positions(
+        editor_state
+            .node_positions
+            .iter()
+            .map(|(n, pos)| (node_id_to_idx(n), *pos - origin))
+            .sorted_by_key(|(idx, _)| *idx)
+            .map(|(_, pos)| glam::Vec2::new(pos.x, pos.y))
+            .collect_vec(),
+    );
+    snippet.into_string()
 }

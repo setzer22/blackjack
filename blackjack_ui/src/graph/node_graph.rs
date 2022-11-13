@@ -7,6 +7,7 @@
 use std::borrow::Cow;
 
 use crate::application::gizmo_ui::UiNodeGizmoStates;
+use crate::application::serialization;
 use crate::custom_widgets::smart_dragvalue::SmartDragValue;
 use crate::{application::code_viewer::code_edit_ui, prelude::*};
 use blackjack_engine::{
@@ -239,7 +240,15 @@ pub fn draw_node_graph(
 
         if ui.input().key_released(egui::Key::C) && ui.input().modifiers.ctrl {
             if !editor_state.selected_nodes.is_empty() {
-                println!("Copy!");
+                match serialization::to_clipboard(&editor_state, custom_state, &editor_state.selected_nodes) {
+                    Ok(clipboard_data) => {
+                        println!("{clipboard_data}");
+                        ui.output().copied_text = clipboard_data;
+                    }
+                    Err(err) => {
+                        println!("Error: Could not generate clipboard data {err:?}");
+                    }
+                }
             }
 
         } else if ui.input().key_released(egui::Key::V) && ui.input().modifiers.ctrl {
