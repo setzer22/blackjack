@@ -240,9 +240,12 @@ pub fn draw_node_graph(
 
         if ui.input().key_released(egui::Key::C) && ui.input().modifiers.ctrl {
             if !editor_state.selected_nodes.is_empty() {
-                match serialization::to_clipboard(&editor_state, custom_state, &editor_state.selected_nodes) {
+                match serialization::to_clipboard(
+                    &editor_state,
+                    custom_state,
+                    &editor_state.selected_nodes,
+                ) {
                     Ok(clipboard_data) => {
-                        println!("{clipboard_data}");
                         ui.output().copied_text = clipboard_data;
                     }
                     Err(err) => {
@@ -250,11 +253,25 @@ pub fn draw_node_graph(
                     }
                 }
             }
-
-        } else if ui.input().key_released(egui::Key::V) && ui.input().modifiers.ctrl {
-            println!("Paste!")
         }
 
+        {
+            let input = ui.input();
+            let cursor_pos = ui.input().pointer.hover_pos().unwrap_or(egui::Pos2::ZERO);
+            if let Some(paste_contents) = input.events.iter().find_map(|ev| match ev {
+                egui::Event::Paste(text) => Some(text),
+                _ => None,
+            }) {
+                if let Err(err) = serialization::from_clipboard(
+                    editor_state,
+                    custom_state,
+                    paste_contents,
+                    cursor_pos,
+                ) {
+                    println!("Error: Could not paste clipboard data: {err:?}")
+                }
+            }
+        }
     });
 }
 

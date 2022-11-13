@@ -22,7 +22,8 @@ use crate::{
 };
 
 use super::{
-    BjkGraph, BjkNode, BjkNodeId, BlackjackValue, DataType, DependencyKind, InputParameter, Output,
+    BjkGraph, BjkNode, BjkNodeId, BjkSnippet, BlackjackValue, DataType, DependencyKind,
+    InputParameter, Output,
 };
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -158,35 +159,9 @@ pub struct SerializedBjkSnippet {
     pub external_parameters: Option<SerializedExternalParameters>,
 }
 
-// WIP:
-// - [x] Introduce a new runtime type BjkGraphSnippet
-//
-// - [x] Introduce its mirror type SerializedBjkGraphSnippet. It also holds editor
-// data like the SerializedBjkGraph, but it's just a single field:
-// relative_node_positions.
-//
-// - From the editor, on save, create a BjkGraphSnippet from the editor data,
-// and enrich it with node positions. We will need to subtract the current pan
-// value, plus the AABB's min position for every node so that the top-leftmost
-// node is at (0,0) in the snippet.
-//
-// - The saved value is stored as a string on the clipboard. Users can paste it
-// anywhere (even between blackjack instances or across the network).
-//
-// - To load, do the same in reverse. First, convert the string into a
-// SerializedBjkGraphSnippet.
-//
-// - Then, use its .into_runtime() function to convert it to runtime data.
-//
-// - Next, grab this runtime data and update the editor data structures to add
-// any new nodes and set their positions.
-//
-// This may sound a bit redundant, but it's better to split the copy/pasting
-// logic from actual file saving from early on, to allow for slight differences
-// in the future. On a micro-scale, we can try to introduce functions to reduce
-// repetition as much as possible, but don't try to do it on the macro scale
-// (i.e. the function to "paste" something should be a different one than the
-// one used for "load file").
+// WIP: Remaining TODOs
+// - [ ] The graph library has a bug where you can select with any mouse button.
+// - [ ] The version header is ommitted from snippets. It should be there.
 
 /// Maps slotmap ids to serialized indices.
 type IdToIdx = SecondaryMap<BjkNodeId, usize>;
@@ -226,7 +201,7 @@ pub struct RuntimeData {
 /// This struct represents the runtime data that can be copied to, or pasted
 /// from the user's clipboard.
 pub struct SnippetRuntimeData {
-    pub nodes: SlotMap<BjkNodeId, BjkNode>,
+    pub snippet: BjkSnippet,
     pub external_parameters: Option<ExternalParameterValues>,
 }
 
@@ -296,30 +271,47 @@ impl SerializedBjkSnippet {
     }
 
     pub fn from_runtime(
-        runtime_data: SnippetRuntimeData,
-        nodes_projection: Vec<BjkNodeId>,
+        mut graph: BjkGraph,
+        mut external_parameters: ExternalParameterValues,
+        node_projection: &[BjkNodeId],
     ) -> Result<(Self, IdMappings)> {
-        let SnippetRuntimeData {
-            nodes,
-            external_parameters,
-        } = runtime_data;
+        // Remove the nodes from the graph that are not part of the projection
+        graph.nodes.retain(|id, _| node_projection.contains(&id));
+
+        // When there is a connection that crosses the projection boundary, we remove it.
+        for (node_id, node) in &mut graph.nodes {
+            if node_projection.contains(&node_id) {
+                for input in &mut node.inputs {
+                    if let DependencyKind::Connection { node, .. } = &input.kind {
+                        if !node_projection.contains(node) {
+                            input.kind = DependencyKind::External { promoted: None };
+                        }
+                    }
+                }
+            }
+        }
+
+        // We also remove any external parameters referencing nodes outside the projection
+        external_parameters
+            .0
+            .retain(|param, _| node_projection.contains(&param.node_id));
+
         let mut serialized_nodes = vec![];
-        let mappings = IdMappings::from_nodes(&nodes);
-        for node_id in nodes_projection {
-            let node = nodes
-                .get(node_id)
-                .ok_or_else(|| anyhow!("Tried to project a non-existing node {node_id:?}"))?;
+        let mappings = IdMappings::from_nodes(&graph.nodes);
+
+        // Finally, we serialize as normal
+        for (node_id, node) in &graph.nodes {
+            debug_assert!(node_projection.contains(&node_id));
             serialized_nodes.push(SerializedBjkNode::from_runtime_data(&node, &mappings)?);
         }
 
         Ok((
             Self {
                 nodes: serialized_nodes,
-                external_parameters: if let Some(e) = external_parameters {
-                    Some(SerializedExternalParameters::from_runtime(e, &mappings)?)
-                } else {
-                    None
-                },
+                external_parameters: Some(SerializedExternalParameters::from_runtime(
+                    external_parameters,
+                    &mappings,
+                )?),
                 node_relative_positions: None,
             },
             mappings,
@@ -566,7 +558,7 @@ impl SerializedBjkSnippet {
 
         Ok((
             SnippetRuntimeData {
-                nodes: rt_nodes,
+                snippet: BjkSnippet { nodes: rt_nodes },
                 external_parameters: if let Some(e) = self.external_parameters {
                     Some(e.into_runtime(&mappings)?)
                 } else {

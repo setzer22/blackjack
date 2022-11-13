@@ -8,9 +8,7 @@ use crate::{graph::graph_interop, prelude::graph::*, prelude::*};
 use std::path::{Path, PathBuf};
 
 use blackjack_engine::graph::{
-    serialization::{
-        RuntimeData, SerializedBjkGraph, SerializedBjkSnippet, SerializedUiData, SnippetRuntimeData,
-    },
+    serialization::{RuntimeData, SerializedBjkGraph, SerializedBjkSnippet, SerializedUiData},
     DependencyKind, NodeDefinitions,
 };
 use egui_node_graph::PanZoom;
@@ -161,12 +159,11 @@ pub fn to_clipboard(
         graph_interop::ui_graph_to_blackjack_graph(&editor_state.graph, custom_state)?;
     let external_param_values =
         graph_interop::extract_graph_params(&editor_state.graph, &bjk_graph, &mapping)?;
+
     let (mut snippet, id_map) = SerializedBjkSnippet::from_runtime(
-        SnippetRuntimeData {
-            nodes: bjk_graph.nodes,
-            external_parameters: Some(external_param_values),
-        },
-        nodes.iter_cpy().map(|x| mapping[x]).collect_vec(),
+        bjk_graph,
+        external_param_values,
+        &nodes.iter_cpy().map(|x| mapping[x]).collect_vec(),
     )?;
 
     let node_id_to_idx =
@@ -184,15 +181,81 @@ pub fn to_clipboard(
         aabb.extend_with(*pos);
     }
 
-    let origin = aabb.left_top() - editor_state.pan_zoom.pan;
+    let origin = aabb.left_top().to_vec2();
     snippet.set_node_relative_positions(
-        editor_state
-            .node_positions
-            .iter()
-            .map(|(n, pos)| (node_id_to_idx(n), *pos - origin))
+        nodes
+            .iter_cpy()
+            .map(|n| {
+                let pos = editor_state
+                    .node_positions
+                    .get(n)
+                    .copied()
+                    .unwrap_or(egui::Pos2::ZERO);
+                (node_id_to_idx(n), pos - origin)
+            })
             .sorted_by_key(|(idx, _)| *idx)
             .map(|(_, pos)| glam::Vec2::new(pos.x, pos.y))
             .collect_vec(),
     );
     snippet.into_string()
+}
+
+pub fn from_clipboard(
+    editor_state: &mut GraphEditorState,
+    custom_state: &mut CustomGraphState,
+    clipboard_contents: &str,
+    cursor_pos: egui::Pos2,
+) -> Result<()> {
+    // NOTE: This destructuring is added for future compatibility. We don't want
+    // to forget updating this function when new things are added to the custom
+    // state. Any fields that require special handling will be annotated below
+    let CustomGraphState {
+        run_side_effect: _,
+        active_node: _,
+        node_definitions: _,
+        promoted_params: _,
+        gizmo_states: _,
+    } = custom_state;
+    let GraphEditorState {
+        // This is updated by `append_snippet_to_existing_ui_graph`
+        graph: _,
+        // Need to update this below, otherwise it will panic because new nodes
+        // have been added.
+        node_order: _,
+        connection_in_progress: _,
+        // The newly created nodes will become selected after a paste
+        selected_nodes: _,
+        ongoing_box_selection: _,
+        // Need to update this, since new nodes have been added
+        node_positions: _,
+        node_finder: _,
+        pan_zoom: _,
+        _user_state: _,
+    } = editor_state;
+
+    let serialized = SerializedBjkSnippet::load_from_string(&clipboard_contents)?;
+    let (rt_data, relative_node_positions, id_map) = serialized.into_runtime()?;
+
+    let node_mapping = graph_interop::append_snippet_to_existing_ui_graph(
+        &mut editor_state.graph,
+        &rt_data.snippet,
+        &rt_data.external_parameters,
+        &custom_state.node_definitions,
+    );
+
+    editor_state.selected_nodes.clear();
+    if let Some(positions) = relative_node_positions {
+        for (idx, position) in positions.iter().enumerate() {
+            let node_id = node_mapping[id_map.get_id(idx)?];
+            let node_pos =
+                cursor_pos + egui::vec2(position.x, position.y) - editor_state.pan_zoom.pan;
+            editor_state.node_positions.insert(node_id, node_pos);
+            editor_state.node_order.push(node_id);
+            editor_state.selected_nodes.push(node_id);
+        }
+    } else {
+        bail!("No node positions in snippet. Cannot paste")
+    }
+
+    Ok(())
 }
