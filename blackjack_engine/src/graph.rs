@@ -161,6 +161,19 @@ pub struct BjkGraph {
     pub default_node: Option<BjkNodeId>,
 }
 
+/// Represents a fragment of a `BjkGraph`. Snippets can be taken out of a graph
+/// and applied to another graph. They are the backing data structure to
+/// implement copy & paste.
+///
+/// NOTE: At this time, the `BjkSnippet` doesn't have substantial differences
+/// with `BjkGraph`, but the distinction between the two types is there to
+/// accomodate for future differences between a *portion* of a graph and a full,
+/// executable graph.
+#[derive(Default)]
+pub struct BjkSnippet {
+    pub nodes: SlotMap<BjkNodeId, BjkNode>,
+}
+
 /// Specifies the ways in which the file picker dialog for an
 /// `InputValueConfig::FilePath` can work.
 #[derive(Debug, Copy, Clone)]
