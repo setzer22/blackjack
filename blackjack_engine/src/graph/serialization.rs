@@ -161,7 +161,8 @@ pub struct SerializedBjkSnippet {
 
 // WIP: Remaining TODOs
 // - [ ] The graph library has a bug where you can select with any mouse button.
-// - [ ] The version header is ommitted from snippets. It should be there.
+// - [x] The version header is ommitted from snippets. It should be there.
+// - [ ] Warn about pasting stuff potentially running code.
 
 /// Maps slotmap ids to serialized indices.
 type IdToIdx = SecondaryMap<BjkNodeId, usize>;
@@ -267,7 +268,10 @@ impl SerializedBjkGraph {
 
 impl SerializedBjkSnippet {
     pub fn into_string(&self) -> Result<String> {
-        Ok(ron::ser::to_string_pretty(&self, PrettyConfig::default())?)
+        let mut w = BufWriter::new(Vec::<u8>::new());
+        SerializationVersion::latest().to_writer(&mut w)?;
+        ron::ser::to_writer_pretty(&mut w, self, PrettyConfig::default())?;
+        Ok(String::from_utf8(w.into_inner()?)?)
     }
 
     pub fn from_runtime(
