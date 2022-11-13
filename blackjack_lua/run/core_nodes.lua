@@ -275,6 +275,23 @@ local primitives = {
         gizmos = { Gz.tweak_point("start_point"), Gz.tweak_point("end_point") },
         returns = "out_mesh",
     },
+    MakeIcosahedron = {
+        label = "Icosahedron",
+        op = function(inputs)
+            return {
+                out_mesh = Primitives.icosahedron(inputs.center, inputs.radius)
+            }
+        end,
+        inputs = {
+            P.v3("center", vector(0, 0, 0)),
+            P.scalar("radius", {default = 1.0, min = 0}),
+        },
+        outputs = {
+            P.mesh("out_mesh"),
+        },
+        gizmos = { Gz.tweak_point("center"), },
+        returns = "out_mesh",
+    },
 }
 
 local function parse_ch_key(s)
