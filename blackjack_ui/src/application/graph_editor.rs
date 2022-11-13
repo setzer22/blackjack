@@ -235,7 +235,7 @@ impl GraphEditor {
         parent_scale: f32,
         _resolution: UVec2,
         render_target: r3::RenderTargetHandle,
-    ) {
+    ) -> egui::PlatformOutput {
         let full_output = self.egui_context.end_frame();
         let paint_jobs = self.egui_context.tessellate(full_output.shapes);
 
@@ -285,6 +285,8 @@ impl GraphEditor {
                     .execute_with_renderpass(rpass, &paint_jobs, &screen_descriptor);
             },
         );
+
+        full_output.platform_output
     }
 
     /// Returns Some(render_target) when the graph should be drawn by the parent
@@ -294,12 +296,12 @@ impl GraphEditor {
         graph: &mut r3::RenderGraph<'node>,
         viewport_rect: egui::Rect,
         parent_scale: f32,
-    ) -> Option<r3::RenderTargetHandle> {
+    ) -> (Option<r3::RenderTargetHandle>, Option<egui::PlatformOutput>) {
         let resolution = viewport_rect.size() * parent_scale;
         let resolution = UVec2::new(resolution.x as u32, resolution.y as u32);
 
         if resolution.x == 0 || resolution.y == 0 {
-            return None;
+            return (None, None);
         }
 
         let render_target = graph.add_render_target(r3::RenderTargetDescriptor {
@@ -312,7 +314,7 @@ impl GraphEditor {
 
         // TODO: Add graph background
 
-        self.add_graph_egui_to_graph(
+        let platform_output = self.add_graph_egui_to_graph(
             graph,
             viewport_rect,
             parent_scale,
@@ -320,7 +322,7 @@ impl GraphEditor {
             render_target,
         );
 
-        Some(render_target)
+        (Some(render_target), Some(platform_output))
     }
 
     /// Updates the graph after the node definitions were updated. This
