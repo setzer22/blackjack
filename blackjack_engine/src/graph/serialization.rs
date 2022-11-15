@@ -160,7 +160,7 @@ pub struct SerializedBjkSnippet {
 }
 
 // WIP: Remaining TODOs
-// - [ ] The graph library has a bug where you can select with any mouse button.
+// - [x] The graph library has a bug where you can select with any mouse button.
 // - [x] The version header is ommitted from snippets. It should be there.
 // - [ ] Warn about pasting stuff potentially running code.
 
