@@ -7,6 +7,7 @@
 use std::borrow::Cow;
 
 use crate::application::gizmo_ui::UiNodeGizmoStates;
+use crate::application::graph_editor::GraphEditor;
 use crate::application::serialization;
 use crate::custom_widgets::smart_dragvalue::SmartDragValue;
 use crate::{application::code_viewer::code_edit_ui, prelude::*};
@@ -14,7 +15,7 @@ use blackjack_engine::{
     graph::{BlackjackValue, DataType, FilePathMode, InputValueConfig, NodeDefinitions},
     prelude::selection::SelectionExpression,
 };
-use egui::RichText;
+use egui::{RichText, TextBuffer};
 use egui_node_graph::{
     DataTypeTrait, InputId, NodeDataTrait, NodeId, NodeResponse, NodeTemplateIter,
     UserResponseTrait, WidgetValueTrait,
@@ -186,16 +187,23 @@ impl NodeDataTrait for NodeData {
 /// Blackjack's custom draw node graph function. It defers to egui_node_graph to
 /// draw the graph itself, then interprets any responses it got and applies the
 /// required side effects.
-pub fn draw_node_graph(
-    ctx: &egui::Context,
-    editor_state: &mut GraphEditorState,
-    custom_state: &mut CustomGraphState,
-    defs: &NodeDefinitions,
-    mouse_over_node_finder: &mut bool,
-) {
+pub fn draw_node_graph(graph_editor: &mut GraphEditor) {
+    let GraphEditor {
+        editor_state,
+        custom_state,
+        egui_context: ctx,
+        mouse_over_node_finder,
+        previous_clipboard_contents,
+        pending_paste_operation,
+        skip_pending_paste_check,
+        ..
+    } = graph_editor;
     egui::CentralPanel::default().show(ctx, |ui| {
-        let responses =
-            editor_state.draw_graph_editor(ui, NodeOpNames(defs.node_names()), custom_state);
+        let responses = editor_state.draw_graph_editor(
+            ui,
+            NodeOpNames(custom_state.node_definitions.node_names()),
+            custom_state,
+        );
 
         // Store whether the mouse is in the node finder. This helps prevent
         // scroll wheel events.
@@ -252,6 +260,7 @@ pub fn draw_node_graph(
                     &editor_state.selected_nodes,
                 ) {
                     Ok(clipboard_data) => {
+                        *previous_clipboard_contents = clipboard_data.clone();
                         ui.output().copied_text = clipboard_data;
                     }
                     Err(err) => {
@@ -261,22 +270,64 @@ pub fn draw_node_graph(
             }
         }
 
-        {
-            let input = ui.input();
-            let cursor_pos = ui.input().pointer.hover_pos().unwrap_or(egui::Pos2::ZERO);
-            if let Some(paste_contents) = input.events.iter().find_map(|ev| match ev {
-                egui::Event::Paste(text) => Some(text),
-                _ => None,
-            }) {
-                if let Err(err) = serialization::from_clipboard(
-                    editor_state,
-                    custom_state,
-                    paste_contents,
-                    cursor_pos,
-                ) {
-                    println!("Error: Could not paste clipboard data: {err:?}")
-                }
+        let input = ui.input();
+        let cursor_pos = ui.input().pointer.hover_pos().unwrap_or(egui::Pos2::ZERO);
+        let mut do_paste = |paste_contents: &str| {
+            if let Err(err) = serialization::from_clipboard(
+                editor_state,
+                custom_state,
+                paste_contents,
+                cursor_pos,
+            ) {
+                println!("Error: Could not paste clipboard data: {err:?}")
             }
+        };
+
+        if let Some(paste_contents) = input.events.iter().find_map(|ev| match ev {
+            egui::Event::Paste(text) => Some(text),
+            _ => None,
+        }) {
+            if previous_clipboard_contents != paste_contents && !*skip_pending_paste_check {
+                *pending_paste_operation = Some(paste_contents.clone());
+            } else {
+                do_paste(paste_contents);
+            }
+        }
+
+        // Do not borrow the egui context for too long or we will deadlock.
+        drop(input);
+
+        let mut clear_pending_paste = false;
+        if let Some(pending_paste) = pending_paste_operation {
+            egui::Window::new("⚠ Warning ⚠")
+                .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
+                .resizable(false)
+                .collapsible(false)
+                .show(ui.ctx(), |ui| {
+                    ui.label(
+                        r#"
+Remember: When pasting from outside sources, always make sure you trust the author of the snippet.
+
+Pasted nodes can potentially run code, but only when you activate them.
+"#,
+                    );
+
+                    ui.checkbox(skip_pending_paste_check, "Do not remind me again");
+
+                    ui.horizontal(|ui| {
+                        if ui.button("I understand").clicked() {
+                            let paste = pending_paste.take();
+                            do_paste(&paste);
+                            clear_pending_paste = true;
+                        }
+                        if ui.button("Nevermind").clicked() {
+                            clear_pending_paste = true;
+                        }
+                    });
+                });
+        }
+        if clear_pending_paste {
+            *pending_paste_operation = None;
         }
     });
 }

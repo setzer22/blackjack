@@ -233,7 +233,6 @@ impl RootViewport {
             window,
             self.screen_descriptor.pixels_per_point,
             self.offscreen_viewports[&OffscreenViewport::GraphEditor].rect,
-            &self.lua_runtime.node_definitions,
         );
         self.viewport_3d.update(
             self.screen_descriptor.pixels_per_point,

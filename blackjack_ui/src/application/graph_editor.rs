@@ -24,7 +24,18 @@ pub struct GraphEditor {
     pub renderpass: RenderPass,
     pub raw_mouse_position: Option<egui::Pos2>,
     pub textures_to_free: Vec<egui::TextureId>,
+    /// Is the mouse over the node finder? Used to ignore scroll wheel events
+    /// and not zoom the graph when that happens.
     pub mouse_over_node_finder: bool,
+    /// Stores the last stored contents of the clipboard from the graph editor.
+    /// Used to detect whether the current paste event was originated from this
+    /// blackjack instance.
+    pub previous_clipboard_contents: String,
+    /// When there's a potentially unsafe paste operation pending, the clipboard
+    /// contents are stored here.
+    pub pending_paste_operation: Option<String>,
+    /// Allows ignoring the potentially unsafe paste confirmation dialog.
+    pub skip_pending_paste_check: bool,
 }
 
 pub fn blackjack_graph_theme() -> egui::Visuals {
@@ -63,6 +74,9 @@ impl GraphEditor {
             raw_mouse_position: None,
             textures_to_free: Vec::new(),
             mouse_over_node_finder: false,
+            previous_clipboard_contents: String::new(),
+            pending_paste_operation: None,
+            skip_pending_paste_check: false,
         }
     }
 
@@ -166,7 +180,6 @@ impl GraphEditor {
         window: &winit::window::Window,
         parent_scale: f32,
         viewport_rect: egui::Rect,
-        node_definitions: &NodeDefinitions,
     ) {
         self.resize_platform(parent_scale, viewport_rect);
         self.egui_context.input_mut().pixels_per_point = 1.0 / self.zoom_level();
@@ -202,13 +215,7 @@ impl GraphEditor {
 
         self.egui_context.begin_frame(egui_input);
 
-        graph::draw_node_graph(
-            &self.egui_context,
-            &mut self.editor_state,
-            &mut self.custom_state,
-            node_definitions,
-            &mut self.mouse_over_node_finder,
-        );
+        graph::draw_node_graph(self);
 
         // Debug mouse pointer position
         // -- This is useful when mouse events are not being interpreted correctly.
