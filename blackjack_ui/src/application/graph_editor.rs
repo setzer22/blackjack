@@ -24,6 +24,7 @@ pub struct GraphEditor {
     pub renderpass: RenderPass,
     pub raw_mouse_position: Option<egui::Pos2>,
     pub textures_to_free: Vec<egui::TextureId>,
+    pub mouse_over_node_finder: bool,
 }
 
 pub fn blackjack_graph_theme() -> egui::Visuals {
@@ -61,6 +62,7 @@ impl GraphEditor {
             // window events from egui when the cursor is not over the viewport
             raw_mouse_position: None,
             textures_to_free: Vec::new(),
+            mouse_over_node_finder: false,
         }
     }
 
@@ -120,22 +122,24 @@ impl GraphEditor {
                     egui::pos2(0.0, 0.0)
                 }
                 .to_vec2();
-                match delta {
-                    winit::event::MouseScrollDelta::LineDelta(_, dy) => {
-                        self.editor_state.pan_zoom.adjust_zoom(
-                            -*dy * 8.0 * 0.01,
-                            mouse_pos,
-                            Self::ZOOM_LEVEL_MIN,
-                            Self::ZOOM_LEVEL_MAX,
-                        );
-                    }
-                    winit::event::MouseScrollDelta::PixelDelta(pos) => {
-                        self.editor_state.pan_zoom.adjust_zoom(
-                            -pos.y as f32 * 0.01,
-                            mouse_pos,
-                            Self::ZOOM_LEVEL_MIN,
-                            Self::ZOOM_LEVEL_MAX,
-                        );
+                if !self.mouse_over_node_finder {
+                    match delta {
+                        winit::event::MouseScrollDelta::LineDelta(_, dy) => {
+                            self.editor_state.pan_zoom.adjust_zoom(
+                                -*dy * 8.0 * 0.01,
+                                mouse_pos,
+                                Self::ZOOM_LEVEL_MIN,
+                                Self::ZOOM_LEVEL_MAX,
+                            );
+                        }
+                        winit::event::MouseScrollDelta::PixelDelta(pos) => {
+                            self.editor_state.pan_zoom.adjust_zoom(
+                                -pos.y as f32 * 0.01,
+                                mouse_pos,
+                                Self::ZOOM_LEVEL_MIN,
+                                Self::ZOOM_LEVEL_MAX,
+                            );
+                        }
                     }
                 }
             }
@@ -203,6 +207,7 @@ impl GraphEditor {
             &mut self.editor_state,
             &mut self.custom_state,
             node_definitions,
+            &mut self.mouse_over_node_finder,
         );
 
         // Debug mouse pointer position

@@ -191,10 +191,16 @@ pub fn draw_node_graph(
     editor_state: &mut GraphEditorState,
     custom_state: &mut CustomGraphState,
     defs: &NodeDefinitions,
+    mouse_over_node_finder: &mut bool,
 ) {
     egui::CentralPanel::default().show(ctx, |ui| {
         let responses =
             editor_state.draw_graph_editor(ui, NodeOpNames(defs.node_names()), custom_state);
+
+        // Store whether the mouse is in the node finder. This helps prevent
+        // scroll wheel events.
+        *mouse_over_node_finder = responses.cursor_in_finder;
+
         for response in responses.node_responses {
             match response {
                 NodeResponse::DeleteNodeFull { node_id, .. } => {
