@@ -19,7 +19,7 @@ blackjack_commons = { path = "../blackjack_commons" }
 blackjack_engine = { path = "../blackjack_engine" }
 
 # Git dependencies
-egui_node_graph = { git = "https://github.com/setzer22/egui_node_graph", rev = "1f79e61a72792651ada11eaad70416cfe7457365" }
+egui_node_graph = { git = "https://github.com/setzer22/egui_node_graph", rev = "f4009fccc92a5f2132109a661e9bb57cc38b7e51" }
 # egui_node_graph = { path = "../../egui_node_graph/egui_node_graph" }
 rend3 = { git = "https://github.com/Cakefish/rend3.git", rev = "dbdfc32264a1fcab3a15c698c4fc474344f10aab" }
 rend3-routine = { git = "https://github.com/Cakefish/rend3.git", rev = "dbdfc32264a1fcab3a15c698c4fc474344f10aab" }
