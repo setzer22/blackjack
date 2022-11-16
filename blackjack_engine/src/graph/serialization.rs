@@ -159,11 +159,6 @@ pub struct SerializedBjkSnippet {
     pub external_parameters: Option<SerializedExternalParameters>,
 }
 
-// WIP: Remaining TODOs
-// - [x] The graph library has a bug where you can select with any mouse button.
-// - [x] The version header is ommitted from snippets. It should be there.
-// - [ ] Warn about pasting stuff potentially running code.
-
 /// Maps slotmap ids to serialized indices.
 type IdToIdx = SecondaryMap<BjkNodeId, usize>;
 

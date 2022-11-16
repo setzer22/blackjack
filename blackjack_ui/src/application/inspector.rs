@@ -4,13 +4,16 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-use crate::prelude::{graph::CustomGraphState, *};
+use crate::prelude::{
+    graph::{CustomGraphState, Graph},
+    *,
+};
 use blackjack_engine::{
     lua_engine::RenderableThing,
     prelude::{selection::SelectionExpression, ChannelKeyType, ChannelValueType, HalfEdgeMesh},
 };
 use egui::*;
-use egui_node_graph::{InputId, WidgetValueTrait};
+use egui_node_graph::{InputId, NodeId, WidgetValueTrait};
 use slotmap::Key;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -171,68 +174,86 @@ impl PropertiesTab {
 
         let graph = &mut editor_state.graph;
         if !editor_state.selected_nodes.is_empty() {
-            for node in editor_state.selected_nodes.iter_cpy().sorted() {
-                let node = &graph[node];
-                let node_id = node.id;
-                let inputs = node.inputs.clone();
-
-                ui.label(format!("{} ({:?})", node.label, node.id.data()));
-                ui.vertical(|ui| {
-                    for (param_name, param) in inputs {
-                        if graph.connection(param).is_some() {
-                            ui.label(param_name);
-                        } else {
-                            ui.horizontal(|ui| {
-                                tiny_checkbox(ui, &mut graph[param].shown_inline);
-                                let mut defer_remove_promoted_param = None;
-                                if let Some(ref promoted_name) =
-                                    custom_state.promoted_params.get(&param)
-                                {
-                                    if ui
-                                        .button("❌")
-                                        .on_hover_text(format!(
-                                            "Promoted as '{promoted_name}'. Click to undo."
-                                        ))
-                                        .clicked()
-                                    {
-                                        defer_remove_promoted_param = Some(param);
-                                    };
-                                } else if ui
-                                    .button("⤴")
-                                    .on_hover_text(
-                                        "Click to promote parameter. \
-                            Promoted parameters will be tweakable in exported jacks.",
-                                    )
-                                    .clicked()
-                                {
-                                    self.new_promoted_popup = Some(NewPromotedPopup {
-                                        name: String::new(),
-                                        param,
-                                    })
-                                }
-
-                                if let Some(id) = defer_remove_promoted_param {
-                                    custom_state.promoted_params.remove(&id);
-                                }
-
-                                let mut value = std::mem::take(&mut graph[param].value);
-                                value.value_widget(
-                                    &param_name,
-                                    node_id,
-                                    ui,
-                                    custom_state,
-                                    &graph[node_id].user_data,
-                                );
-                                graph[param].value = value;
-                            });
+            Frame::default()
+                .inner_margin(egui::vec2(5.0, 0.0))
+                .show(ui, |ui| {
+                    ScrollArea::both().show(ui, |ui| {
+                        for node in editor_state.selected_nodes.iter_cpy().sorted() {
+                            let mut ch_ui = ui.child_ui_with_id_source(
+                                ui.available_rect_before_wrap(),
+                                *ui.layout(),
+                                node,
+                            );
+                            self.draw_params_for_node(&mut ch_ui, graph, custom_state, node);
+                            ui.allocate_rect(ch_ui.min_rect(), Sense::hover());
                         }
-                    }
+                    });
                 });
-                ui.separator();
-            }
         } else {
             ui.label("No node selected.");
         }
+    }
+
+    fn draw_params_for_node(
+        &mut self,
+        ui: &mut egui::Ui,
+        graph: &mut Graph,
+        custom_state: &mut CustomGraphState,
+        node_id: NodeId,
+    ) {
+        let node = &graph[node_id];
+        let inputs = node.inputs.clone();
+        ui.label(format!("{} ({:?})", node.label, node.id.data()));
+        ui.vertical(|ui| {
+            for (param_name, param) in inputs {
+                if graph.connection(param).is_some() {
+                    ui.label(param_name);
+                } else {
+                    ui.horizontal(|ui| {
+                        tiny_checkbox(ui, &mut graph[param].shown_inline);
+                        let mut defer_remove_promoted_param = None;
+                        if let Some(ref promoted_name) = custom_state.promoted_params.get(&param) {
+                            if ui
+                                .button("❌")
+                                .on_hover_text(format!(
+                                    "Promoted as '{promoted_name}'. Click to undo."
+                                ))
+                                .clicked()
+                            {
+                                defer_remove_promoted_param = Some(param);
+                            };
+                        } else if ui
+                            .button("⤴")
+                            .on_hover_text(
+                                "Click to promote parameter. \
+                            Promoted parameters will be tweakable in exported jacks.",
+                            )
+                            .clicked()
+                        {
+                            self.new_promoted_popup = Some(NewPromotedPopup {
+                                name: String::new(),
+                                param,
+                            })
+                        }
+
+                        if let Some(id) = defer_remove_promoted_param {
+                            custom_state.promoted_params.remove(&id);
+                        }
+
+                        let mut value = std::mem::take(&mut graph[param].value);
+                        value.value_widget(
+                            &param_name,
+                            node_id,
+                            ui,
+                            custom_state,
+                            &graph[node_id].user_data,
+                        );
+                        graph[param].value = value;
+                    });
+                }
+            }
+        });
+        ui.separator();
     }
 }
 impl SpreadsheetTab {
