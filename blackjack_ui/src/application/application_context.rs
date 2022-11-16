@@ -14,6 +14,8 @@ use blackjack_engine::{
     lua_engine::{LuaRuntime, RenderableThing},
     prelude::{FaceOverlayBuffers, LineBuffers, PointBuffers, VertexIndexBuffers},
 };
+use egui::epaint::RectShape;
+use egui::{Rounding, Shape};
 
 use super::gizmo_ui::UiNodeGizmoStates;
 use super::{
@@ -188,13 +190,23 @@ impl ApplicationContext {
     pub fn paint_errors(&mut self, egui_ctx: &egui::Context, err: Error) {
         let painter = egui_ctx.debug_painter();
         let width = egui_ctx.available_rect().width();
-        painter.text(
+        let bg_shape = painter.add(Shape::Noop);
+        let text_rect = painter.text(
             egui::pos2(width - 10.0, 30.0),
             egui::Align2::RIGHT_TOP,
             format!("{}", err),
             egui::FontId::default(),
             egui::Color32::RED,
         );
+        painter.set(
+            bg_shape,
+            Shape::Rect(RectShape {
+                rect: text_rect.expand(5.0),
+                rounding: Rounding::none(),
+                fill: egui::Color32::from_rgba_unmultiplied(40, 40, 40, 240),
+                stroke: egui::Stroke::none(),
+            }),
+        )
     }
 
     pub fn generate_bjk_graph(
