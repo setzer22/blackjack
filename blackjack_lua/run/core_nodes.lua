@@ -9,7 +9,7 @@ local V = require("vector_math")
 local T = require("table_helpers")
 local Gz = require("gizmo_helpers")
 local NodeLibrary = require("node_library")
-local load_function = require("utils").load_function
+local Utils = require("utils")
 
 -- Primitives: Construct new meshes based on common patterns
 local primitives = {
@@ -118,7 +118,7 @@ local primitives = {
     MakeTerrain = {
         label = "Terrain",
         op = function(inputs)
-            local f = load_function(inputs.code)
+            local f = Utils.load_function(inputs.code)
             return {
                 out_heightmap = HeightMap.from_fn(inputs.width, inputs.height, f),
             }
@@ -277,23 +277,6 @@ local primitives = {
     },
 }
 
-local function parse_ch_key(s)
-    if s == "Vertex" then
-        return Types.VERTEX_ID
-    elseif s == "Face" then
-        return Types.FACE_ID
-    elseif s == "Halfedge" then
-        return Types.HALFEDGE_ID
-    end
-end
-local function parse_ch_val(s)
-    if s == "f32" then
-        return Types.F32
-    elseif s == "Vec3" then
-        return Types.VEC3
-    end
-end
-
 -- Edit ops: Nodes to edit existing meshes
 local edit_ops = {
     BevelEdges = {
@@ -383,7 +366,7 @@ local edit_ops = {
         end,
     },
     MakeQuadFace = {
-        label = "Make face (quad)",
+        label = "Make Quad",
         inputs = {
             P.mesh("in_mesh"),
             P.selection("a"),
@@ -580,7 +563,7 @@ local edit_ops = {
         returns = "out_mesh",
         op = function(inputs)
             local out_mesh = inputs.mesh:clone()
-            local typ = parse_ch_key(inputs.type)
+            local typ = Utils.parse_ch_key(inputs.type)
             Ops.make_group(out_mesh, typ, inputs.selection, inputs.name)
             return { out_mesh = out_mesh }
         end,
@@ -600,7 +583,7 @@ local edit_ops = {
         returns = "out_mesh",
         op = function(inputs)
             local out_mesh = inputs.mesh:clone()
-            local k_typ = parse_ch_key(inputs.channel_key)
+            local k_typ = Utils.parse_ch_key(inputs.channel_key)
 
             local func, err = loadstring(inputs.code)
             if err ~= nil then
@@ -615,7 +598,7 @@ local edit_ops = {
             local ch_by_name = {}
             for ch_descr in inputs.channels:gmatch("[^,]+") do
                 local _, _, ch_name, ch_val_str = ch_descr:find("(%w+)%s*:%s*(%w+)")
-                local val_typ = parse_ch_val(ch_val_str)
+                local val_typ = Utils.parse_ch_val(ch_val_str)
                 local ch_data = out_mesh:ensure_channel(k_typ, val_typ, ch_name)
                 ch_size = #ch_data
                 ch_by_name[ch_name] = { data = ch_data, value_type = val_typ }
@@ -772,7 +755,7 @@ local edit_ops = {
             end
 
             -- Call the actual op
-            local kty = parse_ch_key(inputs.geometry)
+            local kty = Utils.parse_ch_key(inputs.geometry)
             Ops.edit_geometry(
                 out_mesh,
                 kty,
