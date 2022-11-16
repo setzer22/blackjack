@@ -579,8 +579,13 @@ impl WidgetValueTrait for ValueTypeUi {
                 });
             }
             (BlackjackValue::String(text), InputValueConfig::String { multiline, .. }) => {
-                ui.horizontal(|ui| {
+                if *multiline {
                     ui.label(param_name);
+                }
+                ui.horizontal(|ui| {
+                    if !multiline {
+                        ui.label(param_name);
+                    }
                     if *multiline {
                         ui.text_edit_multiline(text);
                     } else {

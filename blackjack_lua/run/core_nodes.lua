@@ -147,6 +147,17 @@ local primitives = {
             P.lua_str("out_code"),
         },
     },
+    MakeCode = {
+        label = "Comment",
+        op = function(inputs)
+            return {}
+        end,
+        inputs = {
+            P.strparam("comment", "", true),
+        },
+        outputs = {
+        },
+    },
     MakePolygon = {
         label = "Polygon",
         op = function(inputs)
