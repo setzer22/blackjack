@@ -2268,23 +2268,21 @@ pub mod lua_fns {
     #[lua(under = "Ops")]
     pub fn collapse_edge(
         mesh: &mut HalfEdgeMesh,
-        edge: SelectionExpression,
+        edges: SelectionExpression,
         interpolation: f32,
-    ) -> Result<VertexId> {
-        let edge = mesh
-            .resolve_halfedge_selection_full(&edge)?
-            .iter_cpy()
-            .next()
-            .ok_or_else(|| anyhow!("No edge selected"))?;
+    ) -> Result<()> {
+        let edges = mesh.resolve_halfedge_selection_full(&edges)?;
+        for edge in edges {
+            let mut positions = mesh.write_positions();
+            let (src, dst) = mesh.read_connectivity().at_halfedge(edge).src_dst_pair()?;
+            let vpos = lerp(positions[src], positions[dst], interpolation);
 
-        let mut positions = mesh.write_positions();
-        let (src, dst) = mesh.read_connectivity().at_halfedge(edge).src_dst_pair()?;
-        let vpos = lerp(positions[src], positions[dst], interpolation);
+            let v = super::collapse_edge(&mut mesh.write_connectivity(), edge)?;
 
-        let v = super::collapse_edge(&mut mesh.write_connectivity(), edge)?;
+            positions[v] = vpos;
+        }
 
-        positions[v] = vpos;
-        Ok(v)
+        Ok(())
     }
 
     #[lua(under = "Ops")]

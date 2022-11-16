@@ -348,10 +348,10 @@ local edit_ops = {
         end,
     },
     CollapseEdge = {
-        label = "Collapse edge",
+        label = "Collapse edges",
         inputs = {
             P.mesh("in_mesh"),
-            P.selection("edge"),
+            P.selection("edges"),
             P.scalar("interp", { default = 0.5, soft_min = 0.0, soft_max = 1.0 }),
         },
         outputs = {
@@ -360,7 +360,7 @@ local edit_ops = {
         returns = "out_mesh",
         op = function(inputs)
             local out_mesh = inputs.in_mesh:clone()
-            Ops.collapse_edge(out_mesh, inputs.edge, inputs.interp)
+            Ops.collapse_edge(out_mesh, inputs.edges, inputs.interp)
             return { out_mesh = out_mesh }
         end,
     },
