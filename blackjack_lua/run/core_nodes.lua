@@ -53,14 +53,19 @@ local primitives = {
         label = "Circle",
         op = function(inputs)
             return {
-                out_mesh = Primitives.circle(inputs.center, inputs.radius, inputs.num_vertices, inputs.fill == "N-Gon"),
+                out_mesh = Primitives.circle(
+                    inputs.center,
+                    inputs.radius,
+                    inputs.num_vertices,
+                    inputs.fill == "N-Gon"
+                ),
             }
         end,
         inputs = {
             P.v3("center", vector(0, 0, 0)),
             P.scalar("radius", { default = 1.0, min = 0.0 }),
             P.scalar_int("num_vertices", { default = 8, min = 3, soft_max = 32 }),
-            P.enum("fill", {"None", "N-Gon"}, 0)
+            P.enum("fill", { "None", "N-Gon" }, 0),
         },
         outputs = {
             P.mesh("out_mesh"),
@@ -232,19 +237,14 @@ local primitives = {
         label = "Points grid",
         op = function(inputs)
             return {
-                out_mesh = Primitives.grid(
-                    inputs.x,
-                    inputs.y,
-                    inputs.spacing_x, 
-                    inputs.spacing_y
-                )
+                out_mesh = Primitives.grid(inputs.x, inputs.y, inputs.spacing_x, inputs.spacing_y),
             }
         end,
         inputs = {
             P.scalar_int("x", { default = 3, min = 2, soft_max = 32 }),
             P.scalar_int("y", { default = 3, min = 2, soft_max = 32 }),
-            P.scalar("spacing_x", {default = 1.0, min = 1.0 }),
-            P.scalar("spacing_y", {default = 1.0, min = 1.0 }),
+            P.scalar("spacing_x", { default = 1.0, min = 0.0 }),
+            P.scalar("spacing_y", { default = 1.0, min = 0.0 }),
         },
         outputs = {
             P.mesh("out_mesh"),
@@ -266,8 +266,8 @@ local primitives = {
         inputs = {
             P.v3("start_point", vector(0, 0, 0)),
             P.v3("end_point", vector(1, 0, 0)),
-            P.scalar("sag", { default = 1.0, min = 0.001}),
-            P.scalar_int("segments", { default = 8, min = 1, soft_max = 32 })
+            P.scalar("sag", { default = 1.0, min = 0.001 }),
+            P.scalar_int("segments", { default = 8, min = 1, soft_max = 32 }),
         },
         outputs = {
             P.mesh("out_mesh"),
@@ -444,7 +444,7 @@ local edit_ops = {
     },
     SubdivideEdge = {
         label = "Divide Edge",
-        inputs = { 
+        inputs = {
             P.mesh("in_mesh"),
             P.selection("edge"),
             P.scalar("interp", { default = 0.5, soft_min = 0.0, soft_max = 1.0 }),
