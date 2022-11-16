@@ -147,7 +147,7 @@ local primitives = {
             P.lua_str("out_code"),
         },
     },
-    MakeCode = {
+    MakeComment = {
         label = "Comment",
         op = function(inputs)
             return {}

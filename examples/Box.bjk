@@ -1,0 +1,55 @@
+// BLACKJACK_VERSION_HEADER 0 1 0
+(
+    nodes: [
+        (
+            op_name: "MakeBox",
+            return_value: Some("out_mesh"),
+            inputs: [
+                (
+                    name: "origin",
+                    data_type: "BJK_VECTOR",
+                    kind: External(
+                        promoted: None,
+                    ),
+                ),
+                (
+                    name: "size",
+                    data_type: "BJK_VECTOR",
+                    kind: External(
+                        promoted: None,
+                    ),
+                ),
+            ],
+            outputs: [
+                (
+                    name: "out_mesh",
+                    data_type: "BJK_MESH",
+                ),
+            ],
+        ),
+    ],
+    default_node: Some(0),
+    ui_data: Some((
+        node_positions: [
+            (156.97961, 37.18518),
+        ],
+        node_order: [
+            0,
+        ],
+        pan: (0.0, 0.0),
+        zoom: 1.0,
+        locked_gizmo_nodes: [],
+    )),
+    external_parameters: Some((
+        param_values: {
+            (
+                node_idx: 0,
+                param_name: "size",
+            ): Vector((1.0, 1.0, 1.0)),
+            (
+                node_idx: 0,
+                param_name: "origin",
+            ): Vector((0.0, 0.0, 0.0)),
+        },
+    )),
+)
