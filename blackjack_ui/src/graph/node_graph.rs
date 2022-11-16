@@ -11,6 +11,7 @@ use crate::application::graph_editor::GraphEditor;
 use crate::application::serialization;
 use crate::custom_widgets::smart_dragvalue::SmartDragValue;
 use crate::{application::code_viewer::code_edit_ui, prelude::*};
+use blackjack_engine::graph::serialization::SerializedBjkSnippet;
 use blackjack_engine::{
     graph::{BlackjackValue, DataType, FilePathMode, InputValueConfig, NodeDefinitions},
     prelude::selection::SelectionExpression,
@@ -228,7 +229,7 @@ pub fn draw_node_graph(graph_editor: &mut GraphEditor) {
                                 if output.typ.0.can_be_enabled() {
                                     custom_state.active_node =
                                         Some(old_graph.get_output(output_id).node);
-                                    break
+                                    break;
                                 }
                             }
                         }
@@ -290,13 +291,10 @@ pub fn draw_node_graph(graph_editor: &mut GraphEditor) {
 
         let input = ui.input();
         let cursor_pos = ui.input().pointer.hover_pos().unwrap_or(egui::Pos2::ZERO);
-        let mut do_paste = |paste_contents: &str| {
-            if let Err(err) = serialization::from_clipboard(
-                editor_state,
-                custom_state,
-                paste_contents,
-                cursor_pos,
-            ) {
+        let mut do_paste = |snippet: SerializedBjkSnippet| {
+            if let Err(err) =
+                serialization::from_clipboard(editor_state, custom_state, snippet, cursor_pos)
+            {
                 println!("Error: Could not paste clipboard data: {err:?}")
             }
         };
@@ -305,10 +303,14 @@ pub fn draw_node_graph(graph_editor: &mut GraphEditor) {
             egui::Event::Paste(text) => Some(text),
             _ => None,
         }) {
-            if previous_clipboard_contents != paste_contents && !*skip_pending_paste_check {
-                *pending_paste_operation = Some(paste_contents.clone());
+            if let Ok(snippet) = serialization::parse_clipboard_snippet(paste_contents) {
+                if previous_clipboard_contents != paste_contents && !*skip_pending_paste_check {
+                    *pending_paste_operation = Some(snippet);
+                } else {
+                    do_paste(snippet);
+                }
             } else {
-                do_paste(paste_contents);
+                println!("Tried to paste an invalid snippet.");
             }
         }
 
@@ -334,8 +336,8 @@ Pasted nodes can potentially run code, but only when you activate them.
 
                     ui.horizontal(|ui| {
                         if ui.button("I understand").clicked() {
-                            let paste = pending_paste.take();
-                            do_paste(&paste);
+
+                            do_paste(std::mem::take(pending_paste));
                             clear_pending_paste = true;
                         }
                         if ui.button("Nevermind").clicked() {

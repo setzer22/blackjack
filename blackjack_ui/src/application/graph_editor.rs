@@ -11,7 +11,9 @@ use crate::{
         *,
     },
 };
-use blackjack_engine::graph::{BlackjackValue, DataType, NodeDefinitions};
+use blackjack_engine::graph::{
+    serialization::SerializedBjkSnippet, BlackjackValue, DataType, NodeDefinitions,
+};
 use egui_wgpu::renderer::{RenderPass, ScreenDescriptor};
 
 use super::{blackjack_theme, gizmo_ui::UiNodeGizmoStates};
@@ -31,9 +33,9 @@ pub struct GraphEditor {
     /// Used to detect whether the current paste event was originated from this
     /// blackjack instance.
     pub previous_clipboard_contents: String,
-    /// When there's a potentially unsafe paste operation pending, the clipboard
-    /// contents are stored here.
-    pub pending_paste_operation: Option<String>,
+    /// When there's a potentially unsafe paste operation pending, the parsed
+    /// clipboard contents are stored here.
+    pub pending_paste_operation: Option<SerializedBjkSnippet>,
     /// Allows ignoring the potentially unsafe paste confirmation dialog.
     pub skip_pending_paste_check: bool,
 }

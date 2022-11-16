@@ -200,10 +200,14 @@ pub fn to_clipboard(
     snippet.into_string()
 }
 
+pub fn parse_clipboard_snippet(clipboard_contents: &str) -> Result<SerializedBjkSnippet> {
+    SerializedBjkSnippet::load_from_string(&clipboard_contents)
+}
+
 pub fn from_clipboard(
     editor_state: &mut GraphEditorState,
     custom_state: &mut CustomGraphState,
-    clipboard_contents: &str,
+    snippet: SerializedBjkSnippet,
     cursor_pos: egui::Pos2,
 ) -> Result<()> {
     // NOTE: This destructuring is added for future compatibility. We don't want
@@ -233,8 +237,7 @@ pub fn from_clipboard(
         _user_state: _,
     } = editor_state;
 
-    let serialized = SerializedBjkSnippet::load_from_string(&clipboard_contents)?;
-    let (rt_data, relative_node_positions, id_map) = serialized.into_runtime()?;
+    let (rt_data, relative_node_positions, id_map) = snippet.into_runtime()?;
 
     let node_mapping = graph_interop::append_snippet_to_existing_ui_graph(
         &mut editor_state.graph,

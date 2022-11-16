@@ -152,7 +152,7 @@ pub struct SerializedBjkGraph {
     pub external_parameters: Option<SerializedExternalParameters>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Default)]
 pub struct SerializedBjkSnippet {
     pub nodes: Vec<SerializedBjkNode>,
     pub node_relative_positions: Option<Vec<glam::Vec2>>,
