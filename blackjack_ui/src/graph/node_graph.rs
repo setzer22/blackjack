@@ -199,6 +199,10 @@ pub fn draw_node_graph(graph_editor: &mut GraphEditor) {
         ..
     } = graph_editor;
     egui::CentralPanel::default().show(ctx, |ui| {
+        // We clone the old graph here, so we can get a hold of the old state
+        // before the graph is mutated. This is useful on some operations.
+        let old_graph = editor_state.graph.clone();
+
         let responses = editor_state.draw_graph_editor(
             ui,
             NodeOpNames(custom_state.node_definitions.node_names()),
@@ -214,6 +218,20 @@ pub fn draw_node_graph(graph_editor: &mut GraphEditor) {
                 NodeResponse::DeleteNodeFull { node_id, .. } => {
                     if custom_state.active_node == Some(node_id) {
                         custom_state.active_node = None;
+
+                        // Heuristic: Look for the previous node connected to
+                        // the one that got deleted, and activate it.
+                        let old_node = &old_graph.nodes[node_id];
+                        for (_, input) in &old_node.inputs {
+                            if let Some(output_id) = old_graph.connection(*input) {
+                                let output = old_graph.get_output(output_id);
+                                if output.typ.0.can_be_enabled() {
+                                    custom_state.active_node =
+                                        Some(old_graph.get_output(output_id).node);
+                                    break
+                                }
+                            }
+                        }
                     }
                     if custom_state.run_side_effect == Some(node_id) {
                         custom_state.run_side_effect = None;
