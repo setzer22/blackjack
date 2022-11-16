@@ -129,7 +129,7 @@ local primitives = {
         returns = "out_heightmap",
     },
     MakeCode = {
-        label = "Lua code",
+        label = "Lua String",
         op = function(inputs)
             return {
                 out_code = inputs.code,
