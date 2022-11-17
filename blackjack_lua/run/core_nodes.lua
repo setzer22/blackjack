@@ -921,6 +921,36 @@ local misc = {
         end,
         gizmos = { Gz.tweak_point("point") },
     },
+    Turntable = {
+        label = "Turntable",
+        doc = [[
+            Will rotate the current mesh over time, centered at its origin.
+            This rotation is not exported to the end mesh, but is helpful
+            when you want to show off your creations in blackjack itself.
+        ]],
+        inputs = {
+            P.scalar("speed", { default = 1.0, min = 0.0 }),
+            P.mesh("mesh"),
+        },
+        outputs = {
+            P.mesh("out_mesh"),
+        },
+        returns = "out_mesh",
+        op = function(inputs)
+            local time = os.clock()
+            print(time)
+            local out_mesh = inputs.mesh:clone()
+            Ops.transform(
+                out_mesh,
+                vector(0, 0, 0),
+                vector(0, time * inputs.speed, 0),
+                vector(1, 1, 1)
+            )
+            return {
+                out_mesh = out_mesh,
+            }
+        end,
+    },
 }
 
 NodeLibrary:addNodes(primitives)
