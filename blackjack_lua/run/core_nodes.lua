@@ -155,8 +155,7 @@ local primitives = {
         inputs = {
             P.strparam("comment", "", true),
         },
-        outputs = {
-        },
+        outputs = {},
     },
     MakePolygon = {
         label = "Polygon",
@@ -252,8 +251,8 @@ local primitives = {
             }
         end,
         inputs = {
-            P.scalar_int("x", { default = 3, min = 2, soft_max = 32 }),
-            P.scalar_int("y", { default = 3, min = 2, soft_max = 32 }),
+            P.scalar_int("x", { default = 3, min = 1, soft_max = 32 }),
+            P.scalar_int("y", { default = 3, min = 1, soft_max = 32 }),
             P.scalar("spacing_x", { default = 1.0, min = 0.0 }),
             P.scalar("spacing_y", { default = 1.0, min = 0.0 }),
         },
@@ -437,11 +436,12 @@ local edit_ops = {
         end,
     },
     SubdivideEdge = {
-        label = "Divide Edge",
+        label = "Divide Edges",
         inputs = {
             P.mesh("in_mesh"),
-            P.selection("edge"),
+            P.selection("edges"),
             P.scalar("interp", { default = 0.5, soft_min = 0.0, soft_max = 1.0 }),
+            P.scalar_int("divisions", { default = 1, min = 1, soft_max = 32 }),
         },
         outputs = {
             P.mesh("out_mesh"),
@@ -449,7 +449,7 @@ local edit_ops = {
         returns = "out_mesh",
         op = function(inputs)
             local out_mesh = inputs.in_mesh:clone()
-            Ops.divide_edge(out_mesh, inputs.edge, inputs.interp)
+            Ops.divide_edges(out_mesh, inputs.edges, inputs.interp, inputs.divisions)
             return { out_mesh = out_mesh }
         end,
     },
