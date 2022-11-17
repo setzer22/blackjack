@@ -938,7 +938,6 @@ local misc = {
         returns = "out_mesh",
         op = function(inputs)
             local time = os.clock()
-            print(time)
             local out_mesh = inputs.mesh:clone()
             Ops.transform(
                 out_mesh,
