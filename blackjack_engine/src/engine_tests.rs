@@ -1,7 +1,7 @@
 use crate::graph::serialization::SerializedBjkGraph;
 use crate::graph::{BjkGraph, BjkNodeId};
 use crate::graph_interpreter::run_graph;
-use crate::lua_engine::{LuaRuntime, RenderableThing};
+use crate::lua_engine::{LuaRuntime, ProgramResult, RenderableThing};
 use crate::prelude::*;
 
 /// Looks for the first node with no outgoing parameters and assumes it to be
@@ -25,26 +25,28 @@ pub fn infer_target_node(graph: &BjkGraph) -> BjkNodeId {
     panic!("Target node heuristic failed")
 }
 
-#[test]
-pub fn test_box() -> Result<()> {
-    let (rt_data, _, _) =
-        SerializedBjkGraph::load_from_string(include_str!("../../examples/Box.bjk"))?
-            .into_runtime()?;
-
-    let lua_runtime = LuaRuntime::initialize_with_std("../blackjack_lua".into())?;
-    let result = run_graph(
-        &lua_runtime.lua,
+pub fn run_example(rt: &LuaRuntime, bjk_data: &str) -> Result<ProgramResult> {
+    let (rt_data, _, _) = SerializedBjkGraph::load_from_string(bjk_data)?.into_runtime()?;
+    run_graph(
+        &rt.lua,
         &rt_data.graph,
         infer_target_node(&rt_data.graph),
         rt_data.external_parameters.unwrap(),
-        &lua_runtime.node_definitions,
+        &rt.node_definitions,
         None,
-    )?;
+    )
+}
+
+#[test]
+pub fn test_box() -> Result<()> {
+    let lua_runtime = LuaRuntime::initialize_with_std("../blackjack_lua".into())?;
+    let result = run_example(&lua_runtime, include_str!("../../examples/Box.bjk"))?;
     if let Some(RenderableThing::HalfEdgeMesh(h)) = result.renderable {
         assert_eq!(h.read_connectivity().num_vertices(), 8);
+        assert_eq!(h.read_connectivity().num_halfedges(), 24);
+        assert_eq!(h.read_connectivity().num_faces(), 6);
     } else {
         panic!("Expected a mesh")
     }
-
     Ok(())
 }
