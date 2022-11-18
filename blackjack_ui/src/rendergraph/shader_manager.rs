@@ -89,6 +89,7 @@ impl ShaderManager {
         def_shader!("point_cloud_draw", "point_cloud_draw.wgsl");
         def_shader!("face_draw", "face_draw.wgsl");
         def_shader!("face_overlay_draw", "face_overlay_draw.wgsl");
+        def_shader!("face_id_draw", "face_id_draw.wgsl");
 
         Self { shaders }
     }

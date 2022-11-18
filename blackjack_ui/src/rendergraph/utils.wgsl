@@ -26,3 +26,7 @@ fn unpack_v3(v3: PackedVec3) -> vec3<f32> {
 struct Vec3Array {
     inner: array<PackedVec3>,
 };
+
+struct U32Array {
+    inner: array<u32>,
+};
