@@ -152,7 +152,7 @@ impl SelectionExpression {
                     if first {
                         first = false;
                     } else {
-                        write!(out, " ").unwrap();
+                        write!(out, ", ").unwrap();
                     }
                     match segment {
                         SelectionFragment::Group(name) => write!(out, "@{name}").unwrap(),

@@ -175,9 +175,9 @@ mod tests {
 
     #[test]
     pub fn test_load_obj() {
-        HalfEdgeMesh::from_wavefront_obj("./assets/debug/arrow.obj".into())
+        HalfEdgeMesh::from_wavefront_obj("../test/test_mesh.obj".into())
             .unwrap()
-            .to_wavefront_obj("/tmp/wat.obj")
+            .to_wavefront_obj("/tmp/output.obj")
             .unwrap();
     }
 }

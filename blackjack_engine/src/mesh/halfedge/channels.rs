@@ -1071,22 +1071,22 @@ mod test {
         assert_eq!(
             &introspected[&(ChannelKeyType::VertexId, ChannelValueType::Vec3)]["color"],
             &[
-                "Vec3(0.0, 0.0, 0.0)",
-                "Vec3(0.5, 0.5, 0.5)",
-                "Vec3(1.0, 1.0, 1.0)",
+                " 0.000  0.000  0.000",
+                " 0.500  0.500  0.500",
+                " 1.000  1.000  1.000",
             ]
         );
         assert_eq!(
             &introspected[&(ChannelKeyType::VertexId, ChannelValueType::f32)]["size"],
-            &["0.25", "0.5", "1.0",]
+            &[" 0.250", " 0.500", " 1.000",]
         );
         assert_eq!(
             &introspected[&(ChannelKeyType::VertexId, ChannelValueType::Vec3)]["position"],
             &[
-                "Vec3(1.0, 0.0, 0.0)",
-                "Vec3(0.0, 1.0, 0.0)",
-                "Vec3(0.0, 0.0, 1.0)",
-            ]
+                " 1.000  0.000  0.000",
+                " 0.000  1.000  0.000",
+                " 0.000  0.000  1.000",
+            ],
         );
 
         // Channels can also be read and written using a type-erased API. This

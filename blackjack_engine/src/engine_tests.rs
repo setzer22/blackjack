@@ -25,8 +25,20 @@ pub fn infer_target_node(graph: &BjkGraph) -> BjkNodeId {
     panic!("Target node heuristic failed")
 }
 
-pub fn run_example(rt: &LuaRuntime, bjk_data: &str) -> Result<ProgramResult> {
-    let (rt_data, _, _) = SerializedBjkGraph::load_from_string(bjk_data)?.into_runtime()?;
+#[derive(Clone, Copy)]
+struct Example {
+    path: &'static str,
+    vertices: usize,
+    halfedges: usize,
+    faces: usize,
+}
+
+fn run_example(example: &Example, rt: &LuaRuntime) -> ProgramResult {
+    let bjk_data = std::fs::read_to_string(example.path).unwrap();
+    let (rt_data, _, _) = SerializedBjkGraph::load_from_string(&bjk_data)
+        .unwrap()
+        .into_runtime()
+        .unwrap();
     run_graph(
         &rt.lua,
         &rt_data.graph,
@@ -34,19 +46,43 @@ pub fn run_example(rt: &LuaRuntime, bjk_data: &str) -> Result<ProgramResult> {
         rt_data.external_parameters.unwrap(),
         &rt.node_definitions,
         None,
-    )
+    ).unwrap()
 }
 
 #[test]
-pub fn test_box() -> Result<()> {
-    let lua_runtime = LuaRuntime::initialize_with_std("../blackjack_lua".into())?;
-    let result = run_example(&lua_runtime, include_str!("../../examples/Box.bjk"))?;
-    if let Some(RenderableThing::HalfEdgeMesh(h)) = result.renderable {
-        assert_eq!(h.read_connectivity().num_vertices(), 8);
-        assert_eq!(h.read_connectivity().num_halfedges(), 24);
-        assert_eq!(h.read_connectivity().num_faces(), 6);
-    } else {
-        panic!("Expected a mesh")
+pub fn test_examples_folder() {
+    let lua_runtime = LuaRuntime::initialize_with_std("../blackjack_lua".into()).unwrap();
+
+    let examples = &[
+        Example {
+            path: "../examples/box.bjk",
+            vertices: 8,
+            halfedges: 24,
+            faces: 6,
+        },
+        Example {
+            path: "../examples/tp_cutter.bjk",
+            vertices: 184,
+            halfedges: 680,
+            faces: 170,
+        },
+        Example {
+            path: "../examples/stylised_sword.bjk",
+            vertices: 284,
+            halfedges: 988,
+            faces: 228,
+        },
+    ];
+
+    for example in examples {
+        println!("Loading example at {}", example.path);
+        let result = run_example(&example, &lua_runtime);
+        if let Some(RenderableThing::HalfEdgeMesh(h)) = result.renderable {
+            assert_eq!(h.read_connectivity().num_vertices(), example.vertices);
+            assert_eq!(h.read_connectivity().num_halfedges(), example.halfedges);
+            assert_eq!(h.read_connectivity().num_faces(), example.faces);
+        } else {
+            panic!("Expected a mesh")
+        }
     }
-    Ok(())
 }

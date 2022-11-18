@@ -16,7 +16,7 @@ use blackjack_engine::{
     graph::{BlackjackValue, DataType, FilePathMode, InputValueConfig, NodeDefinitions},
     prelude::selection::SelectionExpression,
 };
-use egui::{RichText, TextBuffer};
+use egui::RichText;
 use egui_node_graph::{
     DataTypeTrait, InputId, NodeDataTrait, NodeId, NodeResponse, NodeTemplateIter,
     UserResponseTrait, WidgetValueTrait,
@@ -336,7 +336,6 @@ Pasted nodes can potentially run code, but only when you activate them.
 
                     ui.horizontal(|ui| {
                         if ui.button("I understand").clicked() {
-
                             do_paste(std::mem::take(pending_paste));
                             clear_pending_paste = true;
                         }
