@@ -271,20 +271,21 @@ pub fn draw_node_graph(graph_editor: &mut GraphEditor) {
             }
         }
 
-        if ui.input().key_released(egui::Key::C) && ui.input().modifiers.ctrl {
-            if !editor_state.selected_nodes.is_empty() {
-                match serialization::to_clipboard(
-                    &editor_state,
-                    custom_state,
-                    &editor_state.selected_nodes,
-                ) {
-                    Ok(clipboard_data) => {
-                        *previous_clipboard_contents = clipboard_data.clone();
-                        ui.output().copied_text = clipboard_data;
-                    }
-                    Err(err) => {
-                        println!("Error: Could not generate clipboard data {err:?}");
-                    }
+        if ui.input().key_released(egui::Key::C)
+            && ui.input().modifiers.ctrl
+            && !editor_state.selected_nodes.is_empty()
+        {
+            match serialization::to_clipboard(
+                editor_state,
+                custom_state,
+                &editor_state.selected_nodes,
+            ) {
+                Ok(clipboard_data) => {
+                    *previous_clipboard_contents = clipboard_data.clone();
+                    ui.output().copied_text = clipboard_data;
+                }
+                Err(err) => {
+                    println!("Error: Could not generate clipboard data {err:?}");
                 }
             }
         }

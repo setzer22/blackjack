@@ -201,7 +201,7 @@ pub fn to_clipboard(
 }
 
 pub fn parse_clipboard_snippet(clipboard_contents: &str) -> Result<SerializedBjkSnippet> {
-    SerializedBjkSnippet::load_from_string(&clipboard_contents)
+    SerializedBjkSnippet::load_from_string(clipboard_contents)
 }
 
 pub fn from_clipboard(

@@ -77,7 +77,7 @@ pub fn test_examples_folder() {
 
     for example in examples {
         println!("Loading example at {}", example.path);
-        let result = run_example(&example, &lua_runtime);
+        let result = run_example(example, &lua_runtime);
         if let Some(RenderableThing::HalfEdgeMesh(h)) = result.renderable {
             assert_eq!(h.read_connectivity().num_vertices(), example.vertices);
             assert_eq!(h.read_connectivity().num_halfedges(), example.halfedges);

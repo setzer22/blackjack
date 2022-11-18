@@ -301,7 +301,7 @@ impl SerializedBjkSnippet {
         // Finally, we serialize as normal
         for (node_id, node) in &graph.nodes {
             debug_assert!(node_projection.contains(&node_id));
-            serialized_nodes.push(SerializedBjkNode::from_runtime_data(&node, &mappings)?);
+            serialized_nodes.push(SerializedBjkNode::from_runtime_data(node, &mappings)?);
         }
 
         Ok((
