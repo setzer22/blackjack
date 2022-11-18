@@ -21,7 +21,7 @@ use wgpu::{
 
 use super::{
     shader_manager::ShaderManager,
-    viewport_3d_routine::{DrawType, Viewport3dRoutine, RoutineLayout},
+    viewport_3d_routine::{DrawType, RoutineLayout, Viewport3dRoutine},
 };
 
 /// The number of matcap materials loaded in the routine. TODO: Matcaps should
@@ -108,11 +108,54 @@ impl RoutineLayout<OVERLAY_NUM_BUFFERS> for FaceOverlayLayout {
     }
 }
 
+const ID_NUM_BUFFERS: usize = 2;
+const ID_NUM_UNIFORMS: usize = 1;
+
+/// The buffers for the special routine to draw face ids in an offscreen buffer,
+/// used for object picking.
+pub struct FaceIdLayout {
+    /// `3 * len` positions (as Vec3), one per triangle
+    positions: Buffer,
+    /// `len` face ids, one per triangle. Multilpe triangles may share the same
+    /// face id, in case of quads or N-gons.
+    ids: Buffer,
+    /// Number of triangles
+    len: usize,
+    /// A single u32, containing the largest id in the `ids` buffer. Used to
+    /// generate the debug view.
+    max_id: Buffer,
+}
+
+impl RoutineLayout<ID_NUM_BUFFERS, 0, ID_NUM_UNIFORMS> for FaceIdLayout {
+    type Settings = ();
+
+    fn get_wgpu_buffers(&self, _settings: &Self::Settings) -> [&Buffer; ID_NUM_BUFFERS] {
+        [&self.positions, &self.ids]
+    }
+
+    fn get_wgpu_textures<'a>(
+        &'a self,
+        _texture_manager: &'a TextureManager,
+        _settings: &'a Self::Settings,
+    ) -> [&'a TextureView; 0] {
+        []
+    }
+
+    fn get_wgpu_uniforms<'a>(&'a self, _settings: &Self::Settings) -> [&Buffer; ID_NUM_UNIFORMS] {
+        [&self.max_id]
+    }
+
+    fn get_draw_type(&self, _settings: &Self::Settings) -> DrawType<'_> {
+        todo!()
+    }
+}
+
 pub struct FaceRoutine {
     matcaps: Arc<Vec<TextureHandle>>,
-    base_mesh_routine: Viewport3dRoutine<MeshFacesLayout, BASE_MESH_NUM_BUFFERS, BASE_MESH_NUM_TEXTURES>,
-    face_overlay_routine:
-        Viewport3dRoutine<FaceOverlayLayout, OVERLAY_NUM_BUFFERS>,
+    base_mesh_routine:
+        Viewport3dRoutine<MeshFacesLayout, BASE_MESH_NUM_BUFFERS, BASE_MESH_NUM_TEXTURES>,
+    face_overlay_routine: Viewport3dRoutine<FaceOverlayLayout, OVERLAY_NUM_BUFFERS>,
+    face_id_routine: Viewport3dRoutine<FaceIdLayout, ID_NUM_BUFFERS, 0, ID_NUM_UNIFORMS>,
 }
 
 impl FaceRoutine {
@@ -159,7 +202,6 @@ impl FaceRoutine {
                 shader_manager.get("face_draw"),
                 PrimitiveTopology::TriangleList,
                 FrontFace::Cw,
-                false,
             ),
             face_overlay_routine: Viewport3dRoutine::new(
                 "face overlay",
@@ -168,7 +210,14 @@ impl FaceRoutine {
                 shader_manager.get("face_overlay_draw"),
                 PrimitiveTopology::TriangleList,
                 FrontFace::Cw,
-                true,
+            ),
+            face_id_routine: Viewport3dRoutine::new(
+                "face_id",
+                &renderer.device,
+                base,
+                shader_manager.get("face_overlay_draw"),
+                PrimitiveTopology::TriangleList,
+                FrontFace::Cw,
             ),
         }
     }

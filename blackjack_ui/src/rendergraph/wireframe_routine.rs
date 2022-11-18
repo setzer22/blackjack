@@ -68,7 +68,6 @@ impl WireframeRoutine {
                 shader_manager.get("edge_wireframe_draw"),
                 PrimitiveTopology::LineList,
                 FrontFace::Ccw,
-                false,
             ),
         }
     }

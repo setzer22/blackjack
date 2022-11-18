@@ -59,10 +59,22 @@ pub trait RoutineLayout<
     /// Returns the draw type that should be used to draw this routine. Either
     /// spawn a fixed number of primitives, or use an index buffer.
     fn get_draw_type(&self, settings: &Self::Settings) -> DrawType<'_>;
+
+    fn num_buffers() -> usize {
+        NUM_BUFFERS
+    }
+
+    fn num_textures() -> usize {
+        NUM_TEXTURES
+    }
+
+    fn num_uniforms() -> usize {
+        NUM_UNIFORMS
+    }
 }
 
 pub struct Viewport3dRoutine<
-    Layout: RoutineLayout<NUM_BUFFERS, NUM_TEXTURES>,
+    Layout: RoutineLayout<NUM_BUFFERS, NUM_TEXTURES, NUM_UNIFORMS>,
     const NUM_BUFFERS: usize = 0,
     const NUM_TEXTURES: usize = 0,
     const NUM_UNIFORMS: usize = 0,
@@ -74,7 +86,7 @@ pub struct Viewport3dRoutine<
 }
 
 impl<
-        Layout: RoutineLayout<NUM_BUFFERS, NUM_TEXTURES> + 'static,
+        Layout: RoutineLayout<NUM_BUFFERS, NUM_TEXTURES, NUM_UNIFORMS> + 'static,
         const NUM_BUFFERS: usize,
         const NUM_TEXTURES: usize,
         const NUM_UNIFORMS: usize,
@@ -87,13 +99,12 @@ impl<
         shader: &Shader,
         topology: PrimitiveTopology,
         front_face: FrontFace,
-        use_alpha_blend: bool,
     ) -> Self {
         let bgl = {
             let mut builder = BindGroupLayoutBuilder::new();
-            for _ in 0..NUM_BUFFERS {
+            for _ in 0..Layout::num_buffers() {
                 builder.append(
-                    ShaderStages::VERTEX,
+                    ShaderStages::VERTEX_FRAGMENT,
                     BindingType::Buffer {
                         ty: BufferBindingType::Storage { read_only: true },
                         has_dynamic_offset: false,
@@ -102,13 +113,24 @@ impl<
                     None,
                 );
             }
-            for _ in 0..NUM_TEXTURES {
+            for _ in 0..Layout::num_textures() {
                 builder.append(
-                    ShaderStages::FRAGMENT,
+                    ShaderStages::VERTEX_FRAGMENT,
                     BindingType::Texture {
                         sample_type: TextureSampleType::Float { filterable: true },
                         view_dimension: TextureViewDimension::D2,
                         multisampled: false,
+                    },
+                    None,
+                );
+            }
+            for _ in 0..Layout::num_uniforms() {
+                builder.append(
+                    ShaderStages::VERTEX_FRAGMENT,
+                    BindingType::Buffer {
+                        ty: BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
                     },
                     None,
                 );
@@ -129,11 +151,7 @@ impl<
             primitive: common::primitive_state(topology, front_face),
             depth_stencil: Some(common::depth_stencil(true)),
             multisample: MultisampleState::default(),
-            fragment: Some(if use_alpha_blend {
-                shader.to_fragment_state_transparent()
-            } else {
-                shader.to_fragment_state()
-            }),
+            fragment: Some(shader.get_fragment_state()),
             multiview: None,
         });
 

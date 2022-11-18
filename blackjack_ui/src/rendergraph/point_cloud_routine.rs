@@ -66,7 +66,6 @@ impl PointCloudRoutine {
                 shader_manager.get("point_cloud_draw"),
                 PrimitiveTopology::TriangleList,
                 FrontFace::Ccw,
-                false,
             ),
         }
     }
