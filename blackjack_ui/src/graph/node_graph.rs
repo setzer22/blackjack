@@ -7,8 +7,11 @@
 use std::borrow::Cow;
 
 use crate::application::gizmo_ui::UiNodeGizmoStates;
+use crate::application::graph_editor::GraphEditor;
+use crate::application::serialization;
 use crate::custom_widgets::smart_dragvalue::SmartDragValue;
 use crate::{application::code_viewer::code_edit_ui, prelude::*};
+use blackjack_engine::graph::serialization::SerializedBjkSnippet;
 use blackjack_engine::{
     graph::{BlackjackValue, DataType, FilePathMode, InputValueConfig, NodeDefinitions},
     prelude::selection::SelectionExpression,
@@ -185,20 +188,51 @@ impl NodeDataTrait for NodeData {
 /// Blackjack's custom draw node graph function. It defers to egui_node_graph to
 /// draw the graph itself, then interprets any responses it got and applies the
 /// required side effects.
-pub fn draw_node_graph(
-    ctx: &egui::Context,
-    editor_state: &mut GraphEditorState,
-    custom_state: &mut CustomGraphState,
-    defs: &NodeDefinitions,
-) {
+pub fn draw_node_graph(graph_editor: &mut GraphEditor) {
+    let GraphEditor {
+        editor_state,
+        custom_state,
+        egui_context: ctx,
+        mouse_over_node_finder,
+        previous_clipboard_contents,
+        pending_paste_operation,
+        skip_pending_paste_check,
+        ..
+    } = graph_editor;
     egui::CentralPanel::default().show(ctx, |ui| {
-        let responses =
-            editor_state.draw_graph_editor(ui, NodeOpNames(defs.node_names()), custom_state);
+        // We clone the old graph here, so we can get a hold of the old state
+        // before the graph is mutated. This is useful on some operations.
+        let old_graph = editor_state.graph.clone();
+
+        let responses = editor_state.draw_graph_editor(
+            ui,
+            NodeOpNames(custom_state.node_definitions.node_names()),
+            custom_state,
+        );
+
+        // Store whether the mouse is in the node finder. This helps prevent
+        // scroll wheel events.
+        *mouse_over_node_finder = responses.cursor_in_finder;
+
         for response in responses.node_responses {
             match response {
                 NodeResponse::DeleteNodeFull { node_id, .. } => {
                     if custom_state.active_node == Some(node_id) {
                         custom_state.active_node = None;
+
+                        // Heuristic: Look for the previous node connected to
+                        // the one that got deleted, and activate it.
+                        let old_node = &old_graph.nodes[node_id];
+                        for (_, input) in &old_node.inputs {
+                            if let Some(output_id) = old_graph.connection(*input) {
+                                let output = old_graph.get_output(output_id);
+                                if output.typ.0.can_be_enabled() {
+                                    custom_state.active_node =
+                                        Some(old_graph.get_output(output_id).node);
+                                    break;
+                                }
+                            }
+                        }
                     }
                     if custom_state.run_side_effect == Some(node_id) {
                         custom_state.run_side_effect = None;
@@ -235,6 +269,85 @@ pub fn draw_node_graph(
                 },
                 _ => {}
             }
+        }
+
+        if ui.input().key_released(egui::Key::C)
+            && ui.input().modifiers.ctrl
+            && !editor_state.selected_nodes.is_empty()
+        {
+            match serialization::to_clipboard(
+                editor_state,
+                custom_state,
+                &editor_state.selected_nodes,
+            ) {
+                Ok(clipboard_data) => {
+                    *previous_clipboard_contents = clipboard_data.clone();
+                    ui.output().copied_text = clipboard_data;
+                }
+                Err(err) => {
+                    println!("Error: Could not generate clipboard data {err:?}");
+                }
+            }
+        }
+
+        let input = ui.input();
+        let cursor_pos = ui.input().pointer.hover_pos().unwrap_or(egui::Pos2::ZERO);
+        let mut do_paste = |snippet: SerializedBjkSnippet| {
+            if let Err(err) =
+                serialization::from_clipboard(editor_state, custom_state, snippet, cursor_pos)
+            {
+                println!("Error: Could not paste clipboard data: {err:?}")
+            }
+        };
+
+        if let Some(paste_contents) = input.events.iter().find_map(|ev| match ev {
+            egui::Event::Paste(text) => Some(text),
+            _ => None,
+        }) {
+            if let Ok(snippet) = serialization::parse_clipboard_snippet(paste_contents) {
+                if previous_clipboard_contents != paste_contents && !*skip_pending_paste_check {
+                    *pending_paste_operation = Some(snippet);
+                } else {
+                    do_paste(snippet);
+                }
+            } else {
+                println!("Tried to paste an invalid snippet.");
+            }
+        }
+
+        // Do not borrow the egui context for too long or we will deadlock.
+        drop(input);
+
+        let mut clear_pending_paste = false;
+        if let Some(pending_paste) = pending_paste_operation {
+            egui::Window::new("⚠ Warning ⚠")
+                .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
+                .resizable(false)
+                .collapsible(false)
+                .show(ui.ctx(), |ui| {
+                    ui.label(
+                        r#"
+Remember: When pasting from outside sources, always make sure you trust the author of the snippet.
+
+Pasted nodes can potentially run code, but only when you activate them.
+"#,
+                    );
+
+                    ui.checkbox(skip_pending_paste_check, "Do not remind me again");
+
+                    ui.horizontal(|ui| {
+                        if ui.button("I understand").clicked() {
+                            do_paste(std::mem::take(pending_paste));
+                            clear_pending_paste = true;
+                        }
+                        if ui.button("Nevermind").clicked() {
+                            clear_pending_paste = true;
+                        }
+                    });
+                });
+        }
+        if clear_pending_paste {
+            *pending_paste_operation = None;
         }
     });
 }
@@ -468,8 +581,13 @@ impl WidgetValueTrait for ValueTypeUi {
                 });
             }
             (BlackjackValue::String(text), InputValueConfig::String { multiline, .. }) => {
-                ui.horizontal(|ui| {
+                if *multiline {
                     ui.label(param_name);
+                }
+                ui.horizontal(|ui| {
+                    if !multiline {
+                        ui.label(param_name);
+                    }
                     if *multiline {
                         ui.text_edit_multiline(text);
                     } else {

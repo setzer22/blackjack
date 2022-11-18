@@ -11,7 +11,9 @@ use crate::{
         *,
     },
 };
-use blackjack_engine::graph::{BlackjackValue, DataType, NodeDefinitions};
+use blackjack_engine::graph::{
+    serialization::SerializedBjkSnippet, BlackjackValue, DataType, NodeDefinitions,
+};
 use egui_wgpu::renderer::{RenderPass, ScreenDescriptor};
 
 use super::{blackjack_theme, gizmo_ui::UiNodeGizmoStates};
@@ -24,6 +26,18 @@ pub struct GraphEditor {
     pub renderpass: RenderPass,
     pub raw_mouse_position: Option<egui::Pos2>,
     pub textures_to_free: Vec<egui::TextureId>,
+    /// Is the mouse over the node finder? Used to ignore scroll wheel events
+    /// and not zoom the graph when that happens.
+    pub mouse_over_node_finder: bool,
+    /// Stores the last stored contents of the clipboard from the graph editor.
+    /// Used to detect whether the current paste event was originated from this
+    /// blackjack instance.
+    pub previous_clipboard_contents: String,
+    /// When there's a potentially unsafe paste operation pending, the parsed
+    /// clipboard contents are stored here.
+    pub pending_paste_operation: Option<SerializedBjkSnippet>,
+    /// Allows ignoring the potentially unsafe paste confirmation dialog.
+    pub skip_pending_paste_check: bool,
 }
 
 pub fn blackjack_graph_theme() -> egui::Visuals {
@@ -61,6 +75,10 @@ impl GraphEditor {
             // window events from egui when the cursor is not over the viewport
             raw_mouse_position: None,
             textures_to_free: Vec::new(),
+            mouse_over_node_finder: false,
+            previous_clipboard_contents: String::new(),
+            pending_paste_operation: None,
+            skip_pending_paste_check: false,
         }
     }
 
@@ -120,22 +138,24 @@ impl GraphEditor {
                     egui::pos2(0.0, 0.0)
                 }
                 .to_vec2();
-                match delta {
-                    winit::event::MouseScrollDelta::LineDelta(_, dy) => {
-                        self.editor_state.pan_zoom.adjust_zoom(
-                            -*dy * 8.0 * 0.01,
-                            mouse_pos,
-                            Self::ZOOM_LEVEL_MIN,
-                            Self::ZOOM_LEVEL_MAX,
-                        );
-                    }
-                    winit::event::MouseScrollDelta::PixelDelta(pos) => {
-                        self.editor_state.pan_zoom.adjust_zoom(
-                            -pos.y as f32 * 0.01,
-                            mouse_pos,
-                            Self::ZOOM_LEVEL_MIN,
-                            Self::ZOOM_LEVEL_MAX,
-                        );
+                if !self.mouse_over_node_finder {
+                    match delta {
+                        winit::event::MouseScrollDelta::LineDelta(_, dy) => {
+                            self.editor_state.pan_zoom.adjust_zoom(
+                                -*dy * 8.0 * 0.01,
+                                mouse_pos,
+                                Self::ZOOM_LEVEL_MIN,
+                                Self::ZOOM_LEVEL_MAX,
+                            );
+                        }
+                        winit::event::MouseScrollDelta::PixelDelta(pos) => {
+                            self.editor_state.pan_zoom.adjust_zoom(
+                                -pos.y as f32 * 0.01,
+                                mouse_pos,
+                                Self::ZOOM_LEVEL_MIN,
+                                Self::ZOOM_LEVEL_MAX,
+                            );
+                        }
                     }
                 }
             }
@@ -162,7 +182,6 @@ impl GraphEditor {
         window: &winit::window::Window,
         parent_scale: f32,
         viewport_rect: egui::Rect,
-        node_definitions: &NodeDefinitions,
     ) {
         self.resize_platform(parent_scale, viewport_rect);
         self.egui_context.input_mut().pixels_per_point = 1.0 / self.zoom_level();
@@ -198,12 +217,7 @@ impl GraphEditor {
 
         self.egui_context.begin_frame(egui_input);
 
-        graph::draw_node_graph(
-            &self.egui_context,
-            &mut self.editor_state,
-            &mut self.custom_state,
-            node_definitions,
-        );
+        graph::draw_node_graph(self);
 
         // Debug mouse pointer position
         // -- This is useful when mouse events are not being interpreted correctly.
@@ -235,7 +249,7 @@ impl GraphEditor {
         parent_scale: f32,
         _resolution: UVec2,
         render_target: r3::RenderTargetHandle,
-    ) {
+    ) -> egui::PlatformOutput {
         let full_output = self.egui_context.end_frame();
         let paint_jobs = self.egui_context.tessellate(full_output.shapes);
 
@@ -285,6 +299,8 @@ impl GraphEditor {
                     .execute_with_renderpass(rpass, &paint_jobs, &screen_descriptor);
             },
         );
+
+        full_output.platform_output
     }
 
     /// Returns Some(render_target) when the graph should be drawn by the parent
@@ -294,12 +310,12 @@ impl GraphEditor {
         graph: &mut r3::RenderGraph<'node>,
         viewport_rect: egui::Rect,
         parent_scale: f32,
-    ) -> Option<r3::RenderTargetHandle> {
+    ) -> (Option<r3::RenderTargetHandle>, Option<egui::PlatformOutput>) {
         let resolution = viewport_rect.size() * parent_scale;
         let resolution = UVec2::new(resolution.x as u32, resolution.y as u32);
 
         if resolution.x == 0 || resolution.y == 0 {
-            return None;
+            return (None, None);
         }
 
         let render_target = graph.add_render_target(r3::RenderTargetDescriptor {
@@ -312,7 +328,7 @@ impl GraphEditor {
 
         // TODO: Add graph background
 
-        self.add_graph_egui_to_graph(
+        let platform_output = self.add_graph_egui_to_graph(
             graph,
             viewport_rect,
             parent_scale,
@@ -320,7 +336,7 @@ impl GraphEditor {
             render_target,
         );
 
-        Some(render_target)
+        (Some(render_target), Some(platform_output))
     }
 
     /// Updates the graph after the node definitions were updated. This

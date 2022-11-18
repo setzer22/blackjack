@@ -22,7 +22,8 @@ use crate::{
 };
 
 use super::{
-    BjkGraph, BjkNode, BjkNodeId, BlackjackValue, DataType, DependencyKind, InputParameter, Output,
+    BjkGraph, BjkNode, BjkNodeId, BjkSnippet, BlackjackValue, DataType, DependencyKind,
+    InputParameter, Output,
 };
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -151,6 +152,13 @@ pub struct SerializedBjkGraph {
     pub external_parameters: Option<SerializedExternalParameters>,
 }
 
+#[derive(Serialize, Deserialize, Default)]
+pub struct SerializedBjkSnippet {
+    pub nodes: Vec<SerializedBjkNode>,
+    pub node_relative_positions: Option<Vec<glam::Vec2>>,
+    pub external_parameters: Option<SerializedExternalParameters>,
+}
+
 /// Maps slotmap ids to serialized indices.
 type IdToIdx = SecondaryMap<BjkNodeId, usize>;
 
@@ -186,9 +194,25 @@ pub struct RuntimeData {
     pub external_parameters: Option<ExternalParameterValues>,
 }
 
+/// This struct represents the runtime data that can be copied to, or pasted
+/// from the user's clipboard.
+pub struct SnippetRuntimeData {
+    pub snippet: BjkSnippet,
+    pub external_parameters: Option<ExternalParameterValues>,
+}
+
 // ===========================================
 // ==== SERIALIZATION FROM RUNTIME VALUES ====
 // ===========================================
+
+impl IdMappings {
+    pub fn from_nodes(nodes: &SlotMap<BjkNodeId, BjkNode>) -> Self {
+        Self {
+            id_to_idx: nodes.keys().zip(0..).collect(),
+            idx_to_id: nodes.keys().collect(),
+        }
+    }
+}
 
 impl SerializedBjkGraph {
     pub fn write_to_file(&self, path: impl AsRef<Path>) -> Result<()> {
@@ -204,15 +228,13 @@ impl SerializedBjkGraph {
             graph,
             external_parameters,
         } = runtime_data;
+
+        let mappings = IdMappings::from_nodes(&graph.nodes);
+
         let BjkGraph {
             nodes,
             default_node,
         } = graph;
-
-        let mappings = IdMappings {
-            id_to_idx: nodes.keys().zip(0..).collect(),
-            idx_to_id: nodes.keys().collect(),
-        };
 
         let mut serialized_nodes = vec![];
         for (_node_id, node) in nodes {
@@ -236,6 +258,67 @@ impl SerializedBjkGraph {
 
     pub fn set_ui_data(&mut self, ui_data: SerializedUiData) {
         self.ui_data = Some(ui_data);
+    }
+}
+
+impl SerializedBjkSnippet {
+    pub fn into_string(&self) -> Result<String> {
+        let mut w = BufWriter::new(Vec::<u8>::new());
+        SerializationVersion::latest().to_writer(&mut w)?;
+        ron::ser::to_writer_pretty(&mut w, self, PrettyConfig::default())?;
+        Ok(String::from_utf8(w.into_inner()?)?)
+    }
+
+    pub fn from_runtime(
+        mut graph: BjkGraph,
+        mut external_parameters: ExternalParameterValues,
+        node_projection: &[BjkNodeId],
+    ) -> Result<(Self, IdMappings)> {
+        // Remove the nodes from the graph that are not part of the projection
+        graph.nodes.retain(|id, _| node_projection.contains(&id));
+
+        // When there is a connection that crosses the projection boundary, we remove it.
+        for (node_id, node) in &mut graph.nodes {
+            if node_projection.contains(&node_id) {
+                for input in &mut node.inputs {
+                    if let DependencyKind::Connection { node, .. } = &input.kind {
+                        if !node_projection.contains(node) {
+                            input.kind = DependencyKind::External { promoted: None };
+                        }
+                    }
+                }
+            }
+        }
+
+        // We also remove any external parameters referencing nodes outside the projection
+        external_parameters
+            .0
+            .retain(|param, _| node_projection.contains(&param.node_id));
+
+        let mut serialized_nodes = vec![];
+        let mappings = IdMappings::from_nodes(&graph.nodes);
+
+        // Finally, we serialize as normal
+        for (node_id, node) in &graph.nodes {
+            debug_assert!(node_projection.contains(&node_id));
+            serialized_nodes.push(SerializedBjkNode::from_runtime_data(node, &mappings)?);
+        }
+
+        Ok((
+            Self {
+                nodes: serialized_nodes,
+                external_parameters: Some(SerializedExternalParameters::from_runtime(
+                    external_parameters,
+                    &mappings,
+                )?),
+                node_relative_positions: None,
+            },
+            mappings,
+        ))
+    }
+
+    pub fn set_node_relative_positions(&mut self, node_relative_positions: Vec<glam::Vec2>) {
+        self.node_relative_positions = Some(node_relative_positions)
     }
 }
 
@@ -361,6 +444,27 @@ impl SerializedDependencyKind {
 // ==== RUNTIME DATA GENERATION FROM STORED VALUES ====
 // ====================================================
 
+impl IdMappings {
+    pub fn from_serialized_graph(
+        nodes: &[SerializedBjkNode],
+    ) -> Result<(Self, SlotMap<BjkNodeId, BjkNode>)> {
+        let mut rt_nodes = SlotMap::<BjkNodeId, BjkNode>::with_key();
+        let mut mappings = Self::default();
+        for (idx, node) in nodes.iter().enumerate() {
+            let node_id = rt_nodes.insert(BjkNode {
+                op_name: node.op_name.clone(),
+                return_value: node.return_value.clone(),
+                inputs: vec![],
+                outputs: vec![],
+            });
+
+            mappings.idx_to_id.push(node_id);
+            mappings.id_to_idx.insert(node_id, idx);
+        }
+        Ok((mappings, rt_nodes))
+    }
+}
+
 impl SerializedBjkGraph {
     pub fn load_from_file(path: impl AsRef<Path>) -> Result<SerializedBjkGraph> {
         let reader = BufReader::new(std::fs::File::open(path)?);
@@ -372,58 +476,12 @@ impl SerializedBjkGraph {
     }
 
     pub fn into_runtime(self) -> Result<(RuntimeData, Option<SerializedUiData>, IdMappings)> {
-        let mut rt_nodes = SlotMap::<BjkNodeId, BjkNode>::with_key();
+        // This constructs the initial graph with empty data at each node
+        let (mappings, mut rt_nodes) = IdMappings::from_serialized_graph(&self.nodes)?;
 
-        // First pass, generate the mapping and fill in nodes
-        let mut mappings = IdMappings::default();
-        for (idx, node) in self.nodes.iter().enumerate() {
-            let node_id = rt_nodes.insert(BjkNode {
-                op_name: node.op_name.clone(),
-                return_value: node.return_value.clone(),
-                inputs: vec![],
-                outputs: vec![],
-            });
-
-            mappings.idx_to_id.push(node_id);
-            mappings.id_to_idx.insert(node_id, idx);
-        }
-
-        // Then, finish initializing the nodes once the mapping is complete
+        // Then, we finish initializing the nodes once the mapping is complete
         for (node, node_id) in self.nodes.into_iter().zip(&mappings.idx_to_id) {
-            let rt_node = &mut rt_nodes[*node_id];
-            for input in node.inputs {
-                if let Some(data_type) = deserialize_data_type(&input.data_type) {
-                    rt_node.inputs.push(InputParameter {
-                        name: input.name,
-                        data_type,
-                        kind: match input.kind {
-                            SerializedDependencyKind::External { promoted } => {
-                                DependencyKind::External { promoted }
-                            }
-                            SerializedDependencyKind::Conection {
-                                node_idx,
-                                param_name,
-                            } => DependencyKind::Connection {
-                                node: mappings.idx_to_id[node_idx],
-                                param_name,
-                            },
-                        },
-                    })
-                } else {
-                    println!("[WARNING] Unkown data type: {}", &input.data_type)
-                }
-            }
-
-            for output in node.outputs {
-                if let Some(data_type) = deserialize_data_type(&output.data_type) {
-                    rt_node.outputs.push(Output {
-                        name: output.name,
-                        data_type,
-                    })
-                } else {
-                    println!("[WARNING] Unkown data type: {}", &output.data_type)
-                }
-            }
+            node.fill_runtime(&mut rt_nodes[*node_id], &mappings)?;
         }
 
         Ok((
@@ -439,6 +497,74 @@ impl SerializedBjkGraph {
                 },
             },
             self.ui_data,
+            mappings,
+        ))
+    }
+}
+
+impl SerializedBjkNode {
+    pub fn fill_runtime(self, rt_node: &mut BjkNode, mappings: &IdMappings) -> Result<()> {
+        for input in self.inputs {
+            if let Some(data_type) = deserialize_data_type(&input.data_type) {
+                rt_node.inputs.push(InputParameter {
+                    name: input.name,
+                    data_type,
+                    kind: match input.kind {
+                        SerializedDependencyKind::External { promoted } => {
+                            DependencyKind::External { promoted }
+                        }
+                        SerializedDependencyKind::Conection {
+                            node_idx,
+                            param_name,
+                        } => DependencyKind::Connection {
+                            node: mappings.idx_to_id[node_idx],
+                            param_name,
+                        },
+                    },
+                })
+            } else {
+                println!("[WARNING] Unkown data type: {}", &input.data_type)
+            }
+        }
+
+        for output in self.outputs {
+            if let Some(data_type) = deserialize_data_type(&output.data_type) {
+                rt_node.outputs.push(Output {
+                    name: output.name,
+                    data_type,
+                })
+            } else {
+                println!("[WARNING] Unkown data type: {}", &output.data_type)
+            }
+        }
+        Ok(())
+    }
+}
+
+impl SerializedBjkSnippet {
+    pub fn load_from_string(s: &str) -> Result<SerializedBjkSnippet> {
+        Ok(ron::de::from_str(s)?)
+    }
+
+    pub fn into_runtime(self) -> Result<(SnippetRuntimeData, Option<Vec<glam::Vec2>>, IdMappings)> {
+        // This constructs the initial graph with empty data at each node
+        let (mappings, mut rt_nodes) = IdMappings::from_serialized_graph(&self.nodes)?;
+
+        // Then, we finish initializing the nodes once the mapping is complete
+        for (node, node_id) in self.nodes.into_iter().zip(&mappings.idx_to_id) {
+            node.fill_runtime(&mut rt_nodes[*node_id], &mappings)?;
+        }
+
+        Ok((
+            SnippetRuntimeData {
+                snippet: BjkSnippet { nodes: rt_nodes },
+                external_parameters: if let Some(e) = self.external_parameters {
+                    Some(e.into_runtime(&mappings)?)
+                } else {
+                    None
+                },
+            },
+            self.node_relative_positions,
             mappings,
         ))
     }

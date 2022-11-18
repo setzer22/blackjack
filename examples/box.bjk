@@ -1,0 +1,75 @@
+// BLACKJACK_VERSION_HEADER 0 1 0
+(
+    nodes: [
+        (
+            op_name: "MakeBox",
+            return_value: Some("out_mesh"),
+            inputs: [
+                (
+                    name: "origin",
+                    data_type: "BJK_VECTOR",
+                    kind: External(
+                        promoted: None,
+                    ),
+                ),
+                (
+                    name: "size",
+                    data_type: "BJK_VECTOR",
+                    kind: External(
+                        promoted: None,
+                    ),
+                ),
+            ],
+            outputs: [
+                (
+                    name: "out_mesh",
+                    data_type: "BJK_MESH",
+                ),
+            ],
+        ),
+        (
+            op_name: "MakeComment",
+            return_value: None,
+            inputs: [
+                (
+                    name: "comment",
+                    data_type: "BJK_STRING",
+                    kind: External(
+                        promoted: None,
+                    ),
+                ),
+            ],
+            outputs: [],
+        ),
+    ],
+    default_node: Some(0),
+    ui_data: Some((
+        node_positions: [
+            (403.9753, 165.62659),
+            (126.67163, 64.81848),
+        ],
+        node_order: [
+            0,
+            1,
+        ],
+        pan: (0.0, 0.0),
+        zoom: 1.0,
+        locked_gizmo_nodes: [],
+    )),
+    external_parameters: Some((
+        param_values: {
+            (
+                node_idx: 0,
+                param_name: "size",
+            ): Vector((1.0, 1.0, 1.0)),
+            (
+                node_idx: 1,
+                param_name: "comment",
+            ): String("Here\'s a box, one of the simplest, but most versatile nodes in blackjack!\n\nThe origin and size parameters let you specify the center and boundaries of the box.\n\nTry dragging one of he parameters left and right and see how the box updates!\n\nWhen the box is active, or its Gizmo flag is set, you can  also modify these parameters in the editor."),
+            (
+                node_idx: 0,
+                param_name: "origin",
+            ): Vector((0.0, 0.0, 0.0)),
+        },
+    )),
+)

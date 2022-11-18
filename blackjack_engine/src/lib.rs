@@ -24,3 +24,6 @@ pub mod graph_interpreter;
 
 /// Gizmos allow visual modifications of a node's parameters.
 pub mod gizmos;
+
+#[cfg(test)]
+pub mod engine_tests;

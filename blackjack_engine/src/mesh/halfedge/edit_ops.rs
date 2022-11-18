@@ -2268,45 +2268,64 @@ pub mod lua_fns {
     #[lua(under = "Ops")]
     pub fn collapse_edge(
         mesh: &mut HalfEdgeMesh,
-        edge: SelectionExpression,
+        edges: SelectionExpression,
         interpolation: f32,
-    ) -> Result<VertexId> {
-        let edge = mesh
-            .resolve_halfedge_selection_full(&edge)?
-            .iter_cpy()
-            .next()
-            .ok_or_else(|| anyhow!("No edge selected"))?;
+    ) -> Result<()> {
+        let edges = mesh.resolve_halfedge_selection_full(&edges)?;
+        for edge in edges {
+            let mut positions = mesh.write_positions();
+            let (src, dst) = mesh.read_connectivity().at_halfedge(edge).src_dst_pair()?;
+            let vpos = lerp(positions[src], positions[dst], interpolation);
 
-        let mut positions = mesh.write_positions();
-        let (src, dst) = mesh.read_connectivity().at_halfedge(edge).src_dst_pair()?;
-        let vpos = lerp(positions[src], positions[dst], interpolation);
+            let v = super::collapse_edge(&mut mesh.write_connectivity(), edge)?;
 
-        let v = super::collapse_edge(&mut mesh.write_connectivity(), edge)?;
+            positions[v] = vpos;
+        }
 
-        positions[v] = vpos;
-        Ok(v)
+        Ok(())
     }
 
     #[lua(under = "Ops")]
-    pub fn divide_edge(
+    pub fn divide_edges(
         mesh: &mut HalfEdgeMesh,
-        edge: SelectionExpression,
+        edges: SelectionExpression,
         interpolation: f32,
-    ) -> Result<VertexId> {
-        let edge = mesh
-            .resolve_halfedge_selection_full(&edge)?
-            .iter_cpy()
-            .next()
-            .ok_or_else(|| anyhow!("No edge selected"))?;
+        divisions: usize,
+    ) -> Result<()> {
+        let edges = mesh.resolve_halfedge_selection_full(&edges)?;
+        for edge in edges {
+            if divisions == 1 {
+                super::divide_edge(
+                    &mut mesh.write_connectivity(),
+                    &mut mesh.write_positions(),
+                    edge,
+                    interpolation,
+                )?;
+            } else {
+                let edge_vector = {
+                    let (src, dst) = mesh.read_connectivity().at_halfedge(edge).src_dst_pair()?;
+                    let positions = mesh.read_positions();
+                    positions[dst] - positions[src]
+                };
+                let vs = (0..divisions)
+                    .map(|_| {
+                        super::divide_edge(
+                            &mut mesh.write_connectivity(),
+                            &mut mesh.write_positions(),
+                            edge,
+                            0.0,
+                        )
+                    })
+                    .collect::<Result<Vec<_>>>()?;
 
-        let v = super::divide_edge(
-            &mut mesh.write_connectivity(),
-            &mut mesh.write_positions(),
-            edge,
-            interpolation,
-        )?;
+                let mut positions = mesh.write_positions();
+                for (i, v) in vs.iter_cpy().enumerate() {
+                    positions[v] += edge_vector * (i as f32 / divisions as f32);
+                }
+            }
+        }
 
-        Ok(v)
+        Ok(())
     }
 
     #[lua(under = "Ops")]

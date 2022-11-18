@@ -16,6 +16,7 @@ use crate::{
 };
 use blackjack_engine::lua_engine::LuaRuntime;
 use egui_wgpu::renderer::{RenderPass, ScreenDescriptor};
+use winit::window::Window;
 
 use self::{
     app_viewport::AppViewport, application_context::ApplicationContext,
@@ -232,7 +233,6 @@ impl RootViewport {
             window,
             self.screen_descriptor.pixels_per_point,
             self.offscreen_viewports[&OffscreenViewport::GraphEditor].rect,
-            &self.lua_runtime.node_definitions,
         );
         self.viewport_3d.update(
             self.screen_descriptor.pixels_per_point,
@@ -301,7 +301,7 @@ impl RootViewport {
         Ok(())
     }
 
-    pub fn render(&mut self, render_ctx: &mut RenderContext) {
+    pub fn render(&mut self, render_ctx: &mut RenderContext) -> egui::PlatformOutput {
         let RenderContext {
             ref base_graph,
             ref pbr_routine,
@@ -318,7 +318,7 @@ impl RootViewport {
         };
         let (cmd_bufs, ready) = render_ctx.renderer.ready();
         let mut graph = rend3::graph::RenderGraph::new();
-        self.add_root_to_graph(
+        let platform_output = self.add_root_to_graph(
             &mut graph,
             &ready,
             ViewportRoutines {
@@ -343,6 +343,17 @@ impl RootViewport {
         if let Some(error) = pollster::block_on(render_ctx.renderer.device.pop_error_scope()) {
             println!("WGPU VALIDATION ERROR: {error}");
         }
+
+        platform_output
+    }
+
+    pub fn handle_platform_output(
+        &mut self,
+        window: &Window,
+        platform_output: egui::PlatformOutput,
+    ) {
+        self.egui_winit_state
+            .handle_platform_output(window, &self.egui_context, platform_output);
     }
 }
 

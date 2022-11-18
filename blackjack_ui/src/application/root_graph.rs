@@ -4,6 +4,8 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+use egui::PlatformOutput;
+
 use super::*;
 
 impl RootViewport {
@@ -13,7 +15,7 @@ impl RootViewport {
         ready: &r3::ReadyData,
         viewport_routines: ViewportRoutines<'node>,
         output: r3::RenderTargetHandle,
-    ) {
+    ) -> egui::PlatformOutput {
         // Self contains too many things to passthrough it to the inner node `.build`
         //  closure, so we split it up here to make borrow checking more granular
         let Self {
@@ -32,7 +34,7 @@ impl RootViewport {
         // validation errors.
         let parent_scale = egui_context.pixels_per_point();
 
-        let graph_texture = graph_editor.add_draw_to_graph(
+        let (graph_texture, graph_platform_output) = graph_editor.add_draw_to_graph(
             graph,
             offscreen_viewports[&OffscreenViewport::GraphEditor].rect,
             parent_scale,
@@ -122,6 +124,13 @@ impl RootViewport {
                 renderpass.execute_with_renderpass(rpass, &paint_jobs, screen_descriptor);
             },
         );
+
+        // Combine the platform output from the parent and child egui instances
+        let mut platform_output = full_output.platform_output;
+        if let Some(o) = graph_platform_output {
+            merge_platform_outputs(&mut platform_output, o)
+        }
+        platform_output
     }
 
     pub fn add_root_to_graph<'node>(
@@ -129,8 +138,36 @@ impl RootViewport {
         graph: &mut r3::RenderGraph<'node>,
         ready: &r3::ReadyData,
         viewport_routines: ViewportRoutines<'node>,
-    ) {
+    ) -> egui::PlatformOutput {
         let output = graph.add_surface_texture();
-        self.add_draw_to_graph(graph, ready, viewport_routines, output);
+        self.add_draw_to_graph(graph, ready, viewport_routines, output)
     }
+}
+
+/// Merges the contents of `b` into `a`, where `b` is the platform output for a
+/// child egui instance.
+fn merge_platform_outputs(a: &mut egui::PlatformOutput, b: egui::PlatformOutput) {
+    let PlatformOutput {
+        cursor_icon,
+        open_url,
+        copied_text,
+        events,
+        mutable_text_under_cursor,
+        text_cursor_pos,
+    } = a;
+
+    // NOTE: the copied_text *should* be an option, but instead egui uses the
+    // empty string to represent the operation to not copy anything.
+    if !b.copied_text.is_empty() {
+        *copied_text = b.copied_text;
+    }
+    if b.cursor_icon != egui::CursorIcon::Default {
+        *cursor_icon = b.cursor_icon;
+    }
+    if b.mutable_text_under_cursor {
+        *mutable_text_under_cursor |= b.mutable_text_under_cursor;
+    }
+    *open_url = open_url.take().or(b.open_url);
+    *text_cursor_pos = text_cursor_pos.take().or(b.text_cursor_pos);
+    events.extend(b.events.into_iter());
 }

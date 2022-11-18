@@ -9,7 +9,7 @@ local V = require("vector_math")
 local T = require("table_helpers")
 local Gz = require("gizmo_helpers")
 local NodeLibrary = require("node_library")
-local load_function = require("utils").load_function
+local Utils = require("utils")
 
 -- Primitives: Construct new meshes based on common patterns
 local primitives = {
@@ -53,14 +53,19 @@ local primitives = {
         label = "Circle",
         op = function(inputs)
             return {
-                out_mesh = Primitives.circle(inputs.center, inputs.radius, inputs.num_vertices, inputs.fill == "N-Gon"),
+                out_mesh = Primitives.circle(
+                    inputs.center,
+                    inputs.radius,
+                    inputs.num_vertices,
+                    inputs.fill == "N-Gon"
+                ),
             }
         end,
         inputs = {
             P.v3("center", vector(0, 0, 0)),
             P.scalar("radius", { default = 1.0, min = 0.0 }),
             P.scalar_int("num_vertices", { default = 8, min = 3, soft_max = 32 }),
-            P.enum("fill", {"None", "N-Gon"}, 0)
+            P.enum("fill", { "None", "N-Gon" }, 0),
         },
         outputs = {
             P.mesh("out_mesh"),
@@ -113,7 +118,7 @@ local primitives = {
     MakeTerrain = {
         label = "Terrain",
         op = function(inputs)
-            local f = load_function(inputs.code)
+            local f = Utils.load_function(inputs.code)
             return {
                 out_heightmap = HeightMap.from_fn(inputs.width, inputs.height, f),
             }
@@ -129,7 +134,7 @@ local primitives = {
         returns = "out_heightmap",
     },
     MakeCode = {
-        label = "Lua code",
+        label = "Lua String",
         op = function(inputs)
             return {
                 out_code = inputs.code,
@@ -141,6 +146,16 @@ local primitives = {
         outputs = {
             P.lua_str("out_code"),
         },
+    },
+    MakeComment = {
+        label = "Comment",
+        op = function(inputs)
+            return {}
+        end,
+        inputs = {
+            P.strparam("comment", "", true),
+        },
+        outputs = {},
     },
     MakePolygon = {
         label = "Polygon",
@@ -232,19 +247,14 @@ local primitives = {
         label = "Points grid",
         op = function(inputs)
             return {
-                out_mesh = Primitives.grid(
-                    inputs.x,
-                    inputs.y,
-                    inputs.spacing_x, 
-                    inputs.spacing_y
-                )
+                out_mesh = Primitives.grid(inputs.x, inputs.y, inputs.spacing_x, inputs.spacing_y),
             }
         end,
         inputs = {
-            P.scalar_int("x", { default = 3, min = 2, soft_max = 32 }),
-            P.scalar_int("y", { default = 3, min = 2, soft_max = 32 }),
-            P.scalar("spacing_x", {default = 1.0, min = 1.0 }),
-            P.scalar("spacing_y", {default = 1.0, min = 1.0 }),
+            P.scalar_int("x", { default = 3, min = 1, soft_max = 32 }),
+            P.scalar_int("y", { default = 3, min = 1, soft_max = 32 }),
+            P.scalar("spacing_x", { default = 1.0, min = 0.0 }),
+            P.scalar("spacing_y", { default = 1.0, min = 0.0 }),
         },
         outputs = {
             P.mesh("out_mesh"),
@@ -266,8 +276,8 @@ local primitives = {
         inputs = {
             P.v3("start_point", vector(0, 0, 0)),
             P.v3("end_point", vector(1, 0, 0)),
-            P.scalar("sag", { default = 1.0, min = 0.001}),
-            P.scalar_int("segments", { default = 8, min = 1, soft_max = 32 })
+            P.scalar("sag", { default = 1.0, min = 0.001 }),
+            P.scalar_int("segments", { default = 8, min = 1, soft_max = 32 }),
         },
         outputs = {
             P.mesh("out_mesh"),
@@ -293,23 +303,6 @@ local primitives = {
         returns = "out_mesh",
     },
 }
-
-local function parse_ch_key(s)
-    if s == "Vertex" then
-        return Types.VERTEX_ID
-    elseif s == "Face" then
-        return Types.FACE_ID
-    elseif s == "Halfedge" then
-        return Types.HALFEDGE_ID
-    end
-end
-local function parse_ch_val(s)
-    if s == "f32" then
-        return Types.F32
-    elseif s == "Vec3" then
-        return Types.VEC3
-    end
-end
 
 -- Edit ops: Nodes to edit existing meshes
 local edit_ops = {
@@ -365,10 +358,10 @@ local edit_ops = {
         end,
     },
     CollapseEdge = {
-        label = "Collapse edge",
+        label = "Collapse edges",
         inputs = {
             P.mesh("in_mesh"),
-            P.selection("edge"),
+            P.selection("edges"),
             P.scalar("interp", { default = 0.5, soft_min = 0.0, soft_max = 1.0 }),
         },
         outputs = {
@@ -377,7 +370,7 @@ local edit_ops = {
         returns = "out_mesh",
         op = function(inputs)
             local out_mesh = inputs.in_mesh:clone()
-            Ops.collapse_edge(out_mesh, inputs.edge, inputs.interp)
+            Ops.collapse_edge(out_mesh, inputs.edges, inputs.interp)
             return { out_mesh = out_mesh }
         end,
     },
@@ -400,7 +393,7 @@ local edit_ops = {
         end,
     },
     MakeQuadFace = {
-        label = "Make face (quad)",
+        label = "Make Quad",
         inputs = {
             P.mesh("in_mesh"),
             P.selection("a"),
@@ -460,11 +453,12 @@ local edit_ops = {
         end,
     },
     SubdivideEdge = {
-        label = "Divide Edge",
-        inputs = { 
+        label = "Divide Edges",
+        inputs = {
             P.mesh("in_mesh"),
-            P.selection("edge"),
+            P.selection("edges"),
             P.scalar("interp", { default = 0.5, soft_min = 0.0, soft_max = 1.0 }),
+            P.scalar_int("divisions", { default = 1, min = 1, soft_max = 32 }),
         },
         outputs = {
             P.mesh("out_mesh"),
@@ -472,7 +466,7 @@ local edit_ops = {
         returns = "out_mesh",
         op = function(inputs)
             local out_mesh = inputs.in_mesh:clone()
-            Ops.divide_edge(out_mesh, inputs.edge, inputs.interp)
+            Ops.divide_edges(out_mesh, inputs.edges, inputs.interp, inputs.divisions)
             return { out_mesh = out_mesh }
         end,
     },
@@ -597,7 +591,7 @@ local edit_ops = {
         returns = "out_mesh",
         op = function(inputs)
             local out_mesh = inputs.mesh:clone()
-            local typ = parse_ch_key(inputs.type)
+            local typ = Utils.parse_ch_key(inputs.type)
             Ops.make_group(out_mesh, typ, inputs.selection, inputs.name)
             return { out_mesh = out_mesh }
         end,
@@ -617,7 +611,7 @@ local edit_ops = {
         returns = "out_mesh",
         op = function(inputs)
             local out_mesh = inputs.mesh:clone()
-            local k_typ = parse_ch_key(inputs.channel_key)
+            local k_typ = Utils.parse_ch_key(inputs.channel_key)
 
             local func, err = loadstring(inputs.code)
             if err ~= nil then
@@ -632,7 +626,7 @@ local edit_ops = {
             local ch_by_name = {}
             for ch_descr in inputs.channels:gmatch("[^,]+") do
                 local _, _, ch_name, ch_val_str = ch_descr:find("(%w+)%s*:%s*(%w+)")
-                local val_typ = parse_ch_val(ch_val_str)
+                local val_typ = Utils.parse_ch_val(ch_val_str)
                 local ch_data = out_mesh:ensure_channel(k_typ, val_typ, ch_name)
                 ch_size = #ch_data
                 ch_by_name[ch_name] = { data = ch_data, value_type = val_typ }
@@ -789,7 +783,7 @@ local edit_ops = {
             end
 
             -- Call the actual op
-            local kty = parse_ch_key(inputs.geometry)
+            local kty = Utils.parse_ch_key(inputs.geometry)
             Ops.edit_geometry(
                 out_mesh,
                 kty,
@@ -943,6 +937,35 @@ local misc = {
             return { point = inputs.point }
         end,
         gizmos = { Gz.tweak_point("point") },
+    },
+    Turntable = {
+        label = "Turntable",
+        doc = [[
+            Will rotate the current mesh over time, centered at its origin.
+            This rotation is not exported to the end mesh, but is helpful
+            when you want to show off your creations in blackjack itself.
+        ]],
+        inputs = {
+            P.scalar("speed", { default = 1.0, min = 0.0 }),
+            P.mesh("mesh"),
+        },
+        outputs = {
+            P.mesh("out_mesh"),
+        },
+        returns = "out_mesh",
+        op = function(inputs)
+            local time = os.clock()
+            local out_mesh = inputs.mesh:clone()
+            Ops.transform(
+                out_mesh,
+                vector(0, 0, 0),
+                vector(0, time * inputs.speed, 0),
+                vector(1, 1, 1)
+            )
+            return {
+                out_mesh = out_mesh,
+            }
+        end,
     },
 }
 
