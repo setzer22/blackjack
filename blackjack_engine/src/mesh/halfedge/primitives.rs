@@ -408,7 +408,7 @@ fn catenary_dx(x: f32, a: f32) -> f32 {
 }
 
 /// Curve of a hanging chain, rope, or wire. https://en.wikipedia.org/wiki/Catenary
-struct Catenary;
+pub struct Catenary;
 impl Catenary {
     const MAX_ERR: f32 = 1e-2;
     const NEWTON_ITERS: u32 = 20;
@@ -455,6 +455,59 @@ impl Catenary {
         };
         let normal = |i| Vec3::Y.reject_from_normalized(tangent(i));
         Line::build_with_normals(&position, &normal, &tangent, segments)
+    }
+}
+
+/// Golden ratio, Phi, `(1 + 5.sqrt())/2`
+const PHI: f32 = 1.618_034;
+/// An Icosahedron, a regular 20-sided convex polyhedra. Useful for approximating spheres.
+pub struct Icosahedron;
+impl Icosahedron {
+    const VERTS: [(f32, f32, f32); 12] = [
+        (0., PHI, 1.),
+        (0., PHI, -1.),
+        (PHI, 1., 0.),
+        (-PHI, 1., 0.),
+        (1., 0., -PHI),
+        (-1., 0., -PHI),
+        (-1., 0., PHI),
+        (1., 0., PHI),
+        (PHI, -1., 0.),
+        (-PHI, -1., 0.),
+        (0., -PHI, -1.),
+        (0., -PHI, 1.),
+    ];
+    const FACES: [[usize; 3]; 20] = [
+        [0, 1, 3],
+        [0, 2, 1],
+        [1, 2, 4],
+        [1, 5, 3],
+        [1, 4, 5],
+        [0, 3, 6],
+        [0, 7, 2],
+        [0, 6, 7],
+        [2, 8, 4],
+        [2, 7, 8],
+        [3, 9, 6],
+        [3, 5, 9],
+        [4, 10, 5],
+        [6, 11, 7],
+        [4, 8, 10],
+        [5, 10, 9],
+        [6, 9, 11],
+        [7, 11, 8],
+        [8, 11, 10],
+        [9, 10, 11],
+    ];
+    pub fn build(center: Vec3, radius: f32) -> HalfEdgeMesh {
+        // Verts aren't at radius 1, correct for that here
+        let radius = radius / (PHI * PHI + 1.).sqrt();
+        let verts = Self::VERTS
+            .iter()
+            .map(|(x, y, z)| (Vec3::new(*x, *y, *z) * radius) + center)
+            .collect_vec();
+        HalfEdgeMesh::build_from_polygons(&verts, &Self::FACES)
+            .expect("icosahedron building to succeed")
     }
 }
 
@@ -518,6 +571,13 @@ mod lua_api {
     #[lua(under = "Primitives")]
     fn uv_sphere(center: LVec3, radius: f32, segments: u32, rings: u32) -> HalfEdgeMesh {
         UVSphere::build(center.0, segments, rings, radius)
+    }
+
+    /// Creates an Icosahedron with given `center` and `radius`, a regular polyhedra useful for approximating spheres
+    /// without artifacts around the poles.
+    #[lua(under = "Primitives")]
+    fn icosahedron(center: LVec3, radius: f32) -> HalfEdgeMesh {
+        Icosahedron::build(center.0, radius)
     }
 
     /// Creates a polyline with `start` and `end` points split into a number of
@@ -590,5 +650,10 @@ mod test {
         Line::build_from_points(vec![]);
         Line::build_from_points(vec![Vec3::ZERO]);
         Line::build_from_points(vec![Vec3::ZERO, Vec3::Y]);
+    }
+
+    #[test]
+    fn test_icosahedron() {
+        Icosahedron::build(Vec3::ZERO, 1.);
     }
 }
