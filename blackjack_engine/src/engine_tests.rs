@@ -46,7 +46,8 @@ fn run_example(example: &Example, rt: &LuaRuntime) -> ProgramResult {
         rt_data.external_parameters.unwrap(),
         &rt.node_definitions,
         None,
-    ).unwrap()
+    )
+    .unwrap()
 }
 
 #[test]

@@ -347,8 +347,13 @@ impl RootViewport {
         platform_output
     }
 
-    pub fn handle_platform_output(&mut self, window: &Window, platform_output: egui::PlatformOutput) {
-        self.egui_winit_state.handle_platform_output(window, &self.egui_context, platform_output);
+    pub fn handle_platform_output(
+        &mut self,
+        window: &Window,
+        platform_output: egui::PlatformOutput,
+    ) {
+        self.egui_winit_state
+            .handle_platform_output(window, &self.egui_context, platform_output);
     }
 }
 
