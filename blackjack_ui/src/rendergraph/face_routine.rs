@@ -21,7 +21,7 @@ use wgpu::{
 
 use super::{
     shader_manager::ShaderManager,
-    viewport_3d_routine::{DrawType, Viewport3dRoutine, ViewportBuffers},
+    viewport_3d_routine::{DrawType, Viewport3dRoutine, RoutineLayout},
 };
 
 /// The number of matcap materials loaded in the routine. TODO: Matcaps should
@@ -31,7 +31,7 @@ pub const NUM_MATCAPS: usize = 6;
 /// Represents the buffers to draw a base mesh. Unlike other structures using
 /// vertex pulling and instance ids to simulate indices, this buffer structure
 /// uses a real index buffer. This simplifies things like smooth normals
-pub struct MeshBuffer {
+pub struct MeshFacesLayout {
     indices: Buffer,
     positions: Buffer,
     normals: Buffer,
@@ -41,7 +41,7 @@ pub struct MeshBuffer {
 
 const BASE_MESH_NUM_BUFFERS: usize = 2;
 const BASE_MESH_NUM_TEXTURES: usize = 1;
-impl ViewportBuffers<BASE_MESH_NUM_BUFFERS, BASE_MESH_NUM_TEXTURES> for MeshBuffer {
+impl RoutineLayout<BASE_MESH_NUM_BUFFERS, BASE_MESH_NUM_TEXTURES> for MeshFacesLayout {
     type Settings = Viewport3dSettings;
 
     fn get_wgpu_buffers(&self, _settings: &Viewport3dSettings) -> [&Buffer; BASE_MESH_NUM_BUFFERS] {
@@ -56,6 +56,10 @@ impl ViewportBuffers<BASE_MESH_NUM_BUFFERS, BASE_MESH_NUM_TEXTURES> for MeshBuff
         [texture_manager.get_view(self.matcaps[settings.matcap % NUM_MATCAPS].get_raw())]
     }
 
+    fn get_wgpu_uniforms<'a>(&'a self, _settings: &Self::Settings) -> [&Buffer; 0] {
+        []
+    }
+
     fn get_draw_type(&self, _settings: &Self::Settings) -> DrawType<'_> {
         DrawType::UseIndices {
             indices: &self.indices,
@@ -65,11 +69,10 @@ impl ViewportBuffers<BASE_MESH_NUM_BUFFERS, BASE_MESH_NUM_TEXTURES> for MeshBuff
 }
 
 const OVERLAY_NUM_BUFFERS: usize = 2;
-const OVERLAY_NUM_TEXTURES: usize = 0;
 
 /// Represents the buffers to draw the face overlays, flat unshaded
 /// semi-transparent triangles that are drawn over the base mesh.
-pub struct FaceOverlayBuffer {
+pub struct FaceOverlayLayout {
     /// `3 * len` positions (as Vec3), one per triangle
     positions: Buffer,
     /// `len` colors (as Vec3), one per triangle face
@@ -78,7 +81,7 @@ pub struct FaceOverlayBuffer {
     len: usize,
 }
 
-impl ViewportBuffers<OVERLAY_NUM_BUFFERS, OVERLAY_NUM_TEXTURES> for FaceOverlayBuffer {
+impl RoutineLayout<OVERLAY_NUM_BUFFERS> for FaceOverlayLayout {
     type Settings = ();
 
     fn get_wgpu_buffers(&self, _settings: &Self::Settings) -> [&Buffer; OVERLAY_NUM_BUFFERS] {
@@ -89,7 +92,11 @@ impl ViewportBuffers<OVERLAY_NUM_BUFFERS, OVERLAY_NUM_TEXTURES> for FaceOverlayB
         &'a self,
         _texture_manager: &'a TextureManager,
         _settings: &'a Self::Settings,
-    ) -> [&'a TextureView; OVERLAY_NUM_TEXTURES] {
+    ) -> [&'a TextureView; 0] {
+        []
+    }
+
+    fn get_wgpu_uniforms<'a>(&'a self, _settings: &Self::Settings) -> [&Buffer; 0] {
         []
     }
 
@@ -103,9 +110,9 @@ impl ViewportBuffers<OVERLAY_NUM_BUFFERS, OVERLAY_NUM_TEXTURES> for FaceOverlayB
 
 pub struct FaceRoutine {
     matcaps: Arc<Vec<TextureHandle>>,
-    base_mesh_routine: Viewport3dRoutine<MeshBuffer, BASE_MESH_NUM_BUFFERS, BASE_MESH_NUM_TEXTURES>,
+    base_mesh_routine: Viewport3dRoutine<MeshFacesLayout, BASE_MESH_NUM_BUFFERS, BASE_MESH_NUM_TEXTURES>,
     face_overlay_routine:
-        Viewport3dRoutine<FaceOverlayBuffer, OVERLAY_NUM_BUFFERS, OVERLAY_NUM_TEXTURES>,
+        Viewport3dRoutine<FaceOverlayLayout, OVERLAY_NUM_BUFFERS>,
 }
 
 impl FaceRoutine {
@@ -190,7 +197,7 @@ impl FaceRoutine {
             usage: wgpu::BufferUsages::INDEX,
         });
 
-        self.base_mesh_routine.buffers.push(MeshBuffer {
+        self.base_mesh_routine.buffers.push(MeshFacesLayout {
             positions,
             normals,
             indices,
@@ -217,7 +224,7 @@ impl FaceRoutine {
             usage: BufferUsages::STORAGE,
         });
 
-        self.face_overlay_routine.buffers.push(FaceOverlayBuffer {
+        self.face_overlay_routine.buffers.push(FaceOverlayLayout {
             positions,
             colors,
             len,

@@ -4,7 +4,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-use super::viewport_3d_routine::{DrawType, Viewport3dRoutine, ViewportBuffers};
+use super::viewport_3d_routine::{DrawType, Viewport3dRoutine, RoutineLayout};
 use crate::prelude::r3;
 use glam::Vec3;
 use rend3::managers::TextureManager;
@@ -17,7 +17,7 @@ use wgpu::{
 use super::shader_manager::ShaderManager;
 
 /// Stores a wgpu buffer containing the edges of a wireframe
-pub struct WireframeBuffer {
+pub struct WireframeLayout {
     /// Contains 2*len Vec3 elements
     line_positions: Buffer,
     /// Contains len Vec3 elements (color)
@@ -27,9 +27,8 @@ pub struct WireframeBuffer {
 }
 
 const NUM_BUFFERS: usize = 2;
-const NUM_TEXTURES: usize = 0;
 
-impl ViewportBuffers<NUM_BUFFERS, NUM_TEXTURES> for WireframeBuffer {
+impl RoutineLayout<NUM_BUFFERS> for WireframeLayout {
     type Settings = ();
     fn get_wgpu_buffers(&self, _settings: &()) -> [&Buffer; NUM_BUFFERS] {
         [&self.line_positions, &self.colors]
@@ -39,7 +38,11 @@ impl ViewportBuffers<NUM_BUFFERS, NUM_TEXTURES> for WireframeBuffer {
         &'a self,
         _texture_manager: &'a TextureManager,
         _settings: &(),
-    ) -> [&'a TextureView; NUM_TEXTURES] {
+    ) -> [&'a TextureView; 0] {
+        []
+    }
+
+    fn get_wgpu_uniforms<'a>(&'a self, _settings: &Self::Settings) -> [&Buffer; 0] {
         []
     }
 
@@ -52,7 +55,7 @@ impl ViewportBuffers<NUM_BUFFERS, NUM_TEXTURES> for WireframeBuffer {
 }
 
 pub struct WireframeRoutine {
-    inner: Viewport3dRoutine<WireframeBuffer, NUM_BUFFERS, NUM_TEXTURES>,
+    inner: Viewport3dRoutine<WireframeLayout, NUM_BUFFERS>,
 }
 
 impl WireframeRoutine {
@@ -88,7 +91,7 @@ impl WireframeRoutine {
             usage: BufferUsages::STORAGE,
         });
 
-        self.inner.buffers.push(WireframeBuffer {
+        self.inner.buffers.push(WireframeLayout {
             len,
             line_positions,
             colors,

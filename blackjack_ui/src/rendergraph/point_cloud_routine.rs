@@ -16,18 +16,17 @@ use wgpu::{
 
 use super::{
     shader_manager::ShaderManager,
-    viewport_3d_routine::{DrawType, Viewport3dRoutine, ViewportBuffers},
+    viewport_3d_routine::{DrawType, Viewport3dRoutine, RoutineLayout},
 };
 
-pub struct PointCloudBuffer {
+pub struct PointCloudLayout {
     buffer: Buffer,
     len: usize,
 }
 
 const NUM_BUFFERS: usize = 1;
-const NUM_TEXTURES: usize = 0;
 
-impl ViewportBuffers<NUM_BUFFERS, NUM_TEXTURES> for PointCloudBuffer {
+impl RoutineLayout<NUM_BUFFERS> for PointCloudLayout {
     type Settings = ();
     fn get_wgpu_buffers(&self, _settings: &()) -> [&Buffer; NUM_BUFFERS] {
         [&self.buffer]
@@ -37,7 +36,11 @@ impl ViewportBuffers<NUM_BUFFERS, NUM_TEXTURES> for PointCloudBuffer {
         &'a self,
         _texture_manager: &'a TextureManager,
         _settings: &(),
-    ) -> [&'a TextureView; NUM_TEXTURES] {
+    ) -> [&'a TextureView; 0] {
+        []
+    }
+
+    fn get_wgpu_uniforms<'a>(&'a self, _settings: &Self::Settings) -> [&Buffer; 0] {
         []
     }
 
@@ -50,7 +53,7 @@ impl ViewportBuffers<NUM_BUFFERS, NUM_TEXTURES> for PointCloudBuffer {
 }
 
 pub struct PointCloudRoutine {
-    inner: Viewport3dRoutine<PointCloudBuffer, NUM_BUFFERS, NUM_TEXTURES>,
+    inner: Viewport3dRoutine<PointCloudLayout, NUM_BUFFERS, 0>,
 }
 
 impl PointCloudRoutine {
@@ -74,7 +77,7 @@ impl PointCloudRoutine {
             contents: bytemuck::cast_slice(points),
             usage: BufferUsages::STORAGE,
         });
-        self.inner.buffers.push(PointCloudBuffer {
+        self.inner.buffers.push(PointCloudLayout {
             buffer,
             len: points.len(),
         });

@@ -29,8 +29,18 @@ pub enum DrawType<'a> {
     },
 }
 
-/// Stores a wgpu buffer containing the edges of a wireframe
-pub trait ViewportBuffers<const NUM_BUFFERS: usize, const NUM_TEXTURES: usize> {
+/// Generic trait to set different parameters of the viewport display.
+///
+/// Will generate a layout with given storage buffers, textures and uniform
+/// buffers. Any of the three could be left as empty and will be generated in
+/// the following order: (storages, textures, uniforms). All bindings will be
+/// added to bind group 1, since bind group 0 is already used by rend3.
+pub trait RoutineLayout<
+    const NUM_BUFFERS: usize = 0,
+    const NUM_TEXTURES: usize = 0,
+    const NUM_UNIFORMS: usize = 0,
+>
+{
     type Settings;
 
     /// Returns one wgpu buffer for each of the `NUM_BUFFERS` buffers
@@ -43,26 +53,32 @@ pub trait ViewportBuffers<const NUM_BUFFERS: usize, const NUM_TEXTURES: usize> {
         settings: &'a Self::Settings,
     ) -> [&'a TextureView; NUM_TEXTURES];
 
-    /// Returns the index buffer. Only called if `USE_INDICES` is true.
+    /// Returns one wgpu uniform for eah of the `NUM_UNIFORMS` buffers
+    fn get_wgpu_uniforms<'a>(&'a self, settings: &Self::Settings) -> [&Buffer; NUM_UNIFORMS];
+
+    /// Returns the draw type that should be used to draw this routine. Either
+    /// spawn a fixed number of primitives, or use an index buffer.
     fn get_draw_type(&self, settings: &Self::Settings) -> DrawType<'_>;
 }
 
 pub struct Viewport3dRoutine<
-    Buffers: ViewportBuffers<NUM_BUFFERS, NUM_TEXTURES>,
-    const NUM_BUFFERS: usize,
-    const NUM_TEXTURES: usize,
+    Layout: RoutineLayout<NUM_BUFFERS, NUM_TEXTURES>,
+    const NUM_BUFFERS: usize = 0,
+    const NUM_TEXTURES: usize = 0,
+    const NUM_UNIFORMS: usize = 0,
 > {
     name: String,
     bgl: BindGroupLayout,
     pipeline: RenderPipeline,
-    pub buffers: Vec<Buffers>,
+    pub buffers: Vec<Layout>,
 }
 
 impl<
-        Buffers: ViewportBuffers<NUM_BUFFERS, NUM_TEXTURES> + 'static,
+        Layout: RoutineLayout<NUM_BUFFERS, NUM_TEXTURES> + 'static,
         const NUM_BUFFERS: usize,
         const NUM_TEXTURES: usize,
-    > Viewport3dRoutine<Buffers, NUM_BUFFERS, NUM_TEXTURES>
+        const NUM_UNIFORMS: usize,
+    > Viewport3dRoutine<Layout, NUM_BUFFERS, NUM_TEXTURES, NUM_UNIFORMS>
 {
     pub fn new(
         name: &str,
@@ -138,7 +154,7 @@ impl<
         &'node self,
         graph: &mut r3::RenderGraph<'node>,
         out_bgs: DataHandle<Vec<BindGroup>>,
-        settings: &'node Buffers::Settings,
+        settings: &'node Layout::Settings,
     ) {
         let mut builder = graph.add_node(format!("{}: create bind groups", self.name));
         let pt_handle = builder.passthrough_ref(self);
@@ -176,7 +192,7 @@ impl<
         graph: &mut r3::RenderGraph<'node>,
         state: &BaseRenderGraphIntermediateState,
         in_bgs: DataHandle<Vec<BindGroup>>,
-        settings: &'node Buffers::Settings,
+        settings: &'node Layout::Settings,
     ) {
         let mut builder = graph.add_node(format!("{}: draw", self.name));
         let color = builder.add_render_target_output(state.color);
@@ -237,7 +253,7 @@ impl<
         &'node self,
         graph: &mut r3::RenderGraph<'node>,
         state: &BaseRenderGraphIntermediateState,
-        settings: &'node Buffers::Settings,
+        settings: &'node Layout::Settings,
     ) {
         let bgs = graph.add_data();
         self.create_bind_groups(graph, bgs, settings);

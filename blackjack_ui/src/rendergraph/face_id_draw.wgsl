@@ -20,7 +20,7 @@ struct FragmentOutput {
 var<storage> positions: Vec3Array;
 @group(1) @binding(1)
 var<storage> ids: U32Array;
-@group(2) @binding(0)
+@group(1) @binding(2)
 var<uniform> max_id: u32;
 
 @vertex
@@ -31,7 +31,7 @@ fn vs_main(
 
     var output : VertexOutput;
     output.clip_position = uniforms.view_proj * vec4<f32>(position, 1.0);
-    output.id = ids.inner[vertex_id]
+    output.id = ids.inner[vertex_idx];
     return output;
 }
 
@@ -41,8 +41,8 @@ fn fs_main(input: VertexOutput) -> FragmentOutput {
 
     out.id = input.id;
 
-    let grayscale = input.id as f32 / max_id as f32;
-    out.debug_color = vec4<f32>(grayscale, grayscale, grayscale, 1.0)
+    let grayscale = f32(input.id) / f32(max_id);
+    out.debug_color = vec4<f32>(grayscale, grayscale, grayscale, 1.0);
 
     return out;
 }
