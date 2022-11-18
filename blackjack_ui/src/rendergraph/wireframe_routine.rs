@@ -90,7 +90,7 @@ impl WireframeRoutine {
             usage: BufferUsages::STORAGE,
         });
 
-        self.inner.buffers.push(WireframeLayout {
+        self.inner.layouts.push(WireframeLayout {
             len,
             line_positions,
             colors,

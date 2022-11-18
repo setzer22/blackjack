@@ -211,6 +211,8 @@ impl FaceRoutine {
                 PrimitiveTopology::TriangleList,
                 FrontFace::Cw,
             ),
+            // WIP: I just added this, but I don't have update logic for it yet.
+            // I need to add an `add_id_mesh` below and continue from there.
             face_id_routine: Viewport3dRoutine::new(
                 "face_id",
                 &renderer.device,
@@ -246,7 +248,7 @@ impl FaceRoutine {
             usage: wgpu::BufferUsages::INDEX,
         });
 
-        self.base_mesh_routine.buffers.push(MeshFacesLayout {
+        self.base_mesh_routine.layouts.push(MeshFacesLayout {
             positions,
             normals,
             indices,
@@ -273,7 +275,7 @@ impl FaceRoutine {
             usage: BufferUsages::STORAGE,
         });
 
-        self.face_overlay_routine.buffers.push(FaceOverlayLayout {
+        self.face_overlay_routine.layouts.push(FaceOverlayLayout {
             positions,
             colors,
             len,

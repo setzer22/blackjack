@@ -76,7 +76,7 @@ impl PointCloudRoutine {
             contents: bytemuck::cast_slice(points),
             usage: BufferUsages::STORAGE,
         });
-        self.inner.buffers.push(PointCloudLayout {
+        self.inner.layouts.push(PointCloudLayout {
             buffer,
             len: points.len(),
         });

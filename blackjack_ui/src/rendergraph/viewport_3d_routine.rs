@@ -82,7 +82,7 @@ pub struct Viewport3dRoutine<
     name: String,
     bgl: BindGroupLayout,
     pipeline: RenderPipeline,
-    pub buffers: Vec<Layout>,
+    pub layouts: Vec<Layout>,
 }
 
 impl<
@@ -159,13 +159,13 @@ impl<
             name: name.into(),
             pipeline,
             bgl,
-            buffers: Vec::new(),
+            layouts: Vec::new(),
         }
     }
 
     pub fn clear(&mut self) {
         // Wgpu will deallocate resources when `Drop` is called for the buffers.
-        self.buffers.clear()
+        self.layouts.clear()
     }
 
     fn create_bind_groups<'node>(
@@ -184,7 +184,7 @@ impl<
                 graph_data.set_data(
                     out_bgs,
                     Some(
-                        self.buffers
+                        self.layouts
                             .iter()
                             .map(|buffer| {
                                 let mut builder = BindGroupBuilder::new();
@@ -195,6 +195,9 @@ impl<
                                     .get_wgpu_textures(graph_data.d2_texture_manager, settings)
                                 {
                                     builder.append_texture_view(texture);
+                                }
+                                for uniform in buffer.get_wgpu_uniforms(settings) {
+                                    builder.append_buffer(uniform);
                                 }
                                 builder.build(&renderer.device, None, &this.bgl)
                             })
@@ -244,7 +247,7 @@ impl<
                 pass.set_pipeline(&this.pipeline);
 
                 pass.set_bind_group(0, forward_uniform_bg, &[]);
-                for (buffer, bg) in this.buffers.iter().zip(in_bgs.iter()) {
+                for (buffer, bg) in this.layouts.iter().zip(in_bgs.iter()) {
                     pass.set_bind_group(1, bg, &[]);
 
                     match buffer.get_draw_type(settings) {
