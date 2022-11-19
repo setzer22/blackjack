@@ -62,14 +62,14 @@ pub fn blackjack_viewport_rendergraph<'node>(
 
     use crate::application::viewport_3d::EdgeDrawMode::*;
     if matches!(settings.edge_mode, FullEdge | HalfEdge) {
-        routines.wireframe.add_to_graph(graph, &state);
+        routines.wireframe.add_to_graph(graph, &state, resolution);
     }
     if settings.render_vertices {
-        routines.point_cloud.add_to_graph(graph, &state);
+        routines.point_cloud.add_to_graph(graph, &state, resolution);
     }
     use crate::application::viewport_3d::FaceDrawMode::*;
     if matches!(settings.face_mode, Flat | Smooth | Real) {
-        routines.face.add_to_graph(graph, &state, settings);
+        routines.face.add_to_graph(graph, &state, resolution, settings);
     }
 
     routines.grid.add_to_graph(graph, &state);

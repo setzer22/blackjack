@@ -7,7 +7,7 @@
 use std::sync::Arc;
 
 use crate::{application::viewport_3d::Viewport3dSettings, prelude::r3};
-use glam::Vec3;
+use glam::{Vec3, Vec4, UVec2};
 
 use rend3::{
     managers::TextureManager,
@@ -68,7 +68,8 @@ impl RoutineLayout<BASE_MESH_NUM_BUFFERS, BASE_MESH_NUM_TEXTURES> for MeshFacesL
     }
 }
 
-const OVERLAY_NUM_BUFFERS: usize = 2;
+const OVERLAY_NUM_BUFFERS: usize = 3;
+const OVERLAY_NUM_UNIFORMS: usize = 1;
 
 /// Represents the buffers to draw the face overlays, flat unshaded
 /// semi-transparent triangles that are drawn over the base mesh.
@@ -77,15 +78,21 @@ pub struct FaceOverlayLayout {
     positions: Buffer,
     /// `len` colors (as Vec3), one per triangle face
     colors: Buffer,
+    /// `len` face ids, one per triangle. Multilpe triangles may share the same
+    /// face id, in case of quads or N-gons.
+    ids: Buffer,
+    /// A single u32, containing the largest id in the `ids` buffer. Used to
+    /// generate the debug view.
+    max_id: Buffer,
     /// The number of faces
     len: usize,
 }
 
-impl RoutineLayout<OVERLAY_NUM_BUFFERS> for FaceOverlayLayout {
+impl RoutineLayout<OVERLAY_NUM_BUFFERS, 0, OVERLAY_NUM_UNIFORMS> for FaceOverlayLayout {
     type Settings = ();
 
     fn get_wgpu_buffers(&self, _settings: &Self::Settings) -> [&Buffer; OVERLAY_NUM_BUFFERS] {
-        [&self.positions, &self.colors]
+        [&self.positions, &self.colors, &self.ids]
     }
 
     fn get_wgpu_textures<'a>(
@@ -96,8 +103,8 @@ impl RoutineLayout<OVERLAY_NUM_BUFFERS> for FaceOverlayLayout {
         []
     }
 
-    fn get_wgpu_uniforms<'a>(&'a self, _settings: &Self::Settings) -> [&Buffer; 0] {
-        []
+    fn get_wgpu_uniforms<'a>(&'a self, _settings: &Self::Settings) -> [&Buffer; OVERLAY_NUM_UNIFORMS] {
+        [&self.max_id]
     }
 
     fn get_draw_type(&self, _settings: &Self::Settings) -> DrawType<'_> {
@@ -108,54 +115,11 @@ impl RoutineLayout<OVERLAY_NUM_BUFFERS> for FaceOverlayLayout {
     }
 }
 
-const ID_NUM_BUFFERS: usize = 2;
-const ID_NUM_UNIFORMS: usize = 1;
-
-/// The buffers for the special routine to draw face ids in an offscreen buffer,
-/// used for object picking.
-pub struct FaceIdLayout {
-    /// `3 * len` positions (as Vec3), one per triangle
-    positions: Buffer,
-    /// `len` face ids, one per triangle. Multilpe triangles may share the same
-    /// face id, in case of quads or N-gons.
-    ids: Buffer,
-    /// Number of triangles
-    len: usize,
-    /// A single u32, containing the largest id in the `ids` buffer. Used to
-    /// generate the debug view.
-    max_id: Buffer,
-}
-
-impl RoutineLayout<ID_NUM_BUFFERS, 0, ID_NUM_UNIFORMS> for FaceIdLayout {
-    type Settings = ();
-
-    fn get_wgpu_buffers(&self, _settings: &Self::Settings) -> [&Buffer; ID_NUM_BUFFERS] {
-        [&self.positions, &self.ids]
-    }
-
-    fn get_wgpu_textures<'a>(
-        &'a self,
-        _texture_manager: &'a TextureManager,
-        _settings: &'a Self::Settings,
-    ) -> [&'a TextureView; 0] {
-        []
-    }
-
-    fn get_wgpu_uniforms<'a>(&'a self, _settings: &Self::Settings) -> [&Buffer; ID_NUM_UNIFORMS] {
-        [&self.max_id]
-    }
-
-    fn get_draw_type(&self, _settings: &Self::Settings) -> DrawType<'_> {
-        todo!()
-    }
-}
-
 pub struct FaceRoutine {
     matcaps: Arc<Vec<TextureHandle>>,
     base_mesh_routine:
         Viewport3dRoutine<MeshFacesLayout, BASE_MESH_NUM_BUFFERS, BASE_MESH_NUM_TEXTURES>,
-    face_overlay_routine: Viewport3dRoutine<FaceOverlayLayout, OVERLAY_NUM_BUFFERS>,
-    face_id_routine: Viewport3dRoutine<FaceIdLayout, ID_NUM_BUFFERS, 0, ID_NUM_UNIFORMS>,
+    face_overlay_routine: Viewport3dRoutine<FaceOverlayLayout, OVERLAY_NUM_BUFFERS, 0, OVERLAY_NUM_UNIFORMS>,
 }
 
 impl FaceRoutine {
@@ -211,16 +175,6 @@ impl FaceRoutine {
                 PrimitiveTopology::TriangleList,
                 FrontFace::Cw,
             ),
-            // WIP: I just added this, but I don't have update logic for it yet.
-            // I need to add an `add_id_mesh` below and continue from there.
-            face_id_routine: Viewport3dRoutine::new(
-                "face_id",
-                &renderer.device,
-                base,
-                shader_manager.get("face_overlay_draw"),
-                PrimitiveTopology::TriangleList,
-                FrontFace::Cw,
-            ),
         }
     }
 
@@ -232,6 +186,9 @@ impl FaceRoutine {
         indices: &[u32],
     ) {
         let num_indices = indices.len();
+
+        assert_eq!(positions.len(), normals.len() * 3);
+
         let positions = renderer.device.create_buffer_init(&BufferInitDescriptor {
             label: None,
             contents: bytemuck::cast_slice(positions),
@@ -261,9 +218,15 @@ impl FaceRoutine {
         &mut self,
         renderer: &r3::Renderer,
         positions: &[Vec3],
-        colors: &[Vec3],
+        colors: &[Vec4],
+        ids: &[u32],
+        max_id: u32,
     ) {
         let len = colors.len();
+
+        assert_eq!(positions.len(), len * 3);
+        assert_eq!(colors.len(), len);
+
         let positions = renderer.device.create_buffer_init(&BufferInitDescriptor {
             label: None,
             contents: bytemuck::cast_slice(positions),
@@ -274,10 +237,22 @@ impl FaceRoutine {
             contents: bytemuck::cast_slice(colors),
             usage: BufferUsages::STORAGE,
         });
+        let ids = renderer.device.create_buffer_init(&BufferInitDescriptor {
+            label: None,
+            contents: bytemuck::cast_slice(ids),
+            usage: BufferUsages::STORAGE,
+        });
+        let max_id = renderer.device.create_buffer_init(&BufferInitDescriptor {
+            label: None,
+            contents: bytemuck::bytes_of(&max_id),
+            usage: BufferUsages::UNIFORM,
+        });
 
         self.face_overlay_routine.layouts.push(FaceOverlayLayout {
             positions,
             colors,
+            ids,
+            max_id,
             len,
         });
     }
@@ -291,9 +266,10 @@ impl FaceRoutine {
         &'node self,
         graph: &mut r3::RenderGraph<'node>,
         state: &BaseRenderGraphIntermediateState,
+        resolution: UVec2,
         settings: &'node Viewport3dSettings,
     ) {
-        self.base_mesh_routine.add_to_graph(graph, state, settings);
-        self.face_overlay_routine.add_to_graph(graph, state, &());
+        self.base_mesh_routine.add_to_graph(graph, state, resolution, settings);
+        self.face_overlay_routine.add_to_graph(graph, state, resolution, &());
     }
 }

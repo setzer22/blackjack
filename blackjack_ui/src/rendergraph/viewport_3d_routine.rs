@@ -4,8 +4,12 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-use super::{common, shader_manager::Shader};
+use super::{
+    common,
+    shader_manager::{Shader, ShaderColorTarget},
+};
 use crate::prelude::r3;
+use glam::UVec2;
 use rend3::{
     graph::DataHandle,
     managers::TextureManager,
@@ -83,6 +87,7 @@ pub struct Viewport3dRoutine<
     bgl: BindGroupLayout,
     pipeline: RenderPipeline,
     pub layouts: Vec<Layout>,
+    pub color_target_descrs: Vec<ShaderColorTarget>,
 }
 
 impl<
@@ -160,6 +165,7 @@ impl<
             pipeline,
             bgl,
             layouts: Vec::new(),
+            color_target_descrs: shader.color_target_descrs.clone(),
         }
     }
 
@@ -213,16 +219,48 @@ impl<
         graph: &mut r3::RenderGraph<'node>,
         state: &BaseRenderGraphIntermediateState,
         in_bgs: DataHandle<Vec<BindGroup>>,
+        resolution: UVec2,
         settings: &'node Layout::Settings,
     ) {
         let mut builder = graph.add_node(format!("{}: draw", self.name));
+
         let color = builder.add_render_target_output(state.color);
+        let resolve = builder.add_optional_render_target_output(state.resolve);
+
+        let mut targets = vec![];
+        for d in &self.color_target_descrs {
+            match d {
+                ShaderColorTarget::Viewport { use_alpha: _ } => {
+                    targets.push(r3::RenderPassTarget {
+                        color: builder.add_render_target_output(state.color),
+                        clear: Color::BLACK,
+                        resolve: builder.add_optional_render_target_output(state.resolve),
+                    });
+                }
+                ShaderColorTarget::Offscreen(t) => {
+                    let offs = graph.add_render_target(r3::RenderTargetDescriptor {
+                        label: None,
+                        samples: r3::SampleCount::One,
+                        format: t.format,
+                        usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
+                        resolution,
+                    });
+                    targets.push(r3::RenderPassTarget {
+                        // WIP: Borrow checker issues
+                        color: builder.add_render_target_output(offs),
+                        clear: Color::BLACK,
+                        resolve: None,
+                    })
+                }
+            }
+        }
+
         let depth = builder.add_render_target_output(state.depth);
         let in_bgs = builder.add_data_input(in_bgs);
-        let resolve = builder.add_optional_render_target_output(state.resolve);
         let pt_handle = builder.passthrough_ref(self);
         let forward_uniform_bg = builder.add_data_input(state.forward_uniform_bg);
 
+        // WIP: Need to add additional color targets from the shader.
         let rpass_handle = builder.add_renderpass(r3::RenderPassTargets {
             targets: vec![r3::RenderPassTarget {
                 color,
@@ -274,10 +312,11 @@ impl<
         &'node self,
         graph: &mut r3::RenderGraph<'node>,
         state: &BaseRenderGraphIntermediateState,
+        resolution: UVec2,
         settings: &'node Layout::Settings,
     ) {
         let bgs = graph.add_data();
         self.create_bind_groups(graph, bgs, settings);
-        self.draw(graph, state, bgs, settings);
+        self.draw(graph, state, bgs, resolution, settings);
     }
 }

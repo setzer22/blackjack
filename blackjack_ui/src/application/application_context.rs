@@ -124,15 +124,17 @@ impl ApplicationContext {
                     }
                 }
 
-                // Face overlays
+                // Face overlays and ids
                 {
-                    let FaceOverlayBuffers { positions, colors } =
+                    let FaceOverlayBuffers { positions, colors, ids, max_id } =
                         mesh.generate_face_overlay_buffers();
                     if !positions.is_empty() {
                         render_ctx.face_routine.add_overlay_mesh(
                             &render_ctx.renderer,
                             &positions,
                             &colors,
+                            &ids,
+                            max_id
                         );
                     }
                 }

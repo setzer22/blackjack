@@ -6,7 +6,7 @@
 
 use super::viewport_3d_routine::{DrawType, Viewport3dRoutine, RoutineLayout};
 use crate::prelude::r3;
-use glam::Vec3;
+use glam::{Vec3, UVec2};
 use rend3::managers::TextureManager;
 use rend3_routine::base::{BaseRenderGraph, BaseRenderGraphIntermediateState};
 use wgpu::{
@@ -105,7 +105,8 @@ impl WireframeRoutine {
         &'node self,
         graph: &mut r3::RenderGraph<'node>,
         state: &BaseRenderGraphIntermediateState,
+        resolution: UVec2,
     ) {
-        self.inner.add_to_graph(graph, state, &());
+        self.inner.add_to_graph(graph, state, resolution, &());
     }
 }

@@ -30,3 +30,9 @@ struct Vec3Array {
 struct U32Array {
     inner: array<u32>,
 };
+
+struct ColorArray {
+    // Unlike vec3, vec4 has the same stride and alignment of 16, so we don't
+    // need a Packed version
+    inner: array<vec4<f32>>
+};

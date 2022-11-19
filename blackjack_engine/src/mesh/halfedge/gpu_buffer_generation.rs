@@ -42,8 +42,12 @@ pub struct LineBuffers {
 pub struct FaceOverlayBuffers {
     /// Vertex positions, 3*N, for N triangles
     pub positions: Vec<Vec3>,
-    /// Face colors, N for N triangles
-    pub colors: Vec<Vec3>,
+    /// Face colors, N for N triangles. Includes alpha channel.
+    pub colors: Vec<Vec4>,
+    /// Face ids, N for N triangles
+    pub ids: Vec<u32>,
+    /// The largest id in `ids`.
+    pub max_id: u32,
 }
 
 impl HalfEdgeMesh {
@@ -157,26 +161,39 @@ impl HalfEdgeMesh {
 
         let mut positions = vec![];
         let mut colors = vec![];
+        let mut ids = vec![];
+        let mut max_id = 0;
+
+        // TODO @perf We could reuse this mapping when we extract the
+        // information from the compute shader to ma back to the hovered ids,
+        // but for now let's keep it simple and recompute this when needed.
+        let mapping = conn.face_mapping();
 
         for (_, (face_id, _face)) in conn.faces.iter().enumerate() {
-            // TODO: Add criteria to select highlighted faces
-            if false {
-                let vertices = conn.face_vertices(face_id);
-                let v1 = vertices[0];
-                for (&v2, &v3) in vertices[1..].iter().tuple_windows() {
-                    let v1_pos = positions_ch[v1];
-                    let v2_pos = positions_ch[v2];
-                    let v3_pos = positions_ch[v3];
+            let id_u32 = mapping[face_id];
+            max_id = u32::max(max_id, id_u32);
 
-                    positions.push(v1_pos);
-                    positions.push(v2_pos);
-                    positions.push(v3_pos);
-                    colors.push(Vec3::new(0.2, 0.8, 0.2));
-                }
+            let vertices = conn.face_vertices(face_id);
+            let v1 = vertices[0];
+            for (&v2, &v3) in vertices[1..].iter().tuple_windows() {
+                let v1_pos = positions_ch[v1];
+                let v2_pos = positions_ch[v2];
+                let v3_pos = positions_ch[v3];
+
+                positions.push(v1_pos);
+                positions.push(v2_pos);
+                positions.push(v3_pos);
+                colors.push(Vec4::new(0.2, 0.8, 0.2, 0.5));
+                ids.push(id_u32);
             }
         }
 
-        FaceOverlayBuffers { positions, colors }
+        FaceOverlayBuffers {
+            positions,
+            colors,
+            ids,
+            max_id,
+        }
     }
 
     /// Generates the [`PointBuffers`] for this mesh. Suitable to be uploaded to

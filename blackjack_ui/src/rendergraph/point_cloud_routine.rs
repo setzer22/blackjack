@@ -5,7 +5,7 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 use crate::prelude::r3;
-use glam::Vec3;
+use glam::{Vec3, UVec2};
 
 use rend3::managers::TextureManager;
 use rend3_routine::base::{BaseRenderGraph, BaseRenderGraphIntermediateState};
@@ -90,7 +90,8 @@ impl PointCloudRoutine {
         &'node self,
         graph: &mut r3::RenderGraph<'node>,
         state: &BaseRenderGraphIntermediateState,
+        resolution: UVec2,
     ) {
-        self.inner.add_to_graph(graph, state, &());
+        self.inner.add_to_graph(graph, state, resolution, &());
     }
 }
