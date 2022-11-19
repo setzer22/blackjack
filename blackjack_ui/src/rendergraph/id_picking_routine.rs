@@ -1,4 +1,7 @@
-use std::num::NonZeroU32;
+use std::{
+    num::NonZeroU32,
+    sync::{Arc, Mutex},
+};
 
 use crate::prelude::*;
 
@@ -11,6 +14,12 @@ pub fn add_to_graph<'node>(
     // of 256. This is a requirement to run copy_texture_to_buffer below.
     const SIZE: usize = 64;
 
+    // When the window is too small, we can't copy the buffer. We take the easy
+    // workaround and simply don't run object picking logic in those cases.
+    if resolution.x <= 64 || resolution.y <= 64 {
+        return;
+    }
+
     // The first node will create this buffer and copy the offscreen viewport
     // contents into it. The second node will map this buffer and access the data.
     let id_cpu_buffer = graph.add_data::<wgpu::Buffer>();
@@ -21,11 +30,12 @@ pub fn add_to_graph<'node>(
 
     builder.build(
         move |pt, renderer, encoder_or_pass, temps, _ready, graph_data| {
+            println!("Id picking copy buffer");
             let buffer = renderer.device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("Id Picking Output Buffer"),
                 size: (SIZE * SIZE * std::mem::size_of::<u32>()) as u64,
                 usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
-                mapped_at_creation: true,
+                mapped_at_creation: false,
             });
 
             let commands = encoder_or_pass.get_encoder();
@@ -62,22 +72,42 @@ pub fn add_to_graph<'node>(
     // Make sure this node won't be pruned
     builder.add_external_output();
 
+    // WIP: Rend3 is not submitting between the two nodes. We have to introduce
+    // the buffer from outside and read it after the graph is done executing.
+
     builder.build(
         move |pt, renderer, encoder_or_pass, temps, _ready, graph_data| {
+            println!("Id picking get mapped buffer");
             let buffer = graph_data.get_data(temps, id_cpu_buffer_handle).unwrap();
-            let mapped = buffer.slice(..).get_mapped_range();
-            let id_grid = bytemuck::cast_slice::<_, u32>(&mapped);
+            let buffer_slice = buffer.slice(..);
+            let result_holder = Arc::new(Mutex::new(None));
 
-            let mut ids_set = HashSet::new();
+            let result_holder2 = result_holder.clone();
+            buffer_slice.map_async(wgpu::MapMode::Read, move |result| {
+                *result_holder2.lock().unwrap() = Some(result);
+            });
+            renderer.device.poll(wgpu::Maintain::Wait);
+            let result = result_holder.lock().unwrap();
+            if let Some(Ok(())) = &*result {
+                let mapped = buffer_slice.get_mapped_range();
+                let id_grid = bytemuck::cast_slice::<_, u32>(&mapped);
 
-            for i in 0..SIZE {
-                for j in 0..SIZE {
-                    let idx = i * SIZE + j;
-                    ids_set.insert(id_grid[idx]);
+                let mut ids_set = HashSet::new();
+
+                //for i in 0..SIZE {
+                //for j in 0..SIZE {
+                //let idx = i * SIZE + j;
+                //ids_set.insert(id_grid[idx]);
+                //}
+                //}
+
+                for id in id_grid {
+                    ids_set.insert(id);
                 }
+
+                dbg!(ids_set);
             }
 
-            drop(mapped);
             buffer.unmap();
         },
     );
