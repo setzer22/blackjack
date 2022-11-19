@@ -7,7 +7,7 @@
 use std::sync::Arc;
 
 use crate::{application::viewport_3d::Viewport3dSettings, prelude::r3};
-use glam::{Vec3, Vec4, UVec2};
+use glam::{Vec3, Vec4};
 
 use rend3::{
     managers::TextureManager,
@@ -103,7 +103,10 @@ impl RoutineLayout<OVERLAY_NUM_BUFFERS, 0, OVERLAY_NUM_UNIFORMS> for FaceOverlay
         []
     }
 
-    fn get_wgpu_uniforms<'a>(&'a self, _settings: &Self::Settings) -> [&Buffer; OVERLAY_NUM_UNIFORMS] {
+    fn get_wgpu_uniforms<'a>(
+        &'a self,
+        _settings: &Self::Settings,
+    ) -> [&Buffer; OVERLAY_NUM_UNIFORMS] {
         [&self.max_id]
     }
 
@@ -119,7 +122,8 @@ pub struct FaceRoutine {
     matcaps: Arc<Vec<TextureHandle>>,
     base_mesh_routine:
         Viewport3dRoutine<MeshFacesLayout, BASE_MESH_NUM_BUFFERS, BASE_MESH_NUM_TEXTURES>,
-    face_overlay_routine: Viewport3dRoutine<FaceOverlayLayout, OVERLAY_NUM_BUFFERS, 0, OVERLAY_NUM_UNIFORMS>,
+    face_overlay_routine:
+        Viewport3dRoutine<FaceOverlayLayout, OVERLAY_NUM_BUFFERS, 0, OVERLAY_NUM_UNIFORMS>,
 }
 
 impl FaceRoutine {
@@ -187,7 +191,7 @@ impl FaceRoutine {
     ) {
         let num_indices = indices.len();
 
-        assert_eq!(positions.len(), normals.len() * 3);
+        assert_eq!(positions.len(), normals.len());
 
         let positions = renderer.device.create_buffer_init(&BufferInitDescriptor {
             label: None,
@@ -266,10 +270,12 @@ impl FaceRoutine {
         &'node self,
         graph: &mut r3::RenderGraph<'node>,
         state: &BaseRenderGraphIntermediateState,
-        resolution: UVec2,
+        id_map: r3::RenderTargetHandle,
         settings: &'node Viewport3dSettings,
     ) {
-        self.base_mesh_routine.add_to_graph(graph, state, resolution, settings);
-        self.face_overlay_routine.add_to_graph(graph, state, resolution, &());
+        self.base_mesh_routine
+            .add_to_graph(graph, state, settings, &[]);
+        self.face_overlay_routine
+            .add_to_graph(graph, state, &(), &[id_map]);
     }
 }

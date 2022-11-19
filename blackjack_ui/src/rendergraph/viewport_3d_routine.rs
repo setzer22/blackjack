@@ -9,7 +9,6 @@ use super::{
     shader_manager::{Shader, ShaderColorTarget},
 };
 use crate::prelude::r3;
-use glam::UVec2;
 use rend3::{
     graph::DataHandle,
     managers::TextureManager,
@@ -219,54 +218,45 @@ impl<
         graph: &mut r3::RenderGraph<'node>,
         state: &BaseRenderGraphIntermediateState,
         in_bgs: DataHandle<Vec<BindGroup>>,
-        resolution: UVec2,
         settings: &'node Layout::Settings,
+        // For each ShaderColorTarget::Offscreen in the provided shader (during
+        // new), one rend3 render target handle matching its configuration.
+        offscreen_targets: &[r3::RenderTargetHandle],
     ) {
-        let mut builder = graph.add_node(format!("{}: draw", self.name));
-
-        let color = builder.add_render_target_output(state.color);
-        let resolve = builder.add_optional_render_target_output(state.resolve);
-
         let mut targets = vec![];
+        let mut offscreen_targets = offscreen_targets.iter();
         for d in &self.color_target_descrs {
             match d {
                 ShaderColorTarget::Viewport { use_alpha: _ } => {
-                    targets.push(r3::RenderPassTarget {
-                        color: builder.add_render_target_output(state.color),
-                        clear: Color::BLACK,
-                        resolve: builder.add_optional_render_target_output(state.resolve),
-                    });
+                    targets.push((state.color, (state.resolve)));
                 }
-                ShaderColorTarget::Offscreen(t) => {
-                    let offs = graph.add_render_target(r3::RenderTargetDescriptor {
-                        label: None,
-                        samples: r3::SampleCount::One,
-                        format: t.format,
-                        usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
-                        resolution,
-                    });
-                    targets.push(r3::RenderPassTarget {
-                        // WIP: Borrow checker issues
-                        color: builder.add_render_target_output(offs),
-                        clear: Color::BLACK,
-                        resolve: None,
-                    })
+                ShaderColorTarget::Offscreen(_) => {
+                    targets.push((
+                        *offscreen_targets
+                            .next()
+                            .expect("Not enough offscreen buffer handles"),
+                        None,
+                    ));
                 }
             }
         }
 
+        let mut builder = graph.add_node(format!("{}: draw", self.name));
         let depth = builder.add_render_target_output(state.depth);
         let in_bgs = builder.add_data_input(in_bgs);
         let pt_handle = builder.passthrough_ref(self);
         let forward_uniform_bg = builder.add_data_input(state.forward_uniform_bg);
-
-        // WIP: Need to add additional color targets from the shader.
-        let rpass_handle = builder.add_renderpass(r3::RenderPassTargets {
-            targets: vec![r3::RenderPassTarget {
-                color,
+        let target_deps = targets
+            .into_iter()
+            .map(|(color, resolve)| r3::RenderPassTarget {
+                color: builder.add_render_target_output(color),
                 clear: Color::BLACK,
-                resolve,
-            }],
+                resolve: resolve.and_then(|x| builder.add_optional_render_target_output(Some(x))),
+            })
+            .collect();
+
+        let rpass_handle = builder.add_renderpass(r3::RenderPassTargets {
+            targets: target_deps,
             depth_stencil: Some(r3::RenderPassDepthTarget {
                 target: r3::DepthHandle::RenderTarget(depth),
                 depth_clear: Some(0.0),
@@ -312,11 +302,11 @@ impl<
         &'node self,
         graph: &mut r3::RenderGraph<'node>,
         state: &BaseRenderGraphIntermediateState,
-        resolution: UVec2,
         settings: &'node Layout::Settings,
+        offscreen_targets: &[r3::RenderTargetHandle],
     ) {
         let bgs = graph.add_data();
         self.create_bind_groups(graph, bgs, settings);
-        self.draw(graph, state, bgs, resolution, settings);
+        self.draw(graph, state, bgs, settings, offscreen_targets);
     }
 }

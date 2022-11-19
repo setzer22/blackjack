@@ -40,7 +40,14 @@ fn vs_main(
 @fragment
 fn fs_main(input: VertexOutput) -> FragmentOutput {
     var out : FragmentOutput;
-    out.color = input.color;
+    // out.color = input.color;
+    let t = f32(input.id + 1u) / f32(max_id);
+    let color = vec3<f32>(
+        random(t + 2.1923810),
+        random(t + 4.2123190),
+        random(t + 3.5132098),
+    );
+    out.color = vec4<f32>(color, 1.0);
     out.id = input.id;
     return out;
 }

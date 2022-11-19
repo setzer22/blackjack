@@ -22,7 +22,7 @@ use lerp::*;
 pub enum EdgeDrawMode {
     HalfEdge,
     FullEdge,
-    None,
+    NoDraw,
 }
 
 #[derive(PartialEq, Eq)]
@@ -35,13 +35,13 @@ pub enum FaceDrawMode {
     /// Force smooth shading, ignoring mesh data
     Smooth,
     /// Don't draw faces.
-    None,
+    NoDraw,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum TextOverlayMode {
     /// No text overlay
-    None,
+    NoDraw,
     /// Display face ids
     MeshInfoFaces,
     /// Display vertex ids
@@ -119,7 +119,7 @@ impl Viewport3d {
             settings: Viewport3dSettings {
                 edge_mode: EdgeDrawMode::FullEdge,
                 face_mode: FaceDrawMode::Real,
-                overlay_mode: TextOverlayMode::None,
+                overlay_mode: TextOverlayMode::NoDraw,
                 render_vertices: true,
                 matcap: 0,
             },
@@ -271,7 +271,7 @@ impl Viewport3d {
                         );
                         ui.selectable_value(
                             &mut self.settings.edge_mode,
-                            EdgeDrawMode::None,
+                            EdgeDrawMode::NoDraw,
                             "None",
                         );
                     });
@@ -300,7 +300,7 @@ impl Viewport3d {
                         );
                         ui.selectable_value(
                             &mut self.settings.face_mode,
-                            FaceDrawMode::None,
+                            FaceDrawMode::NoDraw,
                             "None",
                         );
                     });
@@ -323,7 +323,7 @@ impl Viewport3d {
                         ui.label("Text Overlay:");
                         ui.selectable_value(
                             &mut self.settings.overlay_mode,
-                            TextOverlayMode::None,
+                            TextOverlayMode::NoDraw,
                             "None",
                         );
                         ui.selectable_value(

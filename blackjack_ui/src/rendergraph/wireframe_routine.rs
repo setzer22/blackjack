@@ -4,9 +4,9 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-use super::viewport_3d_routine::{DrawType, Viewport3dRoutine, RoutineLayout};
+use super::viewport_3d_routine::{DrawType, RoutineLayout, Viewport3dRoutine};
 use crate::prelude::r3;
-use glam::{Vec3, UVec2};
+use glam::Vec3;
 use rend3::managers::TextureManager;
 use rend3_routine::base::{BaseRenderGraph, BaseRenderGraphIntermediateState};
 use wgpu::{
@@ -105,8 +105,7 @@ impl WireframeRoutine {
         &'node self,
         graph: &mut r3::RenderGraph<'node>,
         state: &BaseRenderGraphIntermediateState,
-        resolution: UVec2,
     ) {
-        self.inner.add_to_graph(graph, state, resolution, &());
+        self.inner.add_to_graph(graph, state, &(), &[]);
     }
 }

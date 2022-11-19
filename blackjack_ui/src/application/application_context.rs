@@ -111,7 +111,7 @@ impl ApplicationContext {
                         }
                         FaceDrawMode::Flat => Some(mesh.generate_triangle_buffers_flat(true)?),
                         FaceDrawMode::Smooth => Some(mesh.generate_triangle_buffers_smooth(true)?),
-                        FaceDrawMode::None => None,
+                        FaceDrawMode::NoDraw => None,
                     } {
                         if !positions.is_empty() {
                             render_ctx.face_routine.add_base_mesh(
@@ -145,7 +145,7 @@ impl ApplicationContext {
                         match viewport_settings.edge_mode {
                             EdgeDrawMode::HalfEdge => Some(mesh.generate_halfedge_arrow_buffers()?),
                             EdgeDrawMode::FullEdge => Some(mesh.generate_line_buffers()?),
-                            EdgeDrawMode::None => None,
+                            EdgeDrawMode::NoDraw => None,
                         }
                     {
                         if !positions.is_empty() {

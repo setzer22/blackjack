@@ -42,7 +42,7 @@ pub fn draw_gui_overlays(
             };
 
             match overlay_type {
-                TextOverlayMode::None => {}
+                TextOverlayMode::NoDraw => {}
                 TextOverlayMode::MeshInfoVertices
                 | TextOverlayMode::MeshInfoFaces
                 | TextOverlayMode::MeshInfoHalfedges

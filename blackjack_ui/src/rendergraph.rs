@@ -26,6 +26,9 @@ pub mod point_cloud_routine;
 /// A render routine to draw meshes
 pub mod face_routine;
 
+/// A routine to implement object picking, by reading the id_map buffer.
+pub mod id_picking_routine;
+
 /// Shader manager struct which sets up loading with a basic preprocessor
 pub mod shader_manager;
 
@@ -60,17 +63,27 @@ pub fn blackjack_viewport_rendergraph<'node>(
     // Forward rendering
     state.pbr_forward_rendering(graph, routines.pbr, samples);
 
+    let id_map = graph.add_render_target(r3::RenderTargetDescriptor {
+        label: None,
+        resolution,
+        samples: r3::SampleCount::One,
+        format: r3::TextureFormat::R32Uint, // Should match one in shader manager
+        usage: r3::TextureUsages::RENDER_ATTACHMENT | r3::TextureUsages::TEXTURE_BINDING | r3::TextureUsages::COPY_SRC,
+    });
+
     use crate::application::viewport_3d::EdgeDrawMode::*;
     if matches!(settings.edge_mode, FullEdge | HalfEdge) {
-        routines.wireframe.add_to_graph(graph, &state, resolution);
+        routines.wireframe.add_to_graph(graph, &state);
     }
     if settings.render_vertices {
-        routines.point_cloud.add_to_graph(graph, &state, resolution);
+        routines.point_cloud.add_to_graph(graph, &state);
     }
     use crate::application::viewport_3d::FaceDrawMode::*;
     if matches!(settings.face_mode, Flat | Smooth | Real) {
-        routines.face.add_to_graph(graph, &state, resolution, settings);
+        routines.face.add_to_graph(graph, &state, id_map, settings);
     }
+
+    id_picking_routine::add_to_graph(graph, resolution, id_map);
 
     routines.grid.add_to_graph(graph, &state);
 
