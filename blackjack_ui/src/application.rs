@@ -10,7 +10,7 @@ use crate::{
     cli_args::CLI_ARGS,
     prelude::*,
     rendergraph::{
-        face_routine::FaceRoutine, grid_routine::GridRoutine,
+        face_routine::FaceRoutine, grid_routine::GridRoutine, id_picking_routine::IdPickingRoutine,
         point_cloud_routine::PointCloudRoutine, wireframe_routine::WireframeRoutine,
     },
 };
@@ -310,8 +310,19 @@ impl RootViewport {
             ref wireframe_routine,
             ref point_cloud_routine,
             ref face_routine,
+            ref mut id_picking_routine,
             ..
         } = render_ctx;
+
+        // TODO: Maybe this is not the best place to do this. Do it in `update` instead?
+        id_picking_routine.set_cursor_pos(
+            self.egui_context
+                .input()
+                .pointer
+                .hover_pos()
+                .unwrap_or(egui::Pos2::ZERO),
+            self.viewport_3d.viewport_rect(),
+        );
 
         let frame = rend3::util::output::OutputFrame::Surface {
             surface: Arc::clone(&render_ctx.surface),
@@ -329,6 +340,7 @@ impl RootViewport {
                 wireframe: wireframe_routine,
                 point_cloud: point_cloud_routine,
                 face: face_routine,
+                id_picking: id_picking_routine,
             },
         );
 
@@ -365,4 +377,5 @@ pub struct ViewportRoutines<'a> {
     pub wireframe: &'a WireframeRoutine,
     pub point_cloud: &'a PointCloudRoutine,
     pub face: &'a FaceRoutine,
+    pub id_picking: &'a IdPickingRoutine,
 }

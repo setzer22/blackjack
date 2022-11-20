@@ -68,6 +68,9 @@ impl AppWindow {
         let platform_output = self.root_viewport.render(&mut self.render_ctx);
         self.root_viewport
             .handle_platform_output(&self.window, platform_output);
+        self.render_ctx
+            .id_picking_routine
+            .debug_print_results(&self.render_ctx.renderer.device);
 
         // Sleep for the remaining time to cap at 60Hz
         let elapsed = Instant::now().duration_since(frame_start_time);

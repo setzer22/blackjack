@@ -83,7 +83,7 @@ pub fn blackjack_viewport_rendergraph<'node>(
         routines.face.add_to_graph(graph, &state, id_map, settings);
     }
 
-    id_picking_routine::add_to_graph(graph, resolution, id_map);
+    routines.id_picking.add_to_graph(graph, resolution, id_map);
 
     routines.grid.add_to_graph(graph, &state);
 
