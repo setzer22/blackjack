@@ -902,32 +902,14 @@ pub mod mappings;
 
 impl MeshConnectivity {
     pub fn vertex_mapping(&self) -> mappings::MeshMapping<VertexId> {
-        mappings::MeshMapping(
-            self.vertices
-                .iter()
-                .enumerate()
-                .map(|(i, (v, _))| (v, i as u32))
-                .collect(),
-        )
+        mappings::MeshMapping::new(&self.vertices)
     }
 
     pub fn face_mapping(&self) -> mappings::MeshMapping<FaceId> {
-        mappings::MeshMapping(
-            self.faces
-                .iter()
-                .enumerate()
-                .map(|(i, (v, _))| (v, i as u32))
-                .collect(),
-        )
+        mappings::MeshMapping::new(&self.faces)
     }
 
     pub fn halfedge_mapping(&self) -> mappings::MeshMapping<HalfEdgeId> {
-        mappings::MeshMapping(
-            self.halfedges
-                .iter()
-                .enumerate()
-                .map(|(i, (v, _))| (v, i as u32))
-                .collect(),
-        )
+        mappings::MeshMapping::new(&self.halfedges)
     }
 }

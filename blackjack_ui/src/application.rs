@@ -356,6 +356,9 @@ impl RootViewport {
             println!("WGPU VALIDATION ERROR: {error}");
         }
 
+        let id = id_picking_routine.id_under_mouse(&render_ctx.renderer.device);
+        self.app_context.on_id_hovered(id);
+
         platform_output
     }
 

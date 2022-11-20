@@ -155,7 +155,7 @@ impl HalfEdgeMesh {
         })
     }
 
-    pub fn generate_face_overlay_buffers(&self) -> FaceOverlayBuffers {
+    pub fn generate_face_overlay_buffers(&self, hover: Option<u32>) -> FaceOverlayBuffers {
         let positions_ch = self.read_positions();
         let conn = self.read_connectivity();
 
@@ -165,7 +165,7 @@ impl HalfEdgeMesh {
         let mut max_id = 0;
 
         // TODO @perf We could reuse this mapping when we extract the
-        // information from the compute shader to ma back to the hovered ids,
+        // information from the compute shader to map back to the hovered ids,
         // but for now let's keep it simple and recompute this when needed.
         let mapping = conn.face_mapping();
 
@@ -180,11 +180,21 @@ impl HalfEdgeMesh {
                 let v2_pos = positions_ch[v2];
                 let v3_pos = positions_ch[v3];
 
+                // NOTE: We add 1 to the ids because 0 is the clear color of the
+                // id buffer, so we need a way to distinguish actual ids, and
+                // zero is an otherwise valid id.
+                let id = id_u32 + 1;
+                let color_alpha = if hover.is_some_and_(|h| *h == id) {
+                    0.5
+                } else {
+                    0.0
+                };
+
                 positions.push(v1_pos);
                 positions.push(v2_pos);
                 positions.push(v3_pos);
-                colors.push(Vec4::new(0.2, 0.8, 0.2, 0.5));
-                ids.push(id_u32);
+                colors.push(Vec4::new(0.2, 0.8, 0.2, color_alpha));
+                ids.push(id_u32 + 1);
             }
         }
 

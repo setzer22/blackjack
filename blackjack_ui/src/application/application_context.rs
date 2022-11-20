@@ -10,6 +10,7 @@ use anyhow::Error;
 
 use blackjack_engine::graph::BjkGraph;
 use blackjack_engine::graph_interpreter::ExternalParameterValues;
+use blackjack_engine::prelude::{ChannelKeyType, HalfEdgeMesh};
 use blackjack_engine::{
     lua_engine::{LuaRuntime, RenderableThing},
     prelude::{FaceOverlayBuffers, LineBuffers, PointBuffers, VertexIndexBuffers},
@@ -24,12 +25,22 @@ use super::{
     viewport_split::SplitTree,
 };
 
+pub struct MeshViewportSelection {
+    pub hovered: Option<u32>,
+    pub selected: HashSet<u32>,
+    pub primitive_type: ChannelKeyType,
+}
+
 pub struct ApplicationContext {
     /// The 'renderable thing' is at the center of the application, it is
     /// typically a kind of mesh.
     /// - The graph generates a program that produces it.
     /// - The 3d viewport renders it.
     pub renderable_thing: Option<RenderableThing>,
+    /// If the current `renderable_thing` is a HalfEdgeMesh and there is
+    /// currently a request to select a group of primitives in the viewport,
+    /// this stores the data for the selection.
+    pub current_selection: Option<MeshViewportSelection>,
     /// The currently active gizmos. Gizmos are returned by nodes to represent
     /// visual objects that can be used to manipulate its parameters.
     pub node_gizmo_states: UiNodeGizmoStates,
@@ -43,6 +54,7 @@ impl ApplicationContext {
     pub fn new(gizmo_states: UiNodeGizmoStates) -> ApplicationContext {
         ApplicationContext {
             renderable_thing: None,
+            current_selection: None,
             node_gizmo_states: gizmo_states,
             split_tree: SplitTree::default_tree(),
         }
@@ -126,15 +138,21 @@ impl ApplicationContext {
 
                 // Face overlays and ids
                 {
-                    let FaceOverlayBuffers { positions, colors, ids, max_id } =
-                        mesh.generate_face_overlay_buffers();
+                    let FaceOverlayBuffers {
+                        positions,
+                        colors,
+                        ids,
+                        max_id,
+                    } = mesh.generate_face_overlay_buffers(
+                        self.current_selection.as_ref().and_then(|x| x.hovered),
+                    );
                     if !positions.is_empty() {
                         render_ctx.face_routine.add_overlay_mesh(
                             &render_ctx.renderer,
                             &positions,
                             &colors,
                             &ids,
-                            max_id
+                            max_id,
                         );
                     }
                 }
@@ -247,6 +265,17 @@ impl ApplicationContext {
                     .update_gizmos(updated_gizmos, &mapping)?;
             }
 
+            // TODO: This is debug code. Remove it
+            if let Some(RenderableThing::HalfEdgeMesh(_)) = &self.renderable_thing {
+                if self.current_selection.is_none() {
+                    self.current_selection = Some(MeshViewportSelection {
+                        hovered: None,
+                        selected: HashSet::new(),
+                        primitive_type: ChannelKeyType::FaceId,
+                    });
+                }
+            }
+
             // Running gizmos returns a set of updated values, we need to
             // refresh the UI graph values with those here.
             graph_interop::set_parameters_from_external_values(
@@ -281,5 +310,11 @@ impl ApplicationContext {
             )?;
         }
         Ok(())
+    }
+
+    pub fn on_id_hovered(&mut self, id: Option<u32>) {
+        if let Some(selection) = &mut self.current_selection {
+            selection.hovered = id;
+        }
     }
 }
