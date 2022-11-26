@@ -220,6 +220,7 @@ impl<'a> Widget<BlackjackUiMessage, iced::Renderer> for NodeWidget<'a> {
         let style = renderer::Style {
             text_color: Color::from_rgb8(227, 227, 227),
         };
+        let border_radius = 5.0;
 
         let mut node_rect = layout.bounds();
         node_rect.height += self.extra_v_separation;
@@ -227,7 +228,7 @@ impl<'a> Widget<BlackjackUiMessage, iced::Renderer> for NodeWidget<'a> {
         renderer.fill_quad(
             renderer::Quad {
                 bounds: node_rect,
-                border_radius: 4.0,
+                border_radius,
                 border_width: 0.0,
                 border_color: Color::WHITE,
             },
@@ -241,16 +242,31 @@ impl<'a> Widget<BlackjackUiMessage, iced::Renderer> for NodeWidget<'a> {
             .max_by(f32::total_cmp)
             .unwrap();
         let mut title_rect = layout.bounds();
-        title_rect.height = titlebar_height + self.extra_v_separation;
+        title_rect.height = titlebar_height + self.extra_v_separation + border_radius;
 
         renderer.fill_quad(
             renderer::Quad {
                 bounds: title_rect,
-                border_radius: 4.0,
+                border_radius,
                 border_width: 0.0,
                 border_color: Color::WHITE,
             },
             Color::from_rgb8(50, 50, 50),
+        );
+
+        // HACK We draw an extra quad to remove the bottom border radius of the
+        // title. This is a hack to work around the lack of a per-corner radius.
+        let mut title_patch_rect = layout.bounds();
+        title_patch_rect.height = border_radius;
+        title_patch_rect.y += titlebar_height + self.extra_v_separation;
+        renderer.fill_quad(
+            renderer::Quad {
+                bounds: title_patch_rect,
+                border_radius: 0.0,
+                border_width: 0.0,
+                border_color: Color::WHITE,
+            },
+            Color::from_rgb8(63, 63, 63),
         );
 
         use std::iter::once;
