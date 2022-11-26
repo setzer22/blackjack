@@ -1,17 +1,18 @@
+use blackjack_engine::graph::BjkGraph;
 use iced::{
     executor,
-    widget::{button, column, container, pane_grid, row, text, PaneGrid},
-    Application, Command, Element, Settings, Theme,
+    widget::{column, container, text},
+    Application, Command, Settings, Theme,
 };
-use iced_lazy::responsive;
 use root_panes::RootPanesMessage;
 
-pub mod root_panes;
 pub mod graph_editor_pane;
+pub mod root_panes;
 
 #[derive(Debug, Clone)]
 pub enum BlackjackUiMessage {
     RootPanes(RootPanesMessage),
+    Dummy,
 }
 
 pub enum BlackjackPane {
@@ -22,6 +23,7 @@ pub enum BlackjackPane {
 
 struct BlackjackUiApp {
     root_panes: root_panes::RootPanes,
+    graph: BjkGraph,
 }
 
 impl Application for BlackjackUiApp {
@@ -34,6 +36,7 @@ impl Application for BlackjackUiApp {
         (
             BlackjackUiApp {
                 root_panes: root_panes::RootPanes::new(),
+                graph: BjkGraph::default(),
             },
             Command::none(),
         )
@@ -52,6 +55,7 @@ impl Application for BlackjackUiApp {
             BlackjackUiMessage::RootPanes(msg) => {
                 self.root_panes.update(msg);
             }
+            Dummy => {}
         }
         Command::none()
     }
@@ -59,7 +63,7 @@ impl Application for BlackjackUiApp {
     fn view(&self) -> iced::Element<'_, Self::Message, iced::Renderer<Self::Theme>> {
         container(column(vec![
             text("Blackjack").into(),
-            self.root_panes.view(),
+            self.root_panes.view(&self.graph).into(),
         ]))
         .into()
     }

@@ -1,3 +1,4 @@
+use blackjack_engine::graph::BjkGraph;
 use iced::{
     executor,
     widget::{button, column, container, pane_grid, row, text, PaneGrid},
@@ -7,6 +8,8 @@ use iced_lazy::responsive;
 
 use crate::BlackjackUiMessage;
 
+use super::graph_editor_pane::GraphEditorPane;
+
 #[derive(Copy, Clone, Debug)]
 pub enum RootPanesMessage {
     PaneResized(pane_grid::ResizeEvent),
@@ -15,7 +18,7 @@ pub enum RootPanesMessage {
 }
 
 pub enum BlackjackPane {
-    GraphEditor,
+    GraphEditor(GraphEditorPane),
     Viewport3d,
     Inspector,
     Spreadsheet,
@@ -38,7 +41,7 @@ impl RootPanes {
         panes.split(
             pane_grid::Axis::Horizontal,
             &viewport,
-            BlackjackPane::GraphEditor,
+            BlackjackPane::GraphEditor(GraphEditorPane::default()),
         );
         let (_, split) = panes
             .split(
@@ -65,23 +68,23 @@ impl RootPanes {
         }
     }
 
-    pub fn view(&self) -> iced::Element<'_, super::BlackjackUiMessage> {
+    pub fn view<'a>(&'a self, graph: &'a BjkGraph) -> iced::Element<'_, super::BlackjackUiMessage> {
         let pane_grid = PaneGrid::new(&self.panes, |id, pane, maximized| {
             let title = row![match pane {
-                BlackjackPane::GraphEditor => text("Graph editor"),
-                BlackjackPane::Viewport3d => text("Viewport 3d"),
-                BlackjackPane::Inspector => text("Inspector"),
-                BlackjackPane::Spreadsheet => text("Spreadsheet"),
+                BlackjackPane::GraphEditor(g) => g.titlebar_view(graph),
+                BlackjackPane::Viewport3d => text("Viewport 3d").into(),
+                BlackjackPane::Inspector => text("Inspector").into(),
+                BlackjackPane::Spreadsheet => text("Spreadsheet").into(),
             }];
 
             let title_bar = pane_grid::TitleBar::new(title);
 
             pane_grid::Content::new(responsive(move |size| {
                 match pane {
-                    BlackjackPane::GraphEditor => text("I am the super graph editor"),
-                    BlackjackPane::Viewport3d => text("I am the 3d viewport"),
-                    BlackjackPane::Inspector => text("I am the inspector 🕵"),
-                    BlackjackPane::Spreadsheet => text("I am the mighty spreadsheet"),
+                    BlackjackPane::GraphEditor(g) => g.content_view(graph),
+                    BlackjackPane::Viewport3d => text("I am the 3d viewport").into(),
+                    BlackjackPane::Inspector => text("I am the inspector 🕵").into(),
+                    BlackjackPane::Spreadsheet => text("I am the mighty spreadsheet").into(),
                 }
                 .into()
             }))
