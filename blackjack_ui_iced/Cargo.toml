@@ -20,6 +20,8 @@ iced = { git = "https://github.com/tarkah/iced.git", branch = "feat/primitive-sc
 iced_native = { git = "https://github.com/tarkah/iced.git", branch = "feat/primitive-scale" }
 iced_graphics = { git = "https://github.com/tarkah/iced.git", branch = "feat/primitive-scale" }
 iced_lazy = { git = "https://github.com/tarkah/iced.git", branch = "feat/primitive-scale" }
+iced_style = { git = "https://github.com/tarkah/iced.git", branch = "feat/primitive-scale" }
+iced_wgpu = { git = "https://github.com/tarkah/iced.git", branch = "feat/primitive-scale" }
 
 # Crates.io dependencies
 glam = "0.21.3"

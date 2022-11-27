@@ -1,54 +1,88 @@
-use std::rc::Rc;
-
-use blackjack_engine::prelude::Itertools;
-use iced::{
-    mouse::Interaction,
-    widget::{Row, Space},
-    Background, Color, Element, Length, Rectangle, Size, Vector,
-};
+use iced::{mouse::Interaction, Color, Length, Rectangle, Size, Vector};
 use iced_native::{
-    layout::{self, flex::Axis, Limits, Node},
+    layout::{Limits, Node},
     renderer,
     widget::Tree,
-    Layout, Renderer, Widget,
+    Renderer, Widget,
 };
 
-use crate::BlackjackUiMessage;
+use crate::prelude::*;
+
+use super::port_widget::PortWidget;
+
+pub struct NodeRow<'a> {
+    pub input_port: BjkUiElement<'a>,
+    pub contents: BjkUiElement<'a>,
+    pub output_port: BjkUiElement<'a>,
+}
+
+impl<'a> NodeRow<'a> {
+    const PORT_SIZE: f32 = 10.0;
+
+    pub fn input(contents: impl Into<BjkUiElement<'a>>, color: Color) -> Self {
+        Self {
+            input_port: BjkUiElement::new(PortWidget {
+                color,
+                size: Self::PORT_SIZE,
+            }),
+            contents: contents.into(),
+            output_port: BjkUiElement::new(empty_space()),
+        }
+    }
+
+    pub fn output(contents: impl Into<BjkUiElement<'a>>, color: Color) -> Self {
+        Self {
+            input_port: BjkUiElement::new(empty_space()),
+            contents: contents.into(),
+            output_port: BjkUiElement::new(PortWidget {
+                color,
+                size: Self::PORT_SIZE,
+            }),
+        }
+    }
+}
 
 pub struct NodeWidget<'a> {
-    pub titlebar_left: Element<'a, BlackjackUiMessage>,
-    pub titlebar_right: Element<'a, BlackjackUiMessage>,
-    pub rows: Vec<Element<'a, BlackjackUiMessage>>,
-    pub bottom_ui: Element<'a, BlackjackUiMessage>,
+    pub titlebar_left: BjkUiElement<'a>,
+    pub titlebar_right: BjkUiElement<'a>,
+    pub rows: Vec<NodeRow<'a>>,
+    pub bottom_ui: BjkUiElement<'a>,
     pub v_separation: f32,
     pub h_separation: f32,
     pub extra_v_separation: f32,
 }
 
-impl<'a> NodeWidget<'a> {
-    fn iter_stuff(
-        &'a self,
-        state: &'a Tree,
-        layout: Layout<'a>,
-    ) -> impl Iterator<
-        Item = (
-            &Element<'a, BlackjackUiMessage, iced::Renderer>,
-            &Tree,
-            Layout,
-        ),
-    > {
-        use std::iter::once;
-        once(&self.titlebar_left)
-            .chain(once(&self.titlebar_right))
-            .chain(self.rows.iter())
-            .chain(once(&self.bottom_ui))
-            .zip(state.children.iter())
-            .zip(layout.children())
-            .map(|((x, y), z)| (x, y, z))
-    }
+macro_rules! iter_stuff {
+    ($self:tt, $layout:ident, $state:ident) => {
+        once(&$self.titlebar_left)
+            .chain(once(&$self.titlebar_right))
+            .chain(
+                $self
+                    .rows
+                    .iter()
+                    .flat_map(|r| [&r.contents, &r.input_port, &r.output_port]),
+            )
+            .chain(once(&$self.bottom_ui))
+            .zip($state.children.iter())
+            .zip($layout.children())
+    };
+
+    (mut $self:tt, $layout:ident, $state:ident) => {
+        once(&mut $self.titlebar_left)
+            .chain(once(&mut $self.titlebar_right))
+            .chain(
+                $self
+                    .rows
+                    .iter_mut()
+                    .flat_map(|r| [&mut r.contents, &mut r.input_port, &mut r.output_port]),
+            )
+            .chain(once(&mut $self.bottom_ui))
+            .zip($state.children.iter_mut())
+            .zip($layout.children())
+    };
 }
 
-impl<'a> Widget<BlackjackUiMessage, iced::Renderer> for NodeWidget<'a> {
+impl<'a> Widget<BjkUiMessage, BjkUiRenderer> for NodeWidget<'a> {
     fn width(&self) -> Length {
         Length::Shrink
     }
@@ -59,24 +93,22 @@ impl<'a> Widget<BlackjackUiMessage, iced::Renderer> for NodeWidget<'a> {
 
     fn layout(
         &self,
-        renderer: &iced::Renderer,
+        renderer: &BjkUiRenderer,
         limits: &iced_native::layout::Limits,
     ) -> iced_native::layout::Node {
         struct Cursor {
             y_offset: f32,
             limits: Limits,
             total_size: Size,
-            children: Vec<Node>,
         }
 
         let mut cursor = Cursor {
             y_offset: self.v_separation,
             limits: *limits,
             total_size: Size::<f32>::new(0.0, 0.0),
-            children: vec![],
         };
 
-        let layout_widget = |w: &Element<_, _>, c: &mut Cursor| {
+        let layout_widget = |w: &BjkUiElement, c: &mut Cursor| -> Node {
             let layout = w.as_widget().layout(renderer, &c.limits);
             let size = layout.size();
             c.limits = c
@@ -84,11 +116,12 @@ impl<'a> Widget<BlackjackUiMessage, iced::Renderer> for NodeWidget<'a> {
                 .shrink(Size::new(0.0, size.height + self.v_separation));
             c.total_size.width = c.total_size.width.max(size.width);
             c.total_size.height += size.height + self.v_separation;
-            c.children.push(layout.translate(Vector {
+            let layout = layout.translate(Vector {
                 x: self.h_separation,
                 y: c.y_offset,
-            }));
+            });
             c.y_offset += size.height + self.v_separation;
+            layout
         };
 
         // Make room for the title, which we will layout at the end, so we can
@@ -103,13 +136,17 @@ impl<'a> Widget<BlackjackUiMessage, iced::Renderer> for NodeWidget<'a> {
         cursor.y_offset += title_height;
         cursor.total_size.height += title_height;
 
-        // Layout rows
+        // Layout row contents
+        let mut row_y_midpoints = vec![];
+        let mut row_contents = vec![];
         for row in &self.rows {
-            layout_widget(row, &mut cursor);
+            let row_layout = layout_widget(&row.contents, &mut cursor);
+            row_y_midpoints.push(row_layout.bounds().center_y());
+            row_contents.push(row_layout);
         }
 
         // Layout bottom UI
-        layout_widget(&self.bottom_ui, &mut cursor);
+        let bottom_ui_layout = layout_widget(&self.bottom_ui, &mut cursor);
 
         // Layout titlebar
         let trl_width = title_right_layout.bounds().width;
@@ -121,21 +158,46 @@ impl<'a> Widget<BlackjackUiMessage, iced::Renderer> for NodeWidget<'a> {
             x: cursor.total_size.width - trl_width + self.h_separation,
             y: 0.0,
         });
-        cursor.children.insert(0, title_left_layout);
-        cursor.children.insert(1, title_right_layout);
 
         cursor.total_size.height += self.v_separation;
         cursor.total_size.width += 2.0 * self.h_separation;
 
-        iced_native::layout::Node::with_children(cursor.total_size, cursor.children)
+        // Layout ports
+        let mut port_layouts = vec![];
+        for y_midpoint in row_y_midpoints {
+            let size = NodeRow::PORT_SIZE;
+            let left = Node::new(Size::new(size, size))
+                .translate(Vector::new(-size * 0.5, y_midpoint - size * 0.5));
+            let right = Node::new(Size::new(size, size)).translate(Vector::new(
+                cursor.total_size.width - size * 0.5,
+                y_midpoint - size * 0.5,
+            ));
+            port_layouts.push((left, right));
+        }
+
+        let mut children = vec![];
+        children.push(title_left_layout);
+        children.push(title_right_layout);
+        for (row, (left, right)) in row_contents.into_iter().zip(port_layouts) {
+            children.push(row);
+            children.push(left);
+            children.push(right);
+        }
+        children.push(bottom_ui_layout);
+
+        iced_native::layout::Node::with_children(cursor.total_size, children)
     }
 
     fn children(&self) -> Vec<iced_native::widget::Tree> {
+        println!("Children");
+
         let mut ch = vec![];
         ch.push(Tree::new(&self.titlebar_left));
         ch.push(Tree::new(&self.titlebar_right));
         for row in &self.rows {
-            ch.push(Tree::new(row));
+            ch.push(Tree::new(&row.contents));
+            ch.push(Tree::new(&row.input_port));
+            ch.push(Tree::new(&row.output_port));
         }
         ch.push(Tree::new(&self.bottom_ui));
         ch
@@ -147,16 +209,10 @@ impl<'a> Widget<BlackjackUiMessage, iced::Renderer> for NodeWidget<'a> {
         layout: iced_native::Layout<'_>,
         cursor_position: iced::Point,
         viewport: &Rectangle,
-        renderer: &iced::Renderer,
+        renderer: &BjkUiRenderer,
     ) -> iced_native::mouse::Interaction {
         use std::iter::once;
-        for ((ch, state), layout) in once(&self.titlebar_left)
-            .chain(once(&self.titlebar_right))
-            .chain(self.rows.iter())
-            .chain(once(&self.bottom_ui))
-            .zip(state.children.iter())
-            .zip(layout.children())
-        {
+        for ((ch, state), layout) in iter_stuff!(self, layout, state) {
             let interaction = ch.as_widget().mouse_interaction(
                 state,
                 layout,
@@ -177,18 +233,12 @@ impl<'a> Widget<BlackjackUiMessage, iced::Renderer> for NodeWidget<'a> {
         event: iced::Event,
         layout: iced_native::Layout<'_>,
         cursor_position: iced::Point,
-        renderer: &iced::Renderer,
+        renderer: &BjkUiRenderer,
         clipboard: &mut dyn iced_native::Clipboard,
-        shell: &mut iced_native::Shell<'_, BlackjackUiMessage>,
+        shell: &mut iced_native::Shell<'_, BjkUiMessage>,
     ) -> iced::event::Status {
         use std::iter::once;
-        for ((ch, state), layout) in once(&mut self.titlebar_left)
-            .chain(once(&mut self.titlebar_right))
-            .chain(self.rows.iter_mut())
-            .chain(once(&mut self.bottom_ui))
-            .zip(state.children.iter_mut())
-            .zip(layout.children())
-        {
+        for ((ch, state), layout) in iter_stuff!(mut self, layout, state) {
             let status = ch.as_widget_mut().on_event(
                 state,
                 event.clone(),
@@ -210,9 +260,9 @@ impl<'a> Widget<BlackjackUiMessage, iced::Renderer> for NodeWidget<'a> {
     fn draw(
         &self,
         state: &iced_native::widget::Tree,
-        renderer: &mut iced::Renderer,
-        theme: &iced_native::Theme,
-        style: &renderer::Style,
+        renderer: &mut BjkUiRenderer,
+        theme: &BjkUiTheme,
+        _style: &renderer::Style,
         layout: iced_native::Layout<'_>,
         cursor_position: iced::Point,
         viewport: &iced::Rectangle,
@@ -270,13 +320,7 @@ impl<'a> Widget<BlackjackUiMessage, iced::Renderer> for NodeWidget<'a> {
         );
 
         use std::iter::once;
-        for ((ch, state), layout) in once(&self.titlebar_left)
-            .chain(once(&self.titlebar_right))
-            .chain(self.rows.iter())
-            .chain(once(&self.bottom_ui))
-            .zip(state.children.iter())
-            .zip(layout.children())
-        {
+        for ((ch, state), layout) in iter_stuff!(self, layout, state) {
             ch.as_widget().draw(
                 state,
                 renderer,

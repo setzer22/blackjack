@@ -546,6 +546,8 @@ dependencies = [
  "iced_graphics",
  "iced_lazy",
  "iced_native",
+ "iced_style",
+ "iced_wgpu",
 ]
 
 [[package]]

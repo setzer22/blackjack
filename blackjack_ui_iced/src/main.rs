@@ -1,16 +1,18 @@
 use blackjack_engine::graph::BjkGraph;
-use iced::{
-    executor,
-    widget::{column, container, text},
-    Application, Command, Settings, Theme,
-};
+use iced::{executor, Application, Command, Settings};
 use root_panes::RootPanesMessage;
+use theme::BjkUiTheme;
 
 pub mod graph_editor_pane;
+pub mod prelude;
+pub mod extensions;
 pub mod root_panes;
+pub mod theme;
+
+use prelude::*;
 
 #[derive(Debug, Clone)]
-pub enum BlackjackUiMessage {
+pub enum BjkUiMessage {
     RootPanes(RootPanesMessage),
     Dummy,
 }
@@ -28,11 +30,11 @@ struct BlackjackUiApp {
 
 impl Application for BlackjackUiApp {
     type Executor = executor::Default;
-    type Message = BlackjackUiMessage;
-    type Theme = Theme;
+    type Message = BjkUiMessage;
+    type Theme = BjkUiTheme;
     type Flags = ();
 
-    fn new(flags: Self::Flags) -> (Self, iced::Command<Self::Message>) {
+    fn new(_flags: Self::Flags) -> (Self, iced::Command<Self::Message>) {
         (
             BlackjackUiApp {
                 root_panes: root_panes::RootPanes::new(),
@@ -52,23 +54,28 @@ impl Application for BlackjackUiApp {
 
     fn update(&mut self, message: Self::Message) -> Command<Self::Message> {
         match message {
-            BlackjackUiMessage::RootPanes(msg) => {
+            BjkUiMessage::RootPanes(msg) => {
                 self.root_panes.update(msg);
             }
-            Dummy => {}
+            BjkUiMessage::Dummy => {}
         }
         Command::none()
     }
 
-    fn view(&self) -> iced::Element<'_, Self::Message, iced::Renderer<Self::Theme>> {
+    fn view(&self) -> BjkUiElement<'_> {
         container(column(vec![
             text("Blackjack").into(),
-            self.root_panes.view(&self.graph).into(),
+            self.root_panes.view(&self.graph),
         ]))
         .into()
     }
 }
 
 fn main() {
-    BlackjackUiApp::run(Settings::default()).unwrap();
+    BlackjackUiApp::run(Settings {
+        default_font: Some(include_bytes!("../resources/fonts/NunitoSans-Light.ttf")),
+        default_text_size: BjkUiTheme::DEFAULT_TEXT_SIZE,
+        antialiasing: true,
+        ..Default::default()
+    }).unwrap();
 }
