@@ -1,15 +1,11 @@
 use blackjack_engine::prelude::Itertools;
-use iced::{mouse::Interaction, Color, Length, Rectangle, Size, Vector};
-use iced_native::{
-    layout::{Limits, Node},
-    renderer,
-    widget::Tree,
-    Renderer, Widget,
-};
+use iced_native::Renderer;
 
+use crate::prelude::iced_prelude::*;
 use crate::prelude::*;
 
 use super::port_widget::PortWidget;
+use super::GraphPaneMessage;
 use std::iter::once;
 
 pub struct NodeRow<'a> {
@@ -54,6 +50,14 @@ pub struct NodeWidget<'a> {
     pub extra_v_separation: f32,
 }
 
+struct NodeWidgetState {
+    /// Is the node currently being dragged?
+    is_dragging: bool,
+    /// The offset, in units, between the node's origin and the point where the
+    /// cursor grabbed it.
+    drag_offset: Vector,
+}
+
 /// A macro to iterate the children of the node widget, to delegate the various
 /// operations on its children.
 ///
@@ -96,6 +100,17 @@ macro_rules! iter_stuff {
 }
 
 impl<'a> Widget<BjkUiMessage, BjkUiRenderer> for NodeWidget<'a> {
+    fn tag(&self) -> WidgetTag {
+        WidgetTag::of::<NodeWidgetState>()
+    }
+
+    fn state(&self) -> WidgetState {
+        WidgetState::new(NodeWidgetState {
+            is_dragging: false,
+            drag_offset: Vector::new(0.0, 0.0),
+        })
+    }
+
     fn width(&self) -> Length {
         Length::Shrink
     }
@@ -104,11 +119,7 @@ impl<'a> Widget<BjkUiMessage, BjkUiRenderer> for NodeWidget<'a> {
         Length::Shrink
     }
 
-    fn layout(
-        &self,
-        renderer: &BjkUiRenderer,
-        limits: &iced_native::layout::Limits,
-    ) -> iced_native::layout::Node {
+    fn layout(&self, renderer: &BjkUiRenderer, limits: &Limits) -> LayoutNode {
         struct Cursor {
             y_offset: f32,
             limits: Limits,
@@ -121,7 +132,7 @@ impl<'a> Widget<BjkUiMessage, BjkUiRenderer> for NodeWidget<'a> {
             total_size: Size::<f32>::new(0.0, 0.0),
         };
 
-        let layout_widget = |w: &BjkUiElement, c: &mut Cursor| -> Node {
+        let layout_widget = |w: &BjkUiElement, c: &mut Cursor| -> LayoutNode {
             let layout = w.as_widget().layout(renderer, &c.limits);
             let size = layout.size();
             c.limits = c
@@ -147,6 +158,10 @@ impl<'a> Widget<BjkUiMessage, BjkUiRenderer> for NodeWidget<'a> {
             .max(title_right_layout.size().height)
             + self.extra_v_separation;
         cursor.y_offset += title_height;
+        cursor.total_size.width = cursor
+            .total_size
+            .width
+            .max(title_left_layout.size().width + title_right_layout.size().width);
         cursor.total_size.height += title_height;
 
         // Layout row contents
@@ -179,9 +194,9 @@ impl<'a> Widget<BjkUiMessage, BjkUiRenderer> for NodeWidget<'a> {
         let mut port_layouts = vec![];
         for y_midpoint in row_y_midpoints {
             let size = NodeRow::PORT_SIZE;
-            let left = Node::new(Size::new(size, size))
+            let left = LayoutNode::new(Size::new(size, size))
                 .translate(Vector::new(-size * 0.5, y_midpoint - size * 0.5));
-            let right = Node::new(Size::new(size, size)).translate(Vector::new(
+            let right = LayoutNode::new(Size::new(size, size)).translate(Vector::new(
                 cursor.total_size.width - size * 0.5,
                 y_midpoint - size * 0.5,
             ));
@@ -201,27 +216,27 @@ impl<'a> Widget<BjkUiMessage, BjkUiRenderer> for NodeWidget<'a> {
         iced_native::layout::Node::with_children(cursor.total_size, children)
     }
 
-    fn children(&self) -> Vec<iced_native::widget::Tree> {
+    fn children(&self) -> Vec<WidgetTree> {
         let mut ch = vec![];
-        ch.push(Tree::new(&self.titlebar_left));
-        ch.push(Tree::new(&self.titlebar_right));
+        ch.push(WidgetTree::new(&self.titlebar_left));
+        ch.push(WidgetTree::new(&self.titlebar_right));
         for row in &self.rows {
-            ch.push(Tree::new(&row.contents));
-            ch.push(Tree::new(&row.input_port));
-            ch.push(Tree::new(&row.output_port));
+            ch.push(WidgetTree::new(&row.contents));
+            ch.push(WidgetTree::new(&row.input_port));
+            ch.push(WidgetTree::new(&row.output_port));
         }
-        ch.push(Tree::new(&self.bottom_ui));
+        ch.push(WidgetTree::new(&self.bottom_ui));
         ch
     }
 
     fn mouse_interaction(
         &self,
-        state: &Tree,
-        layout: iced_native::Layout<'_>,
-        cursor_position: iced::Point,
+        state: &WidgetTree,
+        layout: Layout<'_>,
+        cursor_position: Point,
         viewport: &Rectangle,
         renderer: &BjkUiRenderer,
-    ) -> iced_native::mouse::Interaction {
+    ) -> MouseInteraction {
         for ((ch, state), layout) in iter_stuff!(self, layout, state) {
             let interaction = ch.as_widget().mouse_interaction(
                 state,
@@ -230,23 +245,24 @@ impl<'a> Widget<BjkUiMessage, BjkUiRenderer> for NodeWidget<'a> {
                 viewport,
                 renderer,
             );
-            if interaction != Interaction::Idle {
+            if interaction != MouseInteraction::Idle {
                 return interaction;
             }
         }
-        iced_native::mouse::Interaction::Idle
+
+        MouseInteraction::Idle
     }
 
     fn on_event(
         &mut self,
-        state: &mut iced_native::widget::Tree,
+        state: &mut WidgetTree,
         event: iced::Event,
-        layout: iced_native::Layout<'_>,
-        cursor_position: iced::Point,
+        layout: Layout<'_>,
+        cursor_position: Point,
         renderer: &BjkUiRenderer,
         clipboard: &mut dyn iced_native::Clipboard,
         shell: &mut iced_native::Shell<'_, BjkUiMessage>,
-    ) -> iced::event::Status {
+    ) -> EventStatus {
         for ((ch, state), layout) in iter_stuff!(mut self, layout, state) {
             let status = ch.as_widget_mut().on_event(
                 state,
@@ -257,35 +273,72 @@ impl<'a> Widget<BjkUiMessage, BjkUiRenderer> for NodeWidget<'a> {
                 clipboard,
                 shell,
             );
-            if status == iced::event::Status::Captured {
+            if status == EventStatus::Captured {
                 return status;
             }
         }
 
-        // TODO: Handle self mouse events here
-        iced::event::Status::Ignored
+        let mut status = EventStatus::Ignored;
+        let state = state.state.downcast_mut::<NodeWidgetState>();
+        match state.is_dragging {
+            false => {
+                let titlebar_rect = self.titlebar_rect(&layout);
+                if titlebar_rect.contains(cursor_position) {
+                    if let iced::Event::Mouse(iced::mouse::Event::ButtonPressed(b)) = event {
+                        if b == MouseButton::Left {
+                            state.is_dragging = true;
+                            state.drag_offset =
+                                cursor_position.to_vector() - titlebar_rect.top_left().to_vector();
+                            status = EventStatus::Captured;
+                        }
+                    }
+                }
+            }
+            true => {
+                if let iced::Event::Mouse(m) = event {
+                    match m {
+                        iced::mouse::Event::CursorMoved { position } => {
+                            let new_position = position - state.drag_offset;
+                            // WIP: Node widgets do not currently store a node
+                            // id, so we can't identify them in messages.
+                            /*
+                            shell.publish(BjkUiMessage::GraphPane(GraphPaneMessage::NodeMoved(
+                                todo!(),
+                                todo!(),
+                            )))*/
+                        }
+                        iced::mouse::Event::ButtonReleased(b) => {
+                            if b == MouseButton::Left {
+                                state.is_dragging = false;
+                                status = EventStatus::Captured;
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+
+        status
     }
 
     fn draw(
         &self,
-        state: &iced_native::widget::Tree,
+        state: &WidgetTree,
         renderer: &mut BjkUiRenderer,
         theme: &BjkUiTheme,
-        _style: &renderer::Style,
-        layout: iced_native::Layout<'_>,
-        cursor_position: iced::Point,
-        viewport: &iced::Rectangle,
+        style: &iced_native::renderer::Style,
+        layout: Layout<'_>,
+        cursor_position: Point,
+        viewport: &Rectangle,
     ) {
-        let style = renderer::Style {
-            text_color: Color::from_rgb8(227, 227, 227),
-        };
         let border_radius = 5.0;
 
         let mut node_rect = layout.bounds();
         node_rect.height += self.extra_v_separation;
 
         renderer.fill_quad(
-            renderer::Quad {
+            Quad {
                 bounds: node_rect,
                 border_radius,
                 border_width: 0.0,
@@ -294,17 +347,11 @@ impl<'a> Widget<BjkUiMessage, BjkUiRenderer> for NodeWidget<'a> {
             Color::from_rgb8(63, 63, 63),
         );
 
-        let titlebar_height = layout
-            .children()
-            .take(2)
-            .map(|x| x.bounds().height)
-            .max_by(f32::total_cmp)
-            .unwrap();
-        let mut title_rect = layout.bounds();
-        title_rect.height = titlebar_height + self.extra_v_separation + border_radius;
+        let mut title_rect = self.titlebar_rect(&layout);
+        title_rect.height += border_radius;
 
         renderer.fill_quad(
-            renderer::Quad {
+            Quad {
                 bounds: title_rect,
                 border_radius,
                 border_width: 0.0,
@@ -317,9 +364,9 @@ impl<'a> Widget<BjkUiMessage, BjkUiRenderer> for NodeWidget<'a> {
         // title. This is a hack to work around the lack of a per-corner radius.
         let mut title_patch_rect = layout.bounds();
         title_patch_rect.height = border_radius;
-        title_patch_rect.y += titlebar_height + self.extra_v_separation;
+        title_patch_rect.y += title_rect.height + self.extra_v_separation;
         renderer.fill_quad(
-            renderer::Quad {
+            Quad {
                 bounds: title_patch_rect,
                 border_radius: 0.0,
                 border_width: 0.0,
@@ -333,7 +380,7 @@ impl<'a> Widget<BjkUiMessage, BjkUiRenderer> for NodeWidget<'a> {
                 state,
                 renderer,
                 theme,
-                &style,
+                style,
                 layout,
                 cursor_position,
                 viewport,
@@ -341,10 +388,26 @@ impl<'a> Widget<BjkUiMessage, BjkUiRenderer> for NodeWidget<'a> {
         }
     }
 
-    fn diff(&self, tree: &mut Tree) {
+    fn diff(&self, tree: &mut WidgetTree) {
         // We need to allocate here because `diff_children` requires a slice of
         // borrows, not an iterator.
         let children = iter_stuff!(self).collect_vec();
         tree.diff_children(&children);
+    }
+}
+
+impl NodeWidget<'_> {
+    /// Returns the bounding box of the titlebar, given the `layout` tree.
+    fn titlebar_rect(&self, layout: &Layout) -> Rectangle {
+        let node = layout.bounds();
+        let tb_left = layout.children().next().unwrap().bounds();
+        let tb_right = layout.children().nth(1).unwrap().bounds();
+
+        Rectangle {
+            x: tb_left.x - self.h_separation,
+            y: tb_left.y.max(tb_right.y),
+            width: node.width,
+            height: node.height + self.extra_v_separation,
+        }
     }
 }

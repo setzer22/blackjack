@@ -14,6 +14,7 @@ use prelude::*;
 #[derive(Debug, Clone)]
 pub enum BjkUiMessage {
     RootPanes(RootPanesMessage),
+    GraphPane(GraphPaneMessage),
     Dummy,
 }
 

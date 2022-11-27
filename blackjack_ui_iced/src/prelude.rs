@@ -5,12 +5,6 @@ mod no_generics {
     pub type BjkUiRenderer = iced_graphics::Renderer<iced_wgpu::Backend, crate::theme::BjkUiTheme>;
 
     pub type BjkUiElement<'a> = iced::Element<'a, crate::BjkUiMessage, BjkUiRenderer>;
-
-    macro_rules! BjkWidget {
-        () => {
-
-        };
-    }
 }
 pub use no_generics::*;
 
@@ -30,6 +24,7 @@ pub mod iced_prelude {
     pub use iced::Rectangle;
     pub use iced::Size;
     pub use iced::Background;
+    pub use iced_native::Widget;
     pub use iced_native::renderer::Quad;
     pub use iced_native::layout::Limits;
     pub use iced_native::layout::Layout;
@@ -39,6 +34,7 @@ pub mod iced_prelude {
     pub type WidgetTree = iced_native::widget::Tree;
     pub type RendererStyle = iced_native::renderer::Style;
     pub type MouseButton = iced::mouse::Button;
+    pub type MouseInteraction = iced::mouse::Interaction;
     pub type EventStatus = iced::event::Status;
 
 }
