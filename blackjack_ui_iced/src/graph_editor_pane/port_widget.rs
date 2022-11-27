@@ -7,7 +7,19 @@ pub struct PortWidget {
     pub size: f32,
 }
 
+pub struct PortWidgetState {
+    pub is_dragging: bool,
+}
+
 impl iced_native::Widget<crate::BjkUiMessage, BjkUiRenderer> for PortWidget {
+    fn tag(&self) -> WidgetTag {
+        WidgetTag::of::<PortWidgetState>()
+    }
+
+    fn state(&self) -> WidgetState {
+        WidgetState::new(PortWidgetState { is_dragging: false })
+    }
+
     fn width(&self) -> Length {
         Length::Shrink
     }
@@ -20,19 +32,9 @@ impl iced_native::Widget<crate::BjkUiMessage, BjkUiRenderer> for PortWidget {
         LayoutNode::new(Size::new(self.size, self.size))
     }
 
-    // WIP: Finally understood how the diffing algorithm works. It is not
-    // necessary to implement it for nodes without children like PortWidget, but
-    // I have to do it for the NodeWidget.
-    //
-    // Diffing is what would add or remove the branches in the widget tree for
-    // newly created or removed elements (think, list items in the classic todo
-    // app). It is also a more general mechanism than that, it can be used to
-    // recoinciliate the widget tree (a.k.a. the inner widget state, what makes
-    // widgets *stateless*) when there are changes in the tree.
-
     fn draw(
         &self,
-        _state: &WidgetTree,
+        state: &WidgetTree,
         renderer: &mut BjkUiRenderer,
         _theme: &BjkUiTheme,
         _style: &RendererStyle,
@@ -40,6 +42,7 @@ impl iced_native::Widget<crate::BjkUiMessage, BjkUiRenderer> for PortWidget {
         cursor_position: Point,
         _viewport: &Rectangle,
     ) {
+        let state = state.state.downcast_ref::<PortWidgetState>();
         let color = if layout.bounds().contains(cursor_position) {
             self.color.add(0.6)
         } else {
@@ -54,24 +57,66 @@ impl iced_native::Widget<crate::BjkUiMessage, BjkUiRenderer> for PortWidget {
                 border_color: Color::TRANSPARENT,
             },
             Background::Color(color),
-        )
+        );
+
+        if state.is_dragging {
+            use iced::widget::canvas::{Frame, Path, Stroke};
+            let mut frame = Frame::new(Size::new(1000.0, 1000.0));
+            let start = layout.bounds().center();
+            let end = cursor_position;
+            frame.stroke(
+                &Path::line(start, end),
+                Stroke::default()
+                    .with_width(5.0)
+                    .with_color(Color::from_rgb8(77, 84, 92)),
+            );
+            let primitive = frame.into_geometry().into_primitive();
+            renderer.draw_primitive(primitive);
+
+        }
     }
 
-    /*
     fn on_event(
         &mut self,
-        _state: &mut iced_native::widget::Tree,
-        _event: iced::Event,
+        state: &mut iced_native::widget::Tree,
+        event: iced::Event,
         layout: Layout<'_>,
         cursor_position: Point,
         _renderer: &BjkUiRenderer,
         _clipboard: &mut dyn iced_native::Clipboard,
         _shell: &mut iced_native::Shell<'_, crate::BjkUiMessage>,
     ) -> iced::event::Status {
+        let state = state.state.downcast_mut::<PortWidgetState>();
         let bounds = layout.bounds();
         let in_bounds = bounds.contains(cursor_position);
-        match event {
-            mouse::Ev
+        let mut captured = false;
+
+        match state.is_dragging {
+            false => {
+                if let iced::Event::Mouse(iced::mouse::Event::ButtonPressed(b)) = event {
+                    if in_bounds && b == MouseButton::Left {
+                        println!("Drag started");
+                        state.is_dragging = true;
+                        captured = true;
+                    }
+                }
+            }
+            true => {
+                if let iced::Event::Mouse(iced::mouse::Event::ButtonReleased(b)) = event {
+                    if b == MouseButton::Left {
+                        println!("Drag ended");
+                        state.is_dragging = false;
+                    }
+                }
+            }
         }
-    }*/
+
+        // TODO: Should this always be captured, if there's an ongoing drag
+        // event? Don't think it matters much.
+        if captured {
+            EventStatus::Captured
+        } else {
+            EventStatus::Ignored
+        }
+    }
 }

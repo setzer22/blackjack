@@ -1,3 +1,4 @@
+use blackjack_engine::prelude::Itertools;
 use iced::{mouse::Interaction, Color, Length, Rectangle, Size, Vector};
 use iced_native::{
     layout::{Limits, Node},
@@ -9,6 +10,7 @@ use iced_native::{
 use crate::prelude::*;
 
 use super::port_widget::PortWidget;
+use std::iter::once;
 
 pub struct NodeRow<'a> {
     pub input_port: BjkUiElement<'a>,
@@ -52,8 +54,13 @@ pub struct NodeWidget<'a> {
     pub extra_v_separation: f32,
 }
 
+/// A macro to iterate the children of the node widget, to delegate the various
+/// operations on its children.
+///
+/// It's easier to use a macro than a function here, because a function call
+/// boundary imposes additional restrictions on the borrow checker.
 macro_rules! iter_stuff {
-    ($self:tt, $layout:ident, $state:ident) => {
+    ($self:tt) => {
         once(&$self.titlebar_left)
             .chain(once(&$self.titlebar_right))
             .chain(
@@ -63,11 +70,14 @@ macro_rules! iter_stuff {
                     .flat_map(|r| [&r.contents, &r.input_port, &r.output_port]),
             )
             .chain(once(&$self.bottom_ui))
+    };
+    ($self:tt, $layout:ident, $state:ident) => {
+        iter_stuff!($self)
             .zip($state.children.iter())
             .zip($layout.children())
     };
 
-    (mut $self:tt, $layout:ident, $state:ident) => {
+    (mut $self:tt) => {
         once(&mut $self.titlebar_left)
             .chain(once(&mut $self.titlebar_right))
             .chain(
@@ -77,6 +87,9 @@ macro_rules! iter_stuff {
                     .flat_map(|r| [&mut r.contents, &mut r.input_port, &mut r.output_port]),
             )
             .chain(once(&mut $self.bottom_ui))
+    };
+    (mut $self:tt, $layout:ident, $state:ident) => {
+        iter_stuff!(mut $self)
             .zip($state.children.iter_mut())
             .zip($layout.children())
     };
@@ -189,8 +202,6 @@ impl<'a> Widget<BjkUiMessage, BjkUiRenderer> for NodeWidget<'a> {
     }
 
     fn children(&self) -> Vec<iced_native::widget::Tree> {
-        println!("Children");
-
         let mut ch = vec![];
         ch.push(Tree::new(&self.titlebar_left));
         ch.push(Tree::new(&self.titlebar_right));
@@ -211,7 +222,6 @@ impl<'a> Widget<BjkUiMessage, BjkUiRenderer> for NodeWidget<'a> {
         viewport: &Rectangle,
         renderer: &BjkUiRenderer,
     ) -> iced_native::mouse::Interaction {
-        use std::iter::once;
         for ((ch, state), layout) in iter_stuff!(self, layout, state) {
             let interaction = ch.as_widget().mouse_interaction(
                 state,
@@ -237,7 +247,6 @@ impl<'a> Widget<BjkUiMessage, BjkUiRenderer> for NodeWidget<'a> {
         clipboard: &mut dyn iced_native::Clipboard,
         shell: &mut iced_native::Shell<'_, BjkUiMessage>,
     ) -> iced::event::Status {
-        use std::iter::once;
         for ((ch, state), layout) in iter_stuff!(mut self, layout, state) {
             let status = ch.as_widget_mut().on_event(
                 state,
@@ -319,7 +328,6 @@ impl<'a> Widget<BjkUiMessage, BjkUiRenderer> for NodeWidget<'a> {
             Color::from_rgb8(63, 63, 63),
         );
 
-        use std::iter::once;
         for ((ch, state), layout) in iter_stuff!(self, layout, state) {
             ch.as_widget().draw(
                 state,
@@ -331,5 +339,12 @@ impl<'a> Widget<BjkUiMessage, BjkUiRenderer> for NodeWidget<'a> {
                 viewport,
             )
         }
+    }
+
+    fn diff(&self, tree: &mut Tree) {
+        // We need to allocate here because `diff_children` requires a slice of
+        // borrows, not an iterator.
+        let children = iter_stuff!(self).collect_vec();
+        tree.diff_children(&children);
     }
 }

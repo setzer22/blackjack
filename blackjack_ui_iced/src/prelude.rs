@@ -33,9 +33,12 @@ pub mod iced_prelude {
     pub use iced_native::renderer::Quad;
     pub use iced_native::layout::Limits;
     pub use iced_native::layout::Layout;
+    pub type WidgetTag = iced_native::widget::tree::Tag;
+    pub type WidgetState = iced_native::widget::tree::State;
     pub type LayoutNode = iced_native::layout::Node;
     pub type WidgetTree = iced_native::widget::Tree;
-
     pub type RendererStyle = iced_native::renderer::Style;
+    pub type MouseButton = iced::mouse::Button;
+    pub type EventStatus = iced::event::Status;
 
 }
