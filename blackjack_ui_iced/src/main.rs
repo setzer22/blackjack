@@ -1,11 +1,14 @@
-use blackjack_engine::graph::BjkGraph;
+use blackjack_engine::graph::{BjkGraph, BjkNodeId};
+use glam::Vec2;
+use graph_editor_pane::{GraphEditorPane, GraphEditorState, GraphPaneMessage};
 use iced::{executor, Application, Command, Settings};
-use root_panes::RootPanesMessage;
+use root_panes::{BlackjackPane, RootPanesMessage};
+use slotmap::SecondaryMap;
 use theme::BjkUiTheme;
 
+pub mod extensions;
 pub mod graph_editor_pane;
 pub mod prelude;
-pub mod extensions;
 pub mod root_panes;
 pub mod theme;
 
@@ -18,15 +21,9 @@ pub enum BjkUiMessage {
     Dummy,
 }
 
-pub enum BlackjackPane {
-    GraphEditor,
-    Viewport3d,
-    Inspector,
-}
-
-struct BlackjackUiApp {
+pub struct BlackjackUiApp {
     root_panes: root_panes::RootPanes,
-    graph: BjkGraph,
+    graph_editor: GraphEditorState,
 }
 
 impl Application for BlackjackUiApp {
@@ -39,7 +36,7 @@ impl Application for BlackjackUiApp {
         (
             BlackjackUiApp {
                 root_panes: root_panes::RootPanes::new(),
-                graph: BjkGraph::default(),
+                graph_editor: GraphEditorState::default(),
             },
             Command::none(),
         )
@@ -55,6 +52,9 @@ impl Application for BlackjackUiApp {
 
     fn update(&mut self, message: Self::Message) -> Command<Self::Message> {
         match message {
+            BjkUiMessage::GraphPane(msg) => {
+                self.graph_editor.update(msg);
+            }
             BjkUiMessage::RootPanes(msg) => {
                 self.root_panes.update(msg);
             }
@@ -66,9 +66,30 @@ impl Application for BlackjackUiApp {
     fn view(&self) -> BjkUiElement<'_> {
         container(column(vec![
             text("Blackjack").into(),
-            self.root_panes.view(&self.graph),
+            self.root_panes
+                .view(self, Self::pane_title, Self::pane_contents),
         ]))
         .into()
+    }
+}
+
+impl BlackjackUiApp {
+    fn pane_title(&self, pane: BlackjackPane) -> BjkUiElement<'_> {
+        match pane {
+            BlackjackPane::GraphEditor => GraphEditorPane.titlebar_view(&self.graph_editor),
+            BlackjackPane::Viewport3d => text("Viewport 3d").into(),
+            BlackjackPane::Inspector => text("Inspector").into(),
+            BlackjackPane::Spreadsheet => text("Spreadsheet").into(),
+        }
+    }
+
+    fn pane_contents(&self, pane: BlackjackPane) -> BjkUiElement<'_> {
+        match pane {
+            BlackjackPane::GraphEditor => GraphEditorPane.content_view(&self.graph_editor),
+            BlackjackPane::Viewport3d => text("I am the 3d viewport").into(),
+            BlackjackPane::Inspector => text("I am the inspector 🕵").into(),
+            BlackjackPane::Spreadsheet => text("I am the mighty spreadsheet").into(),
+        }
     }
 }
 
@@ -78,5 +99,6 @@ fn main() {
         default_text_size: BjkUiTheme::DEFAULT_TEXT_SIZE,
         antialiasing: true,
         ..Default::default()
-    }).unwrap();
+    })
+    .unwrap();
 }

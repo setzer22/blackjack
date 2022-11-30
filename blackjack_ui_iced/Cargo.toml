@@ -25,3 +25,4 @@ iced_wgpu = { git = "https://github.com/tarkah/iced.git", branch = "feat/primiti
 
 # Crates.io dependencies
 glam = "0.21.3"
+slotmap = "1.0"

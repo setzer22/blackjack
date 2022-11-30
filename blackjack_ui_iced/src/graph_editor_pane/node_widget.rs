@@ -1,3 +1,4 @@
+use blackjack_engine::graph::BjkNodeId;
 use blackjack_engine::prelude::Itertools;
 use iced_native::Renderer;
 
@@ -41,6 +42,7 @@ impl<'a> NodeRow<'a> {
 }
 
 pub struct NodeWidget<'a> {
+    pub node_id: BjkNodeId,
     pub titlebar_left: BjkUiElement<'a>,
     pub titlebar_right: BjkUiElement<'a>,
     pub rows: Vec<NodeRow<'a>>,
@@ -50,6 +52,7 @@ pub struct NodeWidget<'a> {
     pub extra_v_separation: f32,
 }
 
+#[derive(Debug)]
 struct NodeWidgetState {
     /// Is the node currently being dragged?
     is_dragging: bool,
@@ -278,8 +281,21 @@ impl<'a> Widget<BjkUiMessage, BjkUiRenderer> for NodeWidget<'a> {
             }
         }
 
+        // WIP: This doesn't work because we set the position of the nodes to
+        // the current cursor position, but we need to know the cursor position
+        // *inside* the graph. We can either:
+        //
+        // - Transform the cursor position inside the parent, so node's on_event
+        // gets the transformed position. (This may play well with scaling).
+        //
+        // - Do all the event handling in the parent widget, the graph editor
+        // (This would make it easier to have a global view of the graph and
+        // know where in the widget tree we are, not just nodes but also port
+        // positions and data types)
+
         let mut status = EventStatus::Ignored;
         let state = state.state.downcast_mut::<NodeWidgetState>();
+        dbg!(&state);
         match state.is_dragging {
             false => {
                 let titlebar_rect = self.titlebar_rect(&layout);
@@ -299,13 +315,10 @@ impl<'a> Widget<BjkUiMessage, BjkUiRenderer> for NodeWidget<'a> {
                     match m {
                         iced::mouse::Event::CursorMoved { position } => {
                             let new_position = position - state.drag_offset;
-                            // WIP: Node widgets do not currently store a node
-                            // id, so we can't identify them in messages.
-                            /*
                             shell.publish(BjkUiMessage::GraphPane(GraphPaneMessage::NodeMoved(
-                                todo!(),
-                                todo!(),
-                            )))*/
+                                self.node_id,
+                                new_position,
+                            )))
                         }
                         iced::mouse::Event::ButtonReleased(b) => {
                             if b == MouseButton::Left {
@@ -362,9 +375,9 @@ impl<'a> Widget<BjkUiMessage, BjkUiRenderer> for NodeWidget<'a> {
 
         // HACK We draw an extra quad to remove the bottom border radius of the
         // title. This is a hack to work around the lack of a per-corner radius.
-        let mut title_patch_rect = layout.bounds();
+        let mut title_patch_rect = title_rect;
         title_patch_rect.height = border_radius;
-        title_patch_rect.y += title_rect.height + self.extra_v_separation;
+        title_patch_rect.y += title_rect.height - border_radius;
         renderer.fill_quad(
             Quad {
                 bounds: title_patch_rect,
@@ -405,9 +418,9 @@ impl NodeWidget<'_> {
 
         Rectangle {
             x: tb_left.x - self.h_separation,
-            y: tb_left.y.max(tb_right.y),
+            y: tb_left.y,
             width: node.width,
-            height: node.height + self.extra_v_separation,
+            height: tb_left.height.max(tb_right.height) + self.extra_v_separation,
         }
     }
 }

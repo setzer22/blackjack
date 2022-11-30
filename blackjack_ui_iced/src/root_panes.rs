@@ -1,8 +1,8 @@
 use blackjack_engine::graph::BjkGraph;
 use iced::widget::pane_grid;
-use iced_lazy::responsive;
+use iced_lazy::{responsive, Responsive};
 
-use crate::BjkUiMessage;
+use crate::{graph_editor_pane::GraphEditorState, BjkUiMessage, BlackjackUiApp};
 
 use super::graph_editor_pane::GraphEditorPane;
 
@@ -15,8 +15,9 @@ pub enum RootPanesMessage {
     PaneDragged(pane_grid::DragEvent),
 }
 
+#[derive(Clone, Copy)]
 pub enum BlackjackPane {
-    GraphEditor(GraphEditorPane),
+    GraphEditor,
     Viewport3d,
     Inspector,
     Spreadsheet,
@@ -39,7 +40,7 @@ impl RootPanes {
         panes.split(
             pane_grid::Axis::Horizontal,
             &viewport,
-            BlackjackPane::GraphEditor(GraphEditorPane::default()),
+            BlackjackPane::GraphEditor,
         );
         let (_, split) = panes
             .split(
@@ -66,25 +67,21 @@ impl RootPanes {
         }
     }
 
-    pub fn view<'a>(&'a self, graph: &'a BjkGraph) -> BjkUiElement<'a> {
+    pub fn view<'a>(
+        &'a self,
+        app_state: &'a BlackjackUiApp,
+        pane_title: fn(&'a BlackjackUiApp, BlackjackPane) -> BjkUiElement<'a>,
+        pane_view: fn(&'a BlackjackUiApp, BlackjackPane) -> BjkUiElement<'a>,
+    ) -> BjkUiElement<'a> {
         let pane_grid = pane_grid::PaneGrid::new(&self.panes, |_id, pane, _maximized| {
-            let title = match pane {
-                BlackjackPane::GraphEditor(g) => g.titlebar_view(graph),
-                BlackjackPane::Viewport3d => text("Viewport 3d").into(),
-                BlackjackPane::Inspector => text("Inspector").into(),
-                BlackjackPane::Spreadsheet => text("Spreadsheet").into(),
-            };
+            let title = pane_title(app_state, *pane);
 
             let title_bar = pane_grid::TitleBar::new(title);
 
-            pane_grid::Content::new(responsive(move |_size| match pane {
-                BlackjackPane::GraphEditor(g) => g.content_view(graph),
-                BlackjackPane::Viewport3d => text("I am the 3d viewport").into(),
-                BlackjackPane::Inspector => text("I am the inspector 🕵").into(),
-                BlackjackPane::Spreadsheet => text("I am the mighty spreadsheet").into(),
-            }))
-            .title_bar(title_bar)
-            .style(BjkContainerStyle::Pane)
+            let pane = *pane;
+            pane_grid::Content::new(Responsive::new(move |_| pane_view(app_state, pane)))
+                .title_bar(title_bar)
+                .style(BjkContainerStyle::Pane)
         })
         .spacing(5)
         .on_click(|x| RootPanesMessage::PaneClicked(x).into())

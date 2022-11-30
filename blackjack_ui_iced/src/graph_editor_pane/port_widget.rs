@@ -95,7 +95,6 @@ impl iced_native::Widget<crate::BjkUiMessage, BjkUiRenderer> for PortWidget {
             false => {
                 if let iced::Event::Mouse(iced::mouse::Event::ButtonPressed(b)) = event {
                     if in_bounds && b == MouseButton::Left {
-                        println!("Drag started");
                         state.is_dragging = true;
                         captured = true;
                     }
@@ -104,7 +103,6 @@ impl iced_native::Widget<crate::BjkUiMessage, BjkUiRenderer> for PortWidget {
             true => {
                 if let iced::Event::Mouse(iced::mouse::Event::ButtonReleased(b)) = event {
                     if b == MouseButton::Left {
-                        println!("Drag ended");
                         state.is_dragging = false;
                     }
                 }

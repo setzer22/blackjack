@@ -1,4 +1,4 @@
-use iced::{Color, Point, Vector, Rectangle};
+use iced::{Color, Point, Rectangle, Vector};
 
 pub trait ColorExt {
     fn as_color(&self) -> Color;
@@ -46,6 +46,10 @@ pub trait PointExt {
         let p = self.as_point();
         Vector { x: p.x, y: p.y }
     }
+    fn to_glam(&self) -> glam::Vec2 {
+        let p = self.as_point();
+        glam::Vec2 { x: p.x, y: p.y }
+    }
 }
 
 impl PointExt for Point {
@@ -60,10 +64,32 @@ pub trait VectorExt {
         let v = self.as_vector();
         Point { x: v.x, y: v.y }
     }
+    fn to_glam(&self) -> glam::Vec2 {
+        let v = self.as_vector();
+        glam::Vec2 { x: v.x, y: v.y }
+    }
 }
 
 impl VectorExt for Vector {
     fn as_vector(&self) -> Vector {
+        *self
+    }
+}
+
+pub trait GlamVec2Ext {
+    fn as_vec2(&self) -> glam::Vec2;
+    fn to_iced(&self) -> Vector {
+        let v = self.as_vec2();
+        Vector { x: v.x, y: v.y }
+    }
+    fn to_iced_point(&self) -> Point {
+        let v = self.as_vec2();
+        Point { x: v.x, y: v.y }
+    }
+}
+
+impl GlamVec2Ext for glam::Vec2 {
+    fn as_vec2(&self) -> glam::Vec2 {
         *self
     }
 }
@@ -76,31 +102,52 @@ pub trait RectangleExt {
     }
     fn top_right(&self) -> Point {
         let r = self.as_rectangle();
-        Point { x: r.x + r.width, y: r.y }
+        Point {
+            x: r.x + r.width,
+            y: r.y,
+        }
     }
     fn bottom_left(&self) -> Point {
         let r = self.as_rectangle();
-        Point { x: r.x, y: r.y + r.height }
+        Point {
+            x: r.x,
+            y: r.y + r.height,
+        }
     }
     fn bottom_right(&self) -> Point {
         let r = self.as_rectangle();
-        Point { x: r.x + r.width, y: r.y + r.height }
+        Point {
+            x: r.x + r.width,
+            y: r.y + r.height,
+        }
     }
     fn center_left(&self) -> Point {
         let r = self.as_rectangle();
-        Point { x: r.x, y: r.y + r.height * 0.5 }
+        Point {
+            x: r.x,
+            y: r.y + r.height * 0.5,
+        }
     }
     fn center_right(&self) -> Point {
         let r = self.as_rectangle();
-        Point { x: r.x + r.width, y: r.y + r.height * 0.5 }
+        Point {
+            x: r.x + r.width,
+            y: r.y + r.height * 0.5,
+        }
     }
     fn top_center(&self) -> Point {
         let r = self.as_rectangle();
-        Point { x: r.x + r.width * 0.5, y: r.y }
+        Point {
+            x: r.x + r.width * 0.5,
+            y: r.y,
+        }
     }
     fn bottom_center(&self) -> Point {
         let r = self.as_rectangle();
-        Point { x: r.x + r.width * 0.5, y: r.y + r.height }
+        Point {
+            x: r.x + r.width * 0.5,
+            y: r.y + r.height,
+        }
     }
 }
 

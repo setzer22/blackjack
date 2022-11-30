@@ -548,6 +548,7 @@ dependencies = [
  "iced_native",
  "iced_style",
  "iced_wgpu",
+ "slotmap",
 ]
 
 [[package]]

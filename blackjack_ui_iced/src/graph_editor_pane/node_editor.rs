@@ -87,6 +87,7 @@ impl<'a> Widget<BjkUiMessage, BjkUiRenderer> for NodeEditor<'a> {
         clipboard: &mut dyn iced_native::Clipboard,
         shell: &mut iced_native::Shell<'_, BjkUiMessage>,
     ) -> iced::event::Status {
+        println!("====================== New frame ======================");
         for ((ch, state), layout) in self
             .nodes
             .iter_mut()

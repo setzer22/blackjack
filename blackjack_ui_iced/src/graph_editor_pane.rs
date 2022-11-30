@@ -1,4 +1,6 @@
-use blackjack_engine::graph::{BjkGraph, BjkNodeId};
+use blackjack_engine::graph::{BjkGraph, BjkNodeId, DataType};
+use glam::Vec2;
+use slotmap::SecondaryMap;
 
 use crate::prelude::iced_prelude::*;
 use crate::prelude::*;
@@ -7,12 +9,60 @@ pub mod node_editor;
 pub mod node_widget;
 pub mod port_widget;
 
+#[derive(Debug, Clone)]
 pub enum GraphPaneMessage {
     NodeMoved(BjkNodeId, Point),
 }
 
 #[derive(Default)]
-pub struct GraphEditorPane {}
+pub struct GraphEditorPane;
+
+pub struct GraphEditorState {
+    graph: BjkGraph,
+    node_positions: SecondaryMap<BjkNodeId, Vec2>,
+}
+
+impl Default for GraphEditorState {
+    fn default() -> Self {
+        let mut graph = BjkGraph::new();
+        let mut node_positions = SecondaryMap::new();
+
+        let node1 = graph.add_node("Potato", None);
+        graph
+            .add_input(node1, "foo", DataType::Scalar, None)
+            .unwrap();
+        graph
+            .add_input(node1, "bar", DataType::Scalar, None)
+            .unwrap();
+        graph
+            .add_input(node1, "baz", DataType::Scalar, None)
+            .unwrap();
+        graph
+            .add_output(node1, "foo_out", DataType::Scalar)
+            .unwrap();
+        node_positions.insert(node1, glam::Vec2::new(100.0, 100.0));
+
+        let node2 = graph.add_node("Other node", None);
+        graph
+            .add_input(node2, "afoo", DataType::Scalar, None)
+            .unwrap();
+        graph
+            .add_input(node2, "abar", DataType::Scalar, None)
+            .unwrap();
+        graph
+            .add_output(node2, "afoo1_out", DataType::Scalar)
+            .unwrap();
+        graph
+            .add_output(node2, "afoo2_out", DataType::Scalar)
+            .unwrap();
+        node_positions.insert(node2, glam::Vec2::new(200.0, 200.0));
+
+        Self {
+            graph,
+            node_positions,
+        }
+    }
+}
 
 pub enum GraphEditorMessage {}
 
@@ -21,11 +71,11 @@ impl GraphEditorPane {
         Self {}
     }
 
-    pub fn update(&mut self, _graph: &mut BjkGraph, message: GraphEditorMessage) {
+    pub fn update(&mut self, _graph: &mut GraphEditorState, message: GraphEditorMessage) {
         match message {}
     }
 
-    pub fn titlebar_view(&self, _graph: &BjkGraph) -> BjkUiElement<'_> {
+    pub fn titlebar_view(&self, _graph: &GraphEditorState) -> BjkUiElement<'_> {
         row(vec![
             text("Graph editor").into(),
             h_spacer().into(),
@@ -34,37 +84,54 @@ impl GraphEditorPane {
         .into()
     }
 
-    pub fn content_view(&self, _graph: &BjkGraph) -> BjkUiElement<'_> {
-        let node = node_widget::NodeWidget {
-            titlebar_left: container(text("This is a node")).padding(4).into(),
-            titlebar_right: container(text("x")).padding(4).into(),
-            rows: vec![
-                node_widget::NodeRow::input(button("B1"), Color::from_rgb8(255, 0, 0)),
-                node_widget::NodeRow::input(button("B2"), Color::from_rgb8(0, 255, 0)),
-                node_widget::NodeRow::output(button("B3"), Color::from_rgb8(0, 0, 255)),
-            ],
-            bottom_ui: button("Set Active Node AAA").into(),
-            v_separation: 4.0,
-            h_separation: 12.0,
-            extra_v_separation: 3.0,
-        };
+    pub fn content_view(&self, graph: &GraphEditorState) -> BjkUiElement<'_> {
+        let mut node_widgets = vec![];
+        let mut node_widget_positions = vec![];
 
-        let other_node = node_widget::NodeWidget {
-            titlebar_left: container(text("This is another node")).padding(4).into(),
-            titlebar_right: container(text("x")).padding(4).into(),
-            rows: vec![
-                node_widget::NodeRow::input(button("C1"), Color::from_rgb8(255, 255, 0)),
-                node_widget::NodeRow::input(button("C2"), Color::from_rgb8(0, 255, 255)),
-                node_widget::NodeRow::output(button("C3 -- Foo"), Color::from_rgb8(255, 0, 255)),
-            ],
-            bottom_ui: button("Set Active").into(),
-            v_separation: 4.0,
-            h_separation: 12.0,
-            extra_v_separation: 3.0,
-        };
-        let editor =
-            node_editor::NodeEditor::new([node, other_node].into_iter(), vec![Point::new(100.0, 100.0), Point::new(360.0, 150.0)]);
+        for (node_id, node) in &graph.graph.nodes {
+            let pos = graph.node_positions[node_id];
+            node_widget_positions.push(pos.to_iced_point());
+
+            let mut rows = vec![];
+            for input in &node.inputs {
+                rows.push(node_widget::NodeRow::input(
+                    text(&input.name),
+                    Color::from_rgb8(42, 72, 92),
+                ));
+            }
+            for output in &node.outputs {
+                rows.push(node_widget::NodeRow::output(
+                    text(&output.name),
+                    Color::from_rgb8(42, 72, 92),
+                ));
+            }
+
+            let node_widget = node_widget::NodeWidget {
+                node_id,
+                // TODO: Use label, not op name. This requires node definitions
+                titlebar_left: container(text(&node.op_name)).padding(4).into(),
+                titlebar_right: container(text("x")).padding(4).into(),
+                rows,
+                bottom_ui: button("Set Active").into(),
+                v_separation: 4.0,
+                h_separation: 12.0,
+                extra_v_separation: 3.0,
+            };
+            node_widgets.push(node_widget);
+        }
+
+        let editor = node_editor::NodeEditor::new(node_widgets.into_iter(), node_widget_positions);
 
         container(BjkUiElement::new(editor)).padding(3).into()
+    }
+}
+
+impl GraphEditorState {
+    pub fn update(&mut self, msg: GraphPaneMessage) {
+        match msg {
+            GraphPaneMessage::NodeMoved(id, new_pos) => {
+                self.node_positions[id] = new_pos.to_glam();
+            }
+        }
     }
 }
