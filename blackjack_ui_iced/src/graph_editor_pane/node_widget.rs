@@ -54,6 +54,9 @@ pub struct NodeWidget<'a> {
 
 #[derive(Debug)]
 struct NodeWidgetState {
+    /// The mouse position the previous time we checked for movement. Useful to
+    /// compute mouse deltas.
+    prev_mouse_pos: Option<Point>,
     /// Is the node currently being dragged?
     is_dragging: bool,
     /// The offset, in units, between the node's origin and the point where the
@@ -109,6 +112,7 @@ impl<'a> Widget<BjkUiMessage, BjkUiRenderer> for NodeWidget<'a> {
 
     fn state(&self) -> WidgetState {
         WidgetState::new(NodeWidgetState {
+            prev_mouse_pos: None,
             is_dragging: false,
             drag_offset: Vector::new(0.0, 0.0),
         })
@@ -281,21 +285,8 @@ impl<'a> Widget<BjkUiMessage, BjkUiRenderer> for NodeWidget<'a> {
             }
         }
 
-        // WIP: This doesn't work because we set the position of the nodes to
-        // the current cursor position, but we need to know the cursor position
-        // *inside* the graph. We can either:
-        //
-        // - Transform the cursor position inside the parent, so node's on_event
-        // gets the transformed position. (This may play well with scaling).
-        //
-        // - Do all the event handling in the parent widget, the graph editor
-        // (This would make it easier to have a global view of the graph and
-        // know where in the widget tree we are, not just nodes but also port
-        // positions and data types)
-
         let mut status = EventStatus::Ignored;
         let state = state.state.downcast_mut::<NodeWidgetState>();
-        dbg!(&state);
         match state.is_dragging {
             false => {
                 let titlebar_rect = self.titlebar_rect(&layout);
@@ -305,6 +296,7 @@ impl<'a> Widget<BjkUiMessage, BjkUiRenderer> for NodeWidget<'a> {
                             state.is_dragging = true;
                             state.drag_offset =
                                 cursor_position.to_vector() - titlebar_rect.top_left().to_vector();
+                            state.prev_mouse_pos = Some(cursor_position);
                             status = EventStatus::Captured;
                         }
                     }
@@ -313,12 +305,13 @@ impl<'a> Widget<BjkUiMessage, BjkUiRenderer> for NodeWidget<'a> {
             true => {
                 if let iced::Event::Mouse(m) = event {
                     match m {
-                        iced::mouse::Event::CursorMoved { position } => {
-                            let new_position = position - state.drag_offset;
-                            shell.publish(BjkUiMessage::GraphPane(GraphPaneMessage::NodeMoved(
-                                self.node_id,
-                                new_position,
-                            )))
+                        iced::mouse::Event::CursorMoved { .. } => {
+                            let delta = cursor_position - state.prev_mouse_pos.unwrap();
+                            state.prev_mouse_pos = Some(cursor_position);
+                            shell.publish(BjkUiMessage::GraphPane(GraphPaneMessage::NodeMoved {
+                                node_id: self.node_id,
+                                delta,
+                            }))
                         }
                         iced::mouse::Event::ButtonReleased(b) => {
                             if b == MouseButton::Left {

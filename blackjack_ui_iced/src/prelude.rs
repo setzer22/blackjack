@@ -37,4 +37,7 @@ pub mod iced_prelude {
     pub type MouseInteraction = iced::mouse::Interaction;
     pub type EventStatus = iced::event::Status;
 
+    pub use iced::event::Event;
+    pub type MouseEvent = iced::mouse::Event;
+
 }

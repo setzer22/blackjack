@@ -5,24 +5,47 @@ use crate::prelude::iced_prelude::*;
 use crate::prelude::*;
 
 use super::node_widget::NodeWidget;
+use super::PanZoom;
 
 pub struct NodeEditor<'a> {
     /// The node widgets
     nodes: Vec<BjkUiElement<'a>>,
     /// The offset of each node
     node_positions: Vec<Point>,
+    pan_zoom: PanZoom,
+}
+
+pub struct NodeEditorState {
+    dragging: bool,
+    prev_cursor_pos: Option<Point>,
 }
 
 impl<'a> NodeEditor<'a> {
-    pub fn new(nodes: impl Iterator<Item = NodeWidget<'a>>, node_positions: Vec<Point>) -> Self {
+    pub fn new(
+        nodes: impl Iterator<Item = NodeWidget<'a>>,
+        node_positions: Vec<Point>,
+        pan_zoom: PanZoom,
+    ) -> Self {
         Self {
             nodes: nodes.map(BjkUiElement::new).collect_vec(),
             node_positions,
+            pan_zoom,
         }
     }
 }
 
 impl<'a> Widget<BjkUiMessage, BjkUiRenderer> for NodeEditor<'a> {
+    fn tag(&self) -> iced_native::widget::tree::Tag {
+        WidgetTag::of::<NodeEditorState>()
+    }
+
+    fn state(&self) -> iced_native::widget::tree::State {
+        WidgetState::new(NodeEditorState {
+            dragging: false,
+            prev_cursor_pos: None,
+        })
+    }
+
     fn width(&self) -> Length {
         Length::Fill
     }
@@ -87,7 +110,6 @@ impl<'a> Widget<BjkUiMessage, BjkUiRenderer> for NodeEditor<'a> {
         clipboard: &mut dyn iced_native::Clipboard,
         shell: &mut iced_native::Shell<'_, BjkUiMessage>,
     ) -> iced::event::Status {
-        println!("====================== New frame ======================");
         for ((ch, state), layout) in self
             .nodes
             .iter_mut()
@@ -107,7 +129,47 @@ impl<'a> Widget<BjkUiMessage, BjkUiRenderer> for NodeEditor<'a> {
                 return status;
             }
         }
-        // TODO: Input handling
+
+        if layout.bounds().contains(cursor_position) {
+            let state = state.state.downcast_mut::<NodeEditorState>();
+            match event {
+                Event::Mouse(MouseEvent::ButtonPressed(b)) => {
+                    if b == MouseButton::Middle {
+                        state.dragging = true;
+                        state.prev_cursor_pos = Some(cursor_position);
+                    }
+                }
+                Event::Mouse(MouseEvent::ButtonReleased(b)) => {
+                    if b == MouseButton::Middle {
+                        state.dragging = false;
+                    }
+                }
+                Event::Mouse(MouseEvent::CursorMoved { .. }) => {
+                    if state.dragging {
+                        let delta = cursor_position - state.prev_cursor_pos.unwrap();
+                        state.prev_cursor_pos = Some(cursor_position);
+                        shell.publish(BjkUiMessage::GraphPane(super::GraphPaneMessage::Pan {
+                            delta,
+                        }));
+                    }
+                }
+                // WIP: I added PanZoom and the necessary event handling for it.
+                // Now I need to actually apply the translation and scaling to
+                // the nodes.
+                Event::Mouse(MouseEvent::WheelScrolled { delta }) => {
+                    let delta = match delta {
+                        iced::mouse::ScrollDelta::Lines { y, .. } => y,
+                        iced::mouse::ScrollDelta::Pixels { y, .. } => y * 50.0,
+                    };
+
+                    shell.publish(BjkUiMessage::GraphPane(super::GraphPaneMessage::Zoom {
+                        zoom_delta: delta,
+                        point: cursor_position - layout.bounds().top_left(),
+                    }))
+                }
+                _ => {}
+            }
+        }
         EventStatus::Ignored
     }
 

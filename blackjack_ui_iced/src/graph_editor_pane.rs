@@ -11,7 +11,9 @@ pub mod port_widget;
 
 #[derive(Debug, Clone)]
 pub enum GraphPaneMessage {
-    NodeMoved(BjkNodeId, Point),
+    NodeMoved { node_id: BjkNodeId, delta: Vector },
+    Zoom { zoom_delta: f32, point: Vector },
+    Pan { delta: Vector },
 }
 
 #[derive(Default)]
@@ -20,6 +22,23 @@ pub struct GraphEditorPane;
 pub struct GraphEditorState {
     graph: BjkGraph,
     node_positions: SecondaryMap<BjkNodeId, Vec2>,
+    pan_zoom: PanZoom,
+}
+
+#[derive(Default, Copy, Clone, Debug)]
+pub struct PanZoom {
+    pub pan: Vector,
+    pub zoom: f32,
+}
+
+impl PanZoom {
+    pub fn adjust_zoom(&mut self, zoom_delta: f32, point: Vector, zoom_min: f32, zoom_max: f32) {
+        let zoom_clamped = (self.zoom + zoom_delta).clamp(zoom_min, zoom_max);
+        let zoom_delta = zoom_clamped - self.zoom;
+
+        self.zoom += zoom_delta;
+        self.pan = self.pan + point * zoom_delta;
+    }
 }
 
 impl Default for GraphEditorState {
@@ -60,19 +79,17 @@ impl Default for GraphEditorState {
         Self {
             graph,
             node_positions,
+            pan_zoom: PanZoom {
+                pan: Vector::new(0.0, 0.0),
+                zoom: 1.0,
+            },
         }
     }
 }
 
-pub enum GraphEditorMessage {}
-
 impl GraphEditorPane {
     pub fn new() -> Self {
         Self {}
-    }
-
-    pub fn update(&mut self, _graph: &mut GraphEditorState, message: GraphEditorMessage) {
-        match message {}
     }
 
     pub fn titlebar_view(&self, _graph: &GraphEditorState) -> BjkUiElement<'_> {
@@ -120,7 +137,8 @@ impl GraphEditorPane {
             node_widgets.push(node_widget);
         }
 
-        let editor = node_editor::NodeEditor::new(node_widgets.into_iter(), node_widget_positions);
+        let editor = node_editor::NodeEditor::new(node_widgets.into_iter(), node_widget_positions, graph.pan_zoom);
+        dbg!(graph.pan_zoom);
 
         container(BjkUiElement::new(editor)).padding(3).into()
     }
@@ -129,8 +147,17 @@ impl GraphEditorPane {
 impl GraphEditorState {
     pub fn update(&mut self, msg: GraphPaneMessage) {
         match msg {
-            GraphPaneMessage::NodeMoved(id, new_pos) => {
-                self.node_positions[id] = new_pos.to_glam();
+            GraphPaneMessage::NodeMoved { node_id, delta } => {
+                self.node_positions[node_id] += delta.to_glam();
+            }
+            GraphPaneMessage::Zoom { zoom_delta, point } => {
+                const ZOOM_MIN: f32 = 0.05;
+                const ZOOM_MAX: f32 = 100.0;
+                self.pan_zoom
+                    .adjust_zoom(zoom_delta, point, ZOOM_MIN, ZOOM_MAX)
+            }
+            GraphPaneMessage::Pan { delta } => {
+                self.pan_zoom.pan = self.pan_zoom.pan + delta;
             }
         }
     }
