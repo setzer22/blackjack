@@ -5,38 +5,35 @@ use iced_native::Renderer;
 use crate::prelude::iced_prelude::*;
 use crate::prelude::*;
 
-use super::port_widget::PortWidget;
 use super::GraphPaneMessage;
 use std::iter::once;
 
+struct NodePort {
+    pub color: Color,
+}
+
 pub struct NodeRow<'a> {
-    pub input_port: BjkUiElement<'a>,
+    input_port: Option<NodePort>,
     pub contents: BjkUiElement<'a>,
-    pub output_port: BjkUiElement<'a>,
+    output_port: Option<NodePort>,
 }
 
 impl<'a> NodeRow<'a> {
-    const PORT_SIZE: f32 = 10.0;
+    const PORT_RADIUS: f32 = 5.0;
 
     pub fn input(contents: impl Into<BjkUiElement<'a>>, color: Color) -> Self {
         Self {
-            input_port: BjkUiElement::new(PortWidget {
-                color,
-                size: Self::PORT_SIZE,
-            }),
+            input_port: Some(NodePort { color }),
             contents: contents.into(),
-            output_port: BjkUiElement::new(empty_space()),
+            output_port: None,
         }
     }
 
     pub fn output(contents: impl Into<BjkUiElement<'a>>, color: Color) -> Self {
         Self {
-            input_port: BjkUiElement::new(empty_space()),
+            input_port: None,
             contents: contents.into(),
-            output_port: BjkUiElement::new(PortWidget {
-                color,
-                size: Self::PORT_SIZE,
-            }),
+            output_port: Some(NodePort { color }),
         }
     }
 }
@@ -73,12 +70,7 @@ macro_rules! iter_stuff {
     ($self:tt) => {
         once(&$self.titlebar_left)
             .chain(once(&$self.titlebar_right))
-            .chain(
-                $self
-                    .rows
-                    .iter()
-                    .flat_map(|r| [&r.contents, &r.input_port, &r.output_port]),
-            )
+            .chain($self.rows.iter().map(|r| &r.contents))
             .chain(once(&$self.bottom_ui))
     };
     ($self:tt, $layout:ident, $state:ident) => {
@@ -90,12 +82,7 @@ macro_rules! iter_stuff {
     (mut $self:tt) => {
         once(&mut $self.titlebar_left)
             .chain(once(&mut $self.titlebar_right))
-            .chain(
-                $self
-                    .rows
-                    .iter_mut()
-                    .flat_map(|r| [&mut r.contents, &mut r.input_port, &mut r.output_port]),
-            )
+            .chain($self.rows.iter_mut().map(|r| &mut r.contents))
             .chain(once(&mut $self.bottom_ui))
     };
     (mut $self:tt, $layout:ident, $state:ident) => {
@@ -105,12 +92,13 @@ macro_rules! iter_stuff {
     };
 }
 
-impl<'a> Widget<BjkUiMessage, BjkUiRenderer> for NodeWidget<'a> {
-    fn tag(&self) -> WidgetTag {
+impl NodeWidget<'_> {
+    pub fn tag(&self) -> WidgetTag {
         WidgetTag::of::<NodeWidgetState>()
     }
 
-    fn state(&self) -> WidgetState {
+    // TODO: If node ends up having no state, remove.
+    pub fn state(&self) -> WidgetState {
         WidgetState::new(NodeWidgetState {
             prev_mouse_pos: None,
             is_dragging: false,
@@ -118,15 +106,20 @@ impl<'a> Widget<BjkUiMessage, BjkUiRenderer> for NodeWidget<'a> {
         })
     }
 
-    fn width(&self) -> Length {
-        Length::Shrink
+    pub fn children(&self) -> Vec<WidgetTree> {
+        let mut children = vec![];
+        for ch in iter_stuff!(self) {
+            children.push(WidgetTree::new(ch));
+        }
+        children
     }
 
-    fn height(&self) -> Length {
-        Length::Shrink
+    pub fn diff(&self, tree: &mut WidgetTree) {
+        let child_refs = iter_stuff!(self).collect_vec();
+        tree.diff_children(&child_refs);
     }
 
-    fn layout(&self, renderer: &BjkUiRenderer, limits: &Limits) -> LayoutNode {
+    pub fn layout(&self, renderer: &BjkUiRenderer, limits: &Limits) -> LayoutNode {
         struct Cursor {
             y_offset: f32,
             limits: Limits,
@@ -172,11 +165,9 @@ impl<'a> Widget<BjkUiMessage, BjkUiRenderer> for NodeWidget<'a> {
         cursor.total_size.height += title_height;
 
         // Layout row contents
-        let mut row_y_midpoints = vec![];
         let mut row_contents = vec![];
         for row in &self.rows {
             let row_layout = layout_widget(&row.contents, &mut cursor);
-            row_y_midpoints.push(row_layout.bounds().center_y());
             row_contents.push(row_layout);
         }
 
@@ -197,46 +188,151 @@ impl<'a> Widget<BjkUiMessage, BjkUiRenderer> for NodeWidget<'a> {
         cursor.total_size.height += self.v_separation;
         cursor.total_size.width += 2.0 * self.h_separation;
 
-        // Layout ports
-        let mut port_layouts = vec![];
-        for y_midpoint in row_y_midpoints {
-            let size = NodeRow::PORT_SIZE;
-            let left = LayoutNode::new(Size::new(size, size))
-                .translate(Vector::new(-size * 0.5, y_midpoint - size * 0.5));
-            let right = LayoutNode::new(Size::new(size, size)).translate(Vector::new(
-                cursor.total_size.width - size * 0.5,
-                y_midpoint - size * 0.5,
-            ));
-            port_layouts.push((left, right));
-        }
-
         let mut children = vec![];
         children.push(title_left_layout);
         children.push(title_right_layout);
-        for (row, (left, right)) in row_contents.into_iter().zip(port_layouts) {
+        for row in row_contents {
             children.push(row);
-            children.push(left);
-            children.push(right);
         }
         children.push(bottom_ui_layout);
 
         iced_native::layout::Node::with_children(cursor.total_size, children)
     }
 
-    fn children(&self) -> Vec<WidgetTree> {
-        let mut ch = vec![];
-        ch.push(WidgetTree::new(&self.titlebar_left));
-        ch.push(WidgetTree::new(&self.titlebar_right));
-        for row in &self.rows {
-            ch.push(WidgetTree::new(&row.contents));
-            ch.push(WidgetTree::new(&row.input_port));
-            ch.push(WidgetTree::new(&row.output_port));
+    /// Returns the bounding box of the titlebar, given the `layout` tree.
+    fn titlebar_rect(&self, layout: &Layout) -> Rectangle {
+        let node = layout.bounds();
+        let tb_left = layout.children().next().unwrap().bounds();
+        let tb_right = layout.children().nth(1).unwrap().bounds();
+
+        Rectangle {
+            x: tb_left.x - self.h_separation,
+            y: tb_left.y,
+            width: node.width,
+            height: tb_left.height.max(tb_right.height) + self.extra_v_separation,
         }
-        ch.push(WidgetTree::new(&self.bottom_ui));
-        ch
     }
 
-    fn mouse_interaction(
+    /// Returns the visual information of the left and right port (both
+    /// optional) for the `row-idx`-th row
+    #[allow(clippy::type_complexity)]
+    fn port_visuals(
+        &self,
+        layout: &Layout,
+        row_idx: usize,
+        row: &NodeRow,
+    ) -> (Option<(Point, Color)>, Option<(Point, Color)>) {
+        let row_bounds = layout.children().nth(row_idx + 2).unwrap().bounds();
+        let node_bounds = layout.bounds();
+        let left = Point::new(node_bounds.x, row_bounds.center_y());
+        let right = Point::new(node_bounds.x + node_bounds.width, row_bounds.center_y());
+        (
+            row.input_port.as_ref().map(|i| (left, i.color)),
+            row.output_port.as_ref().map(|o| (right, o.color)),
+        )
+    }
+
+    pub fn draw(
+        &self,
+        state: &WidgetTree,
+        renderer: &mut BjkUiRenderer,
+        theme: &BjkUiTheme,
+        style: &iced_native::renderer::Style,
+        layout: Layout<'_>,
+        cursor_position: Point,
+        viewport: &Rectangle,
+    ) {
+        let border_radius = 5.0;
+
+        let mut node_rect = layout.bounds();
+        node_rect.height += self.extra_v_separation;
+
+        renderer.fill_quad(
+            Quad {
+                bounds: node_rect,
+                border_radius,
+                border_width: 0.0,
+                border_color: Color::WHITE,
+            },
+            Color::from_rgb8(63, 63, 63),
+        );
+
+        let mut title_rect = self.titlebar_rect(&layout);
+        title_rect.height += border_radius;
+
+        renderer.fill_quad(
+            Quad {
+                bounds: title_rect,
+                border_radius,
+                border_width: 0.0,
+                border_color: Color::WHITE,
+            },
+            Color::from_rgb8(50, 50, 50),
+        );
+
+        // HACK We draw an extra quad to remove the bottom border radius of the
+        // title. This is a hack to work around the lack of a per-corner radius.
+        let mut title_patch_rect = title_rect;
+        title_patch_rect.height = border_radius;
+        title_patch_rect.y += title_rect.height - border_radius;
+        renderer.fill_quad(
+            Quad {
+                bounds: title_patch_rect,
+                border_radius: 0.0,
+                border_width: 0.0,
+                border_color: Color::WHITE,
+            },
+            Color::from_rgb8(63, 63, 63),
+        );
+
+        for ((ch, state), layout) in iter_stuff!(self, layout, state) {
+            ch.as_widget().draw(
+                state,
+                renderer,
+                theme,
+                style,
+                layout,
+                cursor_position,
+                viewport,
+            )
+        }
+
+        for (i, row) in self.rows.iter().enumerate() {
+            let mut draw_circle = |center: Point, radius, color| {
+                renderer.fill_quad(
+                    Quad {
+                        bounds: Rectangle {
+                            x: center.x - radius,
+                            y: center.y - radius,
+                            width: radius * 2.0,
+                            height: radius * 2.0,
+                        },
+                        border_radius: radius,
+                        border_width: 0.0,
+                        border_color: Color::TRANSPARENT,
+                    },
+                    Background::Color(color),
+                );
+            };
+            let hover_color = |pos, color: Color| {
+                if cursor_position.distance(pos) < NodeRow::PORT_RADIUS {
+                    color.add(0.6)
+                } else {
+                    color
+                }
+            };
+
+            let (left, right) = self.port_visuals(&layout, i, row);
+            if let Some((left, color)) = left {
+                draw_circle(left, NodeRow::PORT_RADIUS, hover_color(left, color));
+            }
+            if let Some((right, color)) = right {
+                draw_circle(right, NodeRow::PORT_RADIUS, hover_color(right, color));
+            }
+        }
+    }
+
+    pub fn mouse_interaction(
         &self,
         state: &WidgetTree,
         layout: Layout<'_>,
@@ -260,7 +356,7 @@ impl<'a> Widget<BjkUiMessage, BjkUiRenderer> for NodeWidget<'a> {
         MouseInteraction::Idle
     }
 
-    fn on_event(
+    pub fn on_event(
         &mut self,
         state: &mut WidgetTree,
         event: iced::Event,
@@ -326,94 +422,5 @@ impl<'a> Widget<BjkUiMessage, BjkUiRenderer> for NodeWidget<'a> {
         }
 
         status
-    }
-
-    fn draw(
-        &self,
-        state: &WidgetTree,
-        renderer: &mut BjkUiRenderer,
-        theme: &BjkUiTheme,
-        style: &iced_native::renderer::Style,
-        layout: Layout<'_>,
-        cursor_position: Point,
-        viewport: &Rectangle,
-    ) {
-        let border_radius = 5.0;
-
-        let mut node_rect = layout.bounds();
-        node_rect.height += self.extra_v_separation;
-
-        renderer.fill_quad(
-            Quad {
-                bounds: node_rect,
-                border_radius,
-                border_width: 0.0,
-                border_color: Color::WHITE,
-            },
-            Color::from_rgb8(63, 63, 63),
-        );
-
-        let mut title_rect = self.titlebar_rect(&layout);
-        title_rect.height += border_radius;
-
-        renderer.fill_quad(
-            Quad {
-                bounds: title_rect,
-                border_radius,
-                border_width: 0.0,
-                border_color: Color::WHITE,
-            },
-            Color::from_rgb8(50, 50, 50),
-        );
-
-        // HACK We draw an extra quad to remove the bottom border radius of the
-        // title. This is a hack to work around the lack of a per-corner radius.
-        let mut title_patch_rect = title_rect;
-        title_patch_rect.height = border_radius;
-        title_patch_rect.y += title_rect.height - border_radius;
-        renderer.fill_quad(
-            Quad {
-                bounds: title_patch_rect,
-                border_radius: 0.0,
-                border_width: 0.0,
-                border_color: Color::WHITE,
-            },
-            Color::from_rgb8(63, 63, 63),
-        );
-
-        for ((ch, state), layout) in iter_stuff!(self, layout, state) {
-            ch.as_widget().draw(
-                state,
-                renderer,
-                theme,
-                style,
-                layout,
-                cursor_position,
-                viewport,
-            )
-        }
-    }
-
-    fn diff(&self, tree: &mut WidgetTree) {
-        // We need to allocate here because `diff_children` requires a slice of
-        // borrows, not an iterator.
-        let children = iter_stuff!(self).collect_vec();
-        tree.diff_children(&children);
-    }
-}
-
-impl NodeWidget<'_> {
-    /// Returns the bounding box of the titlebar, given the `layout` tree.
-    fn titlebar_rect(&self, layout: &Layout) -> Rectangle {
-        let node = layout.bounds();
-        let tb_left = layout.children().next().unwrap().bounds();
-        let tb_right = layout.children().nth(1).unwrap().bounds();
-
-        Rectangle {
-            x: tb_left.x - self.h_separation,
-            y: tb_left.y,
-            width: node.width,
-            height: tb_left.height.max(tb_right.height) + self.extra_v_separation,
-        }
     }
 }

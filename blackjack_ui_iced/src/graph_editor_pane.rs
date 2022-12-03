@@ -7,7 +7,6 @@ use crate::prelude::*;
 
 pub mod node_editor;
 pub mod node_widget;
-pub mod port_widget;
 
 #[derive(Debug, Clone)]
 pub enum GraphPaneMessage {
@@ -137,9 +136,8 @@ impl GraphEditorPane {
             node_widgets.push(node_widget);
         }
 
-        let editor = node_editor::NodeEditor::new(node_widgets.into_iter(), node_widget_positions, graph.pan_zoom);
-        dbg!(graph.pan_zoom);
-
+        let editor =
+            node_editor::NodeEditor::new(node_widgets, node_widget_positions, graph.pan_zoom);
         container(BjkUiElement::new(editor)).padding(3).into()
     }
 }
