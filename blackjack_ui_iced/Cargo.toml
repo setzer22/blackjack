@@ -16,12 +16,18 @@ blackjack_commons = { path = "../blackjack_commons" }
 blackjack_engine = { path = "../blackjack_engine" }
 
 # Git dependencies
-iced = { git = "https://github.com/tarkah/iced.git", branch = "feat/primitive-scale", features=["canvas"] }
-iced_native = { git = "https://github.com/tarkah/iced.git", branch = "feat/primitive-scale" }
-iced_graphics = { git = "https://github.com/tarkah/iced.git", branch = "feat/primitive-scale" }
-iced_lazy = { git = "https://github.com/tarkah/iced.git", branch = "feat/primitive-scale" }
-iced_style = { git = "https://github.com/tarkah/iced.git", branch = "feat/primitive-scale" }
-iced_wgpu = { git = "https://github.com/tarkah/iced.git", branch = "feat/primitive-scale" }
+# iced = { git = "https://github.com/setzer22/iced.git", branch = "feat/primitive-scale", features=["canvas"] }
+# iced_native = { git = "https://github.com/setzer22tarkah/iced.git", branch = "feat/primitive-scale" }
+# iced_graphics = { git = "https://github.com/tarksetzer22ah/iced.git", branch = "feat/primitive-scale" }
+# iced_lazy = { git = "https://github.com/setzer22/iced.git", branch = "feat/primitive-scale" }
+# iced_style = { git = "https://github.com/setzer22/iced.git", branch = "feat/primitive-scale" }
+# iced_wgpu = { git = "https://github.com/setzer22/iced.git", branch = "feat/primitive-scale" }
+iced = { path = "../../iced", features=["canvas"] }
+iced_native = { path = "../../iced/native" }
+iced_graphics = { path = "../../iced/graphics" }
+iced_lazy = { path = "../../iced/lazy" }
+iced_style = { path = "../../iced/style" }
+iced_wgpu = { path = "../../iced/wgpu" }
 
 # Crates.io dependencies
 glam = "0.21.3"

@@ -50,6 +50,7 @@ impl RootPanes {
             )
             .unwrap();
         panes.resize(&split, 0.6);
+        //let (panes, _) = pane_grid::State::new(BlackjackPane::GraphEditor);
         Self { panes }
     }
 

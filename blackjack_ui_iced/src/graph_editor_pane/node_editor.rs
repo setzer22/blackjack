@@ -1,4 +1,5 @@
 use blackjack_engine::prelude::Itertools;
+use iced_graphics::Transformation;
 use iced_native::Renderer;
 
 use crate::prelude::iced_prelude::*;
@@ -27,6 +28,19 @@ impl<'a> NodeEditor<'a> {
             node_positions,
             pan_zoom,
         }
+    }
+
+    fn transformation(&self, top_left: Point) -> Transformation {
+        Transformation::identity()
+            .translated(-top_left.x, -top_left.y)
+            .scaled(1.0 / self.pan_zoom.zoom, 1.0 / self.pan_zoom.zoom)
+            .translated(-self.pan_zoom.pan.x, -self.pan_zoom.pan.y)
+            .translated(top_left.x, top_left.y)
+    }
+
+    fn transform_cursor(&self, cursor_position: Point, top_left: Point) -> Point {
+        self.transformation(top_left)
+            .transform_point(cursor_position)
     }
 }
 
@@ -81,6 +95,7 @@ impl<'a> Widget<BjkUiMessage, BjkUiRenderer> for NodeEditor<'a> {
         viewport: &Rectangle,
         renderer: &BjkUiRenderer,
     ) -> MouseInteraction {
+        let cursor_position = self.transform_cursor(cursor_position, layout.bounds().top_left());
         for ((ch, state), layout) in self
             .nodes
             .iter()
@@ -120,6 +135,8 @@ impl<'a> Widget<BjkUiMessage, BjkUiRenderer> for NodeEditor<'a> {
         cursor_position: Point,
         viewport: &Rectangle,
     ) {
+        let cursor_position = self.transform_cursor(cursor_position, layout.bounds().top_left());
+
         // Draw the background
         renderer.fill_quad(
             Quad {
@@ -131,23 +148,34 @@ impl<'a> Widget<BjkUiMessage, BjkUiRenderer> for NodeEditor<'a> {
             Background::Color(theme.background_dark),
         );
 
-        // Draw the nodes
-        for ((ch, state), layout) in self
-            .nodes
-            .iter()
-            .zip(state.children.iter())
-            .zip(layout.children())
-        {
-            ch.draw(
-                state,
-                renderer,
-                theme,
-                style,
-                layout,
-                cursor_position,
-                viewport,
-            )
-        }
+        let top_left = layout.bounds().top_left().to_vector();
+        let neg_top_left = Vector::new(0.0, 0.0) - layout.bounds().top_left().to_vector();
+
+        renderer.with_translation(neg_top_left, |renderer| {
+            renderer.with_translation(self.pan_zoom.pan, |renderer| {
+                renderer.with_scale(self.pan_zoom.zoom, |renderer| {
+                    renderer.with_translation(top_left, |renderer| {
+                        // Draw the nodes
+                        for ((ch, state), layout) in self
+                            .nodes
+                            .iter()
+                            .zip(state.children.iter())
+                            .zip(layout.children())
+                        {
+                            ch.draw(
+                                state,
+                                renderer,
+                                theme,
+                                style,
+                                layout,
+                                cursor_position,
+                                viewport,
+                            )
+                        }
+                    });
+                });
+            });
+        });
     }
 
     fn on_event(
@@ -160,6 +188,10 @@ impl<'a> Widget<BjkUiMessage, BjkUiRenderer> for NodeEditor<'a> {
         clipboard: &mut dyn iced_native::Clipboard,
         shell: &mut iced_native::Shell<'_, BjkUiMessage>,
     ) -> iced::event::Status {
+        let contains_cursor = layout.bounds().contains(cursor_position);
+        let un_cursor_position = cursor_position;
+        let cursor_position = self.transform_cursor(cursor_position, layout.bounds().top_left());
+
         for ((ch, state), layout) in self
             .nodes
             .iter_mut()
@@ -180,13 +212,13 @@ impl<'a> Widget<BjkUiMessage, BjkUiRenderer> for NodeEditor<'a> {
             }
         }
 
-        if layout.bounds().contains(cursor_position) {
+        if contains_cursor {
             let state = state.state.downcast_mut::<NodeEditorState>();
             match event {
                 Event::Mouse(MouseEvent::ButtonPressed(b)) => {
                     if b == MouseButton::Middle {
                         state.dragging = true;
-                        state.prev_cursor_pos = Some(cursor_position);
+                        state.prev_cursor_pos = Some(un_cursor_position);
                     }
                 }
                 Event::Mouse(MouseEvent::ButtonReleased(b)) => {
@@ -196,25 +228,30 @@ impl<'a> Widget<BjkUiMessage, BjkUiRenderer> for NodeEditor<'a> {
                 }
                 Event::Mouse(MouseEvent::CursorMoved { .. }) => {
                     if state.dragging {
-                        let delta = cursor_position - state.prev_cursor_pos.unwrap();
-                        state.prev_cursor_pos = Some(cursor_position);
+                        let delta = (un_cursor_position - state.prev_cursor_pos.unwrap())
+                            * (1.0 / self.pan_zoom.zoom);
+                        state.prev_cursor_pos = Some(un_cursor_position);
                         shell.publish(BjkUiMessage::GraphPane(super::GraphPaneMessage::Pan {
                             delta,
                         }));
                     }
                 }
-                // WIP: I added PanZoom and the necessary event handling for it.
-                // Now I need to actually apply the translation and scaling to
-                // the nodes.
                 Event::Mouse(MouseEvent::WheelScrolled { delta }) => {
                     let delta = match delta {
                         iced::mouse::ScrollDelta::Lines { y, .. } => y,
                         iced::mouse::ScrollDelta::Pixels { y, .. } => y * 50.0,
                     };
 
+                    self.pan_zoom.adjust_zoom(
+                        delta * 0.02,
+                        un_cursor_position,
+                        layout.bounds().top_left(),
+                        0.01,
+                        100.0,
+                    );
+
                     shell.publish(BjkUiMessage::GraphPane(super::GraphPaneMessage::Zoom {
-                        zoom_delta: delta,
-                        point: cursor_position - layout.bounds().top_left(),
+                        new_pan_zoom: self.pan_zoom,
                     }))
                 }
                 _ => {}

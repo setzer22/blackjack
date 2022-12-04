@@ -1,3 +1,4 @@
+use blackjack_commons::utils::IteratorUtils;
 use blackjack_engine::graph::{BjkGraph, BjkNodeId, DataType};
 use glam::Vec2;
 use slotmap::SecondaryMap;
@@ -11,7 +12,7 @@ pub mod node_widget;
 #[derive(Debug, Clone)]
 pub enum GraphPaneMessage {
     NodeMoved { node_id: BjkNodeId, delta: Vector },
-    Zoom { zoom_delta: f32, point: Vector },
+    Zoom { new_pan_zoom: PanZoom },
     Pan { delta: Vector },
 }
 
@@ -31,12 +32,25 @@ pub struct PanZoom {
 }
 
 impl PanZoom {
-    pub fn adjust_zoom(&mut self, zoom_delta: f32, point: Vector, zoom_min: f32, zoom_max: f32) {
+    pub fn adjust_zoom(
+        &mut self,
+        zoom_delta: f32,
+        cursor_position: Point,
+        top_left: Point,
+        zoom_min: f32,
+        zoom_max: f32,
+    ) {
+        // WIP: *sigh* still doesn't work.
         let zoom_clamped = (self.zoom + zoom_delta).clamp(zoom_min, zoom_max);
         let zoom_delta = zoom_clamped - self.zoom;
 
+        let point_before = cursor_position.to_vector() - top_left.to_vector();
+        let point_after = point_before * (1.0 + zoom_delta);
+
+        let correction = (point_before - point_after) * (1.0 / (self.zoom * (self.zoom + zoom_delta)));
+
+        self.pan = self.pan + correction;
         self.zoom += zoom_delta;
-        self.pan = self.pan + point * zoom_delta;
     }
 }
 
@@ -148,11 +162,8 @@ impl GraphEditorState {
             GraphPaneMessage::NodeMoved { node_id, delta } => {
                 self.node_positions[node_id] += delta.to_glam();
             }
-            GraphPaneMessage::Zoom { zoom_delta, point } => {
-                const ZOOM_MIN: f32 = 0.05;
-                const ZOOM_MAX: f32 = 100.0;
-                self.pan_zoom
-                    .adjust_zoom(zoom_delta, point, ZOOM_MIN, ZOOM_MAX)
+            GraphPaneMessage::Zoom { new_pan_zoom } => {
+                self.pan_zoom = new_pan_zoom;
             }
             GraphPaneMessage::Pan { delta } => {
                 self.pan_zoom.pan = self.pan_zoom.pan + delta;
