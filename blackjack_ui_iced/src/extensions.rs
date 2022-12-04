@@ -71,6 +71,9 @@ pub trait VectorExt {
     fn div(&self, scalar: f32) -> Vector {
         self.as_vector() * (1.0 / scalar)
     }
+    fn neg(&self) -> Vector {
+        Vector::new(0.0, 0.0) - self.as_vector()
+    }
 }
 
 impl VectorExt for Vector {

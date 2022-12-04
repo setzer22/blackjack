@@ -148,10 +148,15 @@ impl<'a> Widget<BjkUiMessage, BjkUiRenderer> for NodeEditor<'a> {
             Background::Color(theme.background_dark),
         );
 
+        // Rendering the graph happens within a series of transformations:
+        //
+        // - The shapes are scaled, around the origin of the node editor. This
+        // is achieved by translating and untranslating the view before the
+        // scaling.
+        //
+        // - Additionally, regular pan and zoom are applied.
         let top_left = layout.bounds().top_left().to_vector();
-        let neg_top_left = Vector::new(0.0, 0.0) - layout.bounds().top_left().to_vector();
-
-        renderer.with_translation(neg_top_left, |renderer| {
+        renderer.with_translation(top_left.neg(), |renderer| {
             renderer.with_translation(self.pan_zoom.pan, |renderer| {
                 renderer.with_scale(self.pan_zoom.zoom, |renderer| {
                     renderer.with_translation(top_left, |renderer| {
