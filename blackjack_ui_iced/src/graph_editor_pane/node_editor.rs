@@ -156,27 +156,29 @@ impl<'a> Widget<BjkUiMessage, BjkUiRenderer> for NodeEditor<'a> {
         //
         // - Additionally, regular pan and zoom are applied.
         let top_left = layout.bounds().top_left().to_vector();
-        renderer.with_translation(top_left.neg(), |renderer| {
-            renderer.with_translation(self.pan_zoom.pan, |renderer| {
-                renderer.with_scale(self.pan_zoom.zoom, |renderer| {
-                    renderer.with_translation(top_left, |renderer| {
-                        // Draw the nodes
-                        for ((ch, state), layout) in self
-                            .nodes
-                            .iter()
-                            .zip(state.children.iter())
-                            .zip(layout.children())
-                        {
-                            ch.draw(
-                                state,
-                                renderer,
-                                theme,
-                                style,
-                                layout,
-                                cursor_position,
-                                viewport,
-                            )
-                        }
+        renderer.with_layer(layout.bounds(), |renderer| {
+            renderer.with_translation(top_left.neg(), |renderer| {
+                renderer.with_translation(self.pan_zoom.pan, |renderer| {
+                    renderer.with_scale(self.pan_zoom.zoom, |renderer| {
+                        renderer.with_translation(top_left, |renderer| {
+                            // Draw the nodes
+                            for ((ch, state), layout) in self
+                                .nodes
+                                .iter()
+                                .zip(state.children.iter())
+                                .zip(layout.children())
+                            {
+                                ch.draw(
+                                    state,
+                                    renderer,
+                                    theme,
+                                    style,
+                                    layout,
+                                    cursor_position,
+                                    viewport,
+                                )
+                            }
+                        });
                     });
                 });
             });
