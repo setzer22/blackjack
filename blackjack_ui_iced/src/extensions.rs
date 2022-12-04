@@ -68,6 +68,9 @@ pub trait VectorExt {
         let v = self.as_vector();
         glam::Vec2 { x: v.x, y: v.y }
     }
+    fn div(&self, scalar: f32) -> Vector {
+        self.as_vector() * (1.0 / scalar)
+    }
 }
 
 impl VectorExt for Vector {

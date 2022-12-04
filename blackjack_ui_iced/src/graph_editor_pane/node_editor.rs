@@ -243,11 +243,10 @@ impl<'a> Widget<BjkUiMessage, BjkUiRenderer> for NodeEditor<'a> {
                     };
 
                     self.pan_zoom.adjust_zoom(
-                        delta * 0.02,
-                        un_cursor_position,
-                        layout.bounds().top_left(),
-                        0.01,
-                        100.0,
+                        delta * 0.05,
+                        un_cursor_position - layout.bounds().top_left().to_vector(),
+                        0.25,
+                        3.0,
                     );
 
                     shell.publish(BjkUiMessage::GraphPane(super::GraphPaneMessage::Zoom {

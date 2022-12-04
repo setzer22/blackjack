@@ -32,24 +32,27 @@ pub struct PanZoom {
 }
 
 impl PanZoom {
-    pub fn adjust_zoom(
-        &mut self,
-        zoom_delta: f32,
-        cursor_position: Point,
-        top_left: Point,
-        zoom_min: f32,
-        zoom_max: f32,
-    ) {
-        // WIP: *sigh* still doesn't work.
+    /// Increments the current zoom by zoom_level, and increases the current
+    /// zoom level by `zoom_delta` and adjusts the panning so that zoom is
+    /// centered around the given `point`.
+    ///
+    /// The point is provided in window-space coordinates, relative to the
+    /// top-left corner of the graph.
+    pub fn adjust_zoom(&mut self, zoom_delta: f32, point: Point, zoom_min: f32, zoom_max: f32) {
+        // Adjust the zoom level, taking min / max into account.
         let zoom_clamped = (self.zoom + zoom_delta).clamp(zoom_min, zoom_max);
         let zoom_delta = zoom_clamped - self.zoom;
+        let zoom_new = self.zoom + zoom_delta;
 
-        let point_before = cursor_position.to_vector() - top_left.to_vector();
+        // To adjust the pan, we consider the point before scaling, and the
+        // position where that point ends up after the scaling, and we shift the
+        // view in the opposite direction to keep that point at the exact same
+        // position in the window.
+        let point_before = point.to_vector().div(self.zoom);
         let point_after = point_before * (1.0 + zoom_delta);
+        let pan_correction = (point_before - point_after).div(zoom_new);
 
-        let correction = (point_before - point_after) * (1.0 / (self.zoom * (self.zoom + zoom_delta)));
-
-        self.pan = self.pan + correction;
+        self.pan = self.pan + pan_correction;
         self.zoom += zoom_delta;
     }
 }
