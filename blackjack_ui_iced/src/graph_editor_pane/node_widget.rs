@@ -19,7 +19,7 @@ pub struct NodeRow<'a> {
 }
 
 impl<'a> NodeRow<'a> {
-    const PORT_RADIUS: f32 = 5.0;
+    pub const PORT_RADIUS: f32 = 5.0;
 
     pub fn input(contents: impl Into<BjkUiElement<'a>>, color: Color) -> Self {
         Self {

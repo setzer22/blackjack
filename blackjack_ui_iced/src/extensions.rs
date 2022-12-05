@@ -155,6 +155,15 @@ pub trait RectangleExt {
             y: r.y + r.height,
         }
     }
+    fn extend(&self, amt: f32) -> Rectangle {
+        let r = self.as_rectangle();
+        Rectangle {
+            x: r.x - amt,
+            y: r.y - amt,
+            width: r.width + amt * 2.0,
+            height: r.height + amt * 2.0,
+        }
+    }
 }
 
 impl RectangleExt for Rectangle {

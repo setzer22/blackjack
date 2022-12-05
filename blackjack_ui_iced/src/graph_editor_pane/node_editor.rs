@@ -1,7 +1,10 @@
+use blackjack_engine::graph::BjkNodeId;
 use blackjack_engine::prelude::Itertools;
 use iced_graphics::Transformation;
 use iced_native::Renderer;
+use slotmap::SecondaryMap;
 
+use crate::graph_editor_pane::node_widget::NodeRow;
 use crate::prelude::iced_prelude::*;
 use crate::prelude::*;
 
@@ -17,8 +20,9 @@ pub struct NodeEditor<'a> {
 }
 
 pub struct NodeEditorState {
-    dragging: bool,
+    panning: bool,
     prev_cursor_pos: Option<Point>,
+    node_order: Vec<BjkNodeId>,
 }
 
 impl<'a> NodeEditor<'a> {
@@ -42,6 +46,18 @@ impl<'a> NodeEditor<'a> {
         self.transformation(top_left)
             .transform_point(cursor_position)
     }
+
+    fn diff_node_order(&self, editor_state: &mut NodeEditorState) {
+        // Keep the node order consistent when nodes are created / removed.
+        editor_state
+            .node_order
+            .retain(|node_id| self.nodes.iter().any(|x| x.node_id == *node_id));
+        for node in &self.nodes {
+            if !editor_state.node_order.contains(&node.node_id) {
+                editor_state.node_order.push(node.node_id);
+            }
+        }
+    }
 }
 
 impl<'a> Widget<BjkUiMessage, BjkUiRenderer> for NodeEditor<'a> {
@@ -51,8 +67,9 @@ impl<'a> Widget<BjkUiMessage, BjkUiRenderer> for NodeEditor<'a> {
 
     fn state(&self) -> iced_native::widget::tree::State {
         WidgetState::new(NodeEditorState {
-            dragging: false,
+            panning: false,
             prev_cursor_pos: None,
+            node_order: self.nodes.iter().map(|n| n.node_id).collect_vec(),
         })
     }
 
@@ -65,6 +82,9 @@ impl<'a> Widget<BjkUiMessage, BjkUiRenderer> for NodeEditor<'a> {
     }
 
     fn diff(&self, tree: &mut iced_native::widget::Tree) {
+        let editor_state = tree.state.downcast_mut::<NodeEditorState>();
+        self.diff_node_order(editor_state);
+
         tree.diff_children_custom(
             &self.nodes,
             |state, node| node.diff(state),
@@ -136,7 +156,6 @@ impl<'a> Widget<BjkUiMessage, BjkUiRenderer> for NodeEditor<'a> {
         viewport: &Rectangle,
     ) {
         let cursor_position = self.transform_cursor(cursor_position, layout.bounds().top_left());
-
         // Draw the background
         renderer.fill_quad(
             Quad {
@@ -147,6 +166,16 @@ impl<'a> Widget<BjkUiMessage, BjkUiRenderer> for NodeEditor<'a> {
             },
             Background::Color(theme.background_dark),
         );
+
+        let editor_state = state.state.downcast_ref::<NodeEditorState>();
+        let node_id_to_idx: SecondaryMap<BjkNodeId, usize> = self
+            .nodes
+            .iter()
+            .enumerate()
+            .map(|(i, n)| (n.node_id, i))
+            .collect();
+
+        let node_layouts: Vec<Layout> = layout.children().collect();
 
         // Rendering the graph happens within a series of transformations:
         //
@@ -161,22 +190,42 @@ impl<'a> Widget<BjkUiMessage, BjkUiRenderer> for NodeEditor<'a> {
                 renderer.with_translation(self.pan_zoom.pan, |renderer| {
                     renderer.with_scale(self.pan_zoom.zoom, |renderer| {
                         renderer.with_translation(top_left, |renderer| {
-                            // Draw the nodes
-                            for ((ch, state), layout) in self
-                                .nodes
-                                .iter()
-                                .zip(state.children.iter())
-                                .zip(layout.children())
-                            {
-                                ch.draw(
-                                    state,
-                                    renderer,
-                                    theme,
-                                    style,
-                                    layout,
-                                    cursor_position,
-                                    viewport,
-                                )
+                            let mut first = true;
+                            for node_id in editor_state.node_order.iter().copied() {
+                                let index = node_id_to_idx[node_id];
+                                let node = &self.nodes[index];
+                                let node_state = &state.children[index];
+                                let node_layout = node_layouts[index];
+                                macro_rules! do_draw {
+                                    ($renderer:expr) => {
+                                        node.draw(
+                                            node_state,
+                                            $renderer,
+                                            theme,
+                                            style,
+                                            node_layout,
+                                            cursor_position,
+                                            viewport,
+                                        );
+                                    };
+                                }
+
+                                // WIP:
+                                // - [ ] Raise node that's currently being dragged.
+                                // - [ ] Make sure the node in the layer is the one that appears on top
+                                // - [ ] Use node order to implement event processing order.
+
+                                if first {
+                                    renderer.with_layer(
+                                        node_layout.bounds().extend(NodeRow::PORT_RADIUS),
+                                        |renderer| {
+                                            do_draw!(renderer);
+                                        },
+                                    )
+                                } else {
+                                    do_draw!(renderer);
+                                }
+                                first = false;
                             }
                         });
                     });
@@ -219,50 +268,51 @@ impl<'a> Widget<BjkUiMessage, BjkUiRenderer> for NodeEditor<'a> {
             }
         }
 
-        if contains_cursor {
-            let state = state.state.downcast_mut::<NodeEditorState>();
-            match event {
-                Event::Mouse(MouseEvent::ButtonPressed(b)) => {
-                    if b == MouseButton::Middle {
-                        state.dragging = true;
-                        state.prev_cursor_pos = Some(un_cursor_position);
-                    }
+        let state = state.state.downcast_mut::<NodeEditorState>();
+        let mut status = EventStatus::Captured;
+        match event {
+            Event::Mouse(MouseEvent::ButtonPressed(b)) if contains_cursor => {
+                if b == MouseButton::Middle {
+                    state.panning = true;
+                    state.prev_cursor_pos = Some(un_cursor_position);
                 }
-                Event::Mouse(MouseEvent::ButtonReleased(b)) => {
-                    if b == MouseButton::Middle {
-                        state.dragging = false;
-                    }
+            }
+            Event::Mouse(MouseEvent::ButtonReleased(b)) => {
+                if b == MouseButton::Middle {
+                    state.panning = false;
                 }
-                Event::Mouse(MouseEvent::CursorMoved { .. }) => {
-                    if state.dragging {
-                        let delta = (un_cursor_position - state.prev_cursor_pos.unwrap())
-                            * (1.0 / self.pan_zoom.zoom);
-                        state.prev_cursor_pos = Some(un_cursor_position);
-                        shell.publish(BjkUiMessage::GraphPane(super::GraphPaneMessage::Pan {
-                            delta,
-                        }));
-                    }
+            }
+            Event::Mouse(MouseEvent::CursorMoved { .. }) => {
+                if state.panning {
+                    let delta = (un_cursor_position - state.prev_cursor_pos.unwrap())
+                        * (1.0 / self.pan_zoom.zoom);
+                    state.prev_cursor_pos = Some(un_cursor_position);
+                    shell.publish(BjkUiMessage::GraphPane(super::GraphPaneMessage::Pan {
+                        delta,
+                    }));
                 }
-                Event::Mouse(MouseEvent::WheelScrolled { delta }) => {
-                    let delta = match delta {
-                        iced::mouse::ScrollDelta::Lines { y, .. } => y,
-                        iced::mouse::ScrollDelta::Pixels { y, .. } => y * 50.0,
-                    };
+            }
+            Event::Mouse(MouseEvent::WheelScrolled { delta }) if contains_cursor => {
+                let delta = match delta {
+                    iced::mouse::ScrollDelta::Lines { y, .. } => y,
+                    iced::mouse::ScrollDelta::Pixels { y, .. } => y * 50.0,
+                };
 
-                    self.pan_zoom.adjust_zoom(
-                        delta * 0.05,
-                        un_cursor_position - layout.bounds().top_left().to_vector(),
-                        0.25,
-                        3.0,
-                    );
+                self.pan_zoom.adjust_zoom(
+                    delta * 0.05,
+                    un_cursor_position - layout.bounds().top_left().to_vector(),
+                    0.25,
+                    3.0,
+                );
 
-                    shell.publish(BjkUiMessage::GraphPane(super::GraphPaneMessage::Zoom {
-                        new_pan_zoom: self.pan_zoom,
-                    }))
-                }
-                _ => {}
+                shell.publish(BjkUiMessage::GraphPane(super::GraphPaneMessage::Zoom {
+                    new_pan_zoom: self.pan_zoom,
+                }));
+            }
+            _ => {
+                status = EventStatus::Ignored;
             }
         }
-        EventStatus::Ignored
+        status
     }
 }
