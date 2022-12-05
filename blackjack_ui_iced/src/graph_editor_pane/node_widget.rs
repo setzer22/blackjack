@@ -61,6 +61,13 @@ struct NodeWidgetState {
     drag_offset: Vector,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum NodeEventStatus {
+    Ignored,
+    BeingDragged,
+    CapturedByWidget,
+}
+
 /// A macro to iterate the children of the node widget, to delegate the various
 /// operations on its children.
 ///
@@ -365,7 +372,7 @@ impl NodeWidget<'_> {
         renderer: &BjkUiRenderer,
         clipboard: &mut dyn iced_native::Clipboard,
         shell: &mut iced_native::Shell<'_, BjkUiMessage>,
-    ) -> EventStatus {
+    ) -> NodeEventStatus {
         for ((ch, state), layout) in iter_stuff!(mut self, layout, state) {
             let status = ch.as_widget_mut().on_event(
                 state,
@@ -377,11 +384,11 @@ impl NodeWidget<'_> {
                 shell,
             );
             if status == EventStatus::Captured {
-                return status;
+                return NodeEventStatus::CapturedByWidget;
             }
         }
 
-        let mut status = EventStatus::Ignored;
+        let mut status = NodeEventStatus::Ignored;
         let state = state.state.downcast_mut::<NodeWidgetState>();
         match state.is_dragging {
             false => {
@@ -393,7 +400,7 @@ impl NodeWidget<'_> {
                             state.drag_offset =
                                 cursor_position.to_vector() - titlebar_rect.top_left().to_vector();
                             state.prev_mouse_pos = Some(cursor_position);
-                            status = EventStatus::Captured;
+                            status = NodeEventStatus::BeingDragged;
                         }
                     }
                 }
@@ -407,12 +414,13 @@ impl NodeWidget<'_> {
                             shell.publish(BjkUiMessage::GraphPane(GraphPaneMessage::NodeMoved {
                                 node_id: self.node_id,
                                 delta,
-                            }))
+                            }));
+                            status = NodeEventStatus::BeingDragged;
                         }
                         iced::mouse::Event::ButtonReleased(b) => {
                             if b == MouseButton::Left {
                                 state.is_dragging = false;
-                                status = EventStatus::Captured;
+                                status = NodeEventStatus::BeingDragged;
                             }
                         }
                         _ => {}

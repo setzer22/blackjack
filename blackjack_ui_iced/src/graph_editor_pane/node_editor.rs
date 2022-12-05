@@ -1,3 +1,4 @@
+use blackjack_commons::utils::IteratorUtils;
 use blackjack_engine::graph::BjkNodeId;
 use blackjack_engine::prelude::Itertools;
 use iced_graphics::Transformation;
@@ -8,7 +9,7 @@ use crate::graph_editor_pane::node_widget::NodeRow;
 use crate::prelude::iced_prelude::*;
 use crate::prelude::*;
 
-use super::node_widget::NodeWidget;
+use super::node_widget::{NodeEventStatus, NodeWidget};
 use super::PanZoom;
 
 pub struct NodeEditor<'a> {
@@ -22,6 +23,7 @@ pub struct NodeEditor<'a> {
 pub struct NodeEditorState {
     panning: bool,
     prev_cursor_pos: Option<Point>,
+    // The order of the nodes. Last node will appears on top, and its events will be processed last.
     node_order: Vec<BjkNodeId>,
 }
 
@@ -56,6 +58,41 @@ impl<'a> NodeEditor<'a> {
             if !editor_state.node_order.contains(&node.node_id) {
                 editor_state.node_order.push(node.node_id);
             }
+        }
+    }
+}
+
+impl NodeEditorState {
+    pub fn raise_node(&mut self, n: BjkNodeId) {
+        self.node_order.retain(|x| *x != n);
+        self.node_order.push(n);
+    }
+
+    pub fn for_each_node_in_order(
+        &self,
+        nodes: &[NodeWidget<'_>],
+        tree: &WidgetTree,
+        layout: Layout,
+        reverse: bool,
+        mut f: impl FnMut(&NodeWidget<'_>, &WidgetTree, Layout),
+    ) {
+        let node_id_to_idx: SecondaryMap<BjkNodeId, usize> = nodes
+            .iter()
+            .enumerate()
+            .map(|(i, n)| (n.node_id, i))
+            .collect();
+        let node_layouts: Vec<Layout> = layout.children().collect();
+        for node_id in self
+            .node_order
+            .iter()
+            .copied()
+            .branch(reverse, |it| it.rev(), |it| it)
+        {
+            let idx = node_id_to_idx[node_id];
+            let node = &nodes[idx];
+            let node_state = &tree.children[idx];
+            let node_layout = node_layouts[idx];
+            f(node, node_state, node_layout);
         }
     }
 }
@@ -168,14 +205,6 @@ impl<'a> Widget<BjkUiMessage, BjkUiRenderer> for NodeEditor<'a> {
         );
 
         let editor_state = state.state.downcast_ref::<NodeEditorState>();
-        let node_id_to_idx: SecondaryMap<BjkNodeId, usize> = self
-            .nodes
-            .iter()
-            .enumerate()
-            .map(|(i, n)| (n.node_id, i))
-            .collect();
-
-        let node_layouts: Vec<Layout> = layout.children().collect();
 
         // Rendering the graph happens within a series of transformations:
         //
@@ -190,43 +219,30 @@ impl<'a> Widget<BjkUiMessage, BjkUiRenderer> for NodeEditor<'a> {
                 renderer.with_translation(self.pan_zoom.pan, |renderer| {
                     renderer.with_scale(self.pan_zoom.zoom, |renderer| {
                         renderer.with_translation(top_left, |renderer| {
-                            let mut first = true;
-                            for node_id in editor_state.node_order.iter().copied() {
-                                let index = node_id_to_idx[node_id];
-                                let node = &self.nodes[index];
-                                let node_state = &state.children[index];
-                                let node_layout = node_layouts[index];
-                                macro_rules! do_draw {
-                                    ($renderer:expr) => {
-                                        node.draw(
-                                            node_state,
-                                            $renderer,
-                                            theme,
-                                            style,
-                                            node_layout,
-                                            cursor_position,
-                                            viewport,
-                                        );
-                                    };
-                                }
-
-                                // WIP:
-                                // - [ ] Raise node that's currently being dragged.
-                                // - [ ] Make sure the node in the layer is the one that appears on top
-                                // - [ ] Use node order to implement event processing order.
-
-                                if first {
+                            // Draw the nodes in the node order. Topmost one is
+                            // last, which means we're drawing bottom-to-top
+                            editor_state.for_each_node_in_order(
+                                &self.nodes,
+                                state,
+                                layout,
+                                false,
+                                |node, node_state, node_layout| {
                                     renderer.with_layer(
                                         node_layout.bounds().extend(NodeRow::PORT_RADIUS),
                                         |renderer| {
-                                            do_draw!(renderer);
+                                            node.draw(
+                                                node_state,
+                                                renderer,
+                                                theme,
+                                                style,
+                                                node_layout,
+                                                cursor_position,
+                                                viewport,
+                                            );
                                         },
                                     )
-                                } else {
-                                    do_draw!(renderer);
-                                }
-                                first = false;
-                            }
+                                },
+                            );
                         });
                     });
                 });
@@ -247,6 +263,7 @@ impl<'a> Widget<BjkUiMessage, BjkUiRenderer> for NodeEditor<'a> {
         let contains_cursor = layout.bounds().contains(cursor_position);
         let un_cursor_position = cursor_position;
         let cursor_position = self.transform_cursor(cursor_position, layout.bounds().top_left());
+        let editor_state = state.state.downcast_mut::<NodeEditorState>();
 
         for ((ch, state), layout) in self
             .nodes
@@ -263,30 +280,36 @@ impl<'a> Widget<BjkUiMessage, BjkUiRenderer> for NodeEditor<'a> {
                 clipboard,
                 shell,
             );
-            if status == EventStatus::Captured {
-                return status;
+            match status {
+                NodeEventStatus::Ignored => {}
+                NodeEventStatus::BeingDragged => {
+                    editor_state.raise_node(ch.node_id);
+                    return EventStatus::Captured;
+                }
+                NodeEventStatus::CapturedByWidget => {
+                    return EventStatus::Captured;
+                }
             }
         }
 
-        let state = state.state.downcast_mut::<NodeEditorState>();
         let mut status = EventStatus::Captured;
         match event {
             Event::Mouse(MouseEvent::ButtonPressed(b)) if contains_cursor => {
                 if b == MouseButton::Middle {
-                    state.panning = true;
-                    state.prev_cursor_pos = Some(un_cursor_position);
+                    editor_state.panning = true;
+                    editor_state.prev_cursor_pos = Some(un_cursor_position);
                 }
             }
             Event::Mouse(MouseEvent::ButtonReleased(b)) => {
                 if b == MouseButton::Middle {
-                    state.panning = false;
+                    editor_state.panning = false;
                 }
             }
             Event::Mouse(MouseEvent::CursorMoved { .. }) => {
-                if state.panning {
-                    let delta = (un_cursor_position - state.prev_cursor_pos.unwrap())
+                if editor_state.panning {
+                    let delta = (un_cursor_position - editor_state.prev_cursor_pos.unwrap())
                         * (1.0 / self.pan_zoom.zoom);
-                    state.prev_cursor_pos = Some(un_cursor_position);
+                    editor_state.prev_cursor_pos = Some(un_cursor_position);
                     shell.publish(BjkUiMessage::GraphPane(super::GraphPaneMessage::Pan {
                         delta,
                     }));
