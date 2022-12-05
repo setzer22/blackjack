@@ -69,20 +69,20 @@ impl NodeEditorState {
     }
 
     pub fn for_each_node_in_order(
-        &self,
         nodes: &[NodeWidget<'_>],
         tree: &WidgetTree,
         layout: Layout,
         reverse: bool,
         mut f: impl FnMut(&NodeWidget<'_>, &WidgetTree, Layout),
     ) {
+        let state = tree.state.downcast_ref::<Self>();
         let node_id_to_idx: SecondaryMap<BjkNodeId, usize> = nodes
             .iter()
             .enumerate()
             .map(|(i, n)| (n.node_id, i))
             .collect();
         let node_layouts: Vec<Layout> = layout.children().collect();
-        for node_id in self
+        for node_id in state
             .node_order
             .iter()
             .copied()
@@ -153,6 +153,7 @@ impl<'a> Widget<BjkUiMessage, BjkUiRenderer> for NodeEditor<'a> {
         renderer: &BjkUiRenderer,
     ) -> MouseInteraction {
         let cursor_position = self.transform_cursor(cursor_position, layout.bounds().top_left());
+
         for ((ch, state), layout) in self
             .nodes
             .iter()
@@ -204,8 +205,6 @@ impl<'a> Widget<BjkUiMessage, BjkUiRenderer> for NodeEditor<'a> {
             Background::Color(theme.background_dark),
         );
 
-        let editor_state = state.state.downcast_ref::<NodeEditorState>();
-
         // Rendering the graph happens within a series of transformations:
         //
         // - The shapes are scaled, around the origin of the node editor. This
@@ -221,7 +220,14 @@ impl<'a> Widget<BjkUiMessage, BjkUiRenderer> for NodeEditor<'a> {
                         renderer.with_translation(top_left, |renderer| {
                             // Draw the nodes in the node order. Topmost one is
                             // last, which means we're drawing bottom-to-top
-                            editor_state.for_each_node_in_order(
+                            NodeEditorState::for_each_node_in_order(
+                                // WIP: This function needs to be used in other places, but...
+                                // - on_event -> needs a &mut variant
+                                // - mouse_interaction -> needs early return
+                                //
+                                // I think this would be better solved by a
+                                // macro, which can easily abstract over &mut /
+                                // & and allow early returns
                                 &self.nodes,
                                 state,
                                 layout,
