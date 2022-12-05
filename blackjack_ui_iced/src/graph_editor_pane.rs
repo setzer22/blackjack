@@ -40,20 +40,27 @@ impl PanZoom {
     /// top-left corner of the graph.
     pub fn adjust_zoom(&mut self, zoom_delta: f32, point: Point, zoom_min: f32, zoom_max: f32) {
         // Adjust the zoom level, taking min / max into account.
-        let zoom_clamped = (self.zoom + zoom_delta).clamp(zoom_min, zoom_max);
-        let zoom_delta = zoom_clamped - self.zoom;
-        let zoom_new = self.zoom + zoom_delta;
+        let zoom_new = {
+            let clamped = (self.zoom + zoom_delta).clamp(zoom_min, zoom_max);
+            let delta_clamped = clamped - self.zoom;
+            self.zoom * (1.0 + delta_clamped)
+        };
 
-        // To adjust the pan, we consider the point before scaling, and the
-        // position where that point ends up after the scaling, and we shift the
-        // view in the opposite direction to keep that point at the exact same
-        // position in the window.
-        let point_before = point.to_vector().div(self.zoom);
-        let point_after = point_before * (1.0 + zoom_delta);
-        let pan_correction = (point_before - point_after).div(zoom_new);
+        // To adjust the pan, we consider the point at the previous zoom level,
+        // and the position where that point ends up after modifying the zoom
+        // level if we didn't correct the pan. We then shift the view in the
+        // opposite direction to keep that point at the same position.
+        //
+        // NOTE: The points at current and new zoom level are obtained by
+        // dividing the cursor position by the zoom. Division is done to apply
+        // the inverse transformation, since we are converting from screen space
+        // to graph space, not vice-versa. We ignore pan in the transformation
+        // because we're only interested in the difference.
+        let point = point.to_vector();
+        let pan_correction = point.div(zoom_new) - point.div(self.zoom);
 
         self.pan = self.pan + pan_correction;
-        self.zoom += zoom_delta;
+        self.zoom = zoom_new;
     }
 }
 
