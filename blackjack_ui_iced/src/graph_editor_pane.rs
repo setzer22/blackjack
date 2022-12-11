@@ -1,5 +1,5 @@
 use blackjack_commons::utils::IteratorUtils;
-use blackjack_engine::graph::{BjkGraph, BjkNodeId, DataType};
+use blackjack_engine::graph::{BjkGraph, BjkNodeId, DataType, NodeDefinitions};
 use glam::Vec2;
 use slotmap::SecondaryMap;
 
@@ -22,6 +22,7 @@ pub struct GraphEditorPane;
 pub struct GraphEditorState {
     graph: BjkGraph,
     node_positions: SecondaryMap<BjkNodeId, Vec2>,
+    node_definitions: NodeDefinitions,
     pan_zoom: PanZoom,
 }
 
@@ -64,57 +65,7 @@ impl PanZoom {
     }
 }
 
-impl Default for GraphEditorState {
-    fn default() -> Self {
-        let mut graph = BjkGraph::new();
-        let mut node_positions = SecondaryMap::new();
-
-        let node1 = graph.add_node("Potato", None);
-        graph
-            .add_input(node1, "foo", DataType::Scalar, None)
-            .unwrap();
-        graph
-            .add_input(node1, "bar", DataType::Scalar, None)
-            .unwrap();
-        graph
-            .add_input(node1, "baz", DataType::Scalar, None)
-            .unwrap();
-        graph
-            .add_output(node1, "foo_out", DataType::Scalar)
-            .unwrap();
-        node_positions.insert(node1, glam::Vec2::new(100.0, 100.0));
-
-        let node2 = graph.add_node("Other node", None);
-        graph
-            .add_input(node2, "afoo", DataType::Scalar, None)
-            .unwrap();
-        graph
-            .add_input(node2, "abar", DataType::Scalar, None)
-            .unwrap();
-        graph
-            .add_output(node2, "afoo1_out", DataType::Scalar)
-            .unwrap();
-        graph
-            .add_output(node2, "afoo2_out", DataType::Scalar)
-            .unwrap();
-        node_positions.insert(node2, glam::Vec2::new(200.0, 200.0));
-
-        Self {
-            graph,
-            node_positions,
-            pan_zoom: PanZoom {
-                pan: Vector::new(0.0, 0.0),
-                zoom: 1.0,
-            },
-        }
-    }
-}
-
 impl GraphEditorPane {
-    pub fn new() -> Self {
-        Self {}
-    }
-
     pub fn titlebar_view(&self, _graph: &GraphEditorState) -> BjkUiElement<'_> {
         row(vec![
             text("Graph editor").into(),
@@ -167,6 +118,24 @@ impl GraphEditorPane {
 }
 
 impl GraphEditorState {
+    pub fn new(node_definitions: NodeDefinitions) -> Self {
+        Self {
+            graph: BjkGraph::new(),
+            node_positions: SecondaryMap::new(),
+            node_definitions,
+            pan_zoom: PanZoom {
+                pan: Vector::new(0.0, 0.0),
+                zoom: 1.0,
+            },
+        }
+    }
+
+    pub fn spawn_node(&mut self, op_name: &str, position: glam::Vec2) -> Result<BjkNodeId> {
+        let node_id = self.graph.spawn_node(op_name, &self.node_definitions)?;
+        self.node_positions.insert(node_id, position);
+        Ok(node_id)
+    }
+
     pub fn update(&mut self, msg: GraphPaneMessage) {
         match msg {
             GraphPaneMessage::NodeMoved { node_id, delta } => {

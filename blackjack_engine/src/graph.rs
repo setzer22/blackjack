@@ -596,4 +596,26 @@ impl BjkGraph {
         }
         Ok(())
     }
+
+    /// Adds a new node, with inputs and outputs, as found in the template given
+    /// by `op_name` inside `node_definitions`.
+    pub fn spawn_node(
+        &mut self,
+        op_name: &str,
+        node_definitions: &NodeDefinitions,
+    ) -> Result<BjkNodeId> {
+        let def = node_definitions
+            .node_def(op_name)
+            .ok_or_else(|| anyhow!("Node def not found for op name '{op_name}'"))?;
+        let node_id = self.add_node(op_name, def.returns.clone());
+
+        for input in &def.inputs {
+            self.add_input(node_id, input.name.clone(), input.data_type, None)?;
+        }
+        for output in &def.outputs {
+            self.add_output(node_id, output.name.clone(), output.data_type)?;
+        }
+
+        Ok(node_id)
+    }
 }

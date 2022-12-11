@@ -539,8 +539,10 @@ dependencies = [
 name = "blackjack_ui_iced"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "blackjack_commons",
  "blackjack_engine",
+ "clap",
  "glam",
  "iced",
  "iced_graphics",
@@ -548,6 +550,7 @@ dependencies = [
  "iced_native",
  "iced_style",
  "iced_wgpu",
+ "once_cell",
  "slotmap",
 ]
 

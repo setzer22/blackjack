@@ -20,11 +20,18 @@ pub struct NodeEditor<'a> {
     pan_zoom: PanZoom,
 }
 
+pub struct PortLocator {
+    node_id: BjkNodeId,
+    param_name: String,
+    is_input: bool,
+}
+
 pub struct NodeEditorState {
     panning: bool,
     prev_cursor_pos: Option<Point>,
     // The order of the nodes. Last node will appears on top, and its events will be processed last.
     node_order: Vec<BjkNodeId>,
+    ongoing_drag: Option<PortLocator>,
 }
 
 impl<'a> NodeEditor<'a> {
@@ -62,6 +69,18 @@ impl<'a> NodeEditor<'a> {
     }
 }
 
+/// In several functions below, it is necessary to iterate the nodes according
+/// to the order specified inside the `NodeEditorState`'s `node_order`. This is
+/// necessary because nodes have to be drawn bottom-to-top, and must react to
+/// mouse events top-to-bottom (a node on top should occlude mouse events for
+/// those at the bottom).
+///
+/// This is a macro, and not a function, because it lets us abstract over the
+/// `&` and `&mut` variants of this function in a single piece of code. Unlike a
+/// function, it also supports early returning, or breaking out of the loop.
+/// Something that is important when processing mouse events (once a node
+/// captures an event, you want to stop checking those below). Finally, the
+/// borrow checker is more permissive with the inline / borrow-on-usage
 macro_rules! for_each_node_in_order {
     (~downcast mut $tree:expr) => {
         $tree.state.downcast_mut::<NodeEditorState>()
@@ -120,6 +139,7 @@ impl<'a> Widget<BjkUiMessage, BjkUiRenderer> for NodeEditor<'a> {
             panning: false,
             prev_cursor_pos: None,
             node_order: self.nodes.iter().map(|n| n.node_id).collect_vec(),
+            ongoing_drag: None,
         })
     }
 

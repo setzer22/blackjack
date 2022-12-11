@@ -16,6 +16,8 @@ pub use theming::*;
 pub use crate::extensions::*;
 pub use crate::BjkUiMessage;
 
+pub use anyhow::{anyhow, bail, Result};
+
 pub mod iced_prelude {
     pub use iced::Color;
     pub use iced::Length;
