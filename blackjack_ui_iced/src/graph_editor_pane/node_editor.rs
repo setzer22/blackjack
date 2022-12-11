@@ -62,38 +62,51 @@ impl<'a> NodeEditor<'a> {
     }
 }
 
+macro_rules! for_each_node_in_order {
+    (~downcast mut $tree:expr) => {
+        $tree.state.downcast_mut::<NodeEditorState>()
+    };
+    (~downcast ref $tree:expr) => {
+        $tree.state.downcast_ref::<NodeEditorState>()
+    };
+    (~borrow mut $e:expr) => {&mut $e};
+    (~borrow ref $e:expr) => {& $e};
+    (~rev top_to_bottom) => { true };
+    (~rev bottom_to_top) => { false };
+
+    ($mutability:tt, $nodes:expr, $tree:expr, $layout:expr, $reverse:tt, |$node:ident, $node_state:ident, $node_layout:ident| $($body:tt)*) => {
+        {
+            let state = for_each_node_in_order!(~downcast $mutability $tree);
+            let node_id_to_idx: SecondaryMap<BjkNodeId, usize> = $nodes
+                .iter()
+                .enumerate()
+                .map(|(i, n)| (n.node_id, i))
+                .collect();
+            let node_layouts: Vec<Layout> = $layout.children().collect();
+            for node_id in state
+                .node_order
+                .iter()
+                .copied()
+                .branch(
+                    for_each_node_in_order!(~rev $reverse),
+                    |it| it.rev(),
+                    |it| it
+                )
+            {
+                let idx = node_id_to_idx[node_id];
+                let $node = for_each_node_in_order!(~borrow $mutability $nodes[idx]);
+                let $node_state = for_each_node_in_order!(~borrow $mutability $tree.children[idx]);
+                let $node_layout = node_layouts[idx];
+                $($body)*
+            }
+        }
+    };
+}
+
 impl NodeEditorState {
     pub fn raise_node(&mut self, n: BjkNodeId) {
         self.node_order.retain(|x| *x != n);
         self.node_order.push(n);
-    }
-
-    pub fn for_each_node_in_order(
-        nodes: &[NodeWidget<'_>],
-        tree: &WidgetTree,
-        layout: Layout,
-        reverse: bool,
-        mut f: impl FnMut(&NodeWidget<'_>, &WidgetTree, Layout),
-    ) {
-        let state = tree.state.downcast_ref::<Self>();
-        let node_id_to_idx: SecondaryMap<BjkNodeId, usize> = nodes
-            .iter()
-            .enumerate()
-            .map(|(i, n)| (n.node_id, i))
-            .collect();
-        let node_layouts: Vec<Layout> = layout.children().collect();
-        for node_id in state
-            .node_order
-            .iter()
-            .copied()
-            .branch(reverse, |it| it.rev(), |it| it)
-        {
-            let idx = node_id_to_idx[node_id];
-            let node = &nodes[idx];
-            let node_state = &tree.children[idx];
-            let node_layout = node_layouts[idx];
-            f(node, node_state, node_layout);
-        }
     }
 }
 
@@ -152,20 +165,27 @@ impl<'a> Widget<BjkUiMessage, BjkUiRenderer> for NodeEditor<'a> {
         viewport: &Rectangle,
         renderer: &BjkUiRenderer,
     ) -> MouseInteraction {
-        let cursor_position = self.transform_cursor(cursor_position, layout.bounds().top_left());
+        let tr_cursor_position = self.transform_cursor(cursor_position, layout.bounds().top_left());
 
-        for ((ch, state), layout) in self
-            .nodes
-            .iter()
-            .zip(state.children.iter())
-            .zip(layout.children())
-        {
-            let interaction =
-                ch.mouse_interaction(state, layout, cursor_position, viewport, renderer);
-            if interaction != MouseInteraction::Idle {
-                return interaction;
+        for_each_node_in_order!(
+            ref,
+            self.nodes,
+            state,
+            layout,
+            top_to_bottom,
+            |node, node_state, node_layout| {
+                let interaction = node.mouse_interaction(
+                    node_state,
+                    node_layout,
+                    tr_cursor_position,
+                    viewport,
+                    renderer,
+                );
+                if interaction != MouseInteraction::Idle {
+                    return interaction;
+                }
             }
-        }
+        );
         MouseInteraction::Idle
     }
 
@@ -218,20 +238,14 @@ impl<'a> Widget<BjkUiMessage, BjkUiRenderer> for NodeEditor<'a> {
                 renderer.with_translation(self.pan_zoom.pan, |renderer| {
                     renderer.with_scale(self.pan_zoom.zoom, |renderer| {
                         renderer.with_translation(top_left, |renderer| {
-                            // Draw the nodes in the node order. Topmost one is
-                            // last, which means we're drawing bottom-to-top
-                            NodeEditorState::for_each_node_in_order(
-                                // WIP: This function needs to be used in other places, but...
-                                // - on_event -> needs a &mut variant
-                                // - mouse_interaction -> needs early return
-                                //
-                                // I think this would be better solved by a
-                                // macro, which can easily abstract over &mut /
-                                // & and allow early returns
-                                &self.nodes,
+                            // Draw the nodes in the node order. We must draw
+                            // from bottom to top.
+                            for_each_node_in_order!(
+                                ref,
+                                self.nodes,
                                 state,
                                 layout,
-                                false,
+                                bottom_to_top,
                                 |node, node_state, node_layout| {
                                     renderer.with_layer(
                                         node_layout.bounds().extend(NodeRow::PORT_RADIUS),
@@ -247,8 +261,8 @@ impl<'a> Widget<BjkUiMessage, BjkUiRenderer> for NodeEditor<'a> {
                                             );
                                         },
                                     )
-                                },
-                            );
+                                }
+                            )
                         });
                     });
                 });
@@ -266,36 +280,51 @@ impl<'a> Widget<BjkUiMessage, BjkUiRenderer> for NodeEditor<'a> {
         clipboard: &mut dyn iced_native::Clipboard,
         shell: &mut iced_native::Shell<'_, BjkUiMessage>,
     ) -> iced::event::Status {
-        let contains_cursor = layout.bounds().contains(cursor_position);
-        let un_cursor_position = cursor_position;
-        let cursor_position = self.transform_cursor(cursor_position, layout.bounds().top_left());
-        let editor_state = state.state.downcast_mut::<NodeEditorState>();
+        let mut must_raise = None;
+        let mut status = EventStatus::Ignored;
+        let tr_cursor_position = self.transform_cursor(cursor_position, layout.bounds().top_left());
 
-        for ((ch, state), layout) in self
-            .nodes
-            .iter_mut()
-            .zip(state.children.iter_mut())
-            .zip(layout.children())
-        {
-            let status = ch.on_event(
-                state,
-                event.clone(),
-                layout,
-                cursor_position,
-                renderer,
-                clipboard,
-                shell,
-            );
-            match status {
-                NodeEventStatus::Ignored => {}
-                NodeEventStatus::BeingDragged => {
-                    editor_state.raise_node(ch.node_id);
-                    return EventStatus::Captured;
-                }
-                NodeEventStatus::CapturedByWidget => {
-                    return EventStatus::Captured;
+        for_each_node_in_order!(
+            mut,
+            self.nodes,
+            state,
+            layout,
+            top_to_bottom,
+            |node, node_state, node_layout| {
+                let ch_status = node.on_event(
+                    node_state,
+                    event.clone(),
+                    node_layout,
+                    tr_cursor_position,
+                    renderer,
+                    clipboard,
+                    shell,
+                );
+                match ch_status {
+                    NodeEventStatus::Ignored => {}
+                    NodeEventStatus::BeingDragged => {
+                        must_raise = Some(node.node_id);
+                        status = EventStatus::Captured;
+                        break;
+                    }
+                    NodeEventStatus::CapturedByWidget => {
+                        status = EventStatus::Captured;
+                        break;
+                    }
                 }
             }
+        );
+
+        let un_cursor_position = cursor_position;
+        let contains_cursor = layout.bounds().contains(un_cursor_position);
+        let editor_state = state.state.downcast_mut::<NodeEditorState>();
+
+        if let Some(must_raise) = must_raise {
+            editor_state.raise_node(must_raise);
+        }
+
+        if status == EventStatus::Captured {
+            return status;
         }
 
         let mut status = EventStatus::Captured;
