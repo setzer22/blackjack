@@ -80,6 +80,8 @@ impl GraphEditorPane {
         let mut node_widget_positions = vec![];
 
         for (node_id, node) in &graph.graph.nodes {
+            let node_def = graph.node_definitions.node_def(&node.op_name);
+
             let pos = graph.node_positions[node_id];
             node_widget_positions.push(pos.to_iced_point());
 
@@ -97,10 +99,14 @@ impl GraphEditorPane {
                 ));
             }
 
+            let title = node_def
+                .as_ref()
+                .map(|x| &x.label)
+                .unwrap_or_else(|| &node.op_name);
+
             let node_widget = node_widget::NodeWidget {
                 node_id,
-                // TODO: Use label, not op name. This requires node definitions
-                titlebar_left: container(text(&node.op_name)).padding(4).into(),
+                titlebar_left: container(text(title)).padding(4).into(),
                 titlebar_right: container(text("x")).padding(4).into(),
                 rows,
                 bottom_ui: button("Set Active").into(),
