@@ -13,6 +13,7 @@ use theme::BjkUiTheme;
 pub mod cli_args;
 pub mod extensions;
 pub mod graph_editor_pane;
+pub mod helper_widgets;
 pub mod prelude;
 pub mod root_panes;
 pub mod theme;

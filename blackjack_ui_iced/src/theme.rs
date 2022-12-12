@@ -120,6 +120,8 @@ pub enum BjkContainerStyle {
     #[default]
     Transparent,
     Pane,
+    NodePicker,
+    Custom(iced::widget::container::Appearance),
 }
 
 impl iced_style::container::StyleSheet for BjkUiTheme {
@@ -135,6 +137,14 @@ impl iced_style::container::StyleSheet for BjkUiTheme {
                 text_color: None,
                 border_radius: 2.0,
             },
+            BjkContainerStyle::NodePicker => iced_style::container::Appearance {
+                background: Some(Background::Color(self.background)),
+                text_color: None,
+                border_radius: 2.0,
+                border_width: 2.0,
+                border_color: self.widget_bg_light,
+            },
+            BjkContainerStyle::Custom(a) => *a,
         }
     }
 }
@@ -204,4 +214,80 @@ pub fn v_spacer() -> iced::widget::Space {
 
 pub fn empty_space() -> iced::widget::Space {
     iced::widget::Space::new(iced::Length::Shrink, iced::Length::Shrink)
+}
+
+impl iced::widget::text_input::StyleSheet for BjkUiTheme {
+    type Style = ();
+
+    fn active(&self, style: &Self::Style) -> iced_style::text_input::Appearance {
+        iced_style::text_input::Appearance {
+            background: Background::Color(self.widget_bg_dark),
+            border_radius: 2.0,
+            border_width: 2.0,
+            border_color: self.widget_fg,
+        }
+    }
+
+    fn focused(&self, style: &Self::Style) -> iced_style::text_input::Appearance {
+        iced_style::text_input::Appearance {
+            background: Background::Color(self.widget_bg),
+            border_color: self.widget_fg_light,
+            ..self.active(style)
+        }
+    }
+
+    fn placeholder_color(&self, style: &Self::Style) -> Color {
+        Color::WHITE
+    }
+
+    fn value_color(&self, style: &Self::Style) -> Color {
+        Color::WHITE
+    }
+
+    fn selection_color(&self, style: &Self::Style) -> Color {
+        self.accent
+    }
+}
+
+pub fn text_input<'a>(
+    placeholder: &str,
+    value: &str,
+    on_change: impl Fn(String) -> BjkUiMessage + 'a,
+) -> iced::widget::TextInput<'a, BjkUiMessage, BjkUiRenderer> {
+    iced::widget::TextInput::new(placeholder, value, on_change)
+}
+
+pub fn v_scroll_area<'a>(
+    content: impl Into<BjkUiElement<'a>>,
+) -> iced::widget::Scrollable<'a, BjkUiMessage, BjkUiRenderer> {
+    iced::widget::Scrollable::new(content)
+}
+
+impl iced::widget::scrollable::StyleSheet for BjkUiTheme {
+    type Style = ();
+
+    fn active(&self, style: &Self::Style) -> iced_style::scrollable::Scrollbar {
+        iced_style::scrollable::Scrollbar {
+            background: Some(Background::Color(self.widget_bg_dark)),
+            border_radius: 1.0,
+            border_width: 0.0,
+            border_color: Color::TRANSPARENT,
+            scroller: iced_style::scrollable::Scroller {
+                color: self.widget_fg_dark,
+                border_radius: 2.0,
+                border_width: 0.0,
+                border_color: Color::TRANSPARENT,
+            },
+        }
+    }
+
+    fn hovered(&self, style: &Self::Style) -> iced_style::scrollable::Scrollbar {
+        iced_style::scrollable::Scrollbar {
+            scroller: iced_style::scrollable::Scroller {
+                color: self.widget_fg,
+                ..self.active(style).scroller
+            },
+            ..self.active(style)
+        }
+    }
 }

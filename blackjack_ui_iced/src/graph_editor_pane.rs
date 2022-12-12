@@ -1,8 +1,10 @@
 use blackjack_commons::utils::IteratorUtils;
 use blackjack_engine::graph::{BjkGraph, BjkNodeId, DataType, NodeDefinitions};
 use glam::Vec2;
+use iced_native::overlay;
 use slotmap::SecondaryMap;
 
+use crate::helper_widgets::overlap_container;
 use crate::prelude::iced_prelude::*;
 use crate::prelude::*;
 
@@ -119,7 +121,12 @@ impl GraphEditorPane {
 
         let editor =
             node_editor::NodeEditor::new(node_widgets, node_widget_positions, graph.pan_zoom);
-        container(BjkUiElement::new(editor)).padding(3).into()
+
+        BjkUiElement::new(overlap_container::OverlapContainer {
+            bg_widget: container(BjkUiElement::new(editor)).padding(3).into(),
+            fg_widget: node_picker(&graph.node_definitions),
+            fg_widget_position: Vector::new(100.0, 100.0),
+        })
     }
 }
 
@@ -155,4 +162,26 @@ impl GraphEditorState {
             }
         }
     }
+}
+
+pub fn node_picker<'a>(node_definitions: &NodeDefinitions) -> BjkUiElement<'a> {
+    let buttons = node_definitions
+        .node_names()
+        .into_iter()
+        // TODO: Dummy
+        .map(|x| {
+            button(&x)
+                .on_press(BjkUiMessage::Dummy)
+                .width(Length::Fill)
+                .into()
+        })
+        .collect();
+
+    container(column(Vec::from([
+        text_input("potato", "testo", |_| BjkUiMessage::Dummy).into(),
+        v_scroll_area(container(column(buttons)).padding(2)).into(),
+    ])))
+    .max_width(300)
+    .style(BjkContainerStyle::NodePicker)
+    .into()
 }
