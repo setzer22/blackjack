@@ -77,7 +77,7 @@ impl IdPickingRoutine {
 
             let vw = viewport_rect.width() as i32;
             let vh = viewport_rect.height() as i32;
-            let vo = viewport_rect.left_top();
+            let _vo = viewport_rect.left_top();
 
             // We will copy a SIZExSIZE region of the id map buffer to the CPU.
             // The logic below is used to compute the cursor position relative
@@ -146,7 +146,7 @@ impl IdPickingRoutine {
         builder.add_external_output();
 
         builder.build(
-            move |pt, renderer, encoder_or_pass, temps, _ready, graph_data| {
+            move |pt, _renderer, encoder_or_pass, _temps, _ready, graph_data| {
                 let this = pt.get(this_pt);
                 let commands = encoder_or_pass.get_encoder();
                 let tex = graph_data.get_render_target_texture(id_map);

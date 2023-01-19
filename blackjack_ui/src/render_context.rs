@@ -11,7 +11,7 @@ use crate::{
     rendergraph::{
         face_routine::FaceRoutine, grid_routine::GridRoutine,
         point_cloud_routine::PointCloudRoutine, shader_manager::ShaderManager,
-        wireframe_routine::WireframeRoutine, id_picking_routine::{IdPickingRoutine, self},
+        wireframe_routine::WireframeRoutine, id_picking_routine::{IdPickingRoutine},
     },
 };
 

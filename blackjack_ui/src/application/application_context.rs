@@ -10,7 +10,7 @@ use anyhow::Error;
 
 use blackjack_engine::graph::BjkGraph;
 use blackjack_engine::graph_interpreter::ExternalParameterValues;
-use blackjack_engine::prelude::{ChannelKeyType, HalfEdgeMesh};
+use blackjack_engine::prelude::{ChannelKeyType};
 use blackjack_engine::{
     lua_engine::{LuaRuntime, RenderableThing},
     prelude::{FaceOverlayBuffers, LineBuffers, PointBuffers, VertexIndexBuffers},
