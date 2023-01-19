@@ -56,7 +56,7 @@ impl RoutineLayout<BASE_MESH_NUM_BUFFERS, BASE_MESH_NUM_TEXTURES> for MeshFacesL
         [texture_manager.get_view(self.matcaps[settings.matcap % NUM_MATCAPS].get_raw())]
     }
 
-    fn get_wgpu_uniforms<'a>(&'a self, _settings: &Self::Settings) -> [&Buffer; 0] {
+    fn get_wgpu_uniforms(&self, _settings: &Self::Settings) -> [&Buffer; 0] {
         []
     }
 

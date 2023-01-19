@@ -40,7 +40,7 @@ impl RoutineLayout<NUM_BUFFERS> for PointCloudLayout {
         []
     }
 
-    fn get_wgpu_uniforms<'a>(&'a self, _settings: &Self::Settings) -> [&Buffer; 0] {
+    fn get_wgpu_uniforms(&self, _settings: &Self::Settings) -> [&Buffer; 0] {
         []
     }
 

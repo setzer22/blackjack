@@ -33,13 +33,13 @@ pub trait ToLuaError<T> {
 
 impl<T> ToLuaError<T> for anyhow::Result<T> {
     fn map_lua_err(self) -> mlua::Result<T> {
-        self.map_err(|err| mlua::Error::RuntimeError(format!("{:?}", err)))
+        self.map_err(|err| mlua::Error::RuntimeError(format!("{err:?}")))
     }
 }
 
 impl<T> ToLuaError<T> for Result<T, TraversalError> {
     fn map_lua_err(self) -> mlua::Result<T> {
-        self.map_err(|err| mlua::Error::RuntimeError(format!("{:?}", err)))
+        self.map_err(|err| mlua::Error::RuntimeError(format!("{err:?}")))
     }
 }
 

@@ -159,7 +159,7 @@ impl SelectionExpression {
                         SelectionFragment::Range(r) => {
                             write!(out, "{}..{}", r.start, r.end).unwrap()
                         }
-                        SelectionFragment::Single(i) => write!(out, "{}", i).unwrap(),
+                        SelectionFragment::Single(i) => write!(out, "{i}").unwrap(),
                     }
                 }
                 out

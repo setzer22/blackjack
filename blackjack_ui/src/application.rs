@@ -214,7 +214,7 @@ impl RootViewport {
             match self.lua_runtime.watch_for_changes() {
                 Ok(true) => {
                     if let Err(err) = self.graph_editor.on_node_definitions_update() {
-                        println!("Error while updating graph after Lua code reload: {}", err);
+                        println!("Error while updating graph after Lua code reload: {err}");
                     }
 
                     // Reset gizmo state when code is reloaded. This helps
@@ -224,7 +224,7 @@ impl RootViewport {
                 }
                 Ok(false) => { /* Do nothing */ }
                 Err(err) => {
-                    println!("Error while reloading Lua code: {}", err);
+                    println!("Error while reloading Lua code: {err}");
                 }
             }
         }

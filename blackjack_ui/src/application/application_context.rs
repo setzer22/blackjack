@@ -312,9 +312,10 @@ impl ApplicationContext {
         Ok(())
     }
 
-    pub fn on_id_hovered(&mut self, id: Option<u32>) {
-        if let Some(selection) = &mut self.current_selection {
+    pub fn on_id_hovered(&mut self, _id: Option<u32>) {
+        /* TODO: Currently disabled
+         *  if let Some(selection) = &mut self.current_selection {
             selection.hovered = id;
-        }
+        } */
     }
 }

@@ -186,7 +186,7 @@ impl MeshConnectivity {
 
             h = self[h]
                 .next
-                .unwrap_or_else(|| panic!("Halfedge {:?} has no next", h));
+                .unwrap_or_else(|| panic!("Halfedge {h:?} has no next"));
             if h == h0 {
                 break;
             }
