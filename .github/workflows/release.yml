@@ -1,0 +1,183 @@
+name: Create new release
+on:
+  push:
+    tags:
+      - v*
+jobs:
+  linux-build:
+    name: Build Blackjack for Linux
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          branch: feature/release_ci
+          repository: setzer22/blackjack
+          lfs: true
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release
+      - run: ./build_godot_plugin.sh
+      - run: |
+          mkdir ./blackjack_linux
+          cp ./target/release/blackjack_ui ./blackjack_linux
+          chmod +x ./blackjack_linux/blackjack_ui
+          cp -r ./blackjack_lua ./blackjack_linux
+      - uses: actions/upload-artifact@v3
+        with:
+          name: blackjack-linux
+          path: blackjack_linux
+      - uses: actions/upload-artifact@v3
+        with:
+          name: blackjack-godot-base
+          path: target/godot_plugin
+
+  windows-build:
+    name: Build Blackjack for Windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          branch: feature/release_ci
+          repository: setzer22/blackjack
+          lfs: true
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release
+      - run: cargo build --release -p blackjack_godot
+      - run: |
+          mkdir ./blackjack_windows
+          ls target/release
+          cp ./target/release/blackjack_ui.exe ./blackjack_windows
+          cp -r ./blackjack_lua ./blackjack_windows
+        shell: bash
+      - uses: actions/upload-artifact@v3
+        with:
+          name: blackjack-windows
+          path: blackjack_windows/
+      - uses: actions/upload-artifact@v3
+        with:
+          name: blackjack-godot-windows-lib
+          path: target/release/blackjack_godot.dll
+
+  macos-build:
+    name: Build Blackjack for MacOS
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          branch: feature/release_ci
+          repository: setzer22/blackjack
+          lfs: true
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release
+      - run: cargo build --release -p blackjack_godot
+      - run: |
+          mkdir ./blackjack_macos
+          ls target/release/
+          cp ./target/release/blackjack_ui ./blackjack_macos
+          chmod +x ./blackjack_macos/blackjack_ui
+          cp -r ./blackjack_lua ./blackjack_macos
+        shell: bash
+      - uses: actions/upload-artifact@v3
+        with:
+          name: blackjack-macos
+          path: blackjack_macos/
+      - uses: actions/upload-artifact@v3
+        with:
+          name: blackjack-godot-macos-lib
+          path: target/release/libblackjack_godot.dylib
+
+  create-release:
+    name: Assemble packages and create release
+    needs:
+      - windows-build
+      - linux-build
+      - macos-build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Get pushed tag
+        run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
+      - name: Print tag
+        run: echo The tag is $RELEASE_VERSION
+
+      - name: Download editor executable (Linux)
+        uses: actions/download-artifact@v3
+        with:
+          name: blackjack-linux
+          path: blackjack_linux
+      - name: Download editor executable (Windows)
+        uses: actions/download-artifact@v3
+        with:
+          name: blackjack-windows
+          path: blackjack_windows
+      - name: Download editor executable (MacOS)
+        uses: actions/download-artifact@v3
+        with:
+          name: blackjack-macos
+          path: blackjack_macos
+
+      - name: Package the editor zips
+        run: |
+          ls -lh
+
+          # Package for Windows
+          mv blackjack_windows blackjack-$RELEASE_VERSION-windows
+          zip -r blackjack-$RELEASE_VERSION-windows.zip blackjack-$RELEASE_VERSION-windows
+
+          # Package for Linux
+          mv blackjack_linux blackjack-$RELEASE_VERSION-linux
+          zip -r blackjack-$RELEASE_VERSION-linux.zip blackjack-$RELEASE_VERSION-linux
+
+          # Package for MacOS
+          mv blackjack_macos blackjack-$RELEASE_VERSION-macos
+          zip -r blackjack-$RELEASE_VERSION-macos.zip blackjack-$RELEASE_VERSION-macos
+
+      - name: Download godot plugin Base (Linux)
+        uses: actions/download-artifact@v3
+        with:
+          name: blackjack-godot-base
+          path: godot_plugin
+      - name: Download godot plugin Windows dll
+        uses: actions/download-artifact@v3
+        with:
+          name: blackjack-godot-macos-lib
+          path: godot_plugin/addons/blackjack_engine_godot/
+      - name: Download godot plugin MacOS dll
+        uses: actions/download-artifact@v3
+        with:
+          name: blackjack-godot-windows-lib
+          path: godot_plugin/addons/blackjack_engine_godot/
+
+      - name: Package the godot plugin
+        run: |
+          ls -lh
+          pushd godot_plugin
+          zip -r ../blackjack-godot-plugin-$RELEASE_VERSION.zip *
+          popd
+          ls -lh
+          ls -lh godot_plugin
+
+      - name: Create a release draft
+        run: |
+          gh release create \
+            --draft \
+            $RELEASE_VERSION \
+            blackjack-$RELEASE_VERSION-{windows,linux,macos}.zip \
+            blackjack-godot-plugin-$RELEASE_VERSION.zip
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
