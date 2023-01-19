@@ -26,7 +26,7 @@ pub enum TraversalError {
 }
 impl std::fmt::Display for TraversalError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!("{:?}", self))
+        f.write_fmt(format_args!("{self:?}"))
     }
 }
 impl std::error::Error for TraversalError {}
@@ -159,7 +159,7 @@ where
 {
     fn end(&'a self) -> L {
         self.map(|valid| valid.location)
-            .unwrap_or_else(|err| panic!("Error during traversal: {:?}", err))
+            .unwrap_or_else(|err| panic!("Error during traversal: {err:?}"))
     }
 
     fn try_end(&'a self) -> Result<L, TraversalError> {

@@ -10,6 +10,7 @@ use crate::prelude::*;
 pub struct TextureBufferMetrics {
     /// Cursor position, in texels, relative to the origin of the 3d viewport.
     /// None when cursor is outside the 3d viewport.
+    #[allow(unused)] // Will become useful later
     cursor_pos: UVec2,
 
     /// The cursor position inside the `output_buffer`. This will generally be

@@ -80,14 +80,14 @@ mod lua_module {
     /// access permissions.
     #[lua(under = "Io")]
     pub fn read_to_string(path: String) -> Result<String> {
-        Ok(std::fs::read_to_string(&path)?)
+        Ok(std::fs::read_to_string(path)?)
     }
 
     /// Write the given string `contents` as a file to the given `path`. Will
     /// overwrite any previous existing file with that name.
     #[lua(under = "Io")]
     pub fn write(path: String, contents: String) -> Result<()> {
-        std::fs::write(&path, &contents)?;
+        std::fs::write(path, contents)?;
         Ok(())
     }
 }

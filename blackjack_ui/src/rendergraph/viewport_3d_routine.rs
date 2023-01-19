@@ -57,7 +57,7 @@ pub trait RoutineLayout<
     ) -> [&'a TextureView; NUM_TEXTURES];
 
     /// Returns one wgpu uniform for eah of the `NUM_UNIFORMS` buffers
-    fn get_wgpu_uniforms<'a>(&'a self, settings: &Self::Settings) -> [&Buffer; NUM_UNIFORMS];
+    fn get_wgpu_uniforms(&self, settings: &Self::Settings) -> [&Buffer; NUM_UNIFORMS];
 
     /// Returns the draw type that should be used to draw this routine. Either
     /// spawn a fixed number of primitives, or use an index buffer.

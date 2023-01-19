@@ -103,10 +103,7 @@ impl RoutineLayout<OVERLAY_NUM_BUFFERS, 0, OVERLAY_NUM_UNIFORMS> for FaceOverlay
         []
     }
 
-    fn get_wgpu_uniforms<'a>(
-        &'a self,
-        _settings: &Self::Settings,
-    ) -> [&Buffer; OVERLAY_NUM_UNIFORMS] {
+    fn get_wgpu_uniforms(&self, _settings: &Self::Settings) -> [&Buffer; OVERLAY_NUM_UNIFORMS] {
         [&self.max_id]
     }
 
