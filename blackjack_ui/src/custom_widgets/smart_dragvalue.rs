@@ -396,7 +396,7 @@ impl<'a, 'b> Widget for SmartDragValue<'a, 'b> {
             response
         } else {
             let button = Button::new(
-                RichText::new(format!("{}{}{}", prefix, value_text, suffix)).monospace(),
+                RichText::new(format!("{prefix}{value_text}{suffix}")).monospace(),
             )
             .wrap(false)
             .sense(Sense::click_and_drag())

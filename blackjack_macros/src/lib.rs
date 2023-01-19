@@ -17,6 +17,6 @@ pub fn blackjack_lua_module(
     let module = parse_macro_input!(tokens as ItemMod);
     match blackjack_lua_module::blackjack_lua_module2(module) {
         Ok(result) => result.into(),
-        Err(err) => panic!("Error in Blackjack Lua module definition: {:?}", err),
+        Err(err) => panic!("Error in Blackjack Lua module definition: {err:?}"),
     }
 }

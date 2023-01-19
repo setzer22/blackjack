@@ -214,7 +214,7 @@ impl ApplicationContext {
         let text_rect = painter.text(
             egui::pos2(width - 10.0, 30.0),
             egui::Align2::RIGHT_TOP,
-            format!("{}", err),
+            format!("{err}"),
             egui::FontId::default(),
             egui::Color32::RED,
         );

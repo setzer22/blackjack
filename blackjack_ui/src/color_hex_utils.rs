@@ -40,8 +40,7 @@ pub fn color_from_hex(hex: &str) -> Result<Color32, String> {
     }
 
     Err(format!(
-        "Error parsing hex: {}. Example of valid formats: #FFFFFF or #ffffffff",
-        hex
+        "Error parsing hex: {hex}. Example of valid formats: #FFFFFF or #ffffffff"
     ))
 }
 

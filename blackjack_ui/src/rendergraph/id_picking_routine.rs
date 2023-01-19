@@ -127,7 +127,7 @@ impl IdPickingRoutine {
     ) {
         // When the window is too small, we can't copy the buffer. We take the easy
         // workaround and simply don't run object picking logic in those cases.
-        if resolution.x <= Self::SIZE as u32 || resolution.y <= Self::SIZE as u32 {
+        if resolution.x <= Self::SIZE || resolution.y <= Self::SIZE {
             return;
         }
 
@@ -213,7 +213,7 @@ impl IdPickingRoutine {
             let cursor = metrics.cursor_pos_in_buffer;
             for i in 0..Self::SIZE {
                 for j in 0..Self::SIZE {
-                    let pos = UVec2::new(j as u32, i as u32);
+                    let pos = UVec2::new(j, i);
 
                     fn manhattan(v1: UVec2, v2: UVec2) -> u32 {
                         v1.x.abs_diff(v2.x) + v1.y.abs_diff(v2.y)
