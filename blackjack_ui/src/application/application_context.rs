@@ -10,7 +10,7 @@ use anyhow::Error;
 
 use blackjack_engine::graph::BjkGraph;
 use blackjack_engine::graph_interpreter::ExternalParameterValues;
-use blackjack_engine::prelude::{ChannelKeyType};
+use blackjack_engine::prelude::ChannelKeyType;
 use blackjack_engine::{
     lua_engine::{LuaRuntime, RenderableThing},
     prelude::{FaceOverlayBuffers, LineBuffers, PointBuffers, VertexIndexBuffers},
@@ -265,8 +265,8 @@ impl ApplicationContext {
                     .update_gizmos(updated_gizmos, &mapping)?;
             }
 
-            // TODO: This is debug code. Remove it
-            if let Some(RenderableThing::HalfEdgeMesh(_)) = &self.renderable_thing {
+            // TODO: This is debug code used by viewport picking. Currently disabled.
+            /* if let Some(RenderableThing::HalfEdgeMesh(_)) = &self.renderable_thing {
                 if self.current_selection.is_none() {
                     self.current_selection = Some(MeshViewportSelection {
                         hovered: None,
@@ -274,7 +274,7 @@ impl ApplicationContext {
                         primitive_type: ChannelKeyType::FaceId,
                     });
                 }
-            }
+            } */
 
             // Running gizmos returns a set of updated values, we need to
             // refresh the UI graph values with those here.
@@ -312,10 +312,9 @@ impl ApplicationContext {
         Ok(())
     }
 
-    pub fn on_id_hovered(&mut self, _id: Option<u32>) {
-        /* TODO: Currently disabled
-         *  if let Some(selection) = &mut self.current_selection {
+    pub fn on_id_hovered(&mut self, id: Option<u32>) {
+        if let Some(selection) = &mut self.current_selection {
             selection.hovered = id;
-        } */
+        }
     }
 }
