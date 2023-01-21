@@ -7,7 +7,9 @@ reloadable=true
 
 [entry]
 
-X11.64="res://addons/blackjack_engine_godot/libblackjack_godot.so"
+X11.64="res://addons/blackjack_engine_godot/libblackjack_godot_linux.so"
+OSX.64="res://addons/blackjack_engine_godot/libblackjack_godot_macos.dylib"
+Windows.64="res://addons/blackjack_engine_godot/blackjack_godot_windows.dll"
 
 [dependencies]
 
