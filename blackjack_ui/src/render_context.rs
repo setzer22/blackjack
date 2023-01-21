@@ -9,9 +9,9 @@ use std::sync::Arc;
 use crate::{
     prelude::*,
     rendergraph::{
-        face_routine::FaceRoutine, grid_routine::GridRoutine,
+        face_routine::FaceRoutine, grid_routine::GridRoutine, id_picking_routine::IdPickingRoutine,
         point_cloud_routine::PointCloudRoutine, shader_manager::ShaderManager,
-        wireframe_routine::WireframeRoutine, id_picking_routine::{IdPickingRoutine},
+        wireframe_routine::WireframeRoutine,
     },
 };
 
