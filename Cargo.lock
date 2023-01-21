@@ -3288,6 +3288,7 @@ dependencies = [
 [[package]]
 name = "rend3"
 version = "0.3.0"
+source = "git+https://github.com/setzer22/rend3.git?rev=c1df4dca5247eda11c04c529d6376690717ce4d5#c1df4dca5247eda11c04c529d6376690717ce4d5"
 dependencies = [
  "arrayvec 0.7.2",
  "bitflags",
@@ -3320,6 +3321,7 @@ dependencies = [
 [[package]]
 name = "rend3-routine"
 version = "0.3.0"
+source = "git+https://github.com/setzer22/rend3.git?rev=c1df4dca5247eda11c04c529d6376690717ce4d5#c1df4dca5247eda11c04c529d6376690717ce4d5"
 dependencies = [
  "arrayvec 0.7.2",
  "bitflags",
@@ -3340,6 +3342,7 @@ dependencies = [
 [[package]]
 name = "rend3-types"
 version = "0.3.0"
+source = "git+https://github.com/setzer22/rend3.git?rev=c1df4dca5247eda11c04c529d6376690717ce4d5#c1df4dca5247eda11c04c529d6376690717ce4d5"
 dependencies = [
  "bitflags",
  "glam",

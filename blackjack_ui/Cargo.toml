@@ -20,11 +20,8 @@ blackjack_engine = { path = "../blackjack_engine" }
 
 # Git dependencies
 egui_node_graph = { git = "https://github.com/setzer22/egui_node_graph", rev = "f4009fccc92a5f2132109a661e9bb57cc38b7e51" }
-# egui_node_graph = { path = "../../egui_node_graph/egui_node_graph" }
-# rend3 = { git = "https://github.com/setzer22/rend3.git", rev = "5003f7b3a5eff5947954c54eb5dbf946988715fb" }
-# rend3-routine = { git = "https://github.com/setzer22/rend3.git", rev = "5003f7b3a5eff5947954c54eb5dbf946988715fb" }
-rend3 = { path = "../../rend3/rend3" }
-rend3-routine = { path = "../../rend3/rend3-routine" }
+rend3 = { git = "https://github.com/setzer22/rend3.git", rev = "c1df4dca5247eda11c04c529d6376690717ce4d5" }
+rend3-routine = { git = "https://github.com/setzer22/rend3.git", rev = "c1df4dca5247eda11c04c529d6376690717ce4d5" }
 glsl-include = { git = "https://github.com/setzer22/glsl-include", rev = "d9b1ade" }
 egui-gizmo = { git = "https://github.com/setzer22/egui-gizmo", rev = "a3415a075fc2b2ecd3b26cdef9cb7c1857d77478" }
 
