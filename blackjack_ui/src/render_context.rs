@@ -11,7 +11,7 @@ use crate::{
     rendergraph::{
         face_routine::FaceRoutine, grid_routine::GridRoutine,
         point_cloud_routine::PointCloudRoutine, shader_manager::ShaderManager,
-        wireframe_routine::WireframeRoutine,
+        wireframe_routine::WireframeRoutine, id_picking_routine::{IdPickingRoutine},
     },
 };
 
@@ -38,6 +38,7 @@ pub struct RenderContext {
     pub wireframe_routine: WireframeRoutine,
     pub face_routine: FaceRoutine,
     pub point_cloud_routine: PointCloudRoutine,
+    pub id_picking_routine: IdPickingRoutine,
     pub surface: Arc<Surface>,
     pub adapter: Arc<Adapter>,
     pub texture_format: TextureFormat,
@@ -77,11 +78,14 @@ impl RenderContext {
         )
         .unwrap();
 
-        let base_graph = r3::BaseRenderGraph::new(&renderer);
+        let mut spp = rend3::ShaderPreProcessor::new();
+        rend3_routine::builtin_shaders(&mut spp);
+
+        let base_graph = r3::BaseRenderGraph::new(&renderer, &spp);
         let mut data_core = renderer.data_core.lock();
-        let pbr_routine = PbrRoutine::new(&renderer, &mut data_core, &base_graph.interfaces);
+        let pbr_routine = PbrRoutine::new(&renderer, &mut data_core, &spp, &base_graph.interfaces);
         let tonemapping_routine =
-            r3::TonemappingRoutine::new(&renderer, &base_graph.interfaces, format);
+            r3::TonemappingRoutine::new(&renderer, &spp, &base_graph.interfaces, format);
         drop(data_core); // Release the lock
 
         let shader_manager = ShaderManager::new(&renderer.device);
@@ -91,6 +95,7 @@ impl RenderContext {
         let point_cloud_routine =
             PointCloudRoutine::new(&renderer.device, &base_graph, &shader_manager);
         let face_routine = FaceRoutine::new(&renderer, &base_graph, &shader_manager);
+        let id_picking_routine = IdPickingRoutine::new(&renderer.device);
 
         RenderContext {
             renderer,
@@ -101,6 +106,7 @@ impl RenderContext {
             wireframe_routine,
             point_cloud_routine,
             face_routine,
+            id_picking_routine,
             surface,
             adapter,
             texture_format: format,

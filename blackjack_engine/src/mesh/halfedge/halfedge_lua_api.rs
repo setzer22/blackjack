@@ -126,9 +126,9 @@ mod lua_api {
         /// one for each element (vertex, halfedge, face) equivalent to the one
         /// that would be obtained via `HalfEdgeMesh::get_channel`.
         #[lua(hidden)]
-        fn set_channel<'lua>(
+        fn set_channel(
             &self,
-            lua: &'lua Lua,
+            lua: &Lua,
             kty: ChannelKeyType,
             vty: ChannelValueType,
             name: String,
@@ -158,9 +158,9 @@ mod lua_api {
         /// values, one for each element (vertex, halfedge, face) equivalent to
         /// the one obtained via `HalfEdgeMesh::get_assoc_channel`.
         #[lua(hidden)]
-        fn set_assoc_channel<'lua>(
+        fn set_assoc_channel(
             &self,
-            lua: &'lua Lua,
+            lua: &Lua,
             kty: ChannelKeyType,
             vty: ChannelValueType,
             name: String,
@@ -493,7 +493,7 @@ impl mlua::UserData for SharedChannel {
         );
         methods.add_meta_method(mlua::MetaMethod::Index, |lua, this, key: Value| {
             let value = this.0.borrow().get_lua(lua, key).map_lua_err()?;
-            Ok(value.clone())
+            Ok(value)
         });
         methods.add_meta_method(
             mlua::MetaMethod::NewIndex,

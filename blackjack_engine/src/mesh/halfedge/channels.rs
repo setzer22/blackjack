@@ -63,13 +63,13 @@ impl Introspect for Vec3 {
 
 impl Introspect for f32 {
     fn introspect(&self) -> String {
-        format!("{: >6.3}", self)
+        format!("{self: >6.3}")
     }
 }
 
 impl Introspect for bool {
     fn introspect(&self) -> String {
-        format!("{: >6.3}", self)
+        format!("{self: >6.3}")
     }
 }
 
@@ -692,7 +692,7 @@ impl MeshChannels {
         Self::downcast_mut(
             self.channels
                 .entry(Self::key_of::<K, V>())
-                .or_insert_with(|| Box::new(ChannelGroup::<K, V>::default()))
+                .or_insert_with(|| Box::<ChannelGroup<K, V>>::default())
                 .as_any_mut(),
         )
     }

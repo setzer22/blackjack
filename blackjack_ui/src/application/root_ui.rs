@@ -88,7 +88,7 @@ impl RootViewport {
                 &mut payload.graph_editor.editor_state,
                 &mut payload.graph_editor.custom_state,
             ),
-            _ => panic!("Invalid split name {}", name),
+            _ => panic!("Invalid split name {name}"),
         }
     }
 }

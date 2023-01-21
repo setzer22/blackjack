@@ -18,7 +18,7 @@ pub fn color_from_hex(hex: &str) -> Result<Color32, String> {
     fn _hex_dec(hex_string: &str) -> Result<u8, String> {
         match u8::from_str_radix(hex_string, 16) {
             Ok(o) => Ok(o),
-            Err(e) => Err(format!("Error parsing hex: {}", e)),
+            Err(e) => Err(format!("Error parsing hex: {e}")),
         }
     }
 
@@ -40,8 +40,7 @@ pub fn color_from_hex(hex: &str) -> Result<Color32, String> {
     }
 
     Err(format!(
-        "Error parsing hex: {}. Example of valid formats: #FFFFFF or #ffffffff",
-        hex
+        "Error parsing hex: {hex}. Example of valid formats: #FFFFFF or #ffffffff"
     ))
 }
 

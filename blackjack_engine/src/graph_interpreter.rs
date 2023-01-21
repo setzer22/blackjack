@@ -49,8 +49,8 @@ pub struct GizmoState {
     pub gizmos_changed: bool,
 }
 
-pub fn run_graph<'lua>(
-    lua: &'lua mlua::Lua,
+pub fn run_graph(
+    lua: &mlua::Lua,
     graph: &BjkGraph,
     target_node: BjkNodeId,
     mut external_param_values: ExternalParameterValues,
