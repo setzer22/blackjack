@@ -1,0 +1,13 @@
+[package]
+name = "blackjack_ui_next"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+blackjack_engine = { path = "../blackjack_engine" }
+itertools = "0.10.5"
+winit = "0.27.2"
+epaint = { git = "https://github.com/emilk/egui", rev = "c58ac86935123415ea3c1531d735e708465267b6", features = ["bytemuck"] }
+egui-wgpu = { git = "https://github.com/emilk/egui", rev = "c58ac86935123415ea3c1531d735e708465267b6", features = ["winit"] }
+guee = { path = "../../guee/guee" }
+pollster = "0.2"
