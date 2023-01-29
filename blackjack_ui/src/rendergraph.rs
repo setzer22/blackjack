@@ -1,4 +1,4 @@
-// Copyright (C) 2022 setzer22 and contributors
+// Copyright (C) 2023 setzer22 and contributors
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -68,7 +68,9 @@ pub fn blackjack_viewport_rendergraph<'node>(
         resolution,
         samples: r3::SampleCount::One,
         format: r3::TextureFormat::R32Uint, // Should match one in shader manager
-        usage: r3::TextureUsages::RENDER_ATTACHMENT | r3::TextureUsages::TEXTURE_BINDING | r3::TextureUsages::COPY_SRC,
+        usage: r3::TextureUsages::RENDER_ATTACHMENT
+            | r3::TextureUsages::TEXTURE_BINDING
+            | r3::TextureUsages::COPY_SRC,
     });
 
     use crate::application::viewport_3d::EdgeDrawMode::*;

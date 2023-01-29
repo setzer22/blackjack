@@ -1,4 +1,4 @@
-// Copyright (C) 2022 setzer22 and contributors
+// Copyright (C) 2023 setzer22 and contributors
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -395,12 +395,11 @@ impl<'a, 'b> Widget for SmartDragValue<'a, 'b> {
             }
             response
         } else {
-            let button = Button::new(
-                RichText::new(format!("{prefix}{value_text}{suffix}")).monospace(),
-            )
-            .wrap(false)
-            .sense(Sense::click_and_drag())
-            .min_size(ui.spacing().interact_size); // TODO: find some more generic solution to `min_size`
+            let button =
+                Button::new(RichText::new(format!("{prefix}{value_text}{suffix}")).monospace())
+                    .wrap(false)
+                    .sense(Sense::click_and_drag())
+                    .min_size(ui.spacing().interact_size); // TODO: find some more generic solution to `min_size`
 
             let response = ui.add(button);
             let mut response = response.on_hover_cursor(CursorIcon::ResizeHorizontal);

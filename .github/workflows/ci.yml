@@ -72,5 +72,6 @@ jobs:
           profile: minimal
           toolchain: stable
           override: true
-      - run: cargo install licensure
+      # NOTE: Licensure uses an inconsistent newline style in version 0.3.*
+      - run: cargo install licensure --version "0.2.1"
       - run: ~/.cargo/bin/licensure --project --check
