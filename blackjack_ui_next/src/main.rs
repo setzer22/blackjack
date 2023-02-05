@@ -14,60 +14,26 @@ pub struct AppState {
 }
 
 fn view(state: &AppState) -> DynWidget {
-    MarginContainer::new(
-        IdGen::key("margin"),
-        BoxContainer::vertical(
-            IdGen::key("vbox"),
-            vec![
-                BoxContainer::vertical(
-                    IdGen::key("items"),
-                    state
-                        .items
-                        .iter()
-                        .map(|it| Text::new(it.clone()).build())
-                        .collect_vec(),
+    StackContainer::new(
+        IdGen::key("stack"),
+        vec![
+            // Background
+            (
+                Vec2::new(0.0, 0.0),
+                ColoredBox::background(Color32::BLACK).build(),
+            ),
+            (
+                Vec2::new(0.0, 0.0),
+                SplitPaneContainer::new(
+                    IdGen::key("h_split"),
+                    Axis::Horizontal,
+                    ColoredBox::background(Color32::RED).build(),
+                    ColoredBox::background(Color32::DARK_BLUE).build(),
                 )
-                .layout_hints(LayoutHints::fill_horizontal())
-                .cross_align(Align::Center)
                 .build(),
-                Spacer::fill_v(1).build(),
-                TextEdit::new(
-                    IdGen::literal("text_input_field"),
-                    state.wip_item_name.clone(),
-                )
-                .layout_hints(LayoutHints::fill_horizontal())
-                .padding(Vec2::new(3.0, 3.0))
-                .on_changed(|state: &mut AppState, new| {
-                    state.wip_item_name = new;
-                })
-                .build(),
-                BoxContainer::horizontal(
-                    IdGen::key("buttons"),
-                    vec![
-                        Button::with_label("Add!")
-                            .on_click(|state: &mut AppState, _| {
-                                if !state.wip_item_name.is_empty() {
-                                    state.items.push(std::mem::take(&mut state.wip_item_name));
-                                }
-                            })
-                            .hints(LayoutHints::fill_horizontal())
-                            .build(),
-                        Button::with_label("Delete!")
-                            .on_click(|state: &mut AppState, _| {
-                                state.items.pop();
-                            })
-                            .hints(LayoutHints::fill_horizontal())
-                            .build(),
-                    ],
-                )
-                .layout_hints(LayoutHints::fill_horizontal())
-                .build(),
-            ],
-        )
-        .layout_hints(LayoutHints::fill())
-        .build(),
+            ),
+        ],
     )
-    .margin(Vec2::new(50.0, 50.0))
     .build()
 }
 
@@ -103,7 +69,8 @@ fn main() {
                 }
                 painter.paint_and_update_textures(
                     1.0,
-                    epaint::Rgba::from_rgb(0.7, 0.3, 0.3),
+                    // Make it very obvious when the background is visible.
+                    epaint::Rgba::from_rgb(1.0, 0.0, 1.0),
                     &clipped_primitives,
                     &textures_delta,
                 );
