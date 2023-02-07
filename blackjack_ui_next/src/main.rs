@@ -1,5 +1,4 @@
 use egui_wgpu::{winit::Painter, WgpuConfiguration};
-use itertools::Itertools;
 
 use guee::prelude::*;
 use winit::{
@@ -8,27 +7,105 @@ use winit::{
 };
 
 #[derive(Default)]
-pub struct AppState {
-    items: Vec<String>,
-    wip_item_name: String,
+pub struct AppState {}
+
+#[allow(unused)]
+
+pub fn blackjack_theme() -> Theme {
+    let mut theme = Theme::new_empty();
+
+    let widget_bg = color!("#303030");
+    let widget_bg_light = color!("#464646");
+    let widget_bg_dark = color!("#2c2c2c");
+
+    let widget_fg = color!("#c0c0c0");
+    let widget_fg_light = color!("#dddddd");
+    let widget_fg_dark = color!("#9b9b9b");
+
+    let accent = color!("#b43e3e");
+
+    let background = color!("#303030");
+    let background_dark = color!("#1d1d1d");
+
+    // WIP: The color of labels cannot be set by the button, but we want the
+    // text color to be a property of the button. What we can do, is add a
+    // "default_text_color" property in the renderer, so that the button's draw
+    // code can push this value and restore it afterwards.
+    theme.set_style::<Button>(
+        ButtonStyle::with_base_colors(widget_bg, Stroke::NONE, 1.1, 1.3).text_color(widget_fg),
+    );
+
+    theme
 }
 
-fn view(state: &AppState) -> DynWidget {
+fn view(_state: &AppState) -> DynWidget {
     StackContainer::new(
         IdGen::key("stack"),
         vec![
             // Background
             (
                 Vec2::new(0.0, 0.0),
-                ColoredBox::background(Color32::BLACK).build(),
+                ColoredBox::background(color!("#1d1d1d")).build(),
             ),
             (
                 Vec2::new(0.0, 0.0),
                 SplitPaneContainer::new(
                     IdGen::key("h_split"),
                     Axis::Horizontal,
-                    ColoredBox::background(Color32::RED).build(),
-                    ColoredBox::background(Color32::DARK_BLUE).build(),
+                    MarginContainer::new(
+                        IdGen::key("margin"),
+                        BoxContainer::vertical(
+                            IdGen::key("left"),
+                            vec![
+                                Button::with_label("Hello")
+                                    .hints(LayoutHints::fill())
+                                    .build(),
+                                Button::with_label("Hello 1")
+                                    .hints(LayoutHints::fill())
+                                    .build(),
+                                Button::with_label("Hello 2")
+                                    .hints(LayoutHints::fill())
+                                    .build(),
+                                Button::with_label("Hello 3")
+                                    .hints(LayoutHints::fill())
+                                    .build(),
+                                Button::with_label("Hello 4")
+                                    .hints(LayoutHints::fill())
+                                    .build(),
+                            ],
+                        )
+                        .layout_hints(LayoutHints::fill())
+                        .build(),
+                    )
+                    .margin(Vec2::new(10.0, 10.0))
+                    .build(),
+                    MarginContainer::new(
+                        IdGen::key("margin"),
+                        BoxContainer::horizontal(
+                            IdGen::key("left"),
+                            vec![
+                                Button::with_label("Hello")
+                                    .hints(LayoutHints::fill())
+                                    .build(),
+                                Button::with_label("Hello 1")
+                                    .hints(LayoutHints::fill())
+                                    .build(),
+                                Button::with_label("Hello 2")
+                                    .hints(LayoutHints::fill())
+                                    .build(),
+                                Button::with_label("Hello 3")
+                                    .hints(LayoutHints::fill())
+                                    .build(),
+                                Button::with_label("Hello 4")
+                                    .hints(LayoutHints::fill())
+                                    .build(),
+                            ],
+                        )
+                        .layout_hints(LayoutHints::fill())
+                        .build(),
+                    )
+                    .margin(Vec2::new(10.0, 10.0))
+                    .build(),
                 )
                 .build(),
             ),
@@ -40,6 +117,7 @@ fn view(state: &AppState) -> DynWidget {
 fn main() {
     let screen_size = Vec2::new(1024.0, 768.0);
     let mut ctx = Context::new(screen_size);
+    ctx.set_theme(blackjack_theme());
 
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new()
