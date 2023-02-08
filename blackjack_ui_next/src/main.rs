@@ -24,7 +24,7 @@ pub fn blackjack_theme() -> Theme {
 
     let accent = color!("#b43e3e");
 
-    let background = color!("#303030");
+    let background = color!("#191919");
     let background_dark = color!("#1d1d1d");
 
     theme.set_style::<Button>(ButtonStyle::with_base_colors(
@@ -42,6 +42,19 @@ pub fn blackjack_theme() -> Theme {
 }
 
 fn view(_state: &AppState) -> DynWidget {
+    fn panel(key: &str) -> DynWidget {
+        MarginContainer::new(
+            IdGen::key("margin"),
+            ColoredBox::new(IdGen::key(key))
+                .hints(LayoutHints::fill())
+                .fill(color!("#191919"))
+                .stroke(Stroke::new(1.0, color!("#9b9b9b")))
+                .build(),
+        )
+        .margin(Vec2::new(10.0, 10.0))
+        .build()
+    }
+
     StackContainer::new(
         IdGen::key("stack"),
         vec![
@@ -53,62 +66,16 @@ fn view(_state: &AppState) -> DynWidget {
             (
                 Vec2::new(0.0, 0.0),
                 SplitPaneContainer::new(
-                    IdGen::key("h_split"),
-                    Axis::Horizontal,
-                    MarginContainer::new(
-                        IdGen::key("margin"),
-                        BoxContainer::vertical(
-                            IdGen::key("left"),
-                            vec![
-                                Button::with_label("Hello")
-                                    .hints(LayoutHints::fill())
-                                    .build(),
-                                Button::with_label("Hello 1")
-                                    .hints(LayoutHints::fill())
-                                    .build(),
-                                Button::with_label("Hello 2")
-                                    .hints(LayoutHints::fill())
-                                    .build(),
-                                Button::with_label("Hello 3")
-                                    .hints(LayoutHints::fill())
-                                    .build(),
-                                Button::with_label("Hello 4")
-                                    .hints(LayoutHints::fill())
-                                    .build(),
-                            ],
-                        )
-                        .layout_hints(LayoutHints::fill())
-                        .build(),
+                    IdGen::key("v_split"),
+                    Axis::Vertical,
+                    SplitPaneContainer::new(
+                        IdGen::key("h_split"),
+                        Axis::Horizontal,
+                        panel("left"),
+                        panel("right"),
                     )
-                    .margin(Vec2::new(10.0, 10.0))
                     .build(),
-                    MarginContainer::new(
-                        IdGen::key("margin"),
-                        BoxContainer::horizontal(
-                            IdGen::key("left"),
-                            vec![
-                                Button::with_label("Hello")
-                                    .hints(LayoutHints::fill())
-                                    .build(),
-                                Button::with_label("Hello 1")
-                                    .hints(LayoutHints::fill())
-                                    .build(),
-                                Button::with_label("Hello 2")
-                                    .hints(LayoutHints::fill())
-                                    .build(),
-                                Button::with_label("Hello 3")
-                                    .hints(LayoutHints::fill())
-                                    .build(),
-                                Button::with_label("Hello 4")
-                                    .hints(LayoutHints::fill())
-                                    .build(),
-                            ],
-                        )
-                        .layout_hints(LayoutHints::fill())
-                        .build(),
-                    )
-                    .margin(Vec2::new(10.0, 10.0))
-                    .build(),
+                    panel("bottom"),
                 )
                 .build(),
             ),
