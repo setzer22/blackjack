@@ -1,6 +1,6 @@
 use egui_wgpu::{winit::Painter, WgpuConfiguration};
 
-use guee::prelude::*;
+use guee::{base_widgets::split_pane_container::SplitPaneContainerStyle, prelude::*};
 use winit::{
     event_loop::{ControlFlow, EventLoop},
     window::WindowBuilder,
@@ -27,13 +27,16 @@ pub fn blackjack_theme() -> Theme {
     let background = color!("#303030");
     let background_dark = color!("#1d1d1d");
 
-    // WIP: The color of labels cannot be set by the button, but we want the
-    // text color to be a property of the button. What we can do, is add a
-    // "default_text_color" property in the renderer, so that the button's draw
-    // code can push this value and restore it afterwards.
-    theme.set_style::<Button>(
-        ButtonStyle::with_base_colors(widget_bg, Stroke::NONE, 1.1, 1.3).text_color(widget_fg),
-    );
+    theme.set_style::<Button>(ButtonStyle::with_base_colors(
+        widget_bg,
+        Stroke::NONE,
+        1.1,
+        1.3,
+    ));
+
+    theme.set_style::<SplitPaneContainer>(SplitPaneContainerStyle::new(widget_fg_dark));
+
+    theme.text_color = widget_fg;
 
     theme
 }
