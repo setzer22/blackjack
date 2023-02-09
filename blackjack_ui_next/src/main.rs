@@ -1,42 +1,63 @@
 use egui_wgpu::{winit::Painter, WgpuConfiguration};
 
+use epaint::Rounding;
 use guee::{base_widgets::split_pane_container::SplitPaneContainerStyle, prelude::*};
 use winit::{
     event_loop::{ControlFlow, EventLoop},
     window::WindowBuilder,
 };
 
+pub mod node_widget;
+
 #[derive(Default)]
 pub struct AppState {}
 
-#[allow(unused)]
+pub struct BlackjackPallette {
+    pub widget_bg: Color32,
+    pub widget_bg_light: Color32,
+    pub widget_bg_dark: Color32,
+
+    pub widget_fg: Color32,
+    pub widget_fg_light: Color32,
+    pub widget_fg_dark: Color32,
+
+    pub accent: Color32,
+
+    pub background: Color32,
+    pub background_dark: Color32,
+}
+
+#[inline]
+fn pallette() -> BlackjackPallette {
+    BlackjackPallette {
+        widget_bg: color!("#303030"),
+        widget_bg_light: color!("#464646"),
+        widget_bg_dark: color!("#2c2c2c"),
+
+        widget_fg: color!("#c0c0c0"),
+        widget_fg_light: color!("#dddddd"),
+        widget_fg_dark: color!("#9b9b9b"),
+
+        accent: color!("#b43e3e"),
+
+        background: color!("#191919"),
+        background_dark: color!("#1d1d1d"),
+    }
+}
 
 pub fn blackjack_theme() -> Theme {
     let mut theme = Theme::new_empty();
-
-    let widget_bg = color!("#303030");
-    let widget_bg_light = color!("#464646");
-    let widget_bg_dark = color!("#2c2c2c");
-
-    let widget_fg = color!("#c0c0c0");
-    let widget_fg_light = color!("#dddddd");
-    let widget_fg_dark = color!("#9b9b9b");
-
-    let accent = color!("#b43e3e");
-
-    let background = color!("#191919");
-    let background_dark = color!("#1d1d1d");
-
+    let pallette = pallette();
     theme.set_style::<Button>(ButtonStyle::with_base_colors(
-        widget_bg,
+        pallette.widget_bg,
         Stroke::NONE,
         1.1,
         1.3,
     ));
 
-    theme.set_style::<SplitPaneContainer>(SplitPaneContainerStyle::new(widget_fg_dark));
+    theme.set_style::<SplitPaneContainer>(SplitPaneContainerStyle::new(pallette.widget_fg_dark));
 
-    theme.text_color = widget_fg;
+    theme.text_color = pallette.widget_fg;
 
     theme
 }
@@ -52,6 +73,26 @@ fn view(_state: &AppState) -> DynWidget {
                 .build(),
         )
         .margin(Vec2::new(10.0, 10.0))
+        .build()
+    }
+
+    fn dummy_node(id: IdGen) -> DynWidget {
+        MarginContainer::new(
+            id,
+            BoxContainer::vertical(
+                IdGen::key("node_vbox"),
+                vec![
+                    Text::new("param_1".into()).build(),
+                    Text::new("param_2".into()).build(),
+                    Text::new("param_3".into()).build(),
+                ],
+            )
+            .layout_hints(LayoutHints::shrink())
+            .build(),
+        )
+        .margin(Vec2::new(20.0, 20.0))
+        .background_rounding(Rounding::same(4.0))
+        .background_color(pallette().widget_bg_light)
         .build()
     }
 
@@ -75,7 +116,15 @@ fn view(_state: &AppState) -> DynWidget {
                         panel("right"),
                     )
                     .build(),
-                    panel("bottom"),
+                    StackContainer::new(
+                        IdGen::key("bot_stack"),
+                        vec![
+                            (Vec2::ZERO, panel("bottom")),
+                            (Vec2::new(10.0, 10.0), dummy_node(IdGen::key("node1"))),
+                            (Vec2::new(50.0, 100.0), dummy_node(IdGen::key("node1"))),
+                        ],
+                    )
+                    .build(),
                 )
                 .build(),
             ),
