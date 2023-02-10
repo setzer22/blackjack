@@ -192,12 +192,8 @@ impl Line {
         let normal_channel_id = mesh.channels.ensure_channel::<VertexId, Vec3>("normal");
         let mut conn = mesh.write_connectivity();
         let mut pos = mesh.write_positions();
-        let mut norm = mesh
-            .channels
-            .write_channel(normal_channel_id)?;
-        let mut tang = mesh
-            .channels
-            .write_channel(tangent_channel_id)?;
+        let mut norm = mesh.channels.write_channel(normal_channel_id)?;
+        let mut tang = mesh.channels.write_channel(tangent_channel_id)?;
 
         let mut forward_halfedges = SVec::new();
         let mut backward_halfedges = SVec::new();
@@ -362,7 +358,12 @@ impl Cone {
 
 struct Cylinder;
 impl Cylinder {
-    pub fn build(center: Vec3, radius: f32, height: f32, num_vertices: usize) -> Result<HalfEdgeMesh> {
+    pub fn build(
+        center: Vec3,
+        radius: f32,
+        height: f32,
+        num_vertices: usize,
+    ) -> Result<HalfEdgeMesh> {
         Cone::build_truncated_cone(center, radius, radius, height, num_vertices)
     }
 }
@@ -552,7 +553,12 @@ mod lua_api {
 
     /// Creates a cylinder with the given `center`, `radius`, `height`, and `num_vertices around its radius`.
     #[lua(under = "Primitives")]
-    fn cylinder(center: LVec3, radius: f32, height: f32, num_vertices: f32) -> Result<HalfEdgeMesh> {
+    fn cylinder(
+        center: LVec3,
+        radius: f32,
+        height: f32,
+        num_vertices: f32,
+    ) -> Result<HalfEdgeMesh> {
         Cylinder::build(center.0, radius, height, num_vertices as usize)
     }
 
@@ -627,7 +633,7 @@ mod test {
     fn test_circle() {
         Circle::build(Vec3::ZERO, 1.0, 24).unwrap();
         Circle::build(Vec3::ZERO, 1.0, 3).unwrap();
-        
+
         // Not enough vertices to make a circle
         assert!(Circle::build(Vec3::ZERO, 1.0, 2).is_err());
         assert!(Circle::build(Vec3::ZERO, 1.0, 0).is_err());
