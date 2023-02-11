@@ -1,16 +1,33 @@
+use blackjack_engine::{
+    graph::{BjkGraph, BjkNodeId, NodeDefinitions},
+    lua_engine::LuaRuntime,
+};
 use egui_wgpu::{winit::Painter, WgpuConfiguration};
 
-use epaint::Rounding;
+use epaint::{
+    ahash::{HashMap, HashMapExt},
+    Rounding,
+};
 use guee::{base_widgets::split_pane_container::SplitPaneContainerStyle, prelude::*};
+use node_editor_widget::PanZoom;
+use slotmap::SecondaryMap;
 use winit::{
     event_loop::{ControlFlow, EventLoop},
     window::WindowBuilder,
 };
 
+use crate::{node_editor_widget::NodeEditorWidget, node_widget::NodeWidget};
+
+pub mod node_editor_widget;
+
 pub mod node_widget;
 
-#[derive(Default)]
-pub struct AppState {}
+pub struct AppState {
+    lua_runtime: LuaRuntime,
+    graph_pan_zoom: PanZoom,
+    graph: BjkGraph,
+    node_positions: SecondaryMap<BjkNodeId, Vec2>,
+}
 
 pub struct BlackjackPallette {
     pub widget_bg: Color32,
@@ -62,7 +79,32 @@ pub fn blackjack_theme() -> Theme {
     theme
 }
 
-fn view(_state: &AppState) -> DynWidget {
+fn test_state() -> AppState {
+    // TODO: Hardcoded path
+    let runtime = LuaRuntime::initialize_with_std("./blackjack_lua/".into())
+        .expect("Lua init should not fail");
+    let mut graph = BjkGraph::new();
+    let mut node_positions = SecondaryMap::new();
+
+    let node = graph
+        .spawn_node("MakeBox", &runtime.node_definitions)
+        .unwrap();
+    node_positions.insert(node, Vec2::new(40.0, 50.0));
+
+    let node = graph
+        .spawn_node("MakeCircle", &runtime.node_definitions)
+        .unwrap();
+    node_positions.insert(node, Vec2::new(300.0, 150.0));
+
+    AppState {
+        lua_runtime: runtime,
+        node_positions,
+        graph_pan_zoom: PanZoom::default(),
+        graph,
+    }
+}
+
+fn view(state: &AppState) -> DynWidget {
     fn panel(key: &str) -> DynWidget {
         MarginContainer::new(
             IdGen::key("margin"),
@@ -76,25 +118,22 @@ fn view(_state: &AppState) -> DynWidget {
         .build()
     }
 
-    fn dummy_node(id: IdGen) -> DynWidget {
-        MarginContainer::new(
-            id,
-            BoxContainer::vertical(
-                IdGen::key("node_vbox"),
-                vec![
-                    Text::new("param_1".into()).build(),
-                    Text::new("param_2".into()).build(),
-                    Text::new("param_3".into()).build(),
-                ],
-            )
-            .layout_hints(LayoutHints::shrink())
-            .build(),
+    let node_widgets = state.graph.nodes.iter().map(|(node_id, node)| {
+        (
+            state.node_positions[node_id],
+            NodeWidget::from_bjk_node(node_id, node),
         )
-        .margin(Vec2::new(20.0, 20.0))
-        .background_rounding(Rounding::same(4.0))
-        .background_color(pallette().widget_bg_light)
-        .build()
-    }
+    });
+
+    let node_editor = NodeEditorWidget::new(
+        IdGen::key("node_editor"),
+        node_widgets.collect(),
+        state.graph_pan_zoom,
+    )
+    .on_pan_zoom_change(|state: &mut AppState, new_pan_zoom| {
+        state.graph_pan_zoom = new_pan_zoom;
+    })
+    .build();
 
     StackContainer::new(
         IdGen::key("stack"),
@@ -118,11 +157,7 @@ fn view(_state: &AppState) -> DynWidget {
                     .build(),
                     StackContainer::new(
                         IdGen::key("bot_stack"),
-                        vec![
-                            (Vec2::ZERO, panel("bottom")),
-                            (Vec2::new(10.0, 10.0), dummy_node(IdGen::key("node1"))),
-                            (Vec2::new(50.0, 100.0), dummy_node(IdGen::key("node1"))),
-                        ],
+                        vec![(Vec2::ZERO, panel("bottom")), (Vec2::ZERO, node_editor)],
                     )
                     .build(),
                 )
@@ -151,7 +186,7 @@ fn main() {
     let mut painter = Painter::new(WgpuConfiguration::default(), 1, 0);
     unsafe { pollster::block_on(painter.set_window(Some(&window))).unwrap() };
 
-    let mut state = AppState::default();
+    let mut state = test_state();
 
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Wait;
@@ -161,7 +196,7 @@ fn main() {
                 let clipped_primitives = ctx.tessellate();
 
                 let mut textures_delta = TexturesDelta::default();
-                if let Some(img_delta) = ctx.fonts.font_image_delta() {
+                if let Some(img_delta) = ctx.painter.borrow().fonts.font_image_delta() {
                     textures_delta.set.push((TextureId::default(), img_delta));
                 }
                 painter.paint_and_update_textures(

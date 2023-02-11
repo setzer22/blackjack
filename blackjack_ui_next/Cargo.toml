@@ -11,3 +11,4 @@ epaint = { git = "https://github.com/emilk/egui", rev = "c58ac86935123415ea3c153
 egui-wgpu = { git = "https://github.com/emilk/egui", rev = "c58ac86935123415ea3c1531d735e708465267b6", features = ["winit"] }
 guee = { path = "../guee/guee" }
 pollster = "0.2"
+slotmap = "1.0"
