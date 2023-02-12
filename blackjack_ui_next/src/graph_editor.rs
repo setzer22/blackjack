@@ -1,5 +1,6 @@
 use blackjack_engine::{
-    graph::{BjkGraph, BjkNodeId},
+    graph::{BjkGraph, BjkNodeId, DependencyKind},
+    graph_interpreter::BjkParameter,
     lua_engine::LuaRuntime,
 };
 use epaint::Vec2;
@@ -8,7 +9,7 @@ use slotmap::SecondaryMap;
 
 use crate::widgets::{
     node_editor_widget::{NodeEditorWidget, PanZoom},
-    node_widget::{NodeWidget, PortId},
+    node_widget::{NodeWidget, PortId, PortIdKind},
 };
 
 pub struct GraphEditor {
@@ -18,6 +19,7 @@ pub struct GraphEditor {
     node_positions: SecondaryMap<BjkNodeId, Vec2>,
 }
 
+#[allow(clippy::new_without_default)]
 impl GraphEditor {
     pub fn new() -> Self {
         // TODO: Hardcoded path
@@ -63,41 +65,62 @@ impl GraphEditor {
             )
         });
 
+        let mut connections = Vec::new();
+        for (node_id, node) in self.graph.nodes.iter() {
+            for input in node.inputs.iter() {
+                match &input.kind {
+                    DependencyKind::External { .. } => {}
+                    DependencyKind::Connection {
+                        node: other_node_id,
+                        param_name: other_param_name,
+                    } => {
+                        let other_node = &self.graph.nodes[*other_node_id];
+                        let other_param = other_node
+                            .outputs
+                            .iter()
+                            .find(|x| x.name == *other_param_name)
+                            .expect("Other param should be there");
+
+                        connections.push((
+                            PortId {
+                                param: BjkParameter::new(node_id, input.name.clone()),
+                                side: PortIdKind::Input,
+                                data_type: input.data_type,
+                            },
+                            PortId {
+                                param: BjkParameter::new(*other_node_id, other_param.name.clone()),
+                                side: PortIdKind::Output,
+                                data_type: other_param.data_type,
+                            },
+                        ))
+                    }
+                }
+            }
+        }
+
         NodeEditorWidget::new(
             IdGen::key("node_editor"),
             node_widgets.collect(),
+            connections,
             self.pan_zoom,
         )
         .on_pan_zoom_change(|editor: &mut GraphEditor, new_pan_zoom| {
             editor.pan_zoom = new_pan_zoom;
         })
         .on_connection(|editor: &mut GraphEditor, (port1, port2)| {
-            let (input_node, input_param, output_node, output_param) = match (port1, port2) {
-                (
-                    PortId::Input {
-                        node_id: input_node,
-                        param_name: input_param,
-                    },
-                    PortId::Output {
-                        node_id: output_node,
-                        param_name: output_param,
-                    },
-                )
-                | (
-                    PortId::Output {
-                        node_id: output_node,
-                        param_name: output_param,
-                    },
-                    PortId::Input {
-                        node_id: input_node,
-                        param_name: input_param,
-                    },
-                ) => (input_node, input_param, output_node, output_param),
-                _ => unreachable!(),
+            let (input, output) = if port1.side == PortIdKind::Input {
+                (port1.param, port2.param)
+            } else {
+                (port2.param, port1.param)
             };
             editor
                 .graph
-                .add_connection(output_node, &output_param, input_node, &input_param)
+                .add_connection(
+                    output.node_id,
+                    &output.param_name,
+                    input.node_id,
+                    &input.param_name,
+                )
                 .expect("Should not fail");
         })
         .build()

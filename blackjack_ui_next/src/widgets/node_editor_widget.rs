@@ -1,4 +1,3 @@
-use blackjack_engine::graph::BjkNodeId;
 use epaint::{CubicBezierShape, Vec2};
 use guee::{
     input::MouseButton,
@@ -7,7 +6,7 @@ use guee::{
 };
 use itertools::Itertools;
 
-use crate::pallette;
+use crate::{pallette, widgets::node_widget::PortIdKind};
 
 use super::node_widget::{NodeWidget, PortId};
 
@@ -16,6 +15,7 @@ use super::node_widget::{NodeWidget, PortId};
 pub struct NodeEditorWidget {
     pub id: IdGen,
     pub node_widgets: Vec<(Vec2, NodeWidget)>,
+    pub connections: Vec<(PortId, PortId)>,
     pub pan_zoom: PanZoom,
     #[builder(callback)]
     pub on_pan_zoom_change: Option<Callback<PanZoom>>,
@@ -25,16 +25,9 @@ pub struct NodeEditorWidget {
     pub on_connection: Option<Callback<(PortId, PortId)>>,
 }
 
-#[derive(Clone)]
-pub struct PortLocator {
-    pub node_id: BjkNodeId,
-    pub row_idx: usize,
-    pub port: PortId,
-}
-
 pub struct NodeEditorWidgetState {
     pub panning: bool,
-    pub ongoing_connection: Option<PortLocator>,
+    pub ongoing_connection: Option<PortId>,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -86,10 +79,16 @@ impl PanZoom {
 }
 
 impl NodeEditorWidget {
-    pub fn new(id_gen: IdGen, node_widgets: Vec<(Vec2, NodeWidget)>, pan_zoom: PanZoom) -> Self {
+    pub fn new(
+        id_gen: IdGen,
+        node_widgets: Vec<(Vec2, NodeWidget)>,
+        connections: Vec<(PortId, PortId)>,
+        pan_zoom: PanZoom,
+    ) -> Self {
         Self {
             id: id_gen,
             node_widgets,
+            connections,
             pan_zoom,
             on_pan_zoom_change: None,
             on_connection: None,
@@ -122,62 +121,74 @@ impl NodeEditorWidget {
     /// Returns the currently hovered port, if any. Also marks the port itself
     /// as hovered (by mutating it) so that it can react to it when being drawn
     /// during the draw phase.
-    pub fn find_hovered_port(
-        &mut self,
-        cursor_position: Pos2,
-        layout: &Layout,
-    ) -> Option<PortLocator> {
+    pub fn find_hovered_port(&mut self, cursor_position: Pos2, layout: &Layout) -> Option<PortId> {
         for ((_, node), node_layout) in self.node_widgets.iter_mut().zip(&layout.children) {
-            for i in 0..node.rows.len() {
-                let (left, right) = node.port_visuals(node_layout, i, &node.rows[i]);
+            let mut hovered_row = None;
+            for (row_idx, (param, row)) in node.rows.iter().enumerate() {
+                let (left, right) = node.port_visuals(node_layout, param);
+
+                macro_rules! find_port {
+                    ($accessor:ident) => {
+                        row.$accessor.as_ref().expect("Port should be input")
+                    };
+                }
+
                 if let Some((left_pos, _)) = left {
                     if cursor_position.distance(left_pos) < NodeWidget::PORT_RADIUS {
-                        let port = node.rows[i].input_port.as_mut().unwrap();
-                        port.hovered = true;
-                        return Some(PortLocator {
-                            node_id: node.node_id,
-                            row_idx: i,
-                            port: PortId::Input {
-                                node_id: node.node_id,
-                                param_name: port.param_name.clone(),
+                        let port = find_port!(input_port);
+                        hovered_row = Some((
+                            row_idx,
+                            PortIdKind::Input,
+                            PortId {
+                                param: param.clone(),
+                                side: PortIdKind::Input,
+                                data_type: port.data_type,
                             },
-                        });
+                        ));
+                        break;
                     }
                 }
                 if let Some((right_pos, _)) = right {
                     if cursor_position.distance(right_pos) < NodeWidget::PORT_RADIUS {
-                        let port = node.rows[i].output_port.as_mut().unwrap();
-                        port.hovered = true;
-                        return Some(PortLocator {
-                            node_id: node.node_id,
-                            row_idx: i,
-                            port: PortId::Output {
-                                node_id: node.node_id,
-                                param_name: port.param_name.clone(),
+                        let port = find_port!(output_port);
+                        hovered_row = Some((
+                            row_idx,
+                            PortIdKind::Output,
+                            PortId {
+                                param: param.clone(),
+                                side: PortIdKind::Output,
+                                data_type: port.data_type,
                             },
-                        });
+                        ));
+                        break;
                     }
                 }
+            }
+            if let Some((row_idx, side, port_id)) = hovered_row {
+                let row = &mut node.rows[row_idx].1;
+                match side {
+                    PortIdKind::Input => row.input_port.as_mut().unwrap().hovered = true,
+                    PortIdKind::Output => row.output_port.as_mut().unwrap().hovered = true,
+                }
+                return Some(port_id);
             }
         }
         None
     }
 
-    pub fn port_pos(&self, layout: &Layout, locator: &PortLocator) -> Pos2 {
+    pub fn port_pos(&self, layout: &Layout, port_id: &PortId) -> Pos2 {
         let (node_idx, (_, node_widget)) = self
             .node_widgets
             .iter()
-            .find_position(|(_, n)| n.node_id == locator.node_id)
+            .find_position(|(_, n)| n.node_id == port_id.param.node_id)
             .unwrap();
         let node_layout = &layout.children[node_idx];
-        let (left, right) = node_widget.port_visuals(
-            node_layout,
-            locator.row_idx,
-            &node_widget.rows[locator.row_idx],
-        );
-        match locator.port {
-            PortId::Input { .. } => left.unwrap().0,
-            PortId::Output { .. } => right.unwrap().0,
+        let (left, right) = node_widget.port_visuals(node_layout, &port_id.param);
+
+        // NOTE: This assumes each row has either an input, or an output
+        match port_id.side {
+            PortIdKind::Input => left.unwrap().0,
+            PortIdKind::Output => right.unwrap().0,
         }
     }
 
@@ -221,6 +232,17 @@ impl Widget for NodeEditorWidget {
             node_widget.draw(ctx, node_layout)
         }
 
+        // Draw existing connections
+        for (src, dst) in &self.connections {
+            let src_pos = self.port_pos(layout, dst);
+            let dst_pos = self.port_pos(layout, src);
+            ctx.painter()
+                .cubic_bezier(self.connection_shape(src_pos, dst_pos));
+        }
+
+        // WIP: Dragging away from an already connected output port should start
+        // a disconnection.
+
         // Draw ongoing connection
         let state = ctx.memory.get::<NodeEditorWidgetState>(layout.widget_id);
         if let Some(ongoing) = &state.ongoing_connection {
@@ -229,7 +251,6 @@ impl Widget for NodeEditorWidget {
                 self.connection_shape(port_pos, ctx.input_state.mouse_state.position),
             );
         }
-
 
         // Undo transformation
         ctx.painter().clip_rect = old_clip_rect;
@@ -288,10 +309,10 @@ impl Widget for NodeEditorWidget {
         if let Some(hovered) = self.find_hovered_port(transformed_cursor_position, layout) {
             match prev_ongoing {
                 Some(ongoing) => {
-                    if primary_released && hovered.port.is_compatible(&ongoing.port) {
+                    if primary_released && hovered.is_compatible(&ongoing) {
                         if let Some(cb) = self.on_connection.take() {
-                            println!("Connection! {:?}, {:?}", hovered.port, ongoing.port);
-                            ctx.dispatch_callback(cb, (hovered.port, ongoing.port));
+                            println!("Connection! {hovered:?}, {ongoing:?}");
+                            ctx.dispatch_callback(cb, (hovered, ongoing));
                         }
                         state.ongoing_connection = None;
                         return EventStatus::Consumed;
@@ -299,7 +320,7 @@ impl Widget for NodeEditorWidget {
                 }
                 None => {
                     if primary_clicked {
-                        println!("Connection start {:?}", hovered.port);
+                        println!("Connection start {hovered:?}");
                         state.ongoing_connection = Some(hovered);
                         return EventStatus::Consumed;
                     }

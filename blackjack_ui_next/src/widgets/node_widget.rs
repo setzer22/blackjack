@@ -1,50 +1,33 @@
-use blackjack_engine::graph::{BjkNode, BjkNodeId};
+use blackjack_engine::{
+    graph::{BjkNode, BjkNodeId, DataType},
+    graph_interpreter::BjkParameter,
+};
 use epaint::{CircleShape, RectShape, Rounding};
 use guee::{input::MouseButton, prelude::*};
+use itertools::Itertools;
 
 pub struct NodePort {
     pub color: Color32,
-    pub param_name: String,
+    pub data_type: DataType,
     pub hovered: bool,
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum PortIdKind {
+    Input,
+    Output,
+}
+
 #[derive(Debug, Clone)]
-pub enum PortId {
-    Input {
-        node_id: BjkNodeId,
-        param_name: String,
-    },
-    Output {
-        node_id: BjkNodeId,
-        param_name: String,
-    },
+pub struct PortId {
+    pub param: BjkParameter,
+    pub side: PortIdKind,
+    pub data_type: DataType,
 }
 
 impl PortId {
     pub fn is_compatible(&self, other: &PortId) -> bool {
-        match (self, other) {
-            (
-                PortId::Input {
-                    node_id: input_node,
-                    ..
-                },
-                PortId::Output {
-                    node_id: output_node,
-                    ..
-                },
-            )
-            | (
-                PortId::Output {
-                    node_id: output_node,
-                    ..
-                },
-                PortId::Input {
-                    node_id: input_node,
-                    ..
-                },
-            ) => input_node != output_node,
-            _otherwise => false,
-        }
+        self.side != other.side && self.data_type == other.data_type
     }
 }
 
@@ -60,7 +43,7 @@ pub struct NodeWidget {
     pub titlebar_left: DynWidget,
     pub titlebar_right: DynWidget,
     pub bottom_ui: DynWidget,
-    pub rows: Vec<NodeRow>,
+    pub rows: Vec<(BjkParameter, NodeRow)>,
 
     pub v_separation: f32,
     pub h_separation: f32,
@@ -83,29 +66,34 @@ impl NodeWidget {
     ) -> Self {
         let mut rows = Vec::new();
         for input in &node.inputs {
-            rows.push(NodeRow {
-                input_port: Some(NodePort {
-                    color: color!("#ff0000"),
-                    param_name: input.name.clone(),
-                    // Set later, by the node editor, which does the event
-                    // checking for ports.
-                    hovered: false,
-                }),
-                contents: Text::new(input.name.clone()).build(),
-                output_port: None,
-            });
+            rows.push((
+                BjkParameter::new(node_id, input.name.clone()),
+                NodeRow {
+                    input_port: Some(NodePort {
+                        color: color!("#ff0000"),
+                        // Set later, by the node editor, which does the event
+                        // checking for ports.
+                        hovered: false,
+                        data_type: input.data_type,
+                    }),
+                    contents: Text::new(input.name.clone()).build(),
+                    output_port: None,
+                },
+            ));
         }
         for output in &node.outputs {
-            rows.push(NodeRow {
-                input_port: None,
-                contents: Text::new(output.name.clone()).build(),
-                output_port: Some(NodePort {
-                    color: color!("#00ff00"),
-                    param_name: output.name.clone(),
-                    // See above
-                    hovered: false,
-                }),
-            });
+            rows.push((
+                BjkParameter::new(node_id, output.name.clone()),
+                NodeRow {
+                    input_port: None,
+                    contents: Text::new(output.name.clone()).build(),
+                    output_port: Some(NodePort {
+                        color: color!("#00ff00"),
+                        hovered: false, // See above
+                        data_type: output.data_type,
+                    }),
+                },
+            ));
         }
 
         Self {
@@ -155,9 +143,13 @@ impl NodeWidget {
     pub fn port_visuals(
         &self,
         layout: &Layout,
-        row_idx: usize,
-        row: &NodeRow,
+        param: &BjkParameter,
     ) -> (Option<(Pos2, Color32)>, Option<(Pos2, Color32)>) {
+        let (row_idx, (_, row)) = self
+            .rows
+            .iter()
+            .find_position(|(p, _row)| p == param)
+            .expect("Invalid param");
         let row_bounds = layout.children[row_idx + 2].bounds;
         let node_bounds = layout.bounds;
         let left = Pos2::new(node_bounds.left(), row_bounds.center().y);
@@ -220,7 +212,7 @@ impl Widget for NodeWidget {
 
         // Layout row contents
         let mut row_contents = vec![];
-        for row in &mut self.rows {
+        for (_, row) in &mut self.rows {
             let row_layout = layout_widget(&mut row.contents, &mut cursor);
             row_contents.push(row_layout);
         }
@@ -282,15 +274,15 @@ impl Widget for NodeWidget {
         self.titlebar_left.widget.draw(ctx, &layout.children[0]);
         self.titlebar_right.widget.draw(ctx, &layout.children[1]);
         let row_wgt_layouts = &layout.children[2..2 + self.rows.len()];
-        for (row, row_layout) in self.rows.iter_mut().zip(row_wgt_layouts) {
+        for ((_param, row), row_layout) in self.rows.iter_mut().zip(row_wgt_layouts) {
             row.contents.widget.draw(ctx, row_layout);
         }
         self.bottom_ui
             .widget
             .draw(ctx, &layout.children[2 + self.rows.len()]);
 
-        for (i, row) in self.rows.iter().enumerate() {
-            let (left, right) = self.port_visuals(layout, i, row);
+        for (param, _row) in self.rows.iter() {
+            let (left, right) = self.port_visuals(layout, param);
             if let Some((left, color)) = left {
                 ctx.painter().circle(CircleShape {
                     center: left,
@@ -310,7 +302,7 @@ impl Widget for NodeWidget {
         }
     }
 
-    fn min_size(&mut self, ctx: &Context, available: Vec2) -> Vec2 {
+    fn min_size(&mut self, _ctx: &Context, _available: Vec2) -> Vec2 {
         unimplemented!("A node widget should not be inside a container that checks its min size")
     }
 
@@ -342,7 +334,7 @@ impl Widget for NodeWidget {
             return EventStatus::Consumed;
         }
         let row_layouts = &layout.children[2..self.rows.len()];
-        for (row, row_layout) in self.rows.iter_mut().zip(row_layouts) {
+        for ((_, row), row_layout) in self.rows.iter_mut().zip(row_layouts) {
             if let EventStatus::Consumed =
                 row.contents
                     .widget

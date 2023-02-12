@@ -12,13 +12,13 @@ use crate::graph::{BjkGraph, BjkNodeId, BlackjackValue, NodeDefinitions};
 use crate::lua_engine::{ProgramResult, RenderableThing};
 use crate::prelude::*;
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
-pub struct ExternalParameter {
+#[derive(Debug, PartialEq, Eq, Hash, Clone, PartialOrd, Ord)]
+pub struct BjkParameter {
     pub node_id: BjkNodeId,
     pub param_name: String,
 }
 
-impl ExternalParameter {
+impl BjkParameter {
     pub fn new(node_id: BjkNodeId, param_name: String) -> Self {
         Self {
             node_id,
@@ -28,7 +28,7 @@ impl ExternalParameter {
 }
 
 #[derive(Debug, Default, Clone)]
-pub struct ExternalParameterValues(pub HashMap<ExternalParameter, BlackjackValue>);
+pub struct ExternalParameterValues(pub HashMap<BjkParameter, BlackjackValue>);
 
 pub struct InterpreterContext<'a, 'lua> {
     outputs_cache: HashMap<BjkNodeId, mlua::Table<'lua>>,
@@ -113,7 +113,7 @@ pub fn run_node<'lua>(
     // Used to allow the gizmo input function to update a node's parameters.
     // This is None when gizmos don't run to optimize performance
     let mut referenced_external_params = if ctx.gizmo_state.is_some() {
-        Some(Vec::<ExternalParameter>::new())
+        Some(Vec::<BjkParameter>::new())
     } else {
         None
     };
@@ -138,7 +138,7 @@ pub fn run_node<'lua>(
                 )?;
             }
             crate::graph::DependencyKind::External { promoted: _ } => {
-                let ext = ExternalParameter::new(node_id, input.name.clone());
+                let ext = BjkParameter::new(node_id, input.name.clone());
                 let val = ctx.external_param_values.0.get(&ext).ok_or_else(|| {
                     anyhow!(
                         "Could not retrieve external parameter named '{}' from node {}",

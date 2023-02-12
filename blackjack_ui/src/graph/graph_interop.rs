@@ -16,7 +16,7 @@ use blackjack_engine::{
     graph::{
         BjkGraph, BjkNode, BjkNodeId, BjkSnippet, BlackjackValue, DependencyKind, NodeDefinitions,
     },
-    graph_interpreter::{ExternalParameter, ExternalParameterValues},
+    graph_interpreter::{BjkParameter, ExternalParameterValues},
 };
 use egui_node_graph::{InputId, NodeId, OutputId};
 use slotmap::SecondaryMap;
@@ -134,7 +134,7 @@ pub fn set_inputs_outputs_from_bjk_node(
                 let get_runtime_val = || -> BlackjackValue {
                     // Try to get the value from the external parameters
                     if let Some(ext) = external_parameters {
-                        let param = &ExternalParameter {
+                        let param = &BjkParameter {
                             node_id: bjk_node_id,
                             param_name: bjk_input.name.clone(),
                         };
@@ -291,7 +291,7 @@ pub fn extract_graph_params(
     for (node_id, node) in &bjk_graph.nodes {
         for input in &node.inputs {
             if let DependencyKind::External { .. } = input.kind {
-                let external_param = ExternalParameter::new(node_id, input.name.clone());
+                let external_param = BjkParameter::new(node_id, input.name.clone());
                 let ui_node_id = mapping[node_id];
                 let ui_input = graph[ui_node_id].get_input(&input.name)?;
                 params
