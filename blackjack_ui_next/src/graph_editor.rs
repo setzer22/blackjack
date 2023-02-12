@@ -107,31 +107,21 @@ impl GraphEditor {
         .on_pan_zoom_change(|editor: &mut GraphEditor, new_pan_zoom| {
             editor.pan_zoom = new_pan_zoom;
         })
-        .on_connection(|editor: &mut GraphEditor, (port1, port2)| {
-            let (input, output) = if port1.side == PortIdKind::Input {
-                (port1.param, port2.param)
-            } else {
-                (port2.param, port1.param)
-            };
+        .on_connection(|editor: &mut GraphEditor, conn| {
             editor
                 .graph
                 .add_connection(
-                    output.node_id,
-                    &output.param_name,
-                    input.node_id,
-                    &input.param_name,
+                    conn.output.node_id,
+                    &conn.output.param_name,
+                    conn.input.node_id,
+                    &conn.input.param_name,
                 )
                 .expect("Should not fail");
         })
-        .on_disconnection(|editor: &mut GraphEditor, (port1, port2)| {
-            let input = if port1.side == PortIdKind::Input {
-                port1.param
-            } else {
-                port2.param
-            };
+        .on_disconnection(|editor: &mut GraphEditor, disc| {
             editor
                 .graph
-                .remove_connection(input.node_id, &input.param_name)
+                .remove_connection(disc.input.node_id, &disc.input.param_name)
                 .expect("Should not fail");
         })
         .build()

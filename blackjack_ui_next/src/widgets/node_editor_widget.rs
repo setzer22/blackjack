@@ -1,3 +1,4 @@
+use blackjack_engine::graph_interpreter::BjkParameter;
 use epaint::{CubicBezierShape, Vec2};
 use guee::{
     input::MouseButton,
@@ -9,6 +10,16 @@ use itertools::Itertools;
 use crate::{pallette, widgets::node_widget::PortIdKind};
 
 use super::node_widget::{NodeWidget, PortId};
+
+pub struct Connection {
+    pub input: BjkParameter,
+    pub output: BjkParameter,
+}
+
+pub struct Disconnection {
+    pub input: BjkParameter,
+    pub output: BjkParameter,
+}
 
 #[derive(Builder)]
 #[builder(widget, skip_new)]
@@ -22,11 +33,11 @@ pub struct NodeEditorWidget {
     /// Callback is guaranteed to get passed an input and output ports (not two
     /// inputs, or two outputs), order isn't guaranteed.
     #[builder(callback)]
-    pub on_connection: Option<Callback<(PortId, PortId)>>,
+    pub on_connection: Option<Callback<Connection>>,
     /// Callback is guaranteed to get passed an input and output ports (not two
     /// inputs, or two outputs), order isn't guaranteed.
     #[builder(callback)]
-    pub on_disconnection: Option<Callback<(PortId, PortId)>>,
+    pub on_disconnection: Option<Callback<Disconnection>>,
 }
 
 pub struct NodeEditorWidgetState {
@@ -319,7 +330,18 @@ impl Widget for NodeEditorWidget {
                     if primary_released && hovered.is_compatible(&ongoing) {
                         if let Some(cb) = self.on_connection.take() {
                             println!("Connection! {hovered:?}, {ongoing:?}");
-                            ctx.dispatch_callback(cb, (hovered, ongoing));
+                            let (input, output) = if hovered.side == PortIdKind::Input {
+                                (hovered, ongoing)
+                            } else {
+                                (ongoing, hovered)
+                            };
+                            ctx.dispatch_callback(
+                                cb,
+                                Connection {
+                                    input: input.param,
+                                    output: output.param,
+                                },
+                            );
                         }
                         state.ongoing_connection = None;
                         return EventStatus::Consumed;
@@ -339,8 +361,19 @@ impl Widget for NodeEditorWidget {
                         if let Some(already) = already_connected_to {
                             if let Some(cb) = self.on_disconnection.take() {
                                 println!("Disconnection between {hovered:?} and {already:?}");
-                                ctx.dispatch_callback(cb, (hovered, already.clone()));
-                                state.ongoing_connection = Some(already.clone());
+                                let (input, output) = if hovered.side == PortIdKind::Input {
+                                    (hovered, already.clone())
+                                } else {
+                                    (already.clone(), hovered)
+                                };
+                                ctx.dispatch_callback(
+                                    cb,
+                                    Disconnection {
+                                        input: input.param,
+                                        output: output.param.clone(),
+                                    },
+                                );
+                                state.ongoing_connection = Some(output);
                             }
                         } else {
                             println!("Connection start {hovered:?}");
