@@ -75,16 +75,11 @@ pub fn blackjack_theme() -> Theme {
 
 fn view(state: &AppState) -> DynWidget {
     fn panel(key: &str) -> DynWidget {
-        MarginContainer::new(
-            IdGen::key("margin"),
-            ColoredBox::new(IdGen::key(key))
-                .hints(LayoutHints::fill())
-                .fill(color!("#191919"))
-                .stroke(Stroke::new(1.0, color!("#9b9b9b")))
-                .build(),
-        )
-        .margin(Vec2::new(10.0, 10.0))
-        .build()
+        ColoredBox::new(IdGen::key(key))
+            .hints(LayoutHints::fill())
+            .fill(color!("#191919"))
+            .stroke(Stroke::new(1.0, color!("#9b9b9b")))
+            .build()
     }
 
     StackContainer::new(
@@ -126,7 +121,8 @@ fn view(state: &AppState) -> DynWidget {
 fn main() {
     let screen_size = Vec2::new(1024.0, 768.0);
     let mut ctx = Context::new(screen_size);
-    ctx.accessor_registry.register_accessor(|state: &mut AppState| &mut state.graph_editor);
+    ctx.accessor_registry
+        .register_accessor(|state: &mut AppState| &mut state.graph_editor);
     ctx.set_theme(blackjack_theme());
 
     let event_loop = EventLoop::new();
@@ -155,7 +151,6 @@ fn main() {
 
                 let mut textures_delta = TexturesDelta::default();
                 if let Some(img_delta) = ctx.painter.borrow().fonts.font_image_delta() {
-                    dbg!("updating fonts");
                     textures_delta.set.push((TextureId::default(), img_delta));
                 }
                 painter.paint_and_update_textures(

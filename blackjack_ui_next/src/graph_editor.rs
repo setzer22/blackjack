@@ -3,12 +3,12 @@ use blackjack_engine::{
     lua_engine::LuaRuntime,
 };
 use epaint::Vec2;
-use guee::{widget_id::IdGen, widget::DynWidget};
+use guee::{prelude::Callback, widget::DynWidget, widget_id::IdGen};
 use slotmap::SecondaryMap;
 
 use crate::widgets::{
     node_editor_widget::{NodeEditorWidget, PanZoom},
-    node_widget::NodeWidget,
+    node_widget::{NodeWidget, PortId},
 };
 
 pub struct GraphEditor {
@@ -36,6 +36,11 @@ impl GraphEditor {
             .unwrap();
         node_positions.insert(node, Vec2::new(300.0, 150.0));
 
+        let node = graph
+            .spawn_node("BevelEdges", &runtime.node_definitions)
+            .unwrap();
+        node_positions.insert(node, Vec2::new(400.0, 200.0));
+
         Self {
             lua_runtime: runtime,
             node_positions,
@@ -48,7 +53,13 @@ impl GraphEditor {
         let node_widgets = self.graph.nodes.iter().map(|(node_id, node)| {
             (
                 self.node_positions[node_id],
-                NodeWidget::from_bjk_node(node_id, node),
+                NodeWidget::from_bjk_node(
+                    node_id,
+                    node,
+                    Callback::from_fn(move |editor: &mut GraphEditor, new_pos| {
+                        editor.node_positions[node_id] += new_pos;
+                    }),
+                ),
             )
         });
 
@@ -59,6 +70,35 @@ impl GraphEditor {
         )
         .on_pan_zoom_change(|editor: &mut GraphEditor, new_pan_zoom| {
             editor.pan_zoom = new_pan_zoom;
+        })
+        .on_connection(|editor: &mut GraphEditor, (port1, port2)| {
+            let (input_node, input_param, output_node, output_param) = match (port1, port2) {
+                (
+                    PortId::Input {
+                        node_id: input_node,
+                        param_name: input_param,
+                    },
+                    PortId::Output {
+                        node_id: output_node,
+                        param_name: output_param,
+                    },
+                )
+                | (
+                    PortId::Output {
+                        node_id: output_node,
+                        param_name: output_param,
+                    },
+                    PortId::Input {
+                        node_id: input_node,
+                        param_name: input_param,
+                    },
+                ) => (input_node, input_param, output_node, output_param),
+                _ => unreachable!(),
+            };
+            editor
+                .graph
+                .add_connection(output_node, &output_param, input_node, &input_param)
+                .expect("Should not fail");
         })
         .build()
     }

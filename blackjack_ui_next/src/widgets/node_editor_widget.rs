@@ -1,20 +1,40 @@
-use epaint::Vec2;
+use blackjack_engine::graph::BjkNodeId;
+use epaint::{CubicBezierShape, Vec2};
 use guee::{
     input::MouseButton,
     painter::TranslateScale,
     prelude::{guee_derives::Builder, *},
 };
+use itertools::Itertools;
 
-use super::node_widget::NodeWidget;
+use crate::pallette;
+
+use super::node_widget::{NodeWidget, PortId};
 
 #[derive(Builder)]
-#[builder(widget)]
+#[builder(widget, skip_new)]
 pub struct NodeEditorWidget {
     pub id: IdGen,
     pub node_widgets: Vec<(Vec2, NodeWidget)>,
     pub pan_zoom: PanZoom,
     #[builder(callback)]
     pub on_pan_zoom_change: Option<Callback<PanZoom>>,
+    /// Callback is guaranteed to get passed an input and output ports (not two
+    /// inputs, or two outputs), order isn't guaranteed.
+    #[builder(callback)]
+    pub on_connection: Option<Callback<(PortId, PortId)>>,
+}
+
+#[derive(Clone)]
+pub struct PortLocator {
+    pub node_id: BjkNodeId,
+    pub row_idx: usize,
+    pub port: PortId,
+}
+
+pub struct NodeEditorWidgetState {
+    pub panning: bool,
+    pub ongoing_connection: Option<PortLocator>,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -25,7 +45,10 @@ pub struct PanZoom {
 
 impl Default for PanZoom {
     fn default() -> Self {
-        Self { pan: Vec2::ZERO, zoom: 1.0 }
+        Self {
+            pan: Vec2::ZERO,
+            zoom: 1.0,
+        }
     }
 }
 
@@ -59,11 +82,20 @@ impl PanZoom {
 
         self.pan += pan_correction;
         self.zoom = zoom_new;
-        dbg!(self);
     }
 }
 
 impl NodeEditorWidget {
+    pub fn new(id_gen: IdGen, node_widgets: Vec<(Vec2, NodeWidget)>, pan_zoom: PanZoom) -> Self {
+        Self {
+            id: id_gen,
+            node_widgets,
+            pan_zoom,
+            on_pan_zoom_change: None,
+            on_connection: None,
+        }
+    }
+
     // Given the screen coordinates of the top-left corner of the node editor,
     // returns the the direct transform to be applied to the nodes when
     // rendering them.
@@ -86,6 +118,81 @@ impl NodeEditorWidget {
             .translated(-self.pan_zoom.pan)
             .translated(top_left)
     }
+
+    /// Returns the currently hovered port, if any. Also marks the port itself
+    /// as hovered (by mutating it) so that it can react to it when being drawn
+    /// during the draw phase.
+    pub fn find_hovered_port(
+        &mut self,
+        cursor_position: Pos2,
+        layout: &Layout,
+    ) -> Option<PortLocator> {
+        for ((_, node), node_layout) in self.node_widgets.iter_mut().zip(&layout.children) {
+            for i in 0..node.rows.len() {
+                let (left, right) = node.port_visuals(node_layout, i, &node.rows[i]);
+                if let Some((left_pos, _)) = left {
+                    if cursor_position.distance(left_pos) < NodeWidget::PORT_RADIUS {
+                        let port = node.rows[i].input_port.as_mut().unwrap();
+                        port.hovered = true;
+                        return Some(PortLocator {
+                            node_id: node.node_id,
+                            row_idx: i,
+                            port: PortId::Input {
+                                node_id: node.node_id,
+                                param_name: port.param_name.clone(),
+                            },
+                        });
+                    }
+                }
+                if let Some((right_pos, _)) = right {
+                    if cursor_position.distance(right_pos) < NodeWidget::PORT_RADIUS {
+                        let port = node.rows[i].output_port.as_mut().unwrap();
+                        port.hovered = true;
+                        return Some(PortLocator {
+                            node_id: node.node_id,
+                            row_idx: i,
+                            port: PortId::Output {
+                                node_id: node.node_id,
+                                param_name: port.param_name.clone(),
+                            },
+                        });
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    pub fn port_pos(&self, layout: &Layout, locator: &PortLocator) -> Pos2 {
+        let (node_idx, (_, node_widget)) = self
+            .node_widgets
+            .iter()
+            .find_position(|(_, n)| n.node_id == locator.node_id)
+            .unwrap();
+        let node_layout = &layout.children[node_idx];
+        let (left, right) = node_widget.port_visuals(
+            node_layout,
+            locator.row_idx,
+            &node_widget.rows[locator.row_idx],
+        );
+        match locator.port {
+            PortId::Input { .. } => left.unwrap().0,
+            PortId::Output { .. } => right.unwrap().0,
+        }
+    }
+
+    pub fn connection_shape(&self, src: Pos2, dst: Pos2) -> CubicBezierShape {
+        let stroke = Stroke::new(5.0, pallette().widget_fg);
+        let control_scale = ((dst.x - src.x) / 2.0).max(30.0);
+        let src_control = src + Vec2::X * control_scale;
+        let dst_control = dst - Vec2::X * control_scale;
+        CubicBezierShape {
+            points: [src, src_control, dst_control, dst],
+            closed: false,
+            fill: Color32::TRANSPARENT,
+            stroke,
+        }
+    }
 }
 
 impl Widget for NodeEditorWidget {
@@ -100,14 +207,32 @@ impl Widget for NodeEditorWidget {
     }
 
     fn draw(&mut self, ctx: &Context, layout: &Layout) {
-        let old_transform = ctx.painter().transform;
         let top_left = layout.bounds.left_top();
+
+        // Setup transformation
+        let old_transform = ctx.painter().transform;
+        let old_clip_rect = ctx.painter().clip_rect;
         ctx.painter().transform = self.direct_transform(top_left.to_vec2());
-        // TODO: Set clip rect
+        ctx.painter().clip_rect = layout.bounds;
+
+        // Draw nodes
         for ((_pos, node_widget), node_layout) in self.node_widgets.iter_mut().zip(&layout.children)
         {
             node_widget.draw(ctx, node_layout)
         }
+
+        // Draw ongoing connection
+        let state = ctx.memory.get::<NodeEditorWidgetState>(layout.widget_id);
+        if let Some(ongoing) = &state.ongoing_connection {
+            let port_pos = self.port_pos(layout, ongoing);
+            ctx.painter().cubic_bezier(
+                self.connection_shape(port_pos, ctx.input_state.mouse_state.position),
+            );
+        }
+
+
+        // Undo transformation
+        ctx.painter().clip_rect = old_clip_rect;
         ctx.painter().transform = old_transform;
     }
 
@@ -140,21 +265,64 @@ impl Widget for NodeEditorWidget {
             }
         }
 
+        let mut state = ctx.memory.get_mut_or(
+            layout.widget_id,
+            NodeEditorWidgetState {
+                panning: false,
+                ongoing_connection: None,
+            },
+        );
+
         let mut event_status = EventStatus::Ignored;
         let contains_cursor = layout.bounds.contains(cursor_position);
+
+        // Check events on ports
+        let primary_clicked = events
+            .iter()
+            .any(|ev| matches!(&ev, Event::MousePressed(MouseButton::Primary)));
+        let primary_released = events
+            .iter()
+            .any(|ev| matches!(&ev, Event::MouseReleased(MouseButton::Primary)));
+
+        let prev_ongoing = state.ongoing_connection.clone();
+        if let Some(hovered) = self.find_hovered_port(transformed_cursor_position, layout) {
+            match prev_ongoing {
+                Some(ongoing) => {
+                    if primary_released && hovered.port.is_compatible(&ongoing.port) {
+                        if let Some(cb) = self.on_connection.take() {
+                            println!("Connection! {:?}, {:?}", hovered.port, ongoing.port);
+                            ctx.dispatch_callback(cb, (hovered.port, ongoing.port));
+                        }
+                        state.ongoing_connection = None;
+                        return EventStatus::Consumed;
+                    }
+                }
+                None => {
+                    if primary_clicked {
+                        println!("Connection start {:?}", hovered.port);
+                        state.ongoing_connection = Some(hovered);
+                        return EventStatus::Consumed;
+                    }
+                }
+            }
+        }
+        if primary_released {
+            // If this was a connection end, we would've returned by now.
+            println!("Connection dropped");
+            state.ongoing_connection = None;
+        }
+
         for event in events {
             match event {
-                Event::MousePressed(MouseButton::Middle) if contains_cursor => {}
-                Event::MouseReleased(MouseButton::Middle) => {}
-                Event::MouseMoved(_) => {
-                    // The mouse delta, in untransformed screen-space units
-                    let delta_screen = ctx.input_state.mouse_state.delta();
+                Event::MousePressed(MouseButton::Middle) if contains_cursor => {
+                    state.panning = true;
+                    event_status = EventStatus::Consumed;
+                }
+                Event::MouseReleased(MouseButton::Middle) => {
+                    state.panning = false;
+                    event_status = EventStatus::Consumed;
                 }
                 Event::MouseWheel(scroll) if contains_cursor => {
-                    // WIP:
-                    // - Zoom quickly goes to "inf", it's broken
-                    // - The painter does not take the current transform into account
-                    println!("Mouse wheel {scroll:?}");
                     self.pan_zoom.adjust_zoom(
                         scroll.y * 0.05,
                         cursor_position - layout.bounds.left_top().to_vec2(),
@@ -168,6 +336,15 @@ impl Widget for NodeEditorWidget {
                 }
                 _ => {}
             }
+        }
+
+        if state.panning {
+            let delta_screen = ctx.input_state.mouse_state.delta();
+            self.pan_zoom.pan += delta_screen;
+            if let Some(cb) = self.on_pan_zoom_change.take() {
+                ctx.dispatch_callback(cb, self.pan_zoom);
+            }
+            event_status = EventStatus::Consumed;
         }
 
         event_status
