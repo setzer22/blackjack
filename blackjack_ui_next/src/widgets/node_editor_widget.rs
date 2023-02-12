@@ -326,7 +326,6 @@ impl Widget for NodeEditorWidget {
                 Some(ongoing) => {
                     if primary_released && hovered.is_compatible(&ongoing) {
                         if let Some(cb) = self.on_connection.take() {
-                            println!("Connection! {hovered:?}, {ongoing:?}");
                             let (input, output) = if hovered.side == PortIdKind::Input {
                                 (hovered, ongoing)
                             } else {
@@ -357,7 +356,6 @@ impl Widget for NodeEditorWidget {
                         });
                         if let Some(already) = already_connected_to {
                             if let Some(cb) = self.on_disconnection.take() {
-                                println!("Disconnection between {hovered:?} and {already:?}");
                                 let (input, output) = if hovered.side == PortIdKind::Input {
                                     (hovered, already.clone())
                                 } else {
@@ -373,7 +371,6 @@ impl Widget for NodeEditorWidget {
                                 state.ongoing_connection = Some(output);
                             }
                         } else {
-                            println!("Connection start {hovered:?}");
                             state.ongoing_connection = Some(hovered);
                             return EventStatus::Consumed;
                         }
@@ -383,7 +380,6 @@ impl Widget for NodeEditorWidget {
         }
         if primary_released {
             // If this was a connection end, we would've returned by now.
-            println!("Connection dropped");
             state.ongoing_connection = None;
         }
 

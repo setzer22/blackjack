@@ -1,7 +1,9 @@
 use egui_wgpu::{winit::Painter, WgpuConfiguration};
 
 use graph_editor::GraphEditor;
-use guee::{base_widgets::split_pane_container::SplitPaneContainerStyle, prelude::*};
+use guee::{
+    base_widgets::split_pane_container::SplitPaneContainerStyle, painter::ExtraFont, prelude::*,
+};
 use winit::{
     event_loop::{ControlFlow, EventLoop},
     window::WindowBuilder,
@@ -112,7 +114,14 @@ fn view(state: &AppState) -> DynWidget {
 
 fn main() {
     let screen_size = Vec2::new(1024.0, 768.0);
-    let mut ctx = Context::new(screen_size);
+    let mut ctx = Context::new(
+        screen_size,
+        vec![ExtraFont {
+            font_family: epaint::FontFamily::Proportional,
+            name: "NunitoSans-Regular",
+            data: include_bytes!("../resources/fonts/NunitoSans-Regular.ttf"),
+        }],
+    );
     ctx.accessor_registry
         .register_accessor(|state: &mut AppState| &mut state.graph_editor);
     ctx.set_theme(blackjack_theme());
