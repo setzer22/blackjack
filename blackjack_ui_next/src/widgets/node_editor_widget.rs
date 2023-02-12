@@ -256,11 +256,6 @@ impl Widget for NodeEditorWidget {
                 .cubic_bezier(self.connection_shape(src_pos, dst_pos));
         }
 
-        // WIP: Dragging away from an already connected output port should start
-        // a disconnection.
-        //
-        // WIP2: Node drag is broken when zooming. Panning is too
-
         // Draw ongoing connection
         let state = ctx.memory.get::<NodeEditorWidgetState>(layout.widget_id);
         if let Some(ongoing) = &state.ongoing_connection {
@@ -417,7 +412,7 @@ impl Widget for NodeEditorWidget {
         }
 
         if state.panning {
-            let delta_screen = ctx.input_state.mouse_state.delta();
+            let delta_screen = ctx.input_state.mouse_state.delta() / self.pan_zoom.zoom;
             self.pan_zoom.pan += delta_screen;
             if let Some(cb) = self.on_pan_zoom_change.take() {
                 ctx.dispatch_callback(cb, self.pan_zoom);
