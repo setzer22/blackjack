@@ -1,12 +1,12 @@
 use blackjack_engine::{
-    graph::{BjkNode, BjkNodeId, DataType},
+    graph::{BjkNodeId, DataType},
     graph_interpreter::BjkParameter,
 };
 use epaint::{CircleShape, RectShape, Rounding};
 use guee::{input::MouseButton, prelude::*};
 use itertools::Itertools;
 
-pub struct NodePort {
+pub struct NodeWidgetPort {
     pub color: Color32,
     pub data_type: DataType,
     pub hovered: bool,
@@ -31,10 +31,10 @@ impl PortId {
     }
 }
 
-pub struct NodeRow {
-    pub input_port: Option<NodePort>,
+pub struct NodeWidgetRow {
+    pub input_port: Option<NodeWidgetPort>,
     pub contents: DynWidget,
-    pub output_port: Option<NodePort>,
+    pub output_port: Option<NodeWidgetPort>,
 }
 
 pub struct NodeWidget {
@@ -43,7 +43,7 @@ pub struct NodeWidget {
     pub titlebar_left: DynWidget,
     pub titlebar_right: DynWidget,
     pub bottom_ui: DynWidget,
-    pub rows: Vec<(BjkParameter, NodeRow)>,
+    pub rows: Vec<(BjkParameter, NodeWidgetRow)>,
 
     pub v_separation: f32,
     pub h_separation: f32,
@@ -58,69 +58,6 @@ pub struct NodeWidgetState {
 
 impl NodeWidget {
     pub const PORT_RADIUS: f32 = 5.0;
-
-    pub fn from_bjk_node(
-        node_id: BjkNodeId,
-        node: &BjkNode,
-        on_node_dragged: Callback<Vec2>,
-    ) -> Self {
-        let mut rows = Vec::new();
-        for input in &node.inputs {
-            rows.push((
-                BjkParameter::new(node_id, input.name.clone()),
-                NodeRow {
-                    input_port: Some(NodePort {
-                        color: color!("#ff0000"),
-                        // Set later, by the node editor, which does the event
-                        // checking for ports.
-                        hovered: false,
-                        data_type: input.data_type,
-                    }),
-                    contents: Text::new(input.name.clone()).build(),
-                    output_port: None,
-                },
-            ));
-        }
-        for output in &node.outputs {
-            rows.push((
-                BjkParameter::new(node_id, output.name.clone()),
-                NodeRow {
-                    input_port: None,
-                    contents: Text::new(output.name.clone()).build(),
-                    output_port: Some(NodePort {
-                        color: color!("#00ff00"),
-                        hovered: false, // See above
-                        data_type: output.data_type,
-                    }),
-                },
-            ));
-        }
-
-        Self {
-            id: IdGen::key(node_id),
-            node_id,
-            titlebar_left: MarginContainer::new(
-                IdGen::key("margin_l"),
-                Text::new(node.op_name.clone()).build(),
-            )
-            .margin(Vec2::new(10.0, 10.0))
-            .build(),
-            titlebar_right: MarginContainer::new(
-                IdGen::key("margin_r"),
-                Button::with_label("x").padding(Vec2::ZERO).build(),
-            )
-            .margin(Vec2::new(10.0, 10.0))
-            .build(),
-            bottom_ui: Button::with_label("Set Active")
-                .padding(Vec2::new(5.0, 3.0))
-                .build(),
-            rows,
-            v_separation: 4.0,
-            h_separation: 12.0,
-            extra_v_separation: 3.0,
-            on_node_dragged: Some(on_node_dragged),
-        }
-    }
 
     /// Returns the bounding box of the titlebar, given the `layout` tree.
     fn titlebar_rect(&self, layout: &Layout) -> Rect {

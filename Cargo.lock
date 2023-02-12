@@ -527,6 +527,7 @@ dependencies = [
 name = "blackjack_ui_next"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "blackjack_engine",
  "egui-wgpu 0.20.0",
  "epaint 0.20.0",

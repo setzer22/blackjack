@@ -14,3 +14,4 @@ egui-wgpu = { git = "https://github.com/emilk/egui", rev = "c58ac86935123415ea3c
 guee = { path = "../guee/guee" }
 pollster = "0.2"
 slotmap = "1.0"
+anyhow = "1.0"

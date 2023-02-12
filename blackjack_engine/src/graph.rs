@@ -362,6 +362,7 @@ impl NodeDefinitions {
     pub fn node_names(&self) -> Vec<String> {
         self.inner.borrow().0.keys().cloned().collect()
     }
+
     pub fn node_def(&self, op_name: &str) -> Option<impl Deref<Target = NodeDefinition> + '_> {
         let guard = self.inner.borrow();
         if guard.0.contains_key(op_name) {
@@ -370,6 +371,38 @@ impl NodeDefinitions {
             None
         }
     }
+
+    pub fn input_def(
+        &self,
+        op_name: &str,
+        param_name: &str,
+    ) -> Option<impl Deref<Target = InputDefinition> + '_> {
+        let guard = self.inner.borrow();
+        if guard.0.contains_key(op_name) {
+            if guard
+                .0
+                .get(op_name)
+                .unwrap()
+                .inputs
+                .iter()
+                .any(|x| x.name == param_name)
+            {
+                Some(Ref::map(guard, |x| {
+                    x.0.get(op_name)
+                        .unwrap()
+                        .inputs
+                        .iter()
+                        .find(|x| x.name == param_name)
+                        .unwrap()
+                }))
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+
     pub fn update(&self, new_data: NodeDefinitionsInner) {
         *self.inner.borrow_mut() = new_data;
     }
@@ -496,6 +529,10 @@ impl NodeDefinition {
                 })
                 .collect::<Result<_>>()?,
         ))
+    }
+
+    pub fn input_def(&self, input_name: &str) -> Option<&InputDefinition> {
+        self.inputs.iter().find(|i| i.name == input_name)
     }
 }
 
