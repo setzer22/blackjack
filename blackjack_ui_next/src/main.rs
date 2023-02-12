@@ -4,29 +4,23 @@ use blackjack_engine::{
 };
 use egui_wgpu::{winit::Painter, WgpuConfiguration};
 
-use epaint::{
-    ahash::{HashMap, HashMapExt},
-    Rounding,
-};
+use graph_editor::GraphEditor;
 use guee::{base_widgets::split_pane_container::SplitPaneContainerStyle, prelude::*};
-use node_editor_widget::PanZoom;
 use slotmap::SecondaryMap;
+use widgets::node_editor_widget::PanZoom;
 use winit::{
     event_loop::{ControlFlow, EventLoop},
     window::WindowBuilder,
 };
 
-use crate::{node_editor_widget::NodeEditorWidget, node_widget::NodeWidget};
+use crate::widgets::{node_editor_widget::NodeEditorWidget, node_widget::NodeWidget};
 
-pub mod node_editor_widget;
+pub mod widgets;
 
-pub mod node_widget;
+pub mod graph_editor;
 
 pub struct AppState {
-    lua_runtime: LuaRuntime,
-    graph_pan_zoom: PanZoom,
-    graph: BjkGraph,
-    node_positions: SecondaryMap<BjkNodeId, Vec2>,
+    graph_editor: GraphEditor,
 }
 
 pub struct BlackjackPallette {
@@ -79,31 +73,6 @@ pub fn blackjack_theme() -> Theme {
     theme
 }
 
-fn test_state() -> AppState {
-    // TODO: Hardcoded path
-    let runtime = LuaRuntime::initialize_with_std("./blackjack_lua/".into())
-        .expect("Lua init should not fail");
-    let mut graph = BjkGraph::new();
-    let mut node_positions = SecondaryMap::new();
-
-    let node = graph
-        .spawn_node("MakeBox", &runtime.node_definitions)
-        .unwrap();
-    node_positions.insert(node, Vec2::new(40.0, 50.0));
-
-    let node = graph
-        .spawn_node("MakeCircle", &runtime.node_definitions)
-        .unwrap();
-    node_positions.insert(node, Vec2::new(300.0, 150.0));
-
-    AppState {
-        lua_runtime: runtime,
-        node_positions,
-        graph_pan_zoom: PanZoom::default(),
-        graph,
-    }
-}
-
 fn view(state: &AppState) -> DynWidget {
     fn panel(key: &str) -> DynWidget {
         MarginContainer::new(
@@ -117,23 +86,6 @@ fn view(state: &AppState) -> DynWidget {
         .margin(Vec2::new(10.0, 10.0))
         .build()
     }
-
-    let node_widgets = state.graph.nodes.iter().map(|(node_id, node)| {
-        (
-            state.node_positions[node_id],
-            NodeWidget::from_bjk_node(node_id, node),
-        )
-    });
-
-    let node_editor = NodeEditorWidget::new(
-        IdGen::key("node_editor"),
-        node_widgets.collect(),
-        state.graph_pan_zoom,
-    )
-    .on_pan_zoom_change(|state: &mut AppState, new_pan_zoom| {
-        state.graph_pan_zoom = new_pan_zoom;
-    })
-    .build();
 
     StackContainer::new(
         IdGen::key("stack"),
@@ -157,7 +109,10 @@ fn view(state: &AppState) -> DynWidget {
                     .build(),
                     StackContainer::new(
                         IdGen::key("bot_stack"),
-                        vec![(Vec2::ZERO, panel("bottom")), (Vec2::ZERO, node_editor)],
+                        vec![
+                            (Vec2::ZERO, panel("bottom")),
+                            (Vec2::ZERO, state.graph_editor.view()),
+                        ],
                     )
                     .build(),
                 )
@@ -171,6 +126,7 @@ fn view(state: &AppState) -> DynWidget {
 fn main() {
     let screen_size = Vec2::new(1024.0, 768.0);
     let mut ctx = Context::new(screen_size);
+    ctx.accessor_registry.register_accessor(|state: &mut AppState| &mut state.graph_editor);
     ctx.set_theme(blackjack_theme());
 
     let event_loop = EventLoop::new();
@@ -186,7 +142,9 @@ fn main() {
     let mut painter = Painter::new(WgpuConfiguration::default(), 1, 0);
     unsafe { pollster::block_on(painter.set_window(Some(&window))).unwrap() };
 
-    let mut state = test_state();
+    let mut state = AppState {
+        graph_editor: GraphEditor::new(),
+    };
 
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Wait;
@@ -197,6 +155,7 @@ fn main() {
 
                 let mut textures_delta = TexturesDelta::default();
                 if let Some(img_delta) = ctx.painter.borrow().fonts.font_image_delta() {
+                    dbg!("updating fonts");
                     textures_delta.set.push((TextureId::default(), img_delta));
                 }
                 painter.paint_and_update_textures(

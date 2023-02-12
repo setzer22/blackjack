@@ -1,10 +1,11 @@
-use crate::node_widget::NodeWidget;
 use epaint::Vec2;
 use guee::{
     input::MouseButton,
     painter::TranslateScale,
     prelude::{guee_derives::Builder, *},
 };
+
+use super::node_widget::NodeWidget;
 
 #[derive(Builder)]
 #[builder(widget)]

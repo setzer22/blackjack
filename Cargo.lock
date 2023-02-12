@@ -529,7 +529,7 @@ version = "0.1.0"
 dependencies = [
  "blackjack_engine",
  "egui-wgpu 0.20.0",
- "epaint 0.20.0",
+ "epaint 0.20.0 (git+https://github.com/emilk/egui?rev=c58ac86935123415ea3c1531d735e708465267b6)",
  "guee",
  "itertools",
  "pollster",
@@ -1144,6 +1144,13 @@ checksum = "4f94fa09c2aeea5b8839e414b7b841bf429fd25b9c522116ac97ee87856d88b2"
 [[package]]
 name = "ecolor"
 version = "0.20.0"
+dependencies = [
+ "bytemuck",
+]
+
+[[package]]
+name = "ecolor"
+version = "0.20.0"
 source = "git+https://github.com/emilk/egui?rev=c58ac86935123415ea3c1531d735e708465267b6#c58ac86935123415ea3c1531d735e708465267b6"
 dependencies = [
  "bytemuck",
@@ -1187,7 +1194,7 @@ version = "0.20.0"
 source = "git+https://github.com/emilk/egui?rev=c58ac86935123415ea3c1531d735e708465267b6#c58ac86935123415ea3c1531d735e708465267b6"
 dependencies = [
  "bytemuck",
- "epaint 0.20.0",
+ "epaint 0.20.0 (git+https://github.com/emilk/egui?rev=c58ac86935123415ea3c1531d735e708465267b6)",
  "tracing",
  "type-map",
  "wgpu 0.14.2",
@@ -1229,6 +1236,13 @@ checksum = "90e5c1c8368803113bf0c9584fc495a58b86dc8a29edbf8fe877d21d9507e797"
 name = "emath"
 version = "0.19.0"
 source = "git+https://github.com/setzer22/egui?branch=egui_0_19_plus_pr_2051#45d9c8f7ceded048631c8fc73f748bfd53b8cef4"
+dependencies = [
+ "bytemuck",
+]
+
+[[package]]
+name = "emath"
+version = "0.20.0"
 dependencies = [
  "bytemuck",
 ]
@@ -1313,14 +1327,28 @@ dependencies = [
 [[package]]
 name = "epaint"
 version = "0.20.0"
+dependencies = [
+ "ab_glyph",
+ "ahash 0.8.3",
+ "atomic_refcell",
+ "bytemuck",
+ "ecolor 0.20.0",
+ "emath 0.20.0",
+ "nohash-hasher",
+ "parking_lot",
+]
+
+[[package]]
+name = "epaint"
+version = "0.20.0"
 source = "git+https://github.com/emilk/egui?rev=c58ac86935123415ea3c1531d735e708465267b6#c58ac86935123415ea3c1531d735e708465267b6"
 dependencies = [
  "ab_glyph",
  "ahash 0.8.3",
  "atomic_refcell",
  "bytemuck",
- "ecolor",
- "emath 0.20.0",
+ "ecolor 0.20.0 (git+https://github.com/emilk/egui?rev=c58ac86935123415ea3c1531d735e708465267b6)",
+ "emath 0.20.0 (git+https://github.com/emilk/egui?rev=c58ac86935123415ea3c1531d735e708465267b6)",
  "nohash-hasher",
  "parking_lot",
 ]

@@ -7,8 +7,10 @@ edition = "2021"
 blackjack_engine = { path = "../blackjack_engine" }
 itertools = "0.10.5"
 winit = "0.27.2"
-epaint = { git = "https://github.com/emilk/egui", rev = "c58ac86935123415ea3c1531d735e708465267b6", features = ["bytemuck"] }
 egui-wgpu = { git = "https://github.com/emilk/egui", rev = "c58ac86935123415ea3c1531d735e708465267b6", features = ["winit"] }
+ epaint = { git = "https://github.com/emilk/egui", rev = "c58ac86935123415ea3c1531d735e708465267b6", features = ["bytemuck"] }
+# egui-wgpu = { path = "../../egui/crates/egui-wgpu", features = ["winit"] }
+# epaint = { path = "../../egui/crates/epaint", features = ["bytemuck"] }
 guee = { path = "../guee/guee" }
 pollster = "0.2"
 slotmap = "1.0"
