@@ -260,9 +260,11 @@ impl Widget for NodeEditorWidget {
         let state = ctx.memory.get::<NodeEditorWidgetState>(layout.widget_id);
         if let Some(ongoing) = &state.ongoing_connection {
             let port_pos = self.port_pos(layout, ongoing);
-            ctx.painter().cubic_bezier(
-                self.connection_shape(port_pos, ctx.input_state.mouse_state.position),
-            );
+            let mouse_pos = self
+                .cursor_transform(layout.bounds.left_top().to_vec2())
+                .transform_point(ctx.input_state.mouse_state.position);
+            ctx.painter()
+                .cubic_bezier(self.connection_shape(port_pos, mouse_pos));
         }
 
         // Undo transformation

@@ -58,8 +58,9 @@ impl GraphEditor {
                 NodeWidget::from_bjk_node(
                     node_id,
                     node,
-                    Callback::from_fn(move |editor: &mut GraphEditor, new_pos| {
-                        editor.node_positions[node_id] += new_pos;
+                    // On dragged
+                    Callback::from_fn(move |editor: &mut GraphEditor, delta| {
+                        editor.node_positions[node_id] += delta / editor.pan_zoom.zoom;
                     }),
                 ),
             )
