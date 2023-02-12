@@ -23,6 +23,10 @@ pub struct NodeEditorWidget {
     /// inputs, or two outputs), order isn't guaranteed.
     #[builder(callback)]
     pub on_connection: Option<Callback<(PortId, PortId)>>,
+    /// Callback is guaranteed to get passed an input and output ports (not two
+    /// inputs, or two outputs), order isn't guaranteed.
+    #[builder(callback)]
+    pub on_disconnection: Option<Callback<(PortId, PortId)>>,
 }
 
 pub struct NodeEditorWidgetState {
@@ -92,6 +96,7 @@ impl NodeEditorWidget {
             pan_zoom,
             on_pan_zoom_change: None,
             on_connection: None,
+            on_disconnection: None,
         }
     }
 
@@ -242,6 +247,8 @@ impl Widget for NodeEditorWidget {
 
         // WIP: Dragging away from an already connected output port should start
         // a disconnection.
+        //
+        // WIP2: Node drag is broken when zooming. Panning is too
 
         // Draw ongoing connection
         let state = ctx.memory.get::<NodeEditorWidgetState>(layout.widget_id);
@@ -320,9 +327,26 @@ impl Widget for NodeEditorWidget {
                 }
                 None => {
                     if primary_clicked {
-                        println!("Connection start {hovered:?}");
-                        state.ongoing_connection = Some(hovered);
-                        return EventStatus::Consumed;
+                        let already_connected_to = self.connections.iter().find_map(|(a, b)| {
+                            if a == &hovered {
+                                Some(b)
+                            } else if b == &hovered {
+                                Some(a)
+                            } else {
+                                None
+                            }
+                        });
+                        if let Some(already) = already_connected_to {
+                            if let Some(cb) = self.on_disconnection.take() {
+                                println!("Disconnection between {hovered:?} and {already:?}");
+                                ctx.dispatch_callback(cb, (hovered, already.clone()));
+                                state.ongoing_connection = Some(already.clone());
+                            }
+                        } else {
+                            println!("Connection start {hovered:?}");
+                            state.ongoing_connection = Some(hovered);
+                            return EventStatus::Consumed;
+                        }
                     }
                 }
             }

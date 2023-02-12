@@ -123,6 +123,17 @@ impl GraphEditor {
                 )
                 .expect("Should not fail");
         })
+        .on_disconnection(|editor: &mut GraphEditor, (port1, port2)| {
+            let input = if port1.side == PortIdKind::Input {
+                port1.param
+            } else {
+                port2.param
+            };
+            editor
+                .graph
+                .remove_connection(input.node_id, &input.param_name)
+                .expect("Should not fail");
+        })
         .build()
     }
 }

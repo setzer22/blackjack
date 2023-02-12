@@ -18,7 +18,7 @@ pub enum PortIdKind {
     Output,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PortId {
     pub param: BjkParameter,
     pub side: PortIdKind,

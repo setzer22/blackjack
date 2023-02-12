@@ -587,12 +587,28 @@ impl BjkGraph {
                 );
             }
 
+            // NOTE: Here, we're erasing any previous promoted name that may
+            // have been given to this parameter. This may or may not be OK,
+            // UX-wise?
             input.kind = DependencyKind::Connection {
                 node: src_node,
                 param_name: src_param.into(),
             }
         } else {
             bail!("Input parameter named {dst_param} does not exist for node {dst_node:?}");
+        }
+        Ok(())
+    }
+
+    pub fn remove_connection(&mut self, src_node: BjkNodeId, src_param: &str) -> Result<()> {
+        if let Some(input) = self.nodes[src_node]
+            .inputs
+            .iter_mut()
+            .find(|input| input.name == src_param)
+        {
+            input.kind = DependencyKind::External { promoted: None };
+        } else {
+            bail!("Input parameter named {src_param} does not exist for {src_node:?}");
         }
         Ok(())
     }
