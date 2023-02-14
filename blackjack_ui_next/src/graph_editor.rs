@@ -233,6 +233,9 @@ impl GraphEditor {
     pub fn make_scalar_param_widget(&self, param: &BjkParameter, op_name: &str) -> DynWidget {
         if let Ok(BlackjackValue::Scalar(current)) = self.get_current_param_value(param, op_name) {
             let param_cpy = param.clone();
+            // WIP: This is "working", but not really. We can't just reuse
+            // TextEdit to convert to string and parse back. We need a widget
+            // like "DragValue" that will handle this properly.
             TextEdit::new(IdGen::key(param), format!("{current:.4}"))
                 .on_changed(|editor: &mut GraphEditor, new_contents: String| {
                     if let Ok(f) = new_contents.parse::<f32>() {
