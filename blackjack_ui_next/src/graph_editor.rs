@@ -7,7 +7,7 @@ use blackjack_engine::{
     lua_engine::LuaRuntime,
 };
 use epaint::Vec2;
-use guee::{prelude::*, widget::DynWidget, widget_id::IdGen};
+use guee::{base_widgets::drag_value::DragValue, prelude::*, widget::DynWidget, widget_id::IdGen};
 use slotmap::SecondaryMap;
 
 use crate::widgets::{
@@ -64,7 +64,7 @@ impl GraphEditor {
         let name_label = Text::new(input.name.clone()).build();
         let op_name = &self.graph.nodes[node_id].op_name;
         match &input.kind {
-            DependencyKind::External { promoted } => match input.data_type {
+            DependencyKind::External { promoted: _ } => match input.data_type {
                 DataType::Vector => name_label,
                 DataType::Scalar => self.make_scalar_param_widget(
                     &BjkParameter::new(node_id, input.name.clone()),
@@ -233,17 +233,12 @@ impl GraphEditor {
     pub fn make_scalar_param_widget(&self, param: &BjkParameter, op_name: &str) -> DynWidget {
         if let Ok(BlackjackValue::Scalar(current)) = self.get_current_param_value(param, op_name) {
             let param_cpy = param.clone();
-            // WIP: This is "working", but not really. We can't just reuse
-            // TextEdit to convert to string and parse back. We need a widget
-            // like "DragValue" that will handle this properly.
-            TextEdit::new(IdGen::key(param), format!("{current:.4}"))
-                .on_changed(|editor: &mut GraphEditor, new_contents: String| {
-                    if let Ok(f) = new_contents.parse::<f32>() {
-                        editor
-                            .external_parameters
-                            .0
-                            .insert(param_cpy, BlackjackValue::Scalar(f));
-                    }
+            DragValue::new(IdGen::key(param), current)
+                .on_changed(|editor: &mut GraphEditor, new| {
+                    editor
+                        .external_parameters
+                        .0
+                        .insert(param_cpy, BlackjackValue::Scalar(new));
                 })
                 .build()
         } else {
