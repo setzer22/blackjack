@@ -63,13 +63,11 @@ impl GraphEditor {
     ) -> DynWidget {
         let name_label = Text::new(input.name.clone()).build();
         let op_name = &self.graph.nodes[node_id].op_name;
+        let param = BjkParameter::new(node_id, input.name.clone());
         match &input.kind {
             DependencyKind::External { promoted: _ } => match input.data_type {
-                DataType::Vector => name_label,
-                DataType::Scalar => self.make_scalar_param_widget(
-                    &BjkParameter::new(node_id, input.name.clone()),
-                    op_name,
-                ),
+                DataType::Vector => self.make_vector_param_widget(&param, op_name),
+                DataType::Scalar => self.make_scalar_param_widget(&param, op_name),
                 DataType::Selection => name_label,
                 DataType::Mesh => name_label,
                 DataType::String => name_label,
@@ -241,6 +239,52 @@ impl GraphEditor {
                         .insert(param_cpy, BlackjackValue::Scalar(new));
                 })
                 .build()
+        } else {
+            Text::new("<error>".into()).build()
+        }
+    }
+
+    pub fn make_vector_param_widget(&self, param: &BjkParameter, op_name: &str) -> DynWidget {
+        if let Ok(BlackjackValue::Vector(current)) = self.get_current_param_value(param, op_name) {
+            macro_rules! component_drag_val {
+                ($field:ident) => {{
+                    let param_cpy = param.clone();
+                    DragValue::new(IdGen::key((param, stringify!($field))), current.$field)
+                        .on_changed(|editor: &mut GraphEditor, new| {
+                            editor
+                                .external_parameters
+                                .0
+                                .entry(param_cpy)
+                                .and_modify(|v| match v {
+                                    BlackjackValue::Vector(v) => v.$field = new,
+                                    _ => unreachable!(),
+                                });
+                        })
+                        // WIP: Layout for the node widget is broken: The drag
+                        // values overflow the widget and input handling is
+                        // still broken for some reason.
+                        .layout_hints(LayoutHints::shrink())
+                        .build()
+                }};
+            }
+
+            BoxContainer::vertical(
+                IdGen::key(param),
+                vec![
+                    Text::new(param.param_name.clone()).build(),
+                    BoxContainer::horizontal(
+                        IdGen::key("h"),
+                        vec![
+                            component_drag_val!(x),
+                            component_drag_val!(y),
+                            component_drag_val!(z),
+                        ],
+                    )
+                    .separation(3.0)
+                    .build(),
+                ],
+            )
+            .build()
         } else {
             Text::new("<error>".into()).build()
         }
