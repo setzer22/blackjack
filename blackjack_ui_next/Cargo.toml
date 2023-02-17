@@ -15,3 +15,5 @@ guee = { path = "../guee/guee" }
 pollster = "0.2"
 slotmap = "1.0"
 anyhow = "1.0"
+log = "0.4"
+env_logger = "0.10"

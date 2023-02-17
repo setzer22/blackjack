@@ -1,3 +1,5 @@
+use std::any::type_name;
+
 use blackjack_engine::{
     graph::{BjkNodeId, DataType},
     graph_interpreter::BjkParameter,
@@ -106,7 +108,17 @@ impl NodeWidget {
 }
 
 impl Widget for NodeWidget {
-    fn layout(&mut self, ctx: &Context, parent_id: WidgetId, available: Vec2) -> Layout {
+    fn layout(
+        &mut self,
+        ctx: &Context,
+        parent_id: WidgetId,
+        available: Vec2,
+        force_shrink: bool,
+    ) -> Layout {
+        if force_shrink {
+            SizeHint::ignore_force_warning(type_name::<Self>())
+        }
+
         let widget_id = self.id.resolve(parent_id);
 
         struct Cursor {
@@ -122,7 +134,7 @@ impl Widget for NodeWidget {
         };
 
         let layout_widget = |w: &mut DynWidget, c: &mut Cursor| -> Layout {
-            let layout = w.widget.layout(ctx, widget_id, c.available);
+            let layout = w.widget.layout(ctx, widget_id, c.available, false);
             let size = layout.bounds.size();
             c.available -= Vec2::new(0.0, size.y + self.v_separation);
             c.total_size.x = c.total_size.x.max(size.x);
@@ -132,8 +144,14 @@ impl Widget for NodeWidget {
             layout
         };
 
-        let title_left_layout = self.titlebar_left.widget.layout(ctx, widget_id, available);
-        let title_right_layout = self.titlebar_right.widget.layout(ctx, widget_id, available);
+        let title_left_layout = self
+            .titlebar_left
+            .widget
+            .layout(ctx, widget_id, available, false);
+        let title_right_layout = self
+            .titlebar_right
+            .widget
+            .layout(ctx, widget_id, available, false);
         let title_height = title_left_layout
             .bounds
             .size()
@@ -237,10 +255,6 @@ impl Widget for NodeWidget {
                 })
             }
         }
-    }
-
-    fn min_size(&mut self, _ctx: &Context, _available: Vec2) -> Vec2 {
-        unimplemented!("A node widget should not be inside a container that checks its min size")
     }
 
     fn layout_hints(&self) -> LayoutHints {

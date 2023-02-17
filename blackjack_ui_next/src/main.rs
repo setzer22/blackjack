@@ -113,6 +113,8 @@ fn view(state: &AppState) -> DynWidget {
 }
 
 fn main() {
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn")).init();
+
     let screen_size = Vec2::new(1024.0, 768.0);
     let mut ctx = Context::new(
         screen_size,

@@ -1,3 +1,5 @@
+use std::any::type_name;
+
 use blackjack_engine::graph_interpreter::BjkParameter;
 use epaint::{CubicBezierShape, Vec2};
 use guee::{
@@ -223,12 +225,22 @@ impl NodeEditorWidget {
 }
 
 impl Widget for NodeEditorWidget {
-    fn layout(&mut self, ctx: &Context, parent_id: WidgetId, available: Vec2) -> Layout {
+    fn layout(
+        &mut self,
+        ctx: &Context,
+        parent_id: WidgetId,
+        available: Vec2,
+        force_shrink: bool, // ignored, not expanded.
+    ) -> Layout {
+        if force_shrink {
+            SizeHint::ignore_force_warning(type_name::<Self>());
+        }
+
         // Strategy: Layout normally, then draw and handle events with panned / scaled
         let widget_id = self.id.resolve(parent_id);
         let mut children = vec![];
         for (pos, nw) in &mut self.node_widgets {
-            children.push(nw.layout(ctx, widget_id, available).translated(*pos))
+            children.push(nw.layout(ctx, widget_id, available, false).translated(*pos))
         }
         Layout::with_children(widget_id, available, children)
     }
@@ -270,11 +282,6 @@ impl Widget for NodeEditorWidget {
         // Undo transformation
         ctx.painter().clip_rect = old_clip_rect;
         ctx.painter().transform = old_transform;
-    }
-
-    fn min_size(&mut self, _ctx: &Context, available: Vec2) -> Vec2 {
-        // Gimme all you got
-        available
     }
 
     fn layout_hints(&self) -> LayoutHints {
