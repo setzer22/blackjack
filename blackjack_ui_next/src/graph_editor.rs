@@ -231,14 +231,22 @@ impl GraphEditor {
     pub fn make_scalar_param_widget(&self, param: &BjkParameter, op_name: &str) -> DynWidget {
         if let Ok(BlackjackValue::Scalar(current)) = self.get_current_param_value(param, op_name) {
             let param_cpy = param.clone();
-            DragValue::new(IdGen::key(param), current)
-                .on_changed(|editor: &mut GraphEditor, new| {
-                    editor
-                        .external_parameters
-                        .0
-                        .insert(param_cpy, BlackjackValue::Scalar(new));
-                })
-                .build()
+            BoxContainer::horizontal(
+                IdGen::key(param),
+                vec![
+                    Text::new(param.param_name.clone()).build(),
+                    DragValue::new(IdGen::key((param, "value")), current)
+                        .on_changed(|editor: &mut GraphEditor, new| {
+                            editor
+                                .external_parameters
+                                .0
+                                .insert(param_cpy, BlackjackValue::Scalar(new));
+                        })
+                        .build(),
+                ],
+            )
+            .separation(10.0)
+            .build()
         } else {
             Text::new("<error>".into()).build()
         }
@@ -249,20 +257,15 @@ impl GraphEditor {
             macro_rules! component_drag_val {
                 ($field:ident) => {{
                     let param_cpy = param.clone();
+                    let mut current_cpy = current;
                     DragValue::new(IdGen::key((param, stringify!($field))), current.$field)
-                        .on_changed(|editor: &mut GraphEditor, new| {
+                        .on_changed(move |editor: &mut GraphEditor, new| {
+                            current_cpy.$field = new;
                             editor
                                 .external_parameters
                                 .0
-                                .entry(param_cpy)
-                                .and_modify(|v| match v {
-                                    BlackjackValue::Vector(v) => v.$field = new,
-                                    _ => unreachable!(),
-                                });
+                                .insert(param_cpy, BlackjackValue::Vector(current_cpy));
                         })
-                        // WIP: Layout for the node widget is broken: The drag
-                        // values overflow the widget and input handling is
-                        // still broken for some reason.
                         .layout_hints(LayoutHints::shrink())
                         .build()
                 }};
