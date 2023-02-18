@@ -175,7 +175,7 @@ fn main() {
                     _ => (),
                 }
 
-                ctx.input_state.on_winit_event(&event);
+                ctx.on_winit_event(&event);
             }
             _ => (),
         }

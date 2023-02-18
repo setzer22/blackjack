@@ -284,7 +284,7 @@ impl Widget for NodeWidget {
         {
             return EventStatus::Consumed;
         }
-        let row_layouts = &layout.children[2..self.rows.len()];
+        let row_layouts = &layout.children[2..2+self.rows.len()];
         for ((_, row), row_layout) in self.rows.iter_mut().zip(row_layouts) {
             if let EventStatus::Consumed =
                 row.contents
