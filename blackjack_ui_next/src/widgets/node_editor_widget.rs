@@ -43,7 +43,6 @@ pub struct NodeEditorWidget {
 }
 
 pub struct NodeEditorWidgetState {
-    pub panning: bool,
     pub ongoing_connection: Option<PortId>,
 }
 
@@ -274,7 +273,7 @@ impl Widget for NodeEditorWidget {
             let port_pos = self.port_pos(layout, ongoing);
             let mouse_pos = self
                 .cursor_transform(layout.bounds.left_top().to_vec2())
-                .transform_point(ctx.input_state.mouse_state.position);
+                .transform_point(ctx.input_state.mouse.position);
             ctx.painter()
                 .cubic_bezier(self.connection_shape(port_pos, mouse_pos));
         }
@@ -311,7 +310,6 @@ impl Widget for NodeEditorWidget {
         let mut state = ctx.memory.get_mut_or(
             layout.widget_id,
             NodeEditorWidgetState {
-                panning: false,
                 ongoing_connection: None,
             },
         );
@@ -392,14 +390,6 @@ impl Widget for NodeEditorWidget {
 
         for event in events {
             match event {
-                Event::MousePressed(MouseButton::Middle) if contains_cursor => {
-                    state.panning = true;
-                    event_status = EventStatus::Consumed;
-                }
-                Event::MouseReleased(MouseButton::Middle) => {
-                    state.panning = false;
-                    event_status = EventStatus::Consumed;
-                }
                 Event::MouseWheel(scroll) if contains_cursor => {
                     self.pan_zoom.adjust_zoom(
                         scroll.y * 0.05,
@@ -416,8 +406,12 @@ impl Widget for NodeEditorWidget {
             }
         }
 
-        if state.panning {
-            let delta_screen = ctx.input_state.mouse_state.delta() / self.pan_zoom.zoom;
+        let panning = ctx
+            .claim_drag_event(layout.widget_id, layout.bounds, MouseButton::Middle)
+            .is_some();
+
+        if panning {
+            let delta_screen = ctx.input_state.mouse.delta() / self.pan_zoom.zoom;
             self.pan_zoom.pan += delta_screen;
             if let Some(cb) = self.on_pan_zoom_change.take() {
                 ctx.dispatch_callback(cb, self.pan_zoom);

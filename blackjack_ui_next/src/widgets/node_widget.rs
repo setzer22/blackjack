@@ -54,10 +54,6 @@ pub struct NodeWidget {
     pub on_node_dragged: Option<Callback<Vec2>>,
 }
 
-pub struct NodeWidgetState {
-    pub dragging: bool,
-}
-
 impl NodeWidget {
     pub const PORT_RADIUS: f32 = 5.0;
 
@@ -284,7 +280,7 @@ impl Widget for NodeWidget {
         {
             return EventStatus::Consumed;
         }
-        let row_layouts = &layout.children[2..2+self.rows.len()];
+        let row_layouts = &layout.children[2..2 + self.rows.len()];
         for ((_, row), row_layout) in self.rows.iter_mut().zip(row_layouts) {
             if let EventStatus::Consumed =
                 row.contents
@@ -304,28 +300,15 @@ impl Widget for NodeWidget {
         }
 
         let titlebar_rect = self.titlebar_rect(layout);
-        let mut state = ctx
-            .memory
-            .get_mut_or(layout.widget_id, NodeWidgetState { dragging: false });
-        let is_in_titlebar = titlebar_rect.contains(cursor_position);
 
         let mut status = EventStatus::Ignored;
-        for event in events {
-            match event {
-                Event::MousePressed(MouseButton::Primary) if is_in_titlebar => {
-                    state.dragging = true;
-                    status = EventStatus::Consumed;
-                }
-                Event::MouseReleased(MouseButton::Primary) => {
-                    state.dragging = false;
-                    return EventStatus::Ignored;
-                }
-                _ => {}
-            }
-        }
+        let dragging = ctx
+            .claim_drag_event(layout.widget_id, titlebar_rect, MouseButton::Primary)
+            .is_some();
 
-        if state.dragging {
-            let delta = ctx.input_state.mouse_state.delta();
+        if dragging {
+            status = EventStatus::Consumed;
+            let delta = ctx.input_state.mouse.delta();
             if let Some(cb) = self.on_node_dragged.take() {
                 ctx.dispatch_callback(cb, delta);
             }

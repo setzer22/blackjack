@@ -7,7 +7,12 @@ use blackjack_engine::{
     lua_engine::LuaRuntime,
 };
 use epaint::Vec2;
-use guee::{base_widgets::drag_value::DragValue, prelude::*, widget::DynWidget, widget_id::IdGen};
+use guee::{
+    base_widgets::drag_value::{DragValue, ScaleSelector},
+    prelude::*,
+    widget::DynWidget,
+    widget_id::IdGen,
+};
 use slotmap::SecondaryMap;
 
 use crate::widgets::{
@@ -235,13 +240,14 @@ impl GraphEditor {
                 IdGen::key(param),
                 vec![
                     Text::new(param.param_name.clone()).build(),
-                    DragValue::new(IdGen::key((param, "value")), current)
+                    DragValue::new(IdGen::key((param, "value")), current as f64)
                         .on_changed(|editor: &mut GraphEditor, new| {
                             editor
                                 .external_parameters
                                 .0
-                                .insert(param_cpy, BlackjackValue::Scalar(new));
+                                .insert(param_cpy, BlackjackValue::Scalar(new as f32));
                         })
+                        .scale_selector(Some(ScaleSelector::default()))
                         .build(),
                 ],
             )
@@ -258,16 +264,20 @@ impl GraphEditor {
                 ($field:ident) => {{
                     let param_cpy = param.clone();
                     let mut current_cpy = current;
-                    DragValue::new(IdGen::key((param, stringify!($field))), current.$field)
-                        .on_changed(move |editor: &mut GraphEditor, new| {
-                            current_cpy.$field = new;
-                            editor
-                                .external_parameters
-                                .0
-                                .insert(param_cpy, BlackjackValue::Vector(current_cpy));
-                        })
-                        .layout_hints(LayoutHints::shrink())
-                        .build()
+                    DragValue::new(
+                        IdGen::key((param, stringify!($field))),
+                        current.$field as f64,
+                    )
+                    .on_changed(move |editor: &mut GraphEditor, new| {
+                        current_cpy.$field = new as f32;
+                        editor
+                            .external_parameters
+                            .0
+                            .insert(param_cpy, BlackjackValue::Vector(current_cpy));
+                    })
+                    .scale_selector(Some(ScaleSelector::default()))
+                    .layout_hints(LayoutHints::shrink())
+                    .build()
                 }};
             }
 
