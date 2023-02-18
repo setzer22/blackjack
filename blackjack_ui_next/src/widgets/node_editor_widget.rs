@@ -407,7 +407,11 @@ impl Widget for NodeEditorWidget {
         }
 
         let panning = ctx
-            .claim_drag_event(layout.widget_id, layout.bounds, MouseButton::Middle)
+            .claim_drag_event(
+                layout.widget_id,
+                MouseButton::Middle,
+                layout.bounds.contains(cursor_position),
+            )
             .is_some();
 
         if panning {

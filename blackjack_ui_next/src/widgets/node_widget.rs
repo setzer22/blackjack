@@ -303,7 +303,11 @@ impl Widget for NodeWidget {
 
         let mut status = EventStatus::Ignored;
         let dragging = ctx
-            .claim_drag_event(layout.widget_id, titlebar_rect, MouseButton::Primary)
+            .claim_drag_event(
+                layout.widget_id,
+                MouseButton::Primary,
+                titlebar_rect.contains(cursor_position),
+            )
             .is_some();
 
         if dragging {
