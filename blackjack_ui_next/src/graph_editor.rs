@@ -20,6 +20,7 @@ use slotmap::SecondaryMap;
 
 use crate::widgets::{
     node_editor_widget::{NodeEditorWidget, PanZoom},
+    node_finder_widget::NodeFinderWidget,
     node_widget::{NodeWidget, NodeWidgetPort, NodeWidgetRow, PortId, PortIdKind},
 };
 
@@ -66,25 +67,106 @@ impl GraphEditor {
         }
     }
 
-    pub fn make_in_parameter_widget(
-        &self,
-        node_id: BjkNodeId,
-        input: &InputParameter,
-    ) -> DynWidget {
-        let name_label = Text::new(input.name.clone()).build();
-        let op_name = &self.graph.nodes[node_id].op_name;
-        let param = BjkParameter::new(node_id, input.name.clone());
-        match &input.kind {
-            DependencyKind::External { promoted: _ } => match input.data_type {
-                DataType::Vector => self.make_vector_param_widget(&param, op_name),
-                DataType::Scalar => self.make_scalar_param_widget(&param, op_name),
-                DataType::Selection => name_label,
-                DataType::Mesh => name_label,
-                DataType::String => name_label,
-                DataType::HeightMap => name_label,
-            },
-            DependencyKind::Connection { node, param_name } => name_label,
+    pub fn view(&self) -> DynWidget {
+        // Ensure that the node_order and the graph are always aligned.
+        debug_assert_eq!(
+            self.graph
+                .nodes
+                .iter()
+                .map(|(id, _)| id)
+                .collect::<HashSet<_>>()
+                .difference(&self.node_order.iter().copied().collect())
+                .count(),
+            0
+        );
+
+        let node_widgets = self.node_order.iter().copied().map(|node_id| {
+            let node = &self.graph.nodes[node_id];
+            (
+                self.node_positions[node_id],
+                self.make_node_widget(node_id, node),
+            )
+        });
+
+        let mut connections = Vec::new();
+        for (node_id, node) in self.graph.nodes.iter() {
+            for input in node.inputs.iter() {
+                match &input.kind {
+                    DependencyKind::External { .. } => {}
+                    DependencyKind::Connection {
+                        node: other_node_id,
+                        param_name: other_param_name,
+                    } => {
+                        let other_node = &self.graph.nodes[*other_node_id];
+                        let other_param = other_node
+                            .outputs
+                            .iter()
+                            .find(|x| x.name == *other_param_name)
+                            .expect("Other param should be there");
+
+                        connections.push((
+                            PortId {
+                                param: BjkParameter::new(node_id, input.name.clone()),
+                                side: PortIdKind::Input,
+                                data_type: input.data_type,
+                            },
+                            PortId {
+                                param: BjkParameter::new(*other_node_id, other_param.name.clone()),
+                                side: PortIdKind::Output,
+                                data_type: other_param.data_type,
+                            },
+                        ))
+                    }
+                }
+            }
         }
+
+        let node_editor = NodeEditorWidget::new(
+            IdGen::key("node_editor"),
+            node_widgets.collect(),
+            connections,
+            self.pan_zoom,
+        )
+        .on_pan_zoom_change(|editor: &mut GraphEditor, new_pan_zoom| {
+            editor.pan_zoom = new_pan_zoom;
+        })
+        .on_connection(|editor: &mut GraphEditor, conn| {
+            editor
+                .graph
+                .add_connection(
+                    conn.output.node_id,
+                    &conn.output.param_name,
+                    conn.input.node_id,
+                    &conn.input.param_name,
+                )
+                .expect("Should not fail");
+        })
+        .on_disconnection(|editor: &mut GraphEditor, disc| {
+            editor
+                .graph
+                .remove_connection(disc.input.node_id, &disc.input.param_name)
+                .expect("Should not fail");
+        })
+        .on_node_raised(|editor: &mut GraphEditor, node_id| {
+            editor.node_order.retain(|x| *x != node_id);
+            editor.node_order.push(node_id);
+        })
+        .build();
+
+        let node_finder = NodeFinderWidget::new(
+            IdGen::key("node_finder"),
+            self.lua_runtime.node_definitions.node_names(),
+        )
+        .build();
+
+        StackContainer::new(
+            IdGen::key("stack"),
+            vec![
+                (Vec2::new(0.0, 0.0), node_editor),
+                (Vec2::new(100.0, 100.0), node_finder),
+            ],
+        )
+        .build()
     }
 
     pub fn make_node_widget(&self, node_id: BjkNodeId, node: &BjkNode) -> NodeWidget {
@@ -148,91 +230,25 @@ impl GraphEditor {
         }
     }
 
-    pub fn view(&self) -> DynWidget {
-        // Ensure that the node_order and the graph are always aligned.
-        debug_assert_eq!(
-            self.graph
-                .nodes
-                .iter()
-                .map(|(id, _)| id)
-                .collect::<HashSet<_>>()
-                .difference(&self.node_order.iter().copied().collect())
-                .count(),
-            0
-        );
-
-        let node_widgets = self.node_order.iter().copied().map(|node_id| {
-            let node = &self.graph.nodes[node_id];
-            (
-                self.node_positions[node_id],
-                self.make_node_widget(node_id, node),
-            )
-        });
-
-        let mut connections = Vec::new();
-        for (node_id, node) in self.graph.nodes.iter() {
-            for input in node.inputs.iter() {
-                match &input.kind {
-                    DependencyKind::External { .. } => {}
-                    DependencyKind::Connection {
-                        node: other_node_id,
-                        param_name: other_param_name,
-                    } => {
-                        let other_node = &self.graph.nodes[*other_node_id];
-                        let other_param = other_node
-                            .outputs
-                            .iter()
-                            .find(|x| x.name == *other_param_name)
-                            .expect("Other param should be there");
-
-                        connections.push((
-                            PortId {
-                                param: BjkParameter::new(node_id, input.name.clone()),
-                                side: PortIdKind::Input,
-                                data_type: input.data_type,
-                            },
-                            PortId {
-                                param: BjkParameter::new(*other_node_id, other_param.name.clone()),
-                                side: PortIdKind::Output,
-                                data_type: other_param.data_type,
-                            },
-                        ))
-                    }
-                }
-            }
+    pub fn make_in_parameter_widget(
+        &self,
+        node_id: BjkNodeId,
+        input: &InputParameter,
+    ) -> DynWidget {
+        let name_label = Text::new(input.name.clone()).build();
+        let op_name = &self.graph.nodes[node_id].op_name;
+        let param = BjkParameter::new(node_id, input.name.clone());
+        match &input.kind {
+            DependencyKind::External { promoted: _ } => match input.data_type {
+                DataType::Vector => self.make_vector_param_widget(&param, op_name),
+                DataType::Scalar => self.make_scalar_param_widget(&param, op_name),
+                DataType::Selection => name_label,
+                DataType::Mesh => name_label,
+                DataType::String => name_label,
+                DataType::HeightMap => name_label,
+            },
+            DependencyKind::Connection { node, param_name } => name_label,
         }
-
-        NodeEditorWidget::new(
-            IdGen::key("node_editor"),
-            node_widgets.collect(),
-            connections,
-            self.pan_zoom,
-        )
-        .on_pan_zoom_change(|editor: &mut GraphEditor, new_pan_zoom| {
-            editor.pan_zoom = new_pan_zoom;
-        })
-        .on_connection(|editor: &mut GraphEditor, conn| {
-            editor
-                .graph
-                .add_connection(
-                    conn.output.node_id,
-                    &conn.output.param_name,
-                    conn.input.node_id,
-                    &conn.input.param_name,
-                )
-                .expect("Should not fail");
-        })
-        .on_disconnection(|editor: &mut GraphEditor, disc| {
-            editor
-                .graph
-                .remove_connection(disc.input.node_id, &disc.input.param_name)
-                .expect("Should not fail");
-        })
-        .on_node_raised(|editor: &mut GraphEditor, node_id| {
-            editor.node_order.retain(|x| *x != node_id);
-            editor.node_order.push(node_id);
-        })
-        .build()
     }
 
     pub fn get_current_param_value(
@@ -365,6 +381,6 @@ impl GraphEditor {
 }
 
 // WIP:
-// - [ ] Min / max values (soft & hard) in the DragValues
+// - [x] Min / max values (soft & hard) in the DragValues
 // - [ ] The node finder widget
 // - [ ] Start porting the wgpu stuff
