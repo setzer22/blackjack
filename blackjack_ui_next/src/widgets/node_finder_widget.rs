@@ -118,7 +118,7 @@ impl Widget for NodeFinderWidget {
         };
 
         // TODO: Hardcoded size
-        let size = Vec2::new(180.0, 500.0);
+        let size = Vec2::new(300.0, 250.0);
 
         drop(state);
 

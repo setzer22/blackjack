@@ -383,4 +383,6 @@ impl GraphEditor {
 // WIP:
 // - [x] Min / max values (soft & hard) in the DragValues
 // - [ ] The node finder widget
+// -    [ ] Fix bug with text clicks falling through
+// -    [ ] Scroll container support
 // - [ ] Start porting the wgpu stuff
