@@ -1,12 +1,15 @@
+use std::ops::Deref;
+
 use anyhow::bail;
 use blackjack_engine::{
     graph::{
-        BjkGraph, BjkNode, BjkNodeId, BlackjackValue, DataType, DependencyKind, InputParameter,
+        BjkGraph, BjkNode, BjkNodeId, BlackjackValue, DataType, DependencyKind, InputDefinition,
+        InputParameter, InputValueConfig,
     },
     graph_interpreter::{BjkParameter, ExternalParameterValues},
     lua_engine::LuaRuntime,
 };
-use epaint::Vec2;
+use epaint::{ahash::HashSet, Vec2};
 use guee::{
     base_widgets::drag_value::{DragValue, ScaleSelector},
     prelude::*,
@@ -25,6 +28,7 @@ pub struct GraphEditor {
     pan_zoom: PanZoom,
     graph: BjkGraph,
     node_positions: SecondaryMap<BjkNodeId, Vec2>,
+    node_order: Vec<BjkNodeId>,
     external_parameters: ExternalParameterValues,
 }
 
@@ -37,25 +41,26 @@ impl GraphEditor {
         let mut graph = BjkGraph::new();
         let mut node_positions = SecondaryMap::new();
 
-        let node = graph
+        let node1 = graph
             .spawn_node("MakeBox", &runtime.node_definitions)
             .unwrap();
-        node_positions.insert(node, Vec2::new(40.0, 50.0));
+        node_positions.insert(node1, Vec2::new(40.0, 50.0));
 
-        let node = graph
+        let node2 = graph
             .spawn_node("MakeCircle", &runtime.node_definitions)
             .unwrap();
-        node_positions.insert(node, Vec2::new(300.0, 150.0));
+        node_positions.insert(node2, Vec2::new(300.0, 150.0));
 
-        let node = graph
+        let node3 = graph
             .spawn_node("BevelEdges", &runtime.node_definitions)
             .unwrap();
-        node_positions.insert(node, Vec2::new(400.0, 200.0));
+        node_positions.insert(node3, Vec2::new(400.0, 200.0));
 
         Self {
             external_parameters: ExternalParameterValues::default(),
             lua_runtime: runtime,
             node_positions,
+            node_order: vec![node1, node2, node3],
             pan_zoom: PanZoom::default(),
             graph,
         }
@@ -144,7 +149,20 @@ impl GraphEditor {
     }
 
     pub fn view(&self) -> DynWidget {
-        let node_widgets = self.graph.nodes.iter().map(|(node_id, node)| {
+        // Ensure that the node_order and the graph are always aligned.
+        debug_assert_eq!(
+            self.graph
+                .nodes
+                .iter()
+                .map(|(id, _)| id)
+                .collect::<HashSet<_>>()
+                .difference(&self.node_order.iter().copied().collect())
+                .count(),
+            0
+        );
+
+        let node_widgets = self.node_order.iter().copied().map(|node_id| {
+            let node = &self.graph.nodes[node_id];
             (
                 self.node_positions[node_id],
                 self.make_node_widget(node_id, node),
@@ -210,6 +228,10 @@ impl GraphEditor {
                 .remove_connection(disc.input.node_id, &disc.input.param_name)
                 .expect("Should not fail");
         })
+        .on_node_raised(|editor: &mut GraphEditor, node_id| {
+            editor.node_order.retain(|x| *x != node_id);
+            editor.node_order.push(node_id);
+        })
         .build()
     }
 
@@ -217,16 +239,16 @@ impl GraphEditor {
         &self,
         param: &BjkParameter,
         op_name: &str,
-    ) -> anyhow::Result<BlackjackValue> {
+    ) -> anyhow::Result<(BlackjackValue, impl Deref<Target = InputDefinition> + '_)> {
         if let Some(input_def) = self
             .lua_runtime
             .node_definitions
             .input_def(op_name, &param.param_name)
         {
             if let Some(existing) = self.external_parameters.0.get(param) {
-                Ok(existing.clone())
+                Ok((existing.clone(), input_def))
             } else {
-                Ok(input_def.default_value())
+                Ok((input_def.default_value(), input_def))
             }
         } else {
             bail!("Not found in node definitions")
@@ -234,8 +256,22 @@ impl GraphEditor {
     }
 
     pub fn make_scalar_param_widget(&self, param: &BjkParameter, op_name: &str) -> DynWidget {
-        if let Ok(BlackjackValue::Scalar(current)) = self.get_current_param_value(param, op_name) {
+        if let Ok((BlackjackValue::Scalar(current), input_def)) =
+            self.get_current_param_value(param, op_name)
+        {
             let param_cpy = param.clone();
+
+            let InputValueConfig::Scalar {
+                default: _,
+                min,
+                max,
+                soft_min,
+                soft_max,
+                num_decimals
+            } = &input_def.config else {
+                unreachable!("Wrong scalar config type")
+            };
+
             BoxContainer::horizontal(
                 IdGen::key(param),
                 vec![
@@ -247,8 +283,28 @@ impl GraphEditor {
                                 .0
                                 .insert(param_cpy, BlackjackValue::Scalar(new as f32));
                         })
-                        .scale_selector(Some(ScaleSelector::default()))
                         .speed(1.0)
+                        .scale_selector(if num_decimals == &Some(0) {
+                            Some(ScaleSelector::int_3vals())
+                        } else {
+                            Some(ScaleSelector::float_7vals())
+                        })
+                        .num_decimals(num_decimals.unwrap_or(4))
+                        .default_scale_selector_index(if num_decimals == &Some(0) {
+                            // Select the last row, corresponding to the value
+                            // 1, for integer sliders
+                            Some(2)
+                        } else {
+                            None
+                        })
+                        .soft_range(
+                            soft_min.unwrap_or(min.unwrap_or(-f32::INFINITY)).into()
+                                ..=soft_max.unwrap_or(max.unwrap_or(f32::INFINITY)).into(),
+                        )
+                        .hard_range(
+                            min.unwrap_or(-f32::INFINITY).into()
+                                ..=max.unwrap_or(f32::INFINITY).into(),
+                        )
                         .build(),
                 ],
             )
@@ -260,7 +316,9 @@ impl GraphEditor {
     }
 
     pub fn make_vector_param_widget(&self, param: &BjkParameter, op_name: &str) -> DynWidget {
-        if let Ok(BlackjackValue::Vector(current)) = self.get_current_param_value(param, op_name) {
+        if let Ok((BlackjackValue::Vector(current), config)) =
+            self.get_current_param_value(param, op_name)
+        {
             macro_rules! component_drag_val {
                 ($field:ident) => {{
                     let param_cpy = param.clone();
@@ -276,7 +334,7 @@ impl GraphEditor {
                             .0
                             .insert(param_cpy, BlackjackValue::Vector(current_cpy));
                     })
-                    .scale_selector(Some(ScaleSelector::default()))
+                    .scale_selector(Some(ScaleSelector::float_7vals()))
                     .speed(1.0)
                     .layout_hints(LayoutHints::shrink())
                     .build()
@@ -305,3 +363,8 @@ impl GraphEditor {
         }
     }
 }
+
+// WIP:
+// - [ ] Min / max values (soft & hard) in the DragValues
+// - [ ] The node finder widget
+// - [ ] Start porting the wgpu stuff

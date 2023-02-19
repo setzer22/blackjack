@@ -1,8 +1,9 @@
 use std::any::type_name;
 
-use blackjack_engine::graph_interpreter::BjkParameter;
-use epaint::{CubicBezierShape, Vec2};
+use blackjack_engine::{graph::BjkNodeId, graph_interpreter::BjkParameter};
+use epaint::{CircleShape, CubicBezierShape, RectShape, Rounding, Vec2};
 use guee::{
+    extension_traits::{Color32Ext, Vec2Ext},
     input::MouseButton,
     painter::TranslateScale,
     prelude::{guee_derives::Builder, *},
@@ -40,6 +41,10 @@ pub struct NodeEditorWidget {
     /// inputs, or two outputs), order isn't guaranteed.
     #[builder(callback)]
     pub on_disconnection: Option<Callback<Disconnection>>,
+    /// Will get called when a node is interacted with in a way that would
+    /// require raising it to the top of the node order.
+    #[builder(callback)]
+    pub on_node_raised: Option<Callback<BjkNodeId>>,
 }
 
 pub struct NodeEditorWidgetState {
@@ -109,6 +114,7 @@ impl NodeEditorWidget {
             on_pan_zoom_change: None,
             on_connection: None,
             on_disconnection: None,
+            on_node_raised: None,
         }
     }
 
@@ -247,17 +253,53 @@ impl Widget for NodeEditorWidget {
     fn draw(&mut self, ctx: &Context, layout: &Layout) {
         let top_left = layout.bounds.left_top();
 
-        // Setup transformation
-        let old_transform = ctx.painter().transform;
+        // Set clip rect
         let old_clip_rect = ctx.painter().clip_rect;
-        ctx.painter().transform = self.direct_transform(top_left.to_vec2());
         ctx.painter().clip_rect = layout.bounds;
 
-        // Draw nodes
-        for ((_pos, node_widget), node_layout) in self.node_widgets.iter_mut().zip(&layout.children)
+        // Draw background
         {
-            node_widget.draw(ctx, node_layout)
+            let scale = self.pan_zoom.zoom;
+
+            const GRID_SIZE: f32 = 30.0;
+            let x_size = (layout.bounds.width() / GRID_SIZE / scale) as i32;
+            let y_size = (layout.bounds.height() / GRID_SIZE / scale) as i32;
+            let mut painter = ctx.painter();
+
+            painter.rect(RectShape {
+                rect: layout.bounds,
+                rounding: Rounding::none(),
+                fill: pallette().background_dark,
+                stroke: Stroke::NONE,
+            });
+
+            let radius = 1.5 * scale;
+
+            let offset = self
+                .pan_zoom
+                .pan
+                .rem_euclid(Vec2::new(GRID_SIZE, GRID_SIZE));
+
+            for y in -1..y_size + 1 {
+                for x in -1..x_size + 1 {
+                    let center = layout.bounds.left_top()
+                        + Vec2::new(x as f32 * GRID_SIZE * scale, y as f32 * GRID_SIZE * scale)
+                        + Vec2::new(1.0, 1.0) * radius * 2.0;
+                    let center = (center.to_vec2() + (offset * scale)).to_pos2();
+
+                    painter.circle(CircleShape {
+                        center,
+                        radius,
+                        fill: pallette().widget_fg_dark.with_alpha(20),
+                        stroke: Stroke::NONE,
+                    })
+                }
+            }
         }
+
+        // Setup transformation
+        let old_transform = ctx.painter().transform;
+        ctx.painter().transform = self.direct_transform(top_left.to_vec2());
 
         // Draw existing connections
         for (src, dst) in &self.connections {
@@ -277,8 +319,15 @@ impl Widget for NodeEditorWidget {
             ctx.painter()
                 .cubic_bezier(self.connection_shape(port_pos, mouse_pos));
         }
+        drop(state);
 
-        // Undo transformation
+        // Draw nodes
+        for ((_pos, node_widget), node_layout) in self.node_widgets.iter_mut().zip(&layout.children)
+        {
+            node_widget.draw(ctx, node_layout)
+        }
+
+        // Restore transformation & clip rect
         ctx.painter().clip_rect = old_clip_rect;
         ctx.painter().transform = old_transform;
     }
@@ -303,17 +352,33 @@ impl Widget for NodeEditorWidget {
         let prev_tr = ctx.input_widget_state.borrow().cursor_transform;
         ctx.input_widget_state.borrow_mut().cursor_transform = cursor_transform;
 
-        for ((_pos, node_widget), node_layout) in self.node_widgets.iter_mut().zip(&layout.children)
+        let mut event_status = EventStatus::Ignored;
+
+        // NOTE: This needs to be iterated in reverse, so nodes are drawn
+        // bottom-to-top, but events processed top-to-bottom.
+        for ((_pos, node_widget), node_layout) in
+            self.node_widgets.iter_mut().zip(&layout.children).rev()
         {
             if let EventStatus::Consumed =
                 node_widget.on_event(ctx, node_layout, transformed_cursor_position, events)
             {
-                return EventStatus::Consumed;
+                if let Some(on_raised) = self.on_node_raised.take() {
+                    ctx.dispatch_callback(on_raised, node_widget.node_id);
+                }
+
+                event_status = EventStatus::Consumed;
+                break;
             }
         }
 
         // Restore the previous cursor transform.
         ctx.input_widget_state.borrow_mut().cursor_transform = prev_tr;
+
+        // We do this here, and not directly inside the loop, to avoid ending
+        // the frame with a modified cursor transform.
+        if event_status == EventStatus::Consumed {
+            return event_status;
+        }
 
         let mut state = ctx.memory.get_mut_or(
             layout.widget_id,
@@ -322,7 +387,6 @@ impl Widget for NodeEditorWidget {
             },
         );
 
-        let mut event_status = EventStatus::Ignored;
         let contains_cursor = layout.bounds.contains(cursor_position);
 
         // Check events on ports

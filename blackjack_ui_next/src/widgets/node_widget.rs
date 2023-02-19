@@ -199,12 +199,20 @@ impl Widget for NodeWidget {
 
         let node_rect = layout.bounds;
 
+        // Draw the node's shadow
+        ctx.painter().rect(RectShape {
+            rect: node_rect.translate(Vec2::new(5.0, 3.0)),
+            rounding: Rounding::same(border_radius),
+            fill: color!("#18181877"), // TODO Pallette?
+            stroke: Stroke::NONE,
+        });
+
         // Draw the node background
         ctx.painter().rect(RectShape {
             rect: node_rect,
             rounding: Rounding::same(border_radius),
             fill: color!("#3f3f3f"), // TODO Pallette?
-            stroke: Stroke::NONE,
+            stroke: Stroke::new(1.0, color!("#4f4f4f")),
         });
 
         // Draw the titlebar on top
@@ -310,6 +318,18 @@ impl Widget for NodeWidget {
             if let Some(cb) = self.on_node_dragged.take() {
                 ctx.dispatch_callback(cb, delta);
             }
+        }
+
+        if layout.bounds.contains(cursor_position)
+            && ctx
+                .input_state
+                .mouse
+                .button_state
+                .is_clicked(MouseButton::Primary)
+        {
+            // When the mouse clicks anywhere on the node, raise that node.
+            // TODO: In the future, this will also be a selection event.
+            status = EventStatus::Consumed;
         }
 
         status
