@@ -302,13 +302,7 @@ impl Widget for NodeWidget {
         let titlebar_rect = self.titlebar_rect(layout);
 
         let mut status = EventStatus::Ignored;
-        let dragging = ctx
-            .claim_drag_event(
-                layout.widget_id,
-                MouseButton::Primary,
-                titlebar_rect.contains(cursor_position),
-            )
-            .is_some();
+        let dragging = ctx.claim_drag_event(layout.widget_id, titlebar_rect, MouseButton::Primary);
 
         if dragging {
             status = EventStatus::Consumed;

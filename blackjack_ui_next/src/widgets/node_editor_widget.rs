@@ -295,9 +295,14 @@ impl Widget for NodeEditorWidget {
         events: &[Event],
     ) -> EventStatus {
         let top_left = layout.bounds.left_top();
-        let transformed_cursor_position = self
-            .cursor_transform(top_left.to_vec2())
-            .transform_point(cursor_position);
+        let cursor_transform = self.cursor_transform(top_left.to_vec2());
+        let transformed_cursor_position = cursor_transform.transform_point(cursor_position);
+
+        // Set the cursor transform state. This is necessary for child widgets
+        // to be able to properly track click / drag events.
+        let prev_tr = ctx.input_widget_state.borrow().cursor_transform;
+        ctx.input_widget_state.borrow_mut().cursor_transform = cursor_transform;
+
         for ((_pos, node_widget), node_layout) in self.node_widgets.iter_mut().zip(&layout.children)
         {
             if let EventStatus::Consumed =
@@ -306,6 +311,9 @@ impl Widget for NodeEditorWidget {
                 return EventStatus::Consumed;
             }
         }
+
+        // Restore the previous cursor transform.
+        ctx.input_widget_state.borrow_mut().cursor_transform = prev_tr;
 
         let mut state = ctx.memory.get_mut_or(
             layout.widget_id,
@@ -406,14 +414,7 @@ impl Widget for NodeEditorWidget {
             }
         }
 
-        let panning = ctx
-            .claim_drag_event(
-                layout.widget_id,
-                MouseButton::Middle,
-                layout.bounds.contains(cursor_position),
-            )
-            .is_some();
-
+        let panning = ctx.claim_drag_event(layout.widget_id, layout.bounds, MouseButton::Middle);
         if panning {
             let delta_screen = ctx.input_state.mouse.delta() / self.pan_zoom.zoom;
             self.pan_zoom.pan += delta_screen;
