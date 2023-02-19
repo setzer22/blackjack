@@ -248,6 +248,7 @@ impl GraphEditor {
                                 .insert(param_cpy, BlackjackValue::Scalar(new as f32));
                         })
                         .scale_selector(Some(ScaleSelector::default()))
+                        .speed(1.0)
                         .build(),
                 ],
             )
@@ -276,6 +277,7 @@ impl GraphEditor {
                             .insert(param_cpy, BlackjackValue::Vector(current_cpy));
                     })
                     .scale_selector(Some(ScaleSelector::default()))
+                    .speed(1.0)
                     .layout_hints(LayoutHints::shrink())
                     .build()
                 }};
@@ -293,7 +295,7 @@ impl GraphEditor {
                             component_drag_val!(z),
                         ],
                     )
-                    .separation(3.0)
+                    .separation(0.0)
                     .build(),
                 ],
             )
