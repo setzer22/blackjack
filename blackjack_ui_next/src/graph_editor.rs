@@ -20,9 +20,11 @@ use slotmap::SecondaryMap;
 
 use crate::widgets::{
     node_editor_widget::{NodeEditorWidget, PanZoom},
-    node_finder_widget::NodeFinder,
     node_widget::{NodeWidget, NodeWidgetPort, NodeWidgetRow, PortId, PortIdKind},
 };
+
+pub mod node_finder;
+use node_finder::NodeFinder;
 
 pub struct GraphEditor {
     pub lua_runtime: LuaRuntime,
