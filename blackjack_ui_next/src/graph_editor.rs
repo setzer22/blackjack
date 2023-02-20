@@ -20,17 +20,18 @@ use slotmap::SecondaryMap;
 
 use crate::widgets::{
     node_editor_widget::{NodeEditorWidget, PanZoom},
-    node_finder_widget::NodeFinderWidget,
+    node_finder_widget::NodeFinder,
     node_widget::{NodeWidget, NodeWidgetPort, NodeWidgetRow, PortId, PortIdKind},
 };
 
 pub struct GraphEditor {
-    lua_runtime: LuaRuntime,
-    pan_zoom: PanZoom,
-    graph: BjkGraph,
-    node_positions: SecondaryMap<BjkNodeId, Vec2>,
-    node_order: Vec<BjkNodeId>,
-    external_parameters: ExternalParameterValues,
+    pub lua_runtime: LuaRuntime,
+    pub pan_zoom: PanZoom,
+    pub graph: BjkGraph,
+    pub node_positions: SecondaryMap<BjkNodeId, Vec2>,
+    pub node_order: Vec<BjkNodeId>,
+    pub external_parameters: ExternalParameterValues,
+    pub node_finder: NodeFinder,
 }
 
 #[allow(clippy::new_without_default)]
@@ -63,6 +64,7 @@ impl GraphEditor {
             node_positions,
             node_order: vec![node1, node2, node3],
             pan_zoom: PanZoom::default(),
+            node_finder: NodeFinder::default(),
             graph,
         }
     }
@@ -153,11 +155,9 @@ impl GraphEditor {
         })
         .build();
 
-        let node_finder = NodeFinderWidget::new(
-            IdGen::key("node_finder"),
-            self.lua_runtime.node_definitions.node_names(),
-        )
-        .build();
+        let node_finder = self
+            .node_finder
+            .view(self.lua_runtime.node_definitions.node_names());
 
         StackContainer::new(
             IdGen::key("stack"),

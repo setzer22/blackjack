@@ -126,6 +126,8 @@ fn main() {
     );
     ctx.accessor_registry
         .register_accessor(|state: &mut AppState| &mut state.graph_editor);
+    ctx.accessor_registry
+        .register_accessor(|graph_editor: &mut GraphEditor| &mut graph_editor.node_finder);
     ctx.set_theme(blackjack_theme());
 
     let event_loop = EventLoop::new();
