@@ -1,14 +1,27 @@
-use epaint::{ahash::HashMap, emath::Align2, RectShape, Rounding};
-use guee::{
-    callback::PollToken,
-    prelude::{guee_derives::Builder, *},
-};
+use epaint::{emath::Align2, RectShape, Rounding};
+use guee::{callback_accessor::CallbackAccessor, prelude::*};
 
 use crate::{graph_editor::GraphEditor, pallette};
 
-#[derive(Default)]
 pub struct NodeFinder {
+    editor_cba: CallbackAccessor<GraphEditor>,
+    cba: CallbackAccessor<Self>,
     search_box_contents: String,
+}
+
+impl NodeFinder {
+    pub fn new(editor_cba: CallbackAccessor<GraphEditor>) -> Self {
+        Self {
+            cba: editor_cba.drill_down(|editor| {
+                editor
+                    .node_finder
+                    .as_mut()
+                    .expect("Node finder should exist")
+            }),
+            editor_cba,
+            search_box_contents: String::new(),
+        }
+    }
 }
 
 impl NodeFinder {
@@ -19,9 +32,9 @@ impl NodeFinder {
         )
         .padding(Vec2::new(5.0, 5.0))
         .layout_hints(LayoutHints::fill_horizontal())
-        .on_changed(|this: &mut NodeFinder, new| {
+        .on_changed(self.cba.callback(|this, new| {
             this.search_box_contents = new;
-        })
+        }))
         .build();
 
         let buttons = op_names
@@ -38,9 +51,9 @@ impl NodeFinder {
                     .hints(LayoutHints::fill_horizontal())
                     .align_contents(Align2::LEFT_CENTER)
                     .padding(Vec2::new(3.0, 3.0))
-                    .on_click(move |graph: &mut GraphEditor, _| {
+                    .on_click(self.editor_cba.callback(move |_graph, _| {
                         println!("New node {op_name}");
-                    })
+                    }))
                     .build()
             })
             .collect();

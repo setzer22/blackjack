@@ -31,19 +31,19 @@ pub struct NodeEditorWidget {
     pub node_widgets: Vec<(Vec2, NodeWidget)>,
     pub connections: Vec<(PortId, PortId)>,
     pub pan_zoom: PanZoom,
-    #[builder(callback)]
+    #[builder(strip_option)]
     pub on_pan_zoom_change: Option<Callback<PanZoom>>,
     /// Callback is guaranteed to get passed an input and output ports (not two
     /// inputs, or two outputs), order isn't guaranteed.
-    #[builder(callback)]
+    #[builder(strip_option)]
     pub on_connection: Option<Callback<Connection>>,
     /// Callback is guaranteed to get passed an input and output ports (not two
     /// inputs, or two outputs), order isn't guaranteed.
-    #[builder(callback)]
+    #[builder(strip_option)]
     pub on_disconnection: Option<Callback<Disconnection>>,
     /// Will get called when a node is interacted with in a way that would
     /// require raising it to the top of the node order.
-    #[builder(callback)]
+    #[builder(strip_option)]
     pub on_node_raised: Option<Callback<BjkNodeId>>,
 }
 

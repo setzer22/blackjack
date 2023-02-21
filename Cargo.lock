@@ -1923,6 +1923,7 @@ name = "guee"
 version = "0.1.0"
 dependencies = [
  "bytemuck",
+ "dyn-clone",
  "epaint 0.20.0",
  "guee_derives",
  "itertools",

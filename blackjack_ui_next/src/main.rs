@@ -2,7 +2,8 @@ use egui_wgpu::{winit::Painter, WgpuConfiguration};
 
 use graph_editor::GraphEditor;
 use guee::{
-    base_widgets::split_pane_container::SplitPaneContainerStyle, painter::ExtraFont, prelude::*,
+    base_widgets::split_pane_container::SplitPaneContainerStyle,
+    callback_accessor::CallbackAccessor, painter::ExtraFont, prelude::*,
 };
 use winit::{
     event_loop::{ControlFlow, EventLoop},
@@ -15,6 +16,15 @@ pub mod graph_editor;
 
 pub struct AppState {
     graph_editor: GraphEditor,
+}
+
+impl AppState {
+    pub fn init() -> Self {
+        let cba = CallbackAccessor::<Self>::root();
+        Self {
+            graph_editor: GraphEditor::new(cba.drill_down(|this| &mut this.graph_editor)),
+        }
+    }
 }
 
 pub struct BlackjackPallette {
@@ -124,10 +134,6 @@ fn main() {
             data: include_bytes!("../resources/fonts/NunitoSans-Regular.ttf"),
         }],
     );
-    ctx.accessor_registry
-        .register_accessor(|state: &mut AppState| &mut state.graph_editor);
-    ctx.accessor_registry
-        .register_accessor(|graph_editor: &mut GraphEditor| &mut graph_editor.node_finder);
     ctx.set_theme(blackjack_theme());
 
     let event_loop = EventLoop::new();
@@ -143,9 +149,7 @@ fn main() {
     let mut painter = Painter::new(WgpuConfiguration::default(), 1, 0);
     unsafe { pollster::block_on(painter.set_window(Some(&window))).unwrap() };
 
-    let mut state = AppState {
-        graph_editor: GraphEditor::new(),
-    };
+    let mut state = AppState::init();
 
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;

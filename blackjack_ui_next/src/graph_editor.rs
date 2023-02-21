@@ -12,6 +12,7 @@ use blackjack_engine::{
 use epaint::{ahash::HashSet, Vec2};
 use guee::{
     base_widgets::drag_value::{DragValue, ScaleSelector},
+    callback_accessor::CallbackAccessor,
     prelude::*,
     widget::DynWidget,
     widget_id::IdGen,
@@ -19,7 +20,7 @@ use guee::{
 use slotmap::SecondaryMap;
 
 use crate::widgets::{
-    node_editor_widget::{NodeEditorWidget, PanZoom},
+    node_editor_widget::{Connection, Disconnection, NodeEditorWidget, PanZoom},
     node_widget::{NodeWidget, NodeWidgetPort, NodeWidgetRow, PortId, PortIdKind},
 };
 
@@ -33,12 +34,13 @@ pub struct GraphEditor {
     pub node_positions: SecondaryMap<BjkNodeId, Vec2>,
     pub node_order: Vec<BjkNodeId>,
     pub external_parameters: ExternalParameterValues,
-    pub node_finder: NodeFinder,
+    pub node_finder: Option<NodeFinder>,
+    pub cba: CallbackAccessor<Self>,
 }
 
 #[allow(clippy::new_without_default)]
 impl GraphEditor {
-    pub fn new() -> Self {
+    pub fn new(cba: CallbackAccessor<Self>) -> Self {
         // TODO: Hardcoded path
         let runtime = LuaRuntime::initialize_with_std("./blackjack_lua/".into())
             .expect("Lua init should not fail");
@@ -66,8 +68,9 @@ impl GraphEditor {
             node_positions,
             node_order: vec![node1, node2, node3],
             pan_zoom: PanZoom::default(),
-            node_finder: NodeFinder::default(),
+            node_finder: Some(NodeFinder::new(cba.clone())),
             graph,
+            cba,
         }
     }
 
@@ -131,10 +134,10 @@ impl GraphEditor {
             connections,
             self.pan_zoom,
         )
-        .on_pan_zoom_change(|editor: &mut GraphEditor, new_pan_zoom| {
+        .on_pan_zoom_change(self.cba.callback(|editor, new_pan_zoom| {
             editor.pan_zoom = new_pan_zoom;
-        })
-        .on_connection(|editor: &mut GraphEditor, conn| {
+        }))
+        .on_connection(self.cba.callback(|editor, conn: Connection| {
             editor
                 .graph
                 .add_connection(
@@ -144,31 +147,29 @@ impl GraphEditor {
                     &conn.input.param_name,
                 )
                 .expect("Should not fail");
-        })
-        .on_disconnection(|editor: &mut GraphEditor, disc| {
+        }))
+        .on_disconnection(self.cba.callback(|editor, disc: Disconnection| {
             editor
                 .graph
                 .remove_connection(disc.input.node_id, &disc.input.param_name)
                 .expect("Should not fail");
-        })
-        .on_node_raised(|editor: &mut GraphEditor, node_id| {
+        }))
+        .on_node_raised(self.cba.callback(|editor, node_id| {
             editor.node_order.retain(|x| *x != node_id);
             editor.node_order.push(node_id);
-        })
+        }))
         .build();
 
-        let node_finder = self
-            .node_finder
-            .view(self.lua_runtime.node_definitions.node_names());
+        let mut stack = vec![(Vec2::new(0.0, 0.0), node_editor)];
 
-        StackContainer::new(
-            IdGen::key("stack"),
-            vec![
-                (Vec2::new(0.0, 0.0), node_editor),
-                (Vec2::new(100.0, 100.0), node_finder),
-            ],
-        )
-        .build()
+        if let Some(node_finder) = self.node_finder.as_ref() {
+            stack.push((
+                Vec2::new(100.0, 100.0),
+                node_finder.view(self.lua_runtime.node_definitions.node_names()),
+            ));
+        }
+
+        StackContainer::new(IdGen::key("stack"), stack).build()
     }
 
     pub fn make_node_widget(&self, node_id: BjkNodeId, node: &BjkNode) -> NodeWidget {
@@ -226,7 +227,7 @@ impl GraphEditor {
             v_separation: 4.0,
             h_separation: 12.0,
             extra_v_separation: 3.0,
-            on_node_dragged: Some(Callback::from_fn(move |editor: &mut GraphEditor, delta| {
+            on_node_dragged: Some(self.cba.callback(move |editor, delta| {
                 editor.node_positions[node_id] += delta / editor.pan_zoom.zoom;
             })),
         }
@@ -249,7 +250,10 @@ impl GraphEditor {
                 DataType::String => name_label,
                 DataType::HeightMap => name_label,
             },
-            DependencyKind::Connection { node, param_name } => name_label,
+            DependencyKind::Connection {
+                node: _,
+                param_name: _,
+            } => name_label,
         }
     }
 
@@ -295,12 +299,12 @@ impl GraphEditor {
                 vec![
                     Text::new(param.param_name.clone()).build(),
                     DragValue::new(IdGen::key((param, "value")), current as f64)
-                        .on_changed(|editor: &mut GraphEditor, new| {
+                        .on_changed(self.cba.callback(|editor: &mut GraphEditor, new| {
                             editor
                                 .external_parameters
                                 .0
                                 .insert(param_cpy, BlackjackValue::Scalar(new as f32));
-                        })
+                        }))
                         .speed(1.0)
                         .scale_selector(if num_decimals == &Some(0) {
                             Some(ScaleSelector::int_3vals())
@@ -334,7 +338,7 @@ impl GraphEditor {
     }
 
     pub fn make_vector_param_widget(&self, param: &BjkParameter, op_name: &str) -> DynWidget {
-        if let Ok((BlackjackValue::Vector(current), config)) =
+        if let Ok((BlackjackValue::Vector(current), _input_def)) =
             self.get_current_param_value(param, op_name)
         {
             macro_rules! component_drag_val {
@@ -345,13 +349,13 @@ impl GraphEditor {
                         IdGen::key((param, stringify!($field))),
                         current.$field as f64,
                     )
-                    .on_changed(move |editor: &mut GraphEditor, new| {
+                    .on_changed(self.cba.callback(move |editor: &mut GraphEditor, new| {
                         current_cpy.$field = new as f32;
                         editor
                             .external_parameters
                             .0
                             .insert(param_cpy, BlackjackValue::Vector(current_cpy));
-                    })
+                    }))
                     .scale_selector(Some(ScaleSelector::float_7vals()))
                     .speed(1.0)
                     .layout_hints(LayoutHints::shrink())
