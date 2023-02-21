@@ -11,7 +11,7 @@ use super::*;
 pub struct Box;
 
 impl Box {
-    pub fn build(center: Vec3, size: Vec3) -> HalfEdgeMesh {
+    pub fn build(center: Vec3, size: Vec3) -> Result<HalfEdgeMesh> {
         let hsize = size * 0.5;
 
         let v1 = center + Vec3::new(-hsize.x, -hsize.y, -hsize.z);
@@ -49,13 +49,12 @@ impl Box {
                 &[6, 2, 1, 7],
             ],
         )
-        .expect("Cube construction should not fail")
     }
 }
 
 pub struct Quad;
 impl Quad {
-    pub fn build(center: Vec3, normal: Vec3, right: Vec3, size: Vec2) -> HalfEdgeMesh {
+    pub fn build(center: Vec3, normal: Vec3, right: Vec3, size: Vec2) -> Result<HalfEdgeMesh> {
         let normal = normal.normalize();
         let right = right.normalize();
         let forward = normal.cross(right);
@@ -68,7 +67,6 @@ impl Quad {
         let v4 = center + hsize.x * right - hsize.y * forward;
 
         HalfEdgeMesh::build_from_polygons(&[v1, v2, v3, v4], &[&[0, 1, 2, 3]])
-            .expect("Quad construction should not fail")
     }
 }
 
@@ -83,16 +81,16 @@ impl Circle {
             })
             .collect_vec()
     }
-    pub fn build(center: Vec3, radius: f32, num_vertices: usize) -> HalfEdgeMesh {
+
+    pub fn build(center: Vec3, radius: f32, num_vertices: usize) -> Result<HalfEdgeMesh> {
         let verts = Self::make_verts(center, radius, num_vertices);
         let polygon = (0..num_vertices).collect_vec();
 
         HalfEdgeMesh::build_from_polygons(&verts, &[&polygon])
-            .expect("Circle construction should not fail")
     }
 
-    pub fn build_open(center: Vec3, radius: f32, num_vertices: usize) -> HalfEdgeMesh {
-        let circle = Self::build(center, radius, num_vertices);
+    pub fn build_open(center: Vec3, radius: f32, num_vertices: usize) -> Result<HalfEdgeMesh> {
+        let circle = Self::build(center, radius, num_vertices)?;
         {
             let mut conn = circle.write_connectivity();
             let (v, _) = conn.iter_vertices().next().unwrap();
@@ -105,13 +103,13 @@ impl Circle {
             }
             conn.remove_face(face);
         }
-        circle
+        Ok(circle)
     }
 }
 
 pub struct UVSphere;
 impl UVSphere {
-    pub fn build(center: Vec3, segments: u32, rings: u32, radius: f32) -> HalfEdgeMesh {
+    pub fn build(center: Vec3, segments: u32, rings: u32, radius: f32) -> Result<HalfEdgeMesh> {
         let mut vertices = Vec::<Vec3>::new();
         let mut polygons = Vec::<SVec<u32>>::new();
 
@@ -158,13 +156,12 @@ impl UVSphere {
         }
 
         HalfEdgeMesh::build_from_polygons(&vertices, &polygons)
-            .expect("Sphere construction should not fail")
     }
 }
 
 pub struct Line;
 impl Line {
-    pub fn build(position: &impl Fn(u32) -> Vec3, segments: u32) -> HalfEdgeMesh {
+    pub fn build(position: &impl Fn(u32) -> Vec3, segments: u32) -> Result<HalfEdgeMesh> {
         let tangent = |i| {
             match i {
                 0 => position(1) - position(0),
@@ -186,24 +183,17 @@ impl Line {
         normal: &impl Fn(u32) -> Vec3,
         tangent: &impl Fn(u32) -> Vec3,
         segments: u32,
-    ) -> HalfEdgeMesh {
+    ) -> Result<HalfEdgeMesh> {
         if segments == 0 {
-            return HalfEdgeMesh::build_from_polygons::<usize, &[usize]>(&[position(0)], &[])
-                .unwrap();
+            return HalfEdgeMesh::build_from_polygons::<usize, &[usize]>(&[position(0)], &[]);
         }
         let mut mesh = HalfEdgeMesh::new();
         let tangent_channel_id = mesh.channels.ensure_channel::<VertexId, Vec3>("tangent");
         let normal_channel_id = mesh.channels.ensure_channel::<VertexId, Vec3>("normal");
         let mut conn = mesh.write_connectivity();
         let mut pos = mesh.write_positions();
-        let mut norm = mesh
-            .channels
-            .write_channel(normal_channel_id)
-            .expect("normal channel to exist");
-        let mut tang = mesh
-            .channels
-            .write_channel(tangent_channel_id)
-            .expect("tangent channel to exist");
+        let mut norm = mesh.channels.write_channel(normal_channel_id)?;
+        let mut tang = mesh.channels.write_channel(tangent_channel_id)?;
 
         let mut forward_halfedges = SVec::new();
         let mut backward_halfedges = SVec::new();
@@ -254,19 +244,19 @@ impl Line {
         let f_h_first = forward_halfedges
             .iter_cpy()
             .next()
-            .expect("At least one halfedge");
+            .context("expected at least one halfedge")?;
         let f_h_last = forward_halfedges
             .iter_cpy()
             .last()
-            .expect("At least one halfedge");
+            .context("expected at least one halfedge")?;
         let b_h_first = backward_halfedges
             .iter_cpy()
             .next()
-            .expect("At least one halfedge");
+            .context("expected at least one halfedge")?;
         let b_h_last = backward_halfedges
             .iter_cpy()
             .last()
-            .expect("At least one halfedge");
+            .context("expected at least one halfedge")?;
         conn[f_h_last].next = Some(b_h_last);
         conn[b_h_first].next = Some(f_h_first);
 
@@ -275,16 +265,16 @@ impl Line {
         drop(norm);
         drop(tang);
 
-        mesh
+        Ok(mesh)
     }
 
-    pub fn build_straight_line(start: Vec3, end: Vec3, segments: u32) -> HalfEdgeMesh {
+    pub fn build_straight_line(start: Vec3, end: Vec3, segments: u32) -> Result<HalfEdgeMesh> {
         Self::build(&|i| start.lerp(end, i as f32 / segments as f32), segments)
     }
 
-    pub fn build_from_points(points: Vec<Vec3>) -> HalfEdgeMesh {
+    pub fn build_from_points(points: Vec<Vec3>) -> Result<HalfEdgeMesh> {
         match points.len() {
-            0 => HalfEdgeMesh::new(),
+            0 => Ok(HalfEdgeMesh::new()),
             len => Self::build(&|i| points[i as usize], len as u32 - 1),
         }
     }
@@ -310,7 +300,7 @@ impl Cone {
         bottom_radius: f32,
         height: f32,
         num_vertices: usize,
-    ) -> HalfEdgeMesh {
+    ) -> Result<HalfEdgeMesh> {
         if top_radius.abs() <= 1e-5 {
             Self::build_cone(center, bottom_radius, height, num_vertices)
         } else {
@@ -322,7 +312,7 @@ impl Cone {
         bottom_radius: f32,
         height: f32,
         num_vertices: usize,
-    ) -> HalfEdgeMesh {
+    ) -> Result<HalfEdgeMesh> {
         let v_offset = Vec3::new(0.0, height / 2.0, 0.0);
         let mut verts = Circle::make_verts(center - v_offset, bottom_radius, num_vertices);
         verts.push(center + v_offset);
@@ -335,7 +325,6 @@ impl Cone {
         faces.extend(side_faces.iter().map(|x| x.as_slice()));
 
         HalfEdgeMesh::build_from_polygons(&verts, &faces)
-            .expect("Cone construction should not fail.")
     }
     pub fn build_truncated_cone(
         center: Vec3,
@@ -343,7 +332,7 @@ impl Cone {
         bottom_radius: f32,
         height: f32,
         num_vertices: usize,
-    ) -> HalfEdgeMesh {
+    ) -> Result<HalfEdgeMesh> {
         let v_offset = Vec3::new(0.0, height / 2.0, 0.0);
         let mut verts = Circle::make_verts(center - v_offset, bottom_radius, num_vertices);
         verts.extend(Circle::make_verts(
@@ -364,20 +353,24 @@ impl Cone {
         faces.extend(side_faces.iter().map(|x| x.as_slice()));
 
         HalfEdgeMesh::build_from_polygons(&verts, &faces)
-            .expect("Truncated Cone construction should not fail.")
     }
 }
 
 struct Cylinder;
 impl Cylinder {
-    pub fn build(center: Vec3, radius: f32, height: f32, num_vertices: usize) -> HalfEdgeMesh {
+    pub fn build(
+        center: Vec3,
+        radius: f32,
+        height: f32,
+        num_vertices: usize,
+    ) -> Result<HalfEdgeMesh> {
         Cone::build_truncated_cone(center, radius, radius, height, num_vertices)
     }
 }
 
 pub struct Grid;
 impl Grid {
-    pub fn build(x: u32, y: u32, spacing_x: f32, spacing_y: f32) -> HalfEdgeMesh {
+    pub fn build(x: u32, y: u32, spacing_x: f32, spacing_y: f32) -> Result<HalfEdgeMesh> {
         let mesh = HalfEdgeMesh::new();
         let mut conn = mesh.write_connectivity();
         let mut pos = mesh.write_positions();
@@ -395,7 +388,7 @@ impl Grid {
         drop(conn);
         drop(pos);
 
-        mesh
+        Ok(mesh)
     }
 }
 
@@ -413,7 +406,7 @@ impl Catenary {
     const MAX_ERR: f32 = 1e-2;
     const NEWTON_ITERS: u32 = 20;
 
-    pub fn build(start: Vec3, end: Vec3, sag: f32, segments: u32) -> HalfEdgeMesh {
+    pub fn build(start: Vec3, end: Vec3, sag: f32, segments: u32) -> Result<HalfEdgeMesh> {
         let dx = start.xz().distance(end.xz());
         let dy = start.y - end.y;
         // Re-parameterize to make it easier to control. Invert because at low tension values
@@ -499,7 +492,7 @@ impl Icosahedron {
         [8, 11, 10],
         [9, 10, 11],
     ];
-    pub fn build(center: Vec3, radius: f32) -> HalfEdgeMesh {
+    pub fn build(center: Vec3, radius: f32) -> Result<HalfEdgeMesh> {
         // Verts aren't at radius 1, correct for that here
         let radius = radius / (PHI * PHI + 1.).sqrt();
         let verts = Self::VERTS
@@ -507,7 +500,6 @@ impl Icosahedron {
             .map(|(x, y, z)| (Vec3::new(*x, *y, *z) * radius) + center)
             .collect_vec();
         HalfEdgeMesh::build_from_polygons(&verts, &Self::FACES)
-            .expect("icosahedron building to succeed")
     }
 }
 
@@ -518,21 +510,21 @@ mod lua_api {
 
     /// Creates a box with given `center` and `size` vectors.
     #[lua(under = "Primitives")]
-    fn cube(center: LVec3, size: LVec3) -> HalfEdgeMesh {
+    fn cube(center: LVec3, size: LVec3) -> Result<HalfEdgeMesh> {
         Box::build(center.0, size.0)
     }
 
     /// Creates a single quad, located at `center` and oriented along its
     /// `normal` and `right` vectors with given `size`.
     #[lua(under = "Primitives")]
-    fn quad(center: LVec3, normal: LVec3, right: LVec3, size: LVec3) -> HalfEdgeMesh {
+    fn quad(center: LVec3, normal: LVec3, right: LVec3, size: LVec3) -> Result<HalfEdgeMesh> {
         Quad::build(center.0, normal.0, right.0, size.0.truncate())
     }
 
     /// Creates an open circle (polyline) with given `center`, `radius` and
     /// `num_vertices`.
     #[lua(under = "Primitives")]
-    fn circle(center: LVec3, radius: f32, num_vertices: f32, filled: bool) -> HalfEdgeMesh {
+    fn circle(center: LVec3, radius: f32, num_vertices: f32, filled: bool) -> Result<HalfEdgeMesh> {
         if filled {
             Circle::build(center.0, radius, num_vertices as usize)
         } else {
@@ -549,7 +541,7 @@ mod lua_api {
         top_radius: f32,
         height: f32,
         num_vertices: f32,
-    ) -> HalfEdgeMesh {
+    ) -> Result<HalfEdgeMesh> {
         Cone::build(
             center.0,
             top_radius,
@@ -561,35 +553,40 @@ mod lua_api {
 
     /// Creates a cylinder with the given `center`, `radius`, `height`, and `num_vertices around its radius`.
     #[lua(under = "Primitives")]
-    fn cylinder(center: LVec3, radius: f32, height: f32, num_vertices: f32) -> HalfEdgeMesh {
+    fn cylinder(
+        center: LVec3,
+        radius: f32,
+        height: f32,
+        num_vertices: f32,
+    ) -> Result<HalfEdgeMesh> {
         Cylinder::build(center.0, radius, height, num_vertices as usize)
     }
 
     /// Creates a UV-sphere with given `center` and `radius`. The `rings` and
-    /// `segments` let you specify the specify the number of longitudinal
+    /// `segments` let you specify the number of longitudinal
     /// and vertical sections respectively.
     #[lua(under = "Primitives")]
-    fn uv_sphere(center: LVec3, radius: f32, segments: u32, rings: u32) -> HalfEdgeMesh {
+    fn uv_sphere(center: LVec3, radius: f32, segments: u32, rings: u32) -> Result<HalfEdgeMesh> {
         UVSphere::build(center.0, segments, rings, radius)
     }
 
     /// Creates an Icosahedron with given `center` and `radius`, a regular polyhedra useful for approximating spheres
     /// without artifacts around the poles.
     #[lua(under = "Primitives")]
-    fn icosahedron(center: LVec3, radius: f32) -> HalfEdgeMesh {
+    fn icosahedron(center: LVec3, radius: f32) -> Result<HalfEdgeMesh> {
         Icosahedron::build(center.0, radius)
     }
 
     /// Creates a polyline with `start` and `end` points split into a number of
     /// `segments`.
     #[lua(under = "Primitives")]
-    fn line(start: LVec3, end: LVec3, segments: u32) -> HalfEdgeMesh {
+    fn line(start: LVec3, end: LVec3, segments: u32) -> Result<HalfEdgeMesh> {
         Line::build_straight_line(start.0, end.0, segments)
     }
 
     /// Creates a polyline from a given sequence of `points`.
     #[lua(under = "Primitives")]
-    fn line_from_points(points: Vec<LVec3>) -> HalfEdgeMesh {
+    fn line_from_points(points: Vec<LVec3>) -> Result<HalfEdgeMesh> {
         Line::build_from_points(LVec3::cast_vector(points))
     }
 
@@ -597,7 +594,7 @@ mod lua_api {
     /// between `start` and `end` split into a number of `segments`. `sag` adjusts how much the curve sags,
     /// higher values make the curve hang lower, lower values make it closer to a straight line.
     #[lua(under = "Primitives")]
-    fn catenary(start: LVec3, end: LVec3, sag: f32, segments: u32) -> HalfEdgeMesh {
+    fn catenary(start: LVec3, end: LVec3, sag: f32, segments: u32) -> Result<HalfEdgeMesh> {
         Catenary::build(start.0, end.0, sag, segments)
     }
 
@@ -610,7 +607,7 @@ mod lua_api {
     ///Creates a point cloud arranged in a grid
     #[lua(under = "Primitives")]
     fn grid(x: u32, y: u32, spacing_x: f32, spacing_y: f32) -> Result<HalfEdgeMesh> {
-        Ok(Grid::build(x, y, spacing_x, spacing_y))
+        Grid::build(x, y, spacing_x, spacing_y)
     }
 }
 
@@ -619,24 +616,34 @@ mod test {
     use super::*;
     #[test]
     fn test_cone() {
-        let cone = Cone::build(Vec3::ZERO, 0.0, 1.0, 1.0, 8);
+        let cone = Cone::build(Vec3::ZERO, 0.0, 1.0, 1.0, 8).unwrap();
         assert_eq!(cone.read_connectivity().num_vertices(), 9);
 
-        Cone::build(Vec3::ZERO, 1.0, 2.0, 1.0, 8);
-        Cone::build_cone(Vec3::ZERO, 1.0, 1.0, 8);
-        Cone::build_truncated_cone(Vec3::ZERO, 1.0, 2.0, 1.0, 8);
+        Cone::build(Vec3::ZERO, 1.0, 2.0, 1.0, 8).unwrap();
+        Cone::build_cone(Vec3::ZERO, 1.0, 1.0, 8).unwrap();
+        Cone::build_truncated_cone(Vec3::ZERO, 1.0, 2.0, 1.0, 8).unwrap();
     }
 
     #[test]
     fn test_cylinder() {
-        Cylinder::build(Vec3::ZERO, 1.0, 1.0, 8);
+        Cylinder::build(Vec3::ZERO, 1.0, 1.0, 8).unwrap();
+    }
+
+    #[test]
+    fn test_circle() {
+        Circle::build(Vec3::ZERO, 1.0, 24).unwrap();
+        Circle::build(Vec3::ZERO, 1.0, 3).unwrap();
+
+        // Not enough vertices to make a circle
+        assert!(Circle::build(Vec3::ZERO, 1.0, 2).is_err());
+        assert!(Circle::build(Vec3::ZERO, 1.0, 0).is_err());
     }
 
     #[test]
     fn test_catenary() {
         let start = Vec3::ZERO;
         let end = Vec3::new(0.0, 1.0, 1.0);
-        let curve = Catenary::build(start, end, 1.0, 8);
+        let curve = Catenary::build(start, end, 1.0, 8).unwrap();
         assert_eq!(curve.read_connectivity().num_vertices(), 9);
         let pos = curve.read_positions();
         // Want to have the exact endpoints and not ones computed from the curve.
@@ -647,13 +654,13 @@ mod test {
     #[test]
     fn test_line_from_points() {
         // Too few points can cause problems with normal/tangent calculations
-        Line::build_from_points(vec![]);
-        Line::build_from_points(vec![Vec3::ZERO]);
-        Line::build_from_points(vec![Vec3::ZERO, Vec3::Y]);
+        Line::build_from_points(vec![]).unwrap();
+        Line::build_from_points(vec![Vec3::ZERO]).unwrap();
+        Line::build_from_points(vec![Vec3::ZERO, Vec3::Y]).unwrap();
     }
 
     #[test]
     fn test_icosahedron() {
-        Icosahedron::build(Vec3::ZERO, 1.);
+        Icosahedron::build(Vec3::ZERO, 1.).unwrap();
     }
 }
