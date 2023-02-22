@@ -13,6 +13,7 @@ use epaint::{ahash::HashSet, Vec2};
 use guee::{
     base_widgets::drag_value::{DragValue, ScaleSelector},
     callback_accessor::CallbackAccessor,
+    input::MouseButton,
     prelude::*,
     widget::DynWidget,
     widget_id::IdGen,
@@ -68,7 +69,7 @@ impl GraphEditor {
             node_positions,
             node_order: vec![node1, node2, node3],
             pan_zoom: PanZoom::default(),
-            node_finder: Some(NodeFinder::new(cba.clone())),
+            node_finder: None,
             graph,
             cba,
         }
@@ -164,12 +165,38 @@ impl GraphEditor {
 
         if let Some(node_finder) = self.node_finder.as_ref() {
             stack.push((
-                Vec2::new(100.0, 100.0),
+                node_finder.position.to_vec2(),
                 node_finder.view(self.lua_runtime.node_definitions.node_names()),
             ));
         }
 
-        StackContainer::new(IdGen::key("stack"), stack).build()
+        let stack = StackContainer::new(IdGen::key("stack"), stack).build();
+
+        // We use this container to detect unhandled right click events for the
+        // graph editor and spawn the node finder at that position.
+        let cba_cpy = self.cba.clone();
+        let on_spawn_finder_cb = self.cba.callback(move |editor, spawn_pos: Pos2| {
+            editor.node_finder = Some(NodeFinder::new(cba_cpy, spawn_pos))
+        });
+        EventHandlingContainer::new(stack)
+            .post_event(move |ctx, layout, cursor_position, _events| {
+                if layout.bounds.contains(cursor_position)
+                    && ctx
+                        .input_state
+                        .mouse
+                        .button_state
+                        .is_clicked(MouseButton::Secondary)
+                {
+                    ctx.dispatch_callback(
+                        on_spawn_finder_cb,
+                        (cursor_position - layout.bounds.left_top()).to_pos2(),
+                    );
+                    EventStatus::Consumed
+                } else {
+                    EventStatus::Ignored
+                }
+            })
+            .build()
     }
 
     pub fn make_node_widget(&self, node_id: BjkNodeId, node: &BjkNode) -> NodeWidget {

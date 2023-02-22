@@ -4,13 +4,14 @@ use guee::{callback_accessor::CallbackAccessor, prelude::*};
 use crate::{graph_editor::GraphEditor, pallette};
 
 pub struct NodeFinder {
-    editor_cba: CallbackAccessor<GraphEditor>,
-    cba: CallbackAccessor<Self>,
-    search_box_contents: String,
+    pub editor_cba: CallbackAccessor<GraphEditor>,
+    pub position: Pos2,
+    pub cba: CallbackAccessor<Self>,
+    pub search_box_contents: String,
 }
 
 impl NodeFinder {
-    pub fn new(editor_cba: CallbackAccessor<GraphEditor>) -> Self {
+    pub fn new(editor_cba: CallbackAccessor<GraphEditor>, position: Pos2) -> Self {
         Self {
             cba: editor_cba.drill_down(|editor| {
                 editor
@@ -19,6 +20,7 @@ impl NodeFinder {
                     .expect("Node finder should exist")
             }),
             editor_cba,
+            position,
             search_box_contents: String::new(),
         }
     }
