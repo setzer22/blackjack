@@ -19,6 +19,7 @@ use guee::{
     widget_id::IdGen,
 };
 use slotmap::SecondaryMap;
+use winit::event::VirtualKeyCode;
 
 use crate::widgets::{
     node_editor_widget::{Connection, Disconnection, NodeEditorWidget, PanZoom},
@@ -176,10 +177,13 @@ impl GraphEditor {
         // graph editor and spawn the node finder at that position.
         let cba_cpy = self.cba.clone();
         let on_spawn_finder_cb = self.cba.callback(move |editor, spawn_pos: Pos2| {
-            editor.node_finder = Some(NodeFinder::new(cba_cpy, spawn_pos))
+            editor.node_finder = Some(NodeFinder::new(cba_cpy, spawn_pos));
+        });
+        let on_dismiss_node_finder_cb = self.cba.callback(move |editor, _: ()| {
+            editor.node_finder = None;
         });
         EventHandlingContainer::new(stack)
-            .post_event(move |ctx, layout, cursor_position, _events| {
+            .post_event(move |ctx, layout, cursor_position, events| {
                 if layout.bounds.contains(cursor_position)
                     && ctx
                         .input_state
@@ -191,6 +195,18 @@ impl GraphEditor {
                         on_spawn_finder_cb,
                         (cursor_position - layout.bounds.left_top()).to_pos2(),
                     );
+                    EventStatus::Consumed
+                } else if (!layout.bounds.contains(cursor_position)
+                    && ctx
+                        .input_state
+                        .mouse
+                        .button_state
+                        .is_clicked(MouseButton::Primary))
+                    || events
+                        .iter()
+                        .any(|ev| matches!(ev, Event::KeyPressed(VirtualKeyCode::Escape)))
+                {
+                    ctx.dispatch_callback(on_dismiss_node_finder_cb, ());
                     EventStatus::Consumed
                 } else {
                     EventStatus::Ignored

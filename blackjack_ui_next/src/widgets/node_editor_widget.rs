@@ -349,33 +349,27 @@ impl Widget for NodeEditorWidget {
 
         // Set the cursor transform state. This is necessary for child widgets
         // to be able to properly track click / drag events.
-        let prev_tr = ctx.input_widget_state.borrow().cursor_transform;
-        ctx.input_widget_state.borrow_mut().cursor_transform = cursor_transform;
-
-        let mut event_status = EventStatus::Ignored;
-
-        // NOTE: This needs to be iterated in reverse, so nodes are drawn
-        // bottom-to-top, but events processed top-to-bottom.
-        for ((_pos, node_widget), node_layout) in
-            self.node_widgets.iter_mut().zip(&layout.children).rev()
-        {
-            if let EventStatus::Consumed =
-                node_widget.on_event(ctx, node_layout, transformed_cursor_position, events)
+        let mut event_status = ctx.with_cursor_transform(cursor_transform, || {
+            let mut event_status = EventStatus::Ignored;
+            // NOTE: This needs to be iterated in reverse, so nodes are drawn
+            // bottom-to-top, but events processed top-to-bottom.
+            for ((_pos, node_widget), node_layout) in
+                self.node_widgets.iter_mut().zip(&layout.children).rev()
             {
-                if let Some(on_raised) = self.on_node_raised.take() {
-                    ctx.dispatch_callback(on_raised, node_widget.node_id);
+                if let EventStatus::Consumed =
+                    node_widget.on_event(ctx, node_layout, transformed_cursor_position, events)
+                {
+                    if let Some(on_raised) = self.on_node_raised.take() {
+                        ctx.dispatch_callback(on_raised, node_widget.node_id);
+                    }
+
+                    event_status = EventStatus::Consumed;
+                    break;
                 }
-
-                event_status = EventStatus::Consumed;
-                break;
             }
-        }
+            event_status
+        });
 
-        // Restore the previous cursor transform.
-        ctx.input_widget_state.borrow_mut().cursor_transform = prev_tr;
-
-        // We do this here, and not directly inside the loop, to avoid ending
-        // the frame with a modified cursor transform.
         if event_status == EventStatus::Consumed {
             return event_status;
         }
