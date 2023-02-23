@@ -60,13 +60,18 @@ impl NodeFinder {
             })
             .collect();
 
-        let button_container = MarginContainer::new(
-            IdGen::key("margin"),
-            BoxContainer::vertical(IdGen::key("buttons"), buttons)
-                .layout_hints(LayoutHints::fill())
-                .build(),
+        let button_container = VScrollContainer::new(
+            IdGen::key("scroll"),
+            MarginContainer::new(
+                IdGen::key("margin"),
+                BoxContainer::vertical(IdGen::key("buttons"), buttons)
+                    .layout_hints(LayoutHints::fill())
+                    .build(),
+            )
+            .margin(Vec2::new(10.0, 10.0))
+            .build(),
         )
-        .margin(Vec2::new(10.0, 10.0))
+        .hints(LayoutHints::fill())
         .build();
 
         let contents = BoxContainer::vertical(
