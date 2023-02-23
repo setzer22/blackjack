@@ -184,6 +184,12 @@ impl GraphEditor {
         });
         EventHandlingContainer::new(stack)
             .post_event(move |ctx, layout, cursor_position, events| {
+                let cursor_in_finder = layout
+                    .children
+                    .get(1)
+                    .map(|x| x.bounds.contains(cursor_position))
+                    .unwrap_or(false);
+
                 if layout.bounds.contains(cursor_position)
                     && ctx
                         .input_state
@@ -196,7 +202,7 @@ impl GraphEditor {
                         (cursor_position - layout.bounds.left_top()).to_pos2(),
                     );
                     EventStatus::Consumed
-                } else if (!layout.bounds.contains(cursor_position)
+                } else if (!cursor_in_finder
                     && ctx
                         .input_state
                         .mouse
@@ -432,6 +438,6 @@ impl GraphEditor {
 // WIP:
 // - [x] Min / max values (soft & hard) in the DragValues
 // - [ ] The node finder widget
-// -    [ ] Fix bug with text clicks falling through
-// -    [ ] Scroll container support
+// -    [x] Fix bug with text clicks falling through
+// -    [x] Scroll container support
 // - [ ] Start porting the wgpu stuff

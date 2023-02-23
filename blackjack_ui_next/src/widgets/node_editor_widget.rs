@@ -472,8 +472,7 @@ impl Widget for NodeEditorWidget {
             }
         }
 
-        let panning = ctx.claim_drag_event(layout.widget_id, layout.bounds, MouseButton::Middle);
-        if panning {
+        if ctx.claim_drag_event(layout.widget_id, layout.bounds, MouseButton::Middle) {
             let delta_screen = ctx.input_state.mouse.delta() / self.pan_zoom.zoom;
             self.pan_zoom.pan += delta_screen;
             if let Some(cb) = self.on_pan_zoom_change.take() {
