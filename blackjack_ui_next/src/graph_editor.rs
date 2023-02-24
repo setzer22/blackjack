@@ -76,6 +76,28 @@ impl GraphEditor {
         }
     }
 
+    pub fn spawn_node(&mut self, op_name: &str) {
+        let new = self
+            .graph
+            .spawn_node(op_name, &self.lua_runtime.node_definitions)
+            .expect("Spawn node should not fail");
+        self.node_positions.insert(
+            new,
+            self.node_finder
+                .as_ref()
+                .expect("Node finder")
+                .position
+                .to_vec2(),
+        );
+        self.node_order.push(new);
+    }
+
+    pub fn remove_node(&mut self, node: BjkNodeId) {
+        self.graph.remove_node(node);
+        self.node_positions.remove(node);
+        self.node_order.retain(|x| *x != node);
+    }
+
     pub fn view(&self) -> DynWidget {
         // Ensure that the node_order and the graph are always aligned.
         debug_assert_eq!(
@@ -86,7 +108,21 @@ impl GraphEditor {
                 .collect::<HashSet<_>>()
                 .difference(&self.node_order.iter().copied().collect())
                 .count(),
-            0
+            0,
+            "Inconsistency between node_order and graph",
+        );
+
+        // Ensure that the node_positions and the graph are always aligned.
+        debug_assert_eq!(
+            self.graph
+                .nodes
+                .iter()
+                .map(|(id, _)| id)
+                .collect::<HashSet<_>>()
+                .difference(&self.node_positions.iter().map(|(k, _v)| k).collect())
+                .count(),
+            0,
+            "Inconsistency between node_positions and graph",
         );
 
         let node_widgets = self.node_order.iter().copied().map(|node_id| {
@@ -157,8 +193,12 @@ impl GraphEditor {
                 .expect("Should not fail");
         }))
         .on_node_raised(self.cba.callback(|editor, node_id| {
-            editor.node_order.retain(|x| *x != node_id);
-            editor.node_order.push(node_id);
+            // When the node is deleted, a "raised" event will be emitted but we
+            // don't want to handle it then.
+            if editor.node_order.contains(&node_id) {
+                editor.node_order.retain(|x| *x != node_id);
+                editor.node_order.push(node_id);
+            }
         }))
         .build();
 
@@ -265,7 +305,12 @@ impl GraphEditor {
             .build(),
             titlebar_right: MarginContainer::new(
                 IdGen::key("margin_r"),
-                Button::with_label("x").padding(Vec2::ZERO).build(),
+                Button::with_label("x")
+                    .padding(Vec2::ZERO)
+                    .on_click(self.cba.callback(move |editor, _| {
+                        editor.remove_node(node_id);
+                    }))
+                    .build(),
             )
             .margin(Vec2::new(10.0, 10.0))
             .build(),

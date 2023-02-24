@@ -671,4 +671,25 @@ impl BjkGraph {
 
         Ok(node_id)
     }
+
+    pub fn remove_node(&mut self, node_to_delete: BjkNodeId) {
+        self.nodes.remove(node_to_delete);
+        if self.default_node == Some(node_to_delete) {
+            self.default_node = None;
+        }
+
+        for (_other_id, other) in self.nodes.iter_mut() {
+            for input in other.inputs.iter_mut() {
+                match &input.kind {
+                    DependencyKind::External { .. } => (),
+                    DependencyKind::Connection {
+                        node,
+                        param_name: _,
+                    } => {
+                        input.kind = DependencyKind::External { promoted: None };
+                    }
+                }
+            }
+        }
+    }
 }

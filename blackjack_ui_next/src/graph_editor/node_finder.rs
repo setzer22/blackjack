@@ -53,8 +53,9 @@ impl NodeFinder {
                     .hints(LayoutHints::fill_horizontal())
                     .align_contents(Align2::LEFT_CENTER)
                     .padding(Vec2::new(3.0, 3.0))
-                    .on_click(self.editor_cba.callback(move |_graph, _| {
-                        println!("New node {op_name}");
+                    .on_click(self.editor_cba.callback(move |editor, _| {
+                        editor.spawn_node(&op_name);
+                        editor.node_finder = None;
                     }))
                     .build()
             })
