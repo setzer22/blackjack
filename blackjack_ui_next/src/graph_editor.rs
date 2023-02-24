@@ -43,35 +43,16 @@ pub struct GraphEditor {
 #[allow(clippy::new_without_default)]
 impl GraphEditor {
     pub fn new(cba: CallbackAccessor<Self>) -> Self {
-        // TODO: Hardcoded path
-        let runtime = LuaRuntime::initialize_with_std("./blackjack_lua/".into())
-            .expect("Lua init should not fail");
-        let mut graph = BjkGraph::new();
-        let mut node_positions = SecondaryMap::new();
-
-        let node1 = graph
-            .spawn_node("MakeBox", &runtime.node_definitions)
-            .unwrap();
-        node_positions.insert(node1, Vec2::new(40.0, 50.0));
-
-        let node2 = graph
-            .spawn_node("MakeCircle", &runtime.node_definitions)
-            .unwrap();
-        node_positions.insert(node2, Vec2::new(300.0, 150.0));
-
-        let node3 = graph
-            .spawn_node("BevelEdges", &runtime.node_definitions)
-            .unwrap();
-        node_positions.insert(node3, Vec2::new(400.0, 200.0));
-
         Self {
             external_parameters: ExternalParameterValues::default(),
-            lua_runtime: runtime,
-            node_positions,
-            node_order: vec![node1, node2, node3],
+            // TODO: Hardcoded path
+            lua_runtime: LuaRuntime::initialize_with_std("./blackjack_lua/".into())
+                .expect("Lua init should not fail"),
+            node_positions: SecondaryMap::new(),
+            node_order: Vec::new(),
             pan_zoom: PanZoom::default(),
             node_finder: None,
-            graph,
+            graph: BjkGraph::new(),
             cba,
         }
     }
