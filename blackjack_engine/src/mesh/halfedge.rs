@@ -10,8 +10,12 @@ use std::{
     rc::Rc,
 };
 
+#[cfg(feature = "sync")]
+use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
+
 use crate::prelude::*;
 
+use atomic_refcell::{AtomicRef, AtomicRefCell, AtomicRefMut};
 use glam::*;
 use itertools::Itertools;
 use slotmap::{SecondaryMap, SlotMap};
@@ -54,6 +58,46 @@ pub mod channels;
 pub use channels::*;
 
 use self::mappings::MeshMapping;
+
+// TODO Put this someplace sensible.
+
+#[cfg(feature = "sync")]
+// pub struct InteriorMutable<T>(RwLock<T>);
+pub type InteriorMutable<T> = AtomicRefCell<T>;
+
+#[cfg(not(feature = "sync"))]
+pub type InteriorMutable<T> = RefCell<T>;
+
+#[cfg(feature = "sync")]
+pub type RefCounted<T> = Arc<T>;
+
+#[cfg(not(feature = "sync"))]
+pub type RefCounted<T> = Rc<T>;
+
+#[cfg(feature = "sync")]
+pub type BorrowedRef<'a, T> = AtomicRef<'a, T>;
+
+#[cfg(not(feature = "sync"))]
+pub type BorrowedRef<'a, T> = Ref<'a, T>;
+
+#[cfg(feature = "sync")]
+pub type MutableRef<'a, T> = AtomicRefMut<'a, T>;
+
+#[cfg(not(feature = "sync"))]
+pub type MutableRef<'a, T> = RefMut<'a, T>;
+
+#[cfg(feature = "sync")]
+pub trait MaybeSync: Send + Sync + 'static {}
+
+#[cfg(not(feature = "sync"))]
+pub trait MaybeSync {}
+
+// TODO - Put this somewhere sensible.
+#[cfg(feature = "sync")]
+fn test() {
+    fn assert_thread_safe<T: Send + Sync + 'static>(t: T) {}
+    assert_thread_safe(HalfEdgeMesh::new())
+}
 
 /// HalfEdge meshes are a type of linked list. This means it is sometimes
 /// impossible to ensure some algorithms will terminate when the mesh is
@@ -153,12 +197,25 @@ pub struct MeshGenerationConfig {
     pub smooth_normals: bool,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
+#[cfg_attr(not(feature = "sync"), derive(Clone))] // TODO I don't know if this is right.
 pub struct HalfEdgeMesh {
-    connectivity: RefCell<MeshConnectivity>,
+    connectivity: InteriorMutable<MeshConnectivity>,
     pub channels: MeshChannels,
     default_channels: DefaultChannels,
     pub gen_config: MeshGenerationConfig,
+}
+
+#[cfg(feature = "sync")]
+impl Clone for HalfEdgeMesh {
+    fn clone(&self) -> Self {
+        HalfEdgeMesh {
+            connectivity: InteriorMutable::new(self.connectivity.borrow().clone()),
+            channels: self.channels.clone(),
+            default_channels: self.default_channels.clone(),
+            gen_config: self.gen_config.clone(),
+        }
+    }
 }
 
 pub type Positions = Channel<VertexId, Vec3>;
@@ -512,12 +569,12 @@ impl HalfEdgeMesh {
         Self {
             channels,
             default_channels,
-            connectivity: RefCell::new(MeshConnectivity::new()),
+            connectivity: InteriorMutable::new(MeshConnectivity::new()),
             gen_config: MeshGenerationConfig::default(),
         }
     }
 
-    pub fn read_connectivity(&self) -> Ref<'_, MeshConnectivity> {
+    pub fn read_connectivity(&self) -> BorrowedRef<'_, MeshConnectivity> {
         self.connectivity.borrow()
     }
 
@@ -536,17 +593,17 @@ impl HalfEdgeMesh {
         }
     }
 
-    pub fn write_connectivity(&self) -> RefMut<'_, MeshConnectivity> {
+    pub fn write_connectivity(&self) -> MutableRef<'_, MeshConnectivity> {
         self.connectivity.borrow_mut()
     }
 
-    pub fn read_positions(&self) -> Ref<'_, Positions> {
+    pub fn read_positions(&self) -> BorrowedRef<'_, Positions> {
         self.channels
             .read_channel(self.default_channels.position)
             .expect("Could not read positions")
     }
 
-    pub fn read_face_normals(&self) -> Option<Ref<'_, Channel<FaceId, Vec3>>> {
+    pub fn read_face_normals(&self) -> Option<BorrowedRef<'_, Channel<FaceId, Vec3>>> {
         self.default_channels.face_normals.map(|ch_id| {
             self.channels
                 .read_channel(ch_id)
@@ -554,7 +611,7 @@ impl HalfEdgeMesh {
         })
     }
 
-    pub fn read_vertex_normals(&self) -> Option<Ref<'_, Channel<VertexId, Vec3>>> {
+    pub fn read_vertex_normals(&self) -> Option<BorrowedRef<'_, Channel<VertexId, Vec3>>> {
         self.default_channels.vertex_normals.map(|ch_id| {
             self.channels
                 .read_channel(ch_id)
@@ -562,7 +619,7 @@ impl HalfEdgeMesh {
         })
     }
 
-    pub fn read_uvs(&self) -> Option<Ref<'_, Channel<HalfEdgeId, Vec3>>> {
+    pub fn read_uvs(&self) -> Option<BorrowedRef<'_, Channel<HalfEdgeId, Vec3>>> {
         self.default_channels.uvs.map(|ch_id| {
             self.channels
                 .read_channel(ch_id)
@@ -570,7 +627,7 @@ impl HalfEdgeMesh {
         })
     }
 
-    pub fn write_positions(&self) -> RefMut<'_, Positions> {
+    pub fn write_positions(&self) -> MutableRef<'_, Positions> {
         self.channels
             .write_channel(self.default_channels.position)
             .expect("Could not write positions")

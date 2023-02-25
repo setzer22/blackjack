@@ -12,6 +12,7 @@ authors = ["setzer22"]
 
 [features]
 tracy = ["profiling/profile-with-tracy"]
+sync = []
 
 [dependencies]
 # Workspace dependencies
@@ -44,3 +45,4 @@ derive_more = "0.99"
 inventory = "0.3.0"
 ndarray = "0.15.6"
 ron = "0.7"
+atomic_refcell = "0.1.9"

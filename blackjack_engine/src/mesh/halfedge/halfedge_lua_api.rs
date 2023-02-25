@@ -475,10 +475,10 @@ fn mesh_reduce<'lua>(
     Ok(acc)
 }
 
-pub struct SharedChannel(pub Rc<RefCell<dyn DynChannel>>);
+pub struct SharedChannel(pub RefCounted<InteriorMutable<dyn DynChannel>>);
 impl Clone for SharedChannel {
     fn clone(&self) -> Self {
-        Self(Rc::clone(&self.0))
+        Self(RefCounted::clone(&self.0))
     }
 }
 
