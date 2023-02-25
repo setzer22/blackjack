@@ -1,7 +1,7 @@
 use epaint::{emath::Align2, RectShape, Rounding};
 use guee::{callback_accessor::CallbackAccessor, prelude::*};
 
-use crate::{graph_editor::GraphEditor, pallette};
+use crate::{blackjack_theme::pallette, graph_editor::GraphEditor};
 
 pub struct NodeFinder {
     pub editor_cba: CallbackAccessor<GraphEditor>,

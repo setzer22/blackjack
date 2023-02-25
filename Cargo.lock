@@ -529,14 +529,19 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "blackjack_engine",
+ "bytemuck",
  "egui-wgpu 0.20.0",
  "env_logger 0.10.0",
  "epaint 0.20.0",
+ "glam",
+ "glsl-include",
  "guee",
+ "image 0.24.4",
  "itertools",
  "log",
  "pollster",
  "slotmap",
+ "wgpu 0.14.2",
  "winit",
 ]
 

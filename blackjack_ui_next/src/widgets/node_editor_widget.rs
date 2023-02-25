@@ -10,7 +10,7 @@ use guee::{
 };
 use itertools::Itertools;
 
-use crate::{pallette, widgets::node_widget::PortIdKind};
+use crate::{blackjack_theme::pallette, widgets::node_widget::PortIdKind};
 
 use super::node_widget::{NodeWidget, PortId};
 

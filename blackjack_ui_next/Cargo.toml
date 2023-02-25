@@ -4,16 +4,24 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+# Workspace dependencies
 blackjack_engine = { path = "../blackjack_engine" }
+guee = { path = "../guee/guee" }
+
+# Git dependencies
+glsl-include = { git = "https://github.com/setzer22/glsl-include", rev = "d9b1ade" }
+egui-wgpu = { git = "https://github.com/emilk/egui", rev = "c58ac86935123415ea3c1531d735e708465267b6", features = ["winit"] }
+epaint = { git = "https://github.com/emilk/egui", rev = "c58ac86935123415ea3c1531d735e708465267b6", features = ["bytemuck"] }
+
+# Crates.io crates
 itertools = "0.10.5"
 winit = "0.27.2"
-egui-wgpu = { git = "https://github.com/emilk/egui", rev = "c58ac86935123415ea3c1531d735e708465267b6", features = ["winit"] }
- epaint = { git = "https://github.com/emilk/egui", rev = "c58ac86935123415ea3c1531d735e708465267b6", features = ["bytemuck"] }
-# egui-wgpu = { path = "../../egui/crates/egui-wgpu", features = ["winit"] }
-# epaint = { path = "../../egui/crates/epaint", features = ["bytemuck"] }
-guee = { path = "../guee/guee" }
 pollster = "0.2"
 slotmap = "1.0"
 anyhow = "1.0"
 log = "0.4"
 env_logger = "0.10"
+wgpu = "0.14.2"
+glam = "0.21.2"
+bytemuck = { version = "1.7", features = ["derive"] }
+image = { version = "0.24", default-features = false, features = ["png"] }

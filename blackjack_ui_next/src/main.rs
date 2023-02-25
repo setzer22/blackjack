@@ -1,21 +1,25 @@
-use egui_wgpu::{winit::Painter, WgpuConfiguration};
-
+use egui_wgpu::RenderState;
 use graph_editor::GraphEditor;
-use guee::{
-    base_widgets::split_pane_container::SplitPaneContainerStyle,
-    callback_accessor::CallbackAccessor, painter::ExtraFont, prelude::*,
-};
+use guee::{callback_accessor::CallbackAccessor, painter::ExtraFont, prelude::*};
+use viewport_3d::Viewport3d;
 use winit::{
     event_loop::{ControlFlow, EventLoop},
     window::WindowBuilder,
 };
 
+pub mod blackjack_theme;
+
 pub mod widgets;
 
 pub mod graph_editor;
 
+pub mod viewport_3d;
+
+pub mod renderer;
+
 pub struct AppState {
     graph_editor: GraphEditor,
+    viewport_3d: Viewport3d,
 }
 
 impl AppState {
@@ -23,61 +27,12 @@ impl AppState {
         let cba = CallbackAccessor::<Self>::root();
         Self {
             graph_editor: GraphEditor::new(cba.drill_down(|this| &mut this.graph_editor)),
+            viewport_3d: Viewport3d::new(todo!("Bet you'll forget about this one")),
         }
     }
 }
 
-pub struct BlackjackPallette {
-    pub widget_bg: Color32,
-    pub widget_bg_light: Color32,
-    pub widget_bg_dark: Color32,
-
-    pub widget_fg: Color32,
-    pub widget_fg_light: Color32,
-    pub widget_fg_dark: Color32,
-
-    pub accent: Color32,
-
-    pub background: Color32,
-    pub background_dark: Color32,
-}
-
-#[inline]
-fn pallette() -> BlackjackPallette {
-    BlackjackPallette {
-        widget_bg: color!("#303030"),
-        widget_bg_light: color!("#464646"),
-        widget_bg_dark: color!("#2c2c2c"),
-
-        widget_fg: color!("#c0c0c0"),
-        widget_fg_light: color!("#dddddd"),
-        widget_fg_dark: color!("#9b9b9b"),
-
-        accent: color!("#b43e3e"),
-
-        background: color!("#191919"),
-        background_dark: color!("#1d1d1d"),
-    }
-}
-
-pub fn blackjack_theme() -> Theme {
-    let mut theme = Theme::new_empty();
-    let pallette = pallette();
-    theme.set_style::<Button>(ButtonStyle::with_base_colors(
-        pallette.widget_bg,
-        Stroke::NONE,
-        1.1,
-        1.3,
-    ));
-
-    theme.set_style::<SplitPaneContainer>(SplitPaneContainerStyle::new(pallette.widget_fg_dark));
-
-    theme.text_color = pallette.widget_fg;
-
-    theme
-}
-
-fn view(state: &AppState) -> DynWidget {
+fn root_view(state: &AppState, ctx: &Context, render_ctx: &RenderState) -> DynWidget {
     fn panel(key: &str) -> DynWidget {
         ColoredBox::new(IdGen::key(key))
             .hints(LayoutHints::fill())
@@ -102,7 +57,13 @@ fn view(state: &AppState) -> DynWidget {
                     SplitPaneContainer::new(
                         IdGen::key("h_split"),
                         Axis::Horizontal,
-                        panel("left"),
+                        StackContainer::new(
+                            IdGen::key("left_stack"),
+                            vec![
+                                (Vec2::ZERO, panel("bottom")),
+                                (Vec2::ZERO, state.viewport_3d.view(render_ctx)),
+                            ],
+                        ).build(),
                         panel("right"),
                     )
                     .build(),
@@ -134,7 +95,7 @@ fn main() {
             data: include_bytes!("../resources/fonts/NunitoSans-Regular.ttf"),
         }],
     );
-    ctx.set_theme(blackjack_theme());
+    ctx.set_theme(blackjack_theme::blackjack_theme());
 
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new()
@@ -146,8 +107,9 @@ fn main() {
         .build(&event_loop)
         .unwrap();
 
-    let mut painter = Painter::new(WgpuConfiguration::default(), 1, 0);
-    unsafe { pollster::block_on(painter.set_window(Some(&window))).unwrap() };
+    let mut wgpu_painter =
+        egui_wgpu::winit::Painter::new(egui_wgpu::WgpuConfiguration::default(), 1, 0);
+    unsafe { pollster::block_on(wgpu_painter.set_window(Some(&window))).unwrap() };
 
     let mut state = AppState::init();
 
@@ -155,14 +117,20 @@ fn main() {
         *control_flow = ControlFlow::Poll;
         match event {
             winit::event::Event::MainEventsCleared => {
-                ctx.run(&mut view(&state), &mut state);
-                let clipped_primitives = ctx.tessellate();
+                // Run the main view code and generate the root widget
+                let mut root_widget =
+                    root_view(&state, &ctx, wgpu_painter.render_state().as_ref().unwrap());
 
+                // Layout, push shapes and trigger side-effects
+                ctx.run(&mut root_widget, &mut state);
+
+                // Tessellate and render the pushed shapes
+                let clipped_primitives = ctx.tessellate();
                 let mut textures_delta = TexturesDelta::default();
                 if let Some(img_delta) = ctx.painter.borrow().fonts.font_image_delta() {
                     textures_delta.set.push((TextureId::default(), img_delta));
                 }
-                painter.paint_and_update_textures(
+                wgpu_painter.paint_and_update_textures(
                     1.0,
                     // Make it very obvious when the background is visible.
                     epaint::Rgba::from_rgb(1.0, 0.0, 1.0),
@@ -176,7 +144,7 @@ fn main() {
                         *control_flow = ControlFlow::Exit;
                     }
                     winit::event::WindowEvent::Resized(new_size) => {
-                        painter.on_window_resized(new_size.width, new_size.height);
+                        wgpu_painter.on_window_resized(new_size.width, new_size.height);
                     }
                     _ => (),
                 }
