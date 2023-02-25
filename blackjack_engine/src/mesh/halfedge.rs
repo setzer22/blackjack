@@ -5,17 +5,13 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 use std::{
-    cell::{Ref, RefCell, RefMut},
     marker::PhantomData,
     rc::Rc,
 };
 
-#[cfg(feature = "sync")]
-use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
+use crate::{prelude::*, sync::{InteriorMutable, BorrowedRef, MutableRef}};
 
-use crate::prelude::*;
 
-use atomic_refcell::{AtomicRef, AtomicRefCell, AtomicRefMut};
 use glam::*;
 use itertools::Itertools;
 use slotmap::{SecondaryMap, SlotMap};
@@ -59,45 +55,7 @@ pub use channels::*;
 
 use self::mappings::MeshMapping;
 
-// TODO Put this someplace sensible.
 
-#[cfg(feature = "sync")]
-// pub struct InteriorMutable<T>(RwLock<T>);
-pub type InteriorMutable<T> = AtomicRefCell<T>;
-
-#[cfg(not(feature = "sync"))]
-pub type InteriorMutable<T> = RefCell<T>;
-
-#[cfg(feature = "sync")]
-pub type RefCounted<T> = Arc<T>;
-
-#[cfg(not(feature = "sync"))]
-pub type RefCounted<T> = Rc<T>;
-
-#[cfg(feature = "sync")]
-pub type BorrowedRef<'a, T> = AtomicRef<'a, T>;
-
-#[cfg(not(feature = "sync"))]
-pub type BorrowedRef<'a, T> = Ref<'a, T>;
-
-#[cfg(feature = "sync")]
-pub type MutableRef<'a, T> = AtomicRefMut<'a, T>;
-
-#[cfg(not(feature = "sync"))]
-pub type MutableRef<'a, T> = RefMut<'a, T>;
-
-#[cfg(feature = "sync")]
-pub trait MaybeSync: Send + Sync + 'static {}
-
-#[cfg(not(feature = "sync"))]
-pub trait MaybeSync {}
-
-// TODO - Put this somewhere sensible.
-#[cfg(feature = "sync")]
-fn test() {
-    fn assert_thread_safe<T: Send + Sync + 'static>(t: T) {}
-    assert_thread_safe(HalfEdgeMesh::new())
-}
 
 /// HalfEdge meshes are a type of linked list. This means it is sometimes
 /// impossible to ensure some algorithms will terminate when the mesh is

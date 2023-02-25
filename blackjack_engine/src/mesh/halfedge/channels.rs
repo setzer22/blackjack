@@ -14,7 +14,7 @@ use std::{
     rc::Rc,
 };
 
-use crate::lua_engine::lua_stdlib;
+use crate::{lua_engine::lua_stdlib, sync::{MaybeSync, RefCounted, InteriorMutable, BorrowedRef, MutableRef}};
 use glam::Vec3;
 use mlua::{FromLua, Lua, ToLua};
 
@@ -24,7 +24,7 @@ use super::*;
 /// to. It can be Vertices, HalfEdges or Faces, and the `ChannelKey` is the
 /// corresponding id type.
 pub trait ChannelKey:
-    slotmap::Key + Default + Debug + Clone + Copy + Sized + FromToLua + 'static
+    slotmap::Key + Default + Debug + Clone + Copy + Sized + FromToLua + MaybeSync +  'static
 {
     fn key_type() -> ChannelKeyType;
     fn name() -> &'static str;
@@ -44,6 +44,7 @@ macro_rules! impl_channel_key {
                 Self::from(slotmap::KeyData::from_ffi(x))
             }
         }
+		impl MaybeSync for $t {}
     };
 }
 impl_channel_key!(VertexId);
@@ -76,7 +77,7 @@ impl Introspect for bool {
 /// The value of a channel is the data that is associated to a specific key.
 /// Values can be scalars (f32) or vectors (Vec3).
 pub trait ChannelValue:
-    Default + Debug + Clone + Copy + Sized + FromToLua + Introspect + 'static
+    Default + Debug + Clone + Copy + Sized + FromToLua + Introspect + MaybeSync + 'static
 {
     fn value_type() -> ChannelValueType;
     fn name() -> &'static str;
@@ -92,6 +93,7 @@ macro_rules! impl_channel_value {
                 stringify!($t)
             }
         }
+		impl MaybeSync for $t {}
     };
 }
 impl_channel_value!(Vec3);
@@ -218,6 +220,8 @@ pub struct ChannelGroup<K: ChannelKey, V: ChannelValue> {
     channel_names: bimap::BiMap<String, ChannelId<K, V>>,
     channels: SlotMap<RawChannelId, RefCounted<InteriorMutable<Channel<K, V>>>>,
 }
+
+impl<K: ChannelKey, V: ChannelValue> MaybeSync for ChannelGroup<K,V> {}
 
 /// The [`MeshChannels`] are one part of a [`HalfEdgeMesh`]. This struct stores
 /// an heterogeneous group of channel groups, with potentially one
@@ -551,7 +555,7 @@ impl<K: ChannelKey, V: ChannelValue> ChannelGroup<K, V> {
 }
 
 /// This trait is the dynamic API of a [`ChannelGroup`]
-pub trait DynChannelGroup: Any + Debug + dyn_clone::DynClone {
+pub trait DynChannelGroup: Any + Debug + dyn_clone::DynClone + MaybeSync {
     /// Used to inspect the contents of this `ChannelGroup`, for UI display
     fn introspect(&self, keys: &[slotmap::KeyData]) -> BTreeMap<String, Vec<String>>;
     /// Casts this channel group into a `dyn Any`. This hack is required to get
@@ -626,18 +630,13 @@ impl<K: ChannelKey, V: ChannelValue> DynChannelGroup for ChannelGroup<K, V> {
         self.ensure_channel(name).raw
     }
     fn read_channel_dyn(&self, raw_id: RawChannelId) -> BorrowedRef<dyn DynChannel> {
-        self.channels[raw_id].borrow()
+        let borrowed_ref = self.channels[raw_id].borrow();
+        BorrowedRef::map(borrowed_ref, |k| k as &dyn DynChannel)
     }
-
     fn write_channel_dyn(&self, raw_id: RawChannelId) -> MutableRef<dyn DynChannel> {
-		let result: MutableRef<dyn DynChannel> = self.channels[raw_id].borrow_mut() as MutableRef<dyn DynChannel>;
-		result
+		let mutable_ref = self.channels[raw_id].borrow_mut();
+		MutableRef::map(mutable_ref, |k| k as &mut dyn DynChannel)
     }
-	// #[cfg(not(feature = "sync"))]
-    // fn write_channel_dyn(&self, raw_id: RawChannelId) -> MutableRef<dyn DynChannel> {
-    //     self.channels[raw_id].borrow_mut()
-    // }
-
     fn channel_rc_dyn(&self, raw_id: RawChannelId) -> RefCounted<InteriorMutable<dyn DynChannel>> {
         // This standalone function is needed to help the compiler convert
         // between a typed Rc and the dynamic one.

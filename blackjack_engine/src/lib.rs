@@ -25,5 +25,9 @@ pub mod graph_interpreter;
 /// Gizmos allow visual modifications of a node's parameters.
 pub mod gizmos;
 
+/// Conditional types to allow HalfEdgeMesh et al. be `Send` + `Sync` with the sync feature.
+pub mod sync;
+
 #[cfg(test)]
 pub mod engine_tests;
+
