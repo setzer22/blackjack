@@ -90,7 +90,9 @@ impl ShaderManager {
         let mut shaders = HashMap::new();
 
         let mut context = glsl_include::Context::new();
-        let context = context.include("utils.wgsl", include_str!("wgsl/utils.wgsl"));
+        let context = context
+            .include("utils.wgsl", include_str!("wgsl/utils.wgsl"))
+            .include("uniforms.wgsl", include_str!("wgsl/uniforms.wgsl"));
 
         macro_rules! def_shader {
             ($name:expr, $src:expr, opaque) => {

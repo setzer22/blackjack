@@ -23,11 +23,11 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub fn init() -> Self {
+    pub fn init(render_ctx: &RenderState) -> Self {
         let cba = CallbackAccessor::<Self>::root();
         Self {
             graph_editor: GraphEditor::new(cba.drill_down(|this| &mut this.graph_editor)),
-            viewport_3d: Viewport3d::new(todo!("Bet you'll forget about this one")),
+            viewport_3d: Viewport3d::new(render_ctx, cba.drill_down(|this| &mut this.viewport_3d)),
         }
     }
 }
@@ -63,7 +63,8 @@ fn root_view(state: &AppState, ctx: &Context, render_ctx: &RenderState) -> DynWi
                                 (Vec2::ZERO, panel("bottom")),
                                 (Vec2::ZERO, state.viewport_3d.view(render_ctx)),
                             ],
-                        ).build(),
+                        )
+                        .build(),
                         panel("right"),
                     )
                     .build(),
@@ -111,7 +112,7 @@ fn main() {
         egui_wgpu::winit::Painter::new(egui_wgpu::WgpuConfiguration::default(), 1, 0);
     unsafe { pollster::block_on(wgpu_painter.set_window(Some(&window))).unwrap() };
 
-    let mut state = AppState::init();
+    let mut state = AppState::init(wgpu_painter.render_state().as_ref().unwrap());
 
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;

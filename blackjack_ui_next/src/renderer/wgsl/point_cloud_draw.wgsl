@@ -1,5 +1,5 @@
 #include <utils.wgsl>
-#include <rend3_uniforms.wgsl>
+#include <uniforms.wgsl>
 
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,

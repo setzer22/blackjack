@@ -12,6 +12,15 @@ pub struct TextureManager {
 }
 
 impl TextureManager {
+    pub fn new(device: Arc<Device>, queue: Arc<Queue>) -> Self {
+        Self {
+            textures: Default::default(),
+            views: Default::default(),
+            device,
+            queue
+        }
+    }
+
     pub fn add_texture2d(&mut self, name: String, image: DynamicImage) {
         let size = Extent3d {
             width: image.width(),

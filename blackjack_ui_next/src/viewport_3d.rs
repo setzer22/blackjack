@@ -1,6 +1,13 @@
-use egui_wgpu::wgpu;
+use std::{cell::Cell, sync::Arc};
+
 use egui_wgpu::RenderState;
-use guee::prelude::*;
+use glam::UVec2;
+use guee::{base_widgets::image::Image, callback_accessor::CallbackAccessor, prelude::*};
+
+use crate::{
+    blackjack_theme::pallette,
+    renderer::{BlackjackViewportRenderer, ViewportCamera},
+};
 
 #[derive(PartialEq, Eq, Default)]
 pub enum EdgeDrawMode {
@@ -63,31 +70,86 @@ impl Default for Viewport3dSettings {
 }
 
 pub struct Viewport3d {
+    renderer: BlackjackViewportRenderer,
     settings: Viewport3dSettings,
+    last_frame_bounds: Option<Rect>,
+    epaint_texture_id: Cell<Option<TextureId>>,
+    cba: CallbackAccessor<Self>,
 }
 
 impl Viewport3d {
-    pub fn new(render_ctx: &RenderState) -> Self {
+    pub fn new(render_ctx: &RenderState, cba: CallbackAccessor<Self>) -> Self {
         Self {
-            settings: Default::default()
+            renderer: BlackjackViewportRenderer::new(
+                Arc::clone(&render_ctx.device),
+                Arc::clone(&render_ctx.queue),
+            ),
+            settings: Default::default(),
+            // We render with 1 frame delay to know the size of the UI element
+            last_frame_bounds: None,
+            epaint_texture_id: Cell::new(None),
+            cba,
         }
     }
 
     pub fn view(&self, render_ctx: &RenderState) -> DynWidget {
-        let viewport_texture = render_ctx.device.create_texture(&wgpu::TextureDescriptor {
-            size: wgpu::Extent3d {
-                width: 1024,
-                height: 768,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8UnormSrgb,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
-            label: Some("Blackjack Viewport3d Texture"),
-        });
+        if let Some(last_frame_bounds) = self.last_frame_bounds {
+            let resolution = UVec2::new(
+                last_frame_bounds.width() as u32,
+                last_frame_bounds.height() as u32,
+            );
+            let camera = ViewportCamera {
+                view_matrix: glam::Mat4::from_translation(glam::Vec3::Z * 10.0)
+                    * glam::Mat4::from_rotation_x(-45.0)
+                    * glam::Mat4::from_rotation_y(-45.0)
+                    * glam::Mat4::from_translation(glam::Vec3::ZERO),
+                projection_matrix: glam::Mat4::perspective_lh(
+                    60.0,
+                    resolution.x as f32 / resolution.y as f32,
+                    0.01,
+                    100.0,
+                ),
+            };
 
-        Text::new("Potato".into()).build()
+            let output = self.renderer.render(resolution, camera, &self.settings);
+            if let Some(tex_id) = self.epaint_texture_id.get() {
+                render_ctx
+                    .renderer
+                    .write()
+                    .update_egui_texture_from_wgpu_texture(
+                        &render_ctx.device,
+                        &output.color_texture_view,
+                        wgpu::FilterMode::Linear,
+                        tex_id,
+                    );
+            } else {
+                self.epaint_texture_id.set(Some(
+                    render_ctx.renderer.write().register_native_texture(
+                        &render_ctx.device,
+                        &output.color_texture_view,
+                        wgpu::FilterMode::Linear,
+                    ),
+                ));
+            }
+        }
+
+        let image = if let Some(tex_id) = self.epaint_texture_id.get() {
+            Image::new(IdGen::key("viewport"), tex_id, LayoutHints::fill()).build()
+        } else {
+            // For the first frame, just render background
+            ColoredBox::background(pallette().background_dark)
+                .hints(LayoutHints::fill())
+                .build()
+        };
+
+        let set_last_frame_res_cb = self.cba.callback(|viewport, new_bounds: Rect| {
+            viewport.last_frame_bounds = Some(new_bounds);
+        });
+        EventHandlingContainer::new(image)
+            .pre_event(|ctx, layout, _, _| {
+                ctx.dispatch_callback(set_last_frame_res_cb, layout.bounds);
+                EventStatus::Ignored
+            })
+            .build()
     }
 }

@@ -4,7 +4,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-use std::num::{NonZeroU32, NonZeroU64};
+use std::num::{NonZeroU32, NonZeroU64, NonZeroU8};
 
 use wgpu::*;
 
@@ -39,7 +39,7 @@ pub fn create_render_texture(
     size: glam::UVec2,
     format: Option<TextureFormat>,
 ) -> (Texture, TextureView) {
-    let format = format.unwrap_or(wgpu::TextureFormat::Rgba8UnormSrgb);
+    let format = format.unwrap_or(wgpu::TextureFormat::Rgba16Float);
 
     let texture = device.create_texture(&wgpu::TextureDescriptor {
         size: wgpu::Extent3d {
@@ -69,7 +69,26 @@ pub fn create_render_texture(
     (texture, view)
 }
 
-pub const DEFAULT_COLOR_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
+pub fn create_sampler(
+    device: &Device,
+    filter: FilterMode,
+    compare: Option<CompareFunction>,
+) -> Sampler {
+    device.create_sampler(&SamplerDescriptor {
+        label: Some("linear"),
+        address_mode_u: AddressMode::Repeat,
+        address_mode_v: AddressMode::Repeat,
+        address_mode_w: AddressMode::Repeat,
+        mag_filter: filter,
+        min_filter: filter,
+        mipmap_filter: filter,
+        lod_min_clamp: 0.0,
+        lod_max_clamp: 100.0,
+        compare,
+        anisotropy_clamp: NonZeroU8::new(16),
+        border_color: None,
+    })
+}
 
 /// Builder for BindGroupLayouts.
 pub struct BindGroupLayoutBuilder {
