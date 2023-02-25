@@ -7,13 +7,13 @@
 #[cfg(not(feature = "sync"))]
 use std::{
     cell::{Ref, RefCell, RefMut},
-	rc::Rc,
+    rc::Rc,
 };
 
 #[cfg(feature = "sync")]
-use std::sync::{Arc};
-#[cfg(feature = "sync")]
 use atomic_refcell::{AtomicRef, AtomicRefCell, AtomicRefMut};
+#[cfg(feature = "sync")]
+use std::sync::Arc;
 
 #[cfg(feature = "sync")]
 // pub struct InteriorMutable<T>(RwLock<T>);

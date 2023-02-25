@@ -14,7 +14,10 @@ use std::{
     rc::Rc,
 };
 
-use crate::{lua_engine::lua_stdlib, sync::{MaybeSync, RefCounted, InteriorMutable, BorrowedRef, MutableRef}};
+use crate::{
+    lua_engine::lua_stdlib,
+    sync::{BorrowedRef, InteriorMutable, MaybeSync, MutableRef, RefCounted},
+};
 use glam::Vec3;
 use mlua::{FromLua, Lua, ToLua};
 
@@ -24,7 +27,7 @@ use super::*;
 /// to. It can be Vertices, HalfEdges or Faces, and the `ChannelKey` is the
 /// corresponding id type.
 pub trait ChannelKey:
-    slotmap::Key + Default + Debug + Clone + Copy + Sized + FromToLua + MaybeSync +  'static
+    slotmap::Key + Default + Debug + Clone + Copy + Sized + FromToLua + MaybeSync + 'static
 {
     fn key_type() -> ChannelKeyType;
     fn name() -> &'static str;
@@ -44,7 +47,7 @@ macro_rules! impl_channel_key {
                 Self::from(slotmap::KeyData::from_ffi(x))
             }
         }
-		impl MaybeSync for $t {}
+        impl MaybeSync for $t {}
     };
 }
 impl_channel_key!(VertexId);
@@ -93,7 +96,7 @@ macro_rules! impl_channel_value {
                 stringify!($t)
             }
         }
-		impl MaybeSync for $t {}
+        impl MaybeSync for $t {}
     };
 }
 impl_channel_value!(Vec3);
@@ -221,7 +224,7 @@ pub struct ChannelGroup<K: ChannelKey, V: ChannelValue> {
     channels: SlotMap<RawChannelId, RefCounted<InteriorMutable<Channel<K, V>>>>,
 }
 
-impl<K: ChannelKey, V: ChannelValue> MaybeSync for ChannelGroup<K,V> {}
+impl<K: ChannelKey, V: ChannelValue> MaybeSync for ChannelGroup<K, V> {}
 
 /// The [`MeshChannels`] are one part of a [`HalfEdgeMesh`]. This struct stores
 /// an heterogeneous group of channel groups, with potentially one
@@ -634,8 +637,8 @@ impl<K: ChannelKey, V: ChannelValue> DynChannelGroup for ChannelGroup<K, V> {
         BorrowedRef::map(borrowed_ref, |k| k as &dyn DynChannel)
     }
     fn write_channel_dyn(&self, raw_id: RawChannelId) -> MutableRef<dyn DynChannel> {
-		let mutable_ref = self.channels[raw_id].borrow_mut();
-		MutableRef::map(mutable_ref, |k| k as &mut dyn DynChannel)
+        let mutable_ref = self.channels[raw_id].borrow_mut();
+        MutableRef::map(mutable_ref, |k| k as &mut dyn DynChannel)
     }
     fn channel_rc_dyn(&self, raw_id: RawChannelId) -> RefCounted<InteriorMutable<dyn DynChannel>> {
         // This standalone function is needed to help the compiler convert
