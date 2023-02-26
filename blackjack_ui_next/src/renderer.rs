@@ -13,6 +13,7 @@ use crate::viewport_3d::Viewport3dSettings;
 
 use self::{
     face_routine::FaceRoutine,
+    grid_routine::GridRoutine,
     id_picking_routine::IdPickingRoutine,
     point_cloud_routine::PointCloudRoutine,
     render_state::{ViewportRenderState, ViewportUniforms},
@@ -45,6 +46,9 @@ pub mod face_routine;
 /// A routine to implement object picking, by reading the id_map buffer.
 pub mod id_picking_routine;
 
+/// A routine to render an infinite grid on the XZ plane.
+pub mod grid_routine;
+
 /// The state for the renderer (bind groups, texture views...) that is common in
 /// all routines.
 pub mod render_state;
@@ -58,6 +62,7 @@ pub struct BlackjackViewportRenderer {
     pub point_cloud_routine: PointCloudRoutine,
     pub face_routine: FaceRoutine,
     pub id_picking_routine: IdPickingRoutine,
+    pub grid_routine: GridRoutine,
 }
 
 pub struct ViewportRendererOutput {
@@ -80,6 +85,7 @@ impl BlackjackViewportRenderer {
             point_cloud_routine: PointCloudRoutine::new(&device, &shader_manager),
             face_routine: FaceRoutine::new(&device, &mut texture_manager, &shader_manager),
             id_picking_routine: IdPickingRoutine::new(&device),
+            grid_routine: GridRoutine::new(&device, &shader_manager),
             shader_manager,
             texture_manager,
             device,
@@ -120,16 +126,13 @@ impl BlackjackViewportRenderer {
             ),
         );
 
-        let uniforms = ViewportUniforms {
-            view: camera.view_matrix,
-            proj: camera.projection_matrix,
-            view_proj: camera.projection_matrix * camera.view_matrix,
+        let render_state = ViewportRenderState::new(
+            &self.device,
             resolution,
-            _padding: Default::default(),
-        };
-
-        let render_state =
-            ViewportRenderState::new(&self.device, resolution, color_view, depth_view, uniforms);
+            color_view,
+            depth_view,
+            ViewportUniforms::new(camera.view_matrix, camera.projection_matrix, resolution),
+        );
 
         self.wireframe_routine.render(
             &self.device,
@@ -157,6 +160,8 @@ impl BlackjackViewportRenderer {
         );
         self.id_picking_routine
             .run(&mut encoder, resolution, &id_map);
+
+        self.grid_routine.render(&mut encoder, &render_state);
 
         // Send it to the GPU
         self.queue.submit(std::iter::once(encoder.finish()));

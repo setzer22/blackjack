@@ -144,6 +144,7 @@ impl ShaderManager {
         );
         def_shader!("point_cloud_draw", "wgsl/point_cloud_draw.wgsl", opaque);
         def_shader!("face_draw", "wgsl/face_draw.wgsl", opaque);
+        def_shader!("grid_shader", "wgsl/grid_shader.wgsl", alpha_blend);
 
         // For some shaders, we use custom color targets when we have extra
         // offscreen buffers they draw to.
@@ -164,6 +165,7 @@ impl ShaderManager {
                 }),
             ]
         );
+
 
         Self { shaders }
     }

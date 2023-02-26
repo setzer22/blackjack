@@ -25,8 +25,24 @@ pub struct ViewportUniforms {
     pub view: glam::Mat4,
     pub proj: glam::Mat4,
     pub view_proj: glam::Mat4,
+    pub inv_view: glam::Mat4,
+    pub inv_proj: glam::Mat4,
     pub resolution: UVec2,
     pub _padding: [UVec2; 3],
+}
+
+impl ViewportUniforms {
+    pub fn new(view: glam::Mat4, proj: glam::Mat4, resolution: UVec2) -> Self {
+        Self {
+            view,
+            proj,
+            view_proj: proj * view,
+            inv_view: view.inverse(),
+            inv_proj: proj.inverse(),
+            resolution,
+            _padding: Default::default(),
+        }
+    }
 }
 
 impl ViewportRenderState {

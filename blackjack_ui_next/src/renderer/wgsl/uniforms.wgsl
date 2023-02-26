@@ -3,6 +3,8 @@ struct ViewportUniforms {
     view: mat4x4<f32>,
     proj: mat4x4<f32>,
     view_proj: mat4x4<f32>,
+    inv_view: mat4x4<f32>,
+    inv_proj: mat4x4<f32>,
     resolution: vec2<u32>,
     padding0: vec2<u32>,
     padding1: vec2<u32>,

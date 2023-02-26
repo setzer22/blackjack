@@ -1,5 +1,7 @@
-// Vertex shader
+#include <utils.wgsl>
+#include <uniforms.wgsl>
 
+// Vertex shader
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
     @location(0) near_point: vec3<f32>,
@@ -18,10 +20,7 @@ struct GridRoutineUniform {
     inv_proj: mat4x4<f32>,
 };
 
-@group(0) @binding(0)
-var<uniform> matrices: GridRoutineUniform;
-
-var<private> vertices: array<vec2<f32>, 6> = array<vec2<f32>, 6>( 
+var<private> vertices: array<vec2<f32>, 6> = array<vec2<f32>, 6>(
     vec2<f32>(-1.0, 1.0),
     vec2<f32>(-1.0, -1.0),
     vec2<f32>(1.0, 1.0),
@@ -46,8 +45,8 @@ fn vs_main(
 
     out.clip_position = pos;
     // TODO: Compute near_point / far_point
-    out.near_point = unproject_point(vec3<f32>(pos.x, pos.y, 0.1), matrices.inv_view, matrices.inv_proj).xyz;
-    out.far_point = unproject_point(vec3<f32>(pos.x, pos.y, 1.0), matrices.inv_view, matrices.inv_proj).xyz;
+    out.near_point = unproject_point(vec3<f32>(pos.x, pos.y, 0.1), uniforms.inv_view, uniforms.inv_proj).xyz;
+    out.far_point = unproject_point(vec3<f32>(pos.x, pos.y, 1.0), uniforms.inv_view, uniforms.inv_proj).xyz;
 
     return out;
 }
@@ -77,7 +76,7 @@ fn grid(frag_pos_3d: vec3<f32>, scale: f32) -> vec4<f32> {
 }
 
 fn compute_depth(frag_pos_3d: vec3<f32>) -> f32 {
-    let clip_space_pos = matrices.proj * matrices.view * vec4<f32>(frag_pos_3d, 1.0);
+    let clip_space_pos = uniforms.proj * uniforms.view * vec4<f32>(frag_pos_3d, 1.0);
     return (clip_space_pos.z / clip_space_pos.w);
 }
 

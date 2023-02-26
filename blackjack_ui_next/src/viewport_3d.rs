@@ -5,10 +5,13 @@ use egui_wgpu::RenderState;
 use glam::UVec2;
 use guee::{base_widgets::image::Image, callback_accessor::CallbackAccessor, prelude::*};
 
-use crate::{
-    blackjack_theme::pallette,
-    renderer::{BlackjackViewportRenderer, ViewportCamera},
-};
+use crate::renderer::{BlackjackViewportRenderer, ViewportCamera};
+
+use self::orbit_camera::OrbitCamera;
+
+pub mod lerp;
+
+pub mod orbit_camera;
 
 #[derive(PartialEq, Eq, Default)]
 pub enum EdgeDrawMode {
@@ -76,7 +79,7 @@ pub struct Viewport3d {
     pub last_frame_bounds: Option<Rect>,
     pub epaint_texture_id: Cell<Option<TextureId>>,
     pub cba: CallbackAccessor<Self>,
-    pub TODELETE_time: f32,
+    pub camera: OrbitCamera,
 }
 
 impl Viewport3d {
@@ -91,7 +94,7 @@ impl Viewport3d {
             last_frame_bounds: None,
             epaint_texture_id: Cell::new(None),
             cba,
-            TODELETE_time: 0.0,
+            camera: OrbitCamera::default(),
         }
     }
 
@@ -101,19 +104,11 @@ impl Viewport3d {
                 last_frame_bounds.width() as u32,
                 last_frame_bounds.height() as u32,
             );
-            let camera = ViewportCamera {
-                view_matrix: glam::Mat4::from_translation(glam::Vec3::Z * 5.0)
-                    * glam::Mat4::from_rotation_x(-30.0 + self.TODELETE_time)
-                    * glam::Mat4::from_rotation_y(30.0 + self.TODELETE_time)
-                    * glam::Mat4::from_translation(glam::Vec3::ZERO),
-                projection_matrix: glam::Mat4::perspective_infinite_reverse_lh(
-                    60.0f32.to_radians(),
-                    resolution.x as f32 / resolution.y as f32,
-                    0.01,
-                ),
-            };
-
-            let output = self.renderer.render(resolution, camera, &self.settings);
+            let output = self.renderer.render(
+                resolution,
+                self.camera.compute_matrices(resolution),
+                &self.settings,
+            );
             if let Some(tex_id) = self.epaint_texture_id.get() {
                 render_ctx
                     .renderer
@@ -156,6 +151,7 @@ impl Viewport3d {
     }
 
     pub fn update(&mut self) {
+        self.camera.update(1.0 / 60.0);
         let mesh = primitives::Box::build(glam::Vec3::ZERO, glam::Vec3::ONE);
         let face_bufs = mesh.generate_triangle_buffers_flat(true).unwrap();
         self.renderer.face_routine.clear();
@@ -179,7 +175,5 @@ impl Viewport3d {
             &edge_bufs.positions,
             &edge_bufs.colors,
         );
-
-        self.TODELETE_time += 1.0 / 60.0;
     }
 }
