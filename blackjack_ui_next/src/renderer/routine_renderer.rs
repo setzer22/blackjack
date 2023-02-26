@@ -223,6 +223,7 @@ impl<
             .collect()
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn render(
         &self,
         device: &Device,

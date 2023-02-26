@@ -10,7 +10,7 @@ use winit::event::VirtualKeyCode;
 
 use crate::{
     blackjack_theme::pallette,
-    renderer::{routine_renderer::MultisampleConfig, BlackjackViewportRenderer, ViewportCamera},
+    renderer::{routine_renderer::MultisampleConfig, BlackjackViewportRenderer},
 };
 
 use self::orbit_camera::{CameraInput, OrbitCamera};

@@ -20,7 +20,7 @@ use self::{
     routine_renderer::MultisampleConfig,
     shader_manager::ShaderManager,
     texture_manager::TextureManager,
-    wireframe_routine::WireframeRoutine, wgpu_utils::MultisampledRenderTexture,
+    wireframe_routine::WireframeRoutine,
 };
 
 /// Some common definitions to abstract wgpu boilerplate

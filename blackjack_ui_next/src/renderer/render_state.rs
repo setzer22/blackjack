@@ -1,10 +1,9 @@
 use std::num::NonZeroU64;
 
-use glam::{IVec2, Mat4, UVec2};
+use glam::UVec2;
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
-    BindGroup, BindGroupLayout, Buffer, BufferUsages, Operations, RenderPassColorAttachment,
-    RenderPassDepthStencilAttachment, Sampler, SamplerDescriptor, ShaderStages, TextureView,
+    BindGroup, BindGroupLayout, BufferUsages, ShaderStages, TextureView,
 };
 
 use super::wgpu_utils::{self, BindGroupBuilder, BindGroupLayoutBuilder};

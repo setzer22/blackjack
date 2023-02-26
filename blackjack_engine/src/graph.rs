@@ -682,10 +682,7 @@ impl BjkGraph {
             for input in other.inputs.iter_mut() {
                 match &input.kind {
                     DependencyKind::External { .. } => (),
-                    DependencyKind::Connection {
-                        node,
-                        param_name: _,
-                    } => {
+                    DependencyKind::Connection { .. } => {
                         input.kind = DependencyKind::External { promoted: None };
                     }
                 }

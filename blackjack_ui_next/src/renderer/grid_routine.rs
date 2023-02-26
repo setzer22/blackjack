@@ -15,7 +15,6 @@ use super::{
 
 pub struct GridRoutine {
     pipeline: RenderPipeline,
-    multisample_config: MultisampleConfig,
 }
 
 impl GridRoutine {
@@ -44,10 +43,7 @@ impl GridRoutine {
             multiview: None,
         });
 
-        Self {
-            pipeline,
-            multisample_config,
-        }
+        Self { pipeline }
     }
 
     pub fn render(&self, encoder: &mut CommandEncoder, render_state: &ViewportRenderState) {

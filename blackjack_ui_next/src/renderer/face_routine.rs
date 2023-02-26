@@ -20,7 +20,6 @@ use super::{
     routine_renderer::{DrawType, MultisampleConfig, RoutineLayout, RoutineRenderer},
     shader_manager::ShaderManager,
     texture_manager::TextureManager,
-    wgpu_utils,
 };
 
 /// The number of matcap materials loaded in the routine. TODO: Matcaps should
@@ -197,7 +196,7 @@ impl FaceRoutine {
             matcaps: Arc::new(matcaps),
             base_mesh_routine: RoutineRenderer::new(
                 "base mesh",
-                &device,
+                device,
                 shader_manager.get("face_draw"),
                 PrimitiveTopology::TriangleList,
                 FrontFace::Cw,
@@ -205,7 +204,7 @@ impl FaceRoutine {
             ),
             face_overlay_routine: RoutineRenderer::new(
                 "face overlay",
-                &device,
+                device,
                 shader_manager.get("face_overlay_draw"),
                 PrimitiveTopology::TriangleList,
                 FrontFace::Cw,
@@ -213,13 +212,13 @@ impl FaceRoutine {
             ),
             face_id_routine: RoutineRenderer::new(
                 "face id",
-                &device,
+                device,
                 shader_manager.get("face_id_draw"),
                 PrimitiveTopology::TriangleList,
                 FrontFace::Ccw,
                 // The id map is always drawn without multisampling.
                 // We don't care about aliasing there.
-                MultisampleConfig::One
+                MultisampleConfig::One,
             ),
         }
     }
@@ -321,6 +320,7 @@ impl FaceRoutine {
         self.face_overlay_routine.clear();
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn render(
         &self,
         device: &Device,
@@ -361,7 +361,7 @@ impl FaceRoutine {
             &(),
             &[id_map_view],
             overlay_clear_buffer,
-            Some(&id_map_depth_view),
+            Some(id_map_depth_view),
         );
     }
 }

@@ -7,7 +7,7 @@
 use std::collections::HashMap;
 
 use wgpu::{
-    BlendState, ColorTargetState, ColorWrites, FragmentState, TextureFormat, VertexBufferLayout,
+    BlendState, ColorTargetState, ColorWrites, FragmentState, VertexBufferLayout,
     VertexState,
 };
 

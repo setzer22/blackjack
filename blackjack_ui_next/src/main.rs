@@ -35,7 +35,7 @@ impl AppState {
 }
 
 impl AppState {
-    fn root_view(&self, ctx: &Context, render_ctx: &RenderState) -> DynWidget {
+    fn root_view(&self, _ctx: &Context, render_ctx: &RenderState) -> DynWidget {
         fn panel(key: &str) -> DynWidget {
             ColoredBox::new(IdGen::key(key))
                 .hints(LayoutHints::fill())
