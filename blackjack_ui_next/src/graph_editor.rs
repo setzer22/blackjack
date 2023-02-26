@@ -16,14 +16,17 @@ use guee::{
     input::MouseButton,
     prelude::*,
     widget::DynWidget,
-    widget_id::IdGen,
+    widget_id::IdGen, extension_traits::Color32Ext,
 };
 use slotmap::SecondaryMap;
 use winit::event::VirtualKeyCode;
 
-use crate::widgets::{
-    node_editor_widget::{Connection, Disconnection, NodeEditorWidget, PanZoom},
-    node_widget::{NodeWidget, NodeWidgetPort, NodeWidgetRow, PortId, PortIdKind},
+use crate::{
+    blackjack_theme::pallette,
+    widgets::{
+        node_editor_widget::{Connection, Disconnection, NodeEditorWidget, PanZoom},
+        node_widget::{NodeWidget, NodeWidgetPort, NodeWidgetRow, PortId, PortIdKind},
+    },
 };
 
 pub mod node_finder;
@@ -37,6 +40,7 @@ pub struct GraphEditor {
     pub node_order: Vec<BjkNodeId>,
     pub external_parameters: ExternalParameterValues,
     pub node_finder: Option<NodeFinder>,
+    pub active_node: Option<BjkNodeId>,
     pub cba: CallbackAccessor<Self>,
 }
 
@@ -52,6 +56,7 @@ impl GraphEditor {
             node_order: Vec::new(),
             pan_zoom: PanZoom::default(),
             node_finder: None,
+            active_node: None,
             graph: BjkGraph::new(),
             cba,
         }
@@ -74,6 +79,20 @@ impl GraphEditor {
     }
 
     pub fn remove_node(&mut self, node: BjkNodeId) {
+        if self.active_node == Some(node) {
+            // Heuristic: When removing the active node, look for the previous
+            // node connected to the one that got deleted, and activate it.
+            let old_node = &self.graph.nodes[node];
+            for input in &old_node.inputs {
+                match &input.kind {
+                    DependencyKind::External { .. } => todo!(),
+                    DependencyKind::Connection { node, .. } => {
+                        self.active_node = Some(*node);
+                        break;
+                    }
+                }
+            }
+        }
         self.graph.remove_node(node);
         self.node_positions.remove(node);
         self.node_order.retain(|x| *x != node);
@@ -275,6 +294,27 @@ impl GraphEditor {
             ));
         }
 
+        let set_active_cb = self.cba.callback(move |editor, _| {
+            editor.active_node = Some(node_id);
+        });
+        let bottom_ui = if self.active_node == Some(node_id) {
+            Button::with_label("👁 Active")
+                .padding(Vec2::new(5.0, 3.0))
+                .on_click(set_active_cb)
+                .style_override(ButtonStyle::with_base_colors(
+                    pallette().accent.lighten(0.8),
+                    Stroke::NONE,
+                    1.1,
+                    1.3,
+                ))
+                .build()
+        } else {
+            Button::with_label("👁 Set Active")
+                .padding(Vec2::new(5.0, 3.0))
+                .on_click(set_active_cb)
+                .build()
+        };
+
         NodeWidget {
             id: IdGen::key(node_id),
             node_id,
@@ -295,9 +335,7 @@ impl GraphEditor {
             )
             .margin(Vec2::new(10.0, 10.0))
             .build(),
-            bottom_ui: Button::with_label("Set Active")
-                .padding(Vec2::new(5.0, 3.0))
-                .build(),
+            bottom_ui,
             rows,
             v_separation: 4.0,
             h_separation: 12.0,

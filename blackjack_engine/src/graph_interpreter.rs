@@ -8,7 +8,7 @@ use mlua::{Table, ToLua};
 use slotmap::SecondaryMap;
 
 use crate::gizmos::BlackjackGizmo;
-use crate::graph::{BjkGraph, BjkNodeId, BlackjackValue, NodeDefinitions};
+use crate::graph::{BjkGraph, BjkNodeId, BlackjackValue, DependencyKind, NodeDefinitions};
 use crate::lua_engine::{ProgramResult, RenderableThing};
 use crate::prelude::*;
 
@@ -29,6 +29,29 @@ impl BjkParameter {
 
 #[derive(Debug, Default, Clone)]
 pub struct ExternalParameterValues(pub HashMap<BjkParameter, BlackjackValue>);
+
+impl ExternalParameterValues {
+    /// Fills any non-set external parameters to their default values
+    pub fn fill_defaults(&mut self, graph: &BjkGraph, node_definitions: &NodeDefinitions) {
+        for (node_id, node) in &graph.nodes {
+            for input in &node.inputs {
+                match input.kind {
+                    DependencyKind::External { .. } => {
+                        let param = BjkParameter::new(node_id, input.name.clone());
+                        if !self.0.contains_key(&param) {
+                            let default = node_definitions
+                                .input_def(&node.op_name, &param.param_name)
+                                .map(|x| x.default_value())
+                                .unwrap_or_else(|| input.data_type.default_value());
+                            self.0.insert(param, default);
+                        }
+                    }
+                    DependencyKind::Connection { .. } => (),
+                }
+            }
+        }
+    }
+}
 
 pub struct InterpreterContext<'a, 'lua> {
     outputs_cache: HashMap<BjkNodeId, mlua::Table<'lua>>,
@@ -121,7 +144,7 @@ pub fn run_node<'lua>(
     // Compute the values for dependent nodes and populate the output cache.
     for input in &node.inputs {
         match &input.kind {
-            crate::graph::DependencyKind::Connection { node, param_name } => {
+            DependencyKind::Connection { node, param_name } => {
                 // Make sure the value is there by running the node.
                 let cached_output_map = if let Some(cached) = ctx.outputs_cache.get(node) {
                     cached
@@ -137,7 +160,7 @@ pub fn run_node<'lua>(
                     cached_output_map.get::<_, mlua::Value>(param_name.as_str())?,
                 )?;
             }
-            crate::graph::DependencyKind::External { promoted: _ } => {
+            DependencyKind::External { promoted: _ } => {
                 let ext = BjkParameter::new(node_id, input.name.clone());
                 let val = ctx.external_param_values.0.get(&ext).ok_or_else(|| {
                     anyhow!(
@@ -233,8 +256,8 @@ pub fn run_node<'lua>(
                 for input in node.inputs.iter() {
                     if affected_params.contains(&input.name) {
                         match &input.kind {
-                            crate::graph::DependencyKind::External { .. } => return Ok(true),
-                            crate::graph::DependencyKind::Connection { .. } => {}
+                            DependencyKind::External { .. } => return Ok(true),
+                            DependencyKind::Connection { .. } => {}
                         }
                     }
                 }

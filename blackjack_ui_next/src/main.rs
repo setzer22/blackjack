@@ -1,5 +1,6 @@
 use std::time::{Duration, Instant};
 
+use blackjack_engine::graph_interpreter::run_graph;
 use egui_wgpu::RenderState;
 use graph_editor::GraphEditor;
 use guee::{callback_accessor::CallbackAccessor, painter::ExtraFont, prelude::*};
@@ -88,7 +89,32 @@ impl AppState {
     }
 
     fn update(&mut self, _context: &Context) {
-        self.viewport_3d.update();
+        if let Some(active_node) = self.graph_editor.active_node {
+            // TODO: Change detection
+            self.graph_editor.external_parameters.fill_defaults(
+                &self.graph_editor.graph,
+                &self.graph_editor.lua_runtime.node_definitions,
+            );
+            let program_result = run_graph(
+                &self.graph_editor.lua_runtime.lua,
+                &self.graph_editor.graph,
+                active_node,
+                self.graph_editor.external_parameters.clone(),
+                &self.graph_editor.lua_runtime.node_definitions,
+                None, // TODO: Gizmos
+            );
+
+            match program_result {
+                Ok(result) => {
+                    if let Some(renderable) = result.renderable {
+                        self.viewport_3d.update(renderable);
+                    }
+                }
+                Err(err) => {
+                    println!("TODO {err}")
+                }
+            }
+        }
     }
 }
 

@@ -1,6 +1,6 @@
 use std::{cell::Cell, sync::Arc};
 
-use blackjack_engine::prelude::primitives;
+use blackjack_engine::{lua_engine::RenderableThing, prelude::primitives};
 use egui_wgpu::RenderState;
 use glam::UVec2;
 use guee::{
@@ -188,30 +188,36 @@ impl Viewport3d {
             .build()
     }
 
-    pub fn update(&mut self) {
+    pub fn update(&mut self, renderable: RenderableThing) {
         self.camera.update(10.0 / 60.0);
-        let mesh = primitives::Box::build(glam::Vec3::ZERO, glam::Vec3::ONE);
-        let face_bufs = mesh.generate_triangle_buffers_flat(true).unwrap();
+
         self.renderer.face_routine.clear();
-        self.renderer.face_routine.add_base_mesh(
-            &self.renderer.device,
-            &face_bufs.positions,
-            &face_bufs.normals,
-            &face_bufs.indices,
-        );
-
-        let vertex_bufs = mesh.generate_point_buffers();
         self.renderer.point_cloud_routine.clear();
-        self.renderer
-            .point_cloud_routine
-            .add_point_cloud(&self.renderer.device, &vertex_bufs.positions);
-
-        let edge_bufs = mesh.generate_line_buffers().unwrap();
         self.renderer.wireframe_routine.clear();
-        self.renderer.wireframe_routine.add_wireframe(
-            &self.renderer.device,
-            &edge_bufs.positions,
-            &edge_bufs.colors,
-        );
+
+        match renderable {
+            RenderableThing::HalfEdgeMesh(mesh) => {
+                let face_bufs = mesh.generate_triangle_buffers_flat(true).unwrap();
+                self.renderer.face_routine.add_base_mesh(
+                    &self.renderer.device,
+                    &face_bufs.positions,
+                    &face_bufs.normals,
+                    &face_bufs.indices,
+                );
+
+                let vertex_bufs = mesh.generate_point_buffers();
+                self.renderer
+                    .point_cloud_routine
+                    .add_point_cloud(&self.renderer.device, &vertex_bufs.positions);
+
+                let edge_bufs = mesh.generate_line_buffers().unwrap();
+                self.renderer.wireframe_routine.add_wireframe(
+                    &self.renderer.device,
+                    &edge_bufs.positions,
+                    &edge_bufs.colors,
+                );
+            }
+            RenderableThing::HeightMap(_) => todo!(),
+        }
     }
 }
