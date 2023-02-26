@@ -3,11 +3,17 @@ use std::{cell::Cell, sync::Arc};
 use blackjack_engine::prelude::primitives;
 use egui_wgpu::RenderState;
 use glam::UVec2;
-use guee::{base_widgets::image::Image, callback_accessor::CallbackAccessor, prelude::*};
+use guee::{
+    base_widgets::image::Image, callback_accessor::CallbackAccessor, input::MouseButton, prelude::*,
+};
+use winit::event::VirtualKeyCode;
 
-use crate::renderer::{BlackjackViewportRenderer, ViewportCamera};
+use crate::{
+    blackjack_theme::pallette,
+    renderer::{BlackjackViewportRenderer, ViewportCamera},
+};
 
-use self::orbit_camera::OrbitCamera;
+use self::orbit_camera::{CameraInput, OrbitCamera};
 
 pub mod lerp;
 
@@ -134,7 +140,7 @@ impl Viewport3d {
             Image::new(IdGen::key("viewport"), tex_id, LayoutHints::fill()).build()
         } else {
             // For the first frame, just render background
-            ColoredBox::background(/*pallette().background_dark*/ color!("#ff0000"))
+            ColoredBox::background(pallette().background_dark)
                 .hints(LayoutHints::fill())
                 .build()
         };
@@ -142,16 +148,47 @@ impl Viewport3d {
         let set_last_frame_res_cb = self.cba.callback(|viewport, new_bounds: Rect| {
             viewport.last_frame_bounds = Some(new_bounds);
         });
-        EventHandlingContainer::new(image)
-            .pre_event(|ctx, layout, _, _| {
+        let camera_input_cb = self.cba.callback(|viewport, cam_input| {
+            viewport.camera.on_input(cam_input);
+        });
+        TinkerContainer::new(image)
+            .post_layout(|ctx, layout| {
                 ctx.dispatch_callback(set_last_frame_res_cb, layout.bounds);
-                EventStatus::Ignored
+            })
+            .pre_event(|ctx, layout, cursor_pos, events| {
+                let mut cam_input = CameraInput::default();
+                let mut status = EventStatus::Ignored;
+                if layout.bounds.contains(cursor_pos) {
+                    cam_input.shift_down = ctx.input_state.modifiers.shift;
+                    if ctx.claim_drag_event(layout.widget_id, layout.bounds, MouseButton::Primary) {
+                        status = EventStatus::Consumed;
+                        cam_input.lmb_pressed = true
+                    }
+                    cam_input.cursor_delta = ctx.input_state.mouse.delta();
+                    for event in events {
+                        match &event {
+                            Event::MouseWheel(wheel_delta) => {
+                                if wheel_delta.y.abs() > 0.0 {
+                                    status = EventStatus::Consumed;
+                                    cam_input.wheel_delta = wheel_delta.y;
+                                }
+                            }
+                            Event::KeyPressed(VirtualKeyCode::F) => {
+                                cam_input.f_pressed = true;
+                                status = EventStatus::Consumed;
+                            }
+                            _ => (),
+                        }
+                    }
+                }
+                ctx.dispatch_callback(camera_input_cb, cam_input);
+                status
             })
             .build()
     }
 
     pub fn update(&mut self) {
-        self.camera.update(1.0 / 60.0);
+        self.camera.update(10.0 / 60.0);
         let mesh = primitives::Box::build(glam::Vec3::ZERO, glam::Vec3::ONE);
         let face_bufs = mesh.generate_triangle_buffers_flat(true).unwrap();
         self.renderer.face_routine.clear();

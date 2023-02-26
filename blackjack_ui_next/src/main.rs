@@ -1,3 +1,5 @@
+use std::time::{Duration, Instant};
+
 use egui_wgpu::RenderState;
 use graph_editor::GraphEditor;
 use guee::{callback_accessor::CallbackAccessor, painter::ExtraFont, prelude::*};
@@ -124,6 +126,9 @@ fn main() {
         *control_flow = ControlFlow::Poll;
         match event {
             winit::event::Event::MainEventsCleared => {
+                // Record the frame time at the start of the frame.
+                let frame_start_time = Instant::now();
+
                 // Run the main view code and generate the root widget
                 let mut root_widget =
                     state.root_view(&ctx, wgpu_painter.render_state().as_ref().unwrap());
@@ -147,6 +152,11 @@ fn main() {
 
                 // Run update logic
                 state.update(&ctx);
+
+                // Sleep for the remaining time to cap at 60Hz
+                let elapsed = Instant::now().duration_since(frame_start_time);
+                let remaining = Duration::from_secs_f32(1.0 / 60.0).saturating_sub(elapsed);
+                spin_sleep::sleep(remaining);
             }
             winit::event::Event::WindowEvent { window_id, event } if window_id == window.id() => {
                 match &event {

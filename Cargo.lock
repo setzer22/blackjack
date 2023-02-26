@@ -541,6 +541,7 @@ dependencies = [
  "log",
  "pollster",
  "slotmap",
+ "spin_sleep",
  "wgpu 0.14.2",
  "winit",
 ]

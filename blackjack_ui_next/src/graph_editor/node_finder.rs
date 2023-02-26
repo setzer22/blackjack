@@ -83,9 +83,9 @@ impl NodeFinder {
         .build();
 
         SizedContainer::new(
-            CustomDrawContainer::new(contents)
-                .pre_draw(|painter, layout| {
-                    painter.rect(RectShape {
+            TinkerContainer::new(contents)
+                .pre_draw(|ctx, layout| {
+                    ctx.painter().rect(RectShape {
                         rect: layout.bounds.expand2(Vec2::new(1.0, 1.0)),
                         rounding: Rounding::same(1.0),
                         fill: pallette().widget_bg_dark,

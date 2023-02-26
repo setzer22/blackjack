@@ -164,7 +164,7 @@ impl Viewport3d {
                         self.input.mouse.cursor_delta().x * camera_right * move_speed
                             + self.input.mouse.cursor_delta().y * -camera_up * move_speed;
                 } else {
-                    self.camera.yaw += self.input.mouse.cursor_delta().x * 2.0;
+                    self.camera.yaw += dbg!(self.input.mouse.cursor_delta().x) * 2.0;
                     self.camera.pitch += self.input.mouse.cursor_delta().y * 2.0;
                 }
             }

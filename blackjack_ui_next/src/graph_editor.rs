@@ -203,7 +203,7 @@ impl GraphEditor {
         let on_dismiss_node_finder_cb = self.cba.callback(move |editor, _: ()| {
             editor.node_finder = None;
         });
-        EventHandlingContainer::new(stack)
+        TinkerContainer::new(stack)
             .post_event(move |ctx, layout, cursor_position, events| {
                 let cursor_in_finder = layout
                     .children
