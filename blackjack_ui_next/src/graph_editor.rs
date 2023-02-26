@@ -500,8 +500,9 @@ impl GraphEditor {
 }
 
 // WIP:
-// - [x] Min / max values (soft & hard) in the DragValues
-// - [ ] The node finder widget
-// -    [x] Fix bug with text clicks falling through
-// -    [x] Scroll container support
-// - [ ] Start porting the wgpu stuff
+// - [ ] Use human-friendly labels in nodes.
+// - [ ] Node widget alignment improvements.
+// - [ ] Use the color for data types.
+// - [ ] Top menubar
+// - [ ] Save / load system
+// - [ ] Display errors in a console
