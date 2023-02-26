@@ -4,12 +4,15 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+use crate::blackjack_theme::pallette;
+
 use super::{
     render_state::ViewportRenderState,
     shader_manager::{Shader, ShaderColorTarget},
     texture_manager::TextureManager,
     wgpu_utils::{self, BindGroupBuilder, BindGroupLayoutBuilder},
 };
+use guee::extension_traits::Color32Ext;
 use wgpu::*;
 
 pub enum DrawType<'a> {
@@ -201,12 +204,24 @@ impl<
         // For each ShaderColorTarget::Offscreen in the provided shader (during
         // new), one texture view handle matching its configuration.
         offscreen_targets: &[&TextureView],
+        clear_buffer: bool,
     ) {
         let mut color_attachments = vec![];
         let mut offscreen_targets = offscreen_targets.iter();
         for d in &self.color_target_descrs {
+            let clear_color = pallette().background_dark;
+            let clear_color = wgpu::Color {
+                r: clear_color.red_f().powf(2.2) as f64,
+                g: clear_color.green_f().powf(2.2) as f64,
+                b: clear_color.blue_f().powf(2.2) as f64,
+                a: clear_color.alpha_f().powf(2.2) as f64,
+            };
             let ops = Operations {
-                load: LoadOp::Load,
+                load: if clear_buffer {
+                    LoadOp::Clear(clear_color)
+                } else {
+                    LoadOp::Load
+                },
                 store: true,
             };
             match d {
@@ -231,12 +246,16 @@ impl<
 
         let bind_groups = self.create_bind_groups(device, texture_manager, settings);
         let mut pass = encoder.begin_render_pass(&RenderPassDescriptor {
-            label: Some("Blackjack Viewport3d RenderPass"),
+            label: Some(&format!("Blackjack Viewport3d RenderPass: {}", self.name)),
             color_attachments: &color_attachments,
             depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
                 view: &render_state.depth_target,
                 depth_ops: Some(Operations {
-                    load: LoadOp::Load,
+                    load: if clear_buffer {
+                        LoadOp::Clear(0.0)
+                    } else {
+                        LoadOp::Load
+                    },
                     store: true,
                 }),
                 stencil_ops: None,

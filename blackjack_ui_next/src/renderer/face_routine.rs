@@ -264,6 +264,8 @@ impl FaceRoutine {
         render_state: &ViewportRenderState,
         settings: &Viewport3dSettings,
         id_map_view: &TextureView,
+        base_clear_buffer: bool,
+        overlay_clear_buffer: bool,
     ) {
         self.base_mesh_routine.render(
             device,
@@ -272,6 +274,7 @@ impl FaceRoutine {
             render_state,
             settings,
             &[],
+            base_clear_buffer,
         );
         self.face_overlay_routine.render(
             device,
@@ -280,6 +283,7 @@ impl FaceRoutine {
             render_state,
             &(),
             &[id_map_view],
+            overlay_clear_buffer,
         );
     }
 }

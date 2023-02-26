@@ -1,5 +1,6 @@
 use std::{cell::Cell, sync::Arc};
 
+use blackjack_engine::prelude::primitives;
 use egui_wgpu::RenderState;
 use glam::UVec2;
 use guee::{base_widgets::image::Image, callback_accessor::CallbackAccessor, prelude::*};
@@ -70,11 +71,12 @@ impl Default for Viewport3dSettings {
 }
 
 pub struct Viewport3d {
-    renderer: BlackjackViewportRenderer,
-    settings: Viewport3dSettings,
-    last_frame_bounds: Option<Rect>,
-    epaint_texture_id: Cell<Option<TextureId>>,
-    cba: CallbackAccessor<Self>,
+    pub renderer: BlackjackViewportRenderer,
+    pub settings: Viewport3dSettings,
+    pub last_frame_bounds: Option<Rect>,
+    pub epaint_texture_id: Cell<Option<TextureId>>,
+    pub cba: CallbackAccessor<Self>,
+    pub TODELETE_time: f32,
 }
 
 impl Viewport3d {
@@ -89,6 +91,7 @@ impl Viewport3d {
             last_frame_bounds: None,
             epaint_texture_id: Cell::new(None),
             cba,
+            TODELETE_time: 0.0,
         }
     }
 
@@ -99,15 +102,14 @@ impl Viewport3d {
                 last_frame_bounds.height() as u32,
             );
             let camera = ViewportCamera {
-                view_matrix: glam::Mat4::from_translation(glam::Vec3::Z * 10.0)
-                    * glam::Mat4::from_rotation_x(-45.0)
-                    * glam::Mat4::from_rotation_y(-45.0)
+                view_matrix: glam::Mat4::from_translation(glam::Vec3::Z * 5.0)
+                    * glam::Mat4::from_rotation_x(-30.0 + self.TODELETE_time)
+                    * glam::Mat4::from_rotation_y(30.0 + self.TODELETE_time)
                     * glam::Mat4::from_translation(glam::Vec3::ZERO),
-                projection_matrix: glam::Mat4::perspective_lh(
-                    60.0,
+                projection_matrix: glam::Mat4::perspective_infinite_reverse_lh(
+                    60.0f32.to_radians(),
                     resolution.x as f32 / resolution.y as f32,
                     0.01,
-                    100.0,
                 ),
             };
 
@@ -137,7 +139,7 @@ impl Viewport3d {
             Image::new(IdGen::key("viewport"), tex_id, LayoutHints::fill()).build()
         } else {
             // For the first frame, just render background
-            ColoredBox::background(pallette().background_dark)
+            ColoredBox::background(/*pallette().background_dark*/ color!("#ff0000"))
                 .hints(LayoutHints::fill())
                 .build()
         };
@@ -151,5 +153,33 @@ impl Viewport3d {
                 EventStatus::Ignored
             })
             .build()
+    }
+
+    pub fn update(&mut self) {
+        let mesh = primitives::Box::build(glam::Vec3::ZERO, glam::Vec3::ONE);
+        let face_bufs = mesh.generate_triangle_buffers_flat(true).unwrap();
+        self.renderer.face_routine.clear();
+        self.renderer.face_routine.add_base_mesh(
+            &self.renderer.device,
+            &face_bufs.positions,
+            &face_bufs.normals,
+            &face_bufs.indices,
+        );
+
+        let vertex_bufs = mesh.generate_point_buffers();
+        self.renderer.point_cloud_routine.clear();
+        self.renderer
+            .point_cloud_routine
+            .add_point_cloud(&self.renderer.device, &vertex_bufs.positions);
+
+        let edge_bufs = mesh.generate_line_buffers().unwrap();
+        self.renderer.wireframe_routine.clear();
+        self.renderer.wireframe_routine.add_wireframe(
+            &self.renderer.device,
+            &edge_bufs.positions,
+            &edge_bufs.colors,
+        );
+
+        self.TODELETE_time += 1.0 / 60.0;
     }
 }

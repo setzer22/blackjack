@@ -33,13 +33,15 @@ pub fn depth_stencil(depth_write: bool) -> wgpu::DepthStencilState {
     }
 }
 
+pub const RENDER_TARGET_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
+
 pub fn create_render_texture(
     device: &Device,
     label: &str,
     size: glam::UVec2,
     format: Option<TextureFormat>,
 ) -> (Texture, TextureView) {
-    let format = format.unwrap_or(wgpu::TextureFormat::Rgba16Float);
+    let format = format.unwrap_or(RENDER_TARGET_FORMAT);
 
     let texture = device.create_texture(&wgpu::TextureDescriptor {
         size: wgpu::Extent3d {

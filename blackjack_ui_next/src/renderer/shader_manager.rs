@@ -11,6 +11,8 @@ use wgpu::{
     VertexState,
 };
 
+use super::wgpu_utils;
+
 #[derive(Clone, Debug)]
 pub enum ShaderColorTarget {
     // The shader will write to the main viewport texture
@@ -31,7 +33,7 @@ impl ShaderColorTarget {
     pub fn into_wgpu(&self) -> ColorTargetState {
         match self {
             ShaderColorTarget::Viewport { use_alpha } => ColorTargetState {
-                format: TextureFormat::Rgba16Float,
+                format: wgpu_utils::RENDER_TARGET_FORMAT,
                 blend: use_alpha.then(|| BlendState::ALPHA_BLENDING),
                 write_mask: ColorWrites::ALL,
             },

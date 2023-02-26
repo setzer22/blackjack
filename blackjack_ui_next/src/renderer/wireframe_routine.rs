@@ -107,8 +107,16 @@ impl WireframeRoutine {
         encoder: &mut CommandEncoder,
         texture_manager: &TextureManager,
         render_state: &ViewportRenderState,
+        clear_buffer: bool,
     ) {
-        self.inner
-            .render(device, encoder, texture_manager, render_state, &(), &[]);
+        self.inner.render(
+            device,
+            encoder,
+            texture_manager,
+            render_state,
+            &(),
+            &[],
+            clear_buffer,
+        );
     }
 }

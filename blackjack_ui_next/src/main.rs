@@ -32,56 +32,62 @@ impl AppState {
     }
 }
 
-fn root_view(state: &AppState, ctx: &Context, render_ctx: &RenderState) -> DynWidget {
-    fn panel(key: &str) -> DynWidget {
-        ColoredBox::new(IdGen::key(key))
-            .hints(LayoutHints::fill())
-            .fill(color!("#191919"))
-            .stroke(Stroke::new(1.0, color!("#9b9b9b")))
-            .build()
-    }
+impl AppState {
+    fn root_view(&self, ctx: &Context, render_ctx: &RenderState) -> DynWidget {
+        fn panel(key: &str) -> DynWidget {
+            ColoredBox::new(IdGen::key(key))
+                .hints(LayoutHints::fill())
+                .fill(color!("#191919"))
+                .stroke(Stroke::new(1.0, color!("#9b9b9b")))
+                .build()
+        }
 
-    StackContainer::new(
-        IdGen::key("stack"),
-        vec![
-            // Background
-            (
-                Vec2::new(0.0, 0.0),
-                ColoredBox::background(color!("#1d1d1d")).build(),
-            ),
-            (
-                Vec2::new(0.0, 0.0),
-                SplitPaneContainer::new(
-                    IdGen::key("v_split"),
-                    Axis::Vertical,
+        StackContainer::new(
+            IdGen::key("stack"),
+            vec![
+                // Background
+                (
+                    Vec2::new(0.0, 0.0),
+                    ColoredBox::background(color!("#1d1d1d")).build(),
+                ),
+                (
+                    Vec2::new(0.0, 0.0),
                     SplitPaneContainer::new(
-                        IdGen::key("h_split"),
-                        Axis::Horizontal,
+                        IdGen::key("v_split"),
+                        Axis::Vertical,
+                        SplitPaneContainer::new(
+                            IdGen::key("h_split"),
+                            Axis::Horizontal,
+                            StackContainer::new(
+                                IdGen::key("left_stack"),
+                                vec![
+                                    (Vec2::ZERO, panel("bottom")),
+                                    (Vec2::ZERO, self.viewport_3d.view(render_ctx)),
+                                ],
+                            )
+                            .build(),
+                            panel("right"),
+                        )
+                        .build(),
                         StackContainer::new(
-                            IdGen::key("left_stack"),
+                            IdGen::key("bot_stack"),
                             vec![
                                 (Vec2::ZERO, panel("bottom")),
-                                (Vec2::ZERO, state.viewport_3d.view(render_ctx)),
+                                (Vec2::ZERO, self.graph_editor.view()),
                             ],
                         )
                         .build(),
-                        panel("right"),
                     )
                     .build(),
-                    StackContainer::new(
-                        IdGen::key("bot_stack"),
-                        vec![
-                            (Vec2::ZERO, panel("bottom")),
-                            (Vec2::ZERO, state.graph_editor.view()),
-                        ],
-                    )
-                    .build(),
-                )
-                .build(),
-            ),
-        ],
-    )
-    .build()
+                ),
+            ],
+        )
+        .build()
+    }
+
+    fn update(&mut self, _context: &Context) {
+        self.viewport_3d.update();
+    }
 }
 
 fn main() {
@@ -120,7 +126,7 @@ fn main() {
             winit::event::Event::MainEventsCleared => {
                 // Run the main view code and generate the root widget
                 let mut root_widget =
-                    root_view(&state, &ctx, wgpu_painter.render_state().as_ref().unwrap());
+                    state.root_view(&ctx, wgpu_painter.render_state().as_ref().unwrap());
 
                 // Layout, push shapes and trigger side-effects
                 ctx.run(&mut root_widget, &mut state);
@@ -138,6 +144,9 @@ fn main() {
                     &clipped_primitives,
                     &textures_delta,
                 );
+
+                // Run update logic
+                state.update(&ctx);
             }
             winit::event::Event::WindowEvent { window_id, event } if window_id == window.id() => {
                 match &event {

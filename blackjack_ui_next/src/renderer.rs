@@ -50,13 +50,14 @@ pub mod id_picking_routine;
 pub mod render_state;
 
 pub struct BlackjackViewportRenderer {
-    device: Arc<Device>,
-    shader_manager: ShaderManager,
-    texture_manager: TextureManager,
-    wireframe_routine: WireframeRoutine,
-    point_cloud_routine: PointCloudRoutine,
-    face_routine: FaceRoutine,
-    id_picking_routine: IdPickingRoutine,
+    pub device: Arc<Device>,
+    pub queue: Arc<Queue>,
+    pub shader_manager: ShaderManager,
+    pub texture_manager: TextureManager,
+    pub wireframe_routine: WireframeRoutine,
+    pub point_cloud_routine: PointCloudRoutine,
+    pub face_routine: FaceRoutine,
+    pub id_picking_routine: IdPickingRoutine,
 }
 
 pub struct ViewportRendererOutput {
@@ -82,6 +83,7 @@ impl BlackjackViewportRenderer {
             shader_manager,
             texture_manager,
             device,
+            queue,
         }
     }
 
@@ -134,12 +136,14 @@ impl BlackjackViewportRenderer {
             &mut encoder,
             &self.texture_manager,
             &render_state,
+            true,
         );
         self.point_cloud_routine.render(
             &self.device,
             &mut encoder,
             &self.texture_manager,
             &render_state,
+            false,
         );
         self.face_routine.render(
             &self.device,
@@ -148,9 +152,14 @@ impl BlackjackViewportRenderer {
             &render_state,
             settings,
             &id_map_view,
+            false,
+            false,
         );
         self.id_picking_routine
             .run(&mut encoder, resolution, &id_map);
+
+        // Send it to the GPU
+        self.queue.submit(std::iter::once(encoder.finish()));
 
         ViewportRendererOutput {
             color_texture_view: render_state.color_target,
