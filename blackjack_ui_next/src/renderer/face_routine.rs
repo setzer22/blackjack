@@ -17,7 +17,7 @@ use crate::viewport_3d::Viewport3dSettings;
 
 use super::{
     render_state::ViewportRenderState,
-    routine_renderer::{DrawType, RoutineLayout, RoutineRenderer},
+    routine_renderer::{DrawType, MultisampleConfig, RoutineLayout, RoutineRenderer},
     shader_manager::ShaderManager,
     texture_manager::TextureManager,
     wgpu_utils,
@@ -70,8 +70,8 @@ impl RoutineLayout<BASE_MESH_NUM_BUFFERS, BASE_MESH_NUM_TEXTURES> for MeshFacesL
     }
 }
 
-const OVERLAY_NUM_BUFFERS: usize = 3;
-const OVERLAY_NUM_UNIFORMS: usize = 1;
+const OVERLAY_NUM_BUFFERS: usize = 2;
+const OVERLAY_NUM_UNIFORMS: usize = 0;
 
 /// Represents the buffers to draw the face overlays, flat unshaded
 /// semi-transparent triangles that are drawn over the base mesh.
@@ -80,12 +80,6 @@ pub struct FaceOverlayLayout {
     positions: Buffer,
     /// `len` colors (as Vec3), one per triangle face
     colors: Buffer,
-    /// `len` face ids, one per triangle. Multilpe triangles may share the same
-    /// face id, in case of quads or N-gons.
-    ids: Buffer,
-    /// A single u32, containing the largest id in the `ids` buffer. Used to
-    /// generate the debug view.
-    max_id: Buffer,
     /// The number of faces
     len: usize,
 }
@@ -94,7 +88,7 @@ impl RoutineLayout<OVERLAY_NUM_BUFFERS, 0, OVERLAY_NUM_UNIFORMS> for FaceOverlay
     type Settings = ();
 
     fn get_wgpu_buffers(&self, _settings: &Self::Settings) -> [&Buffer; OVERLAY_NUM_BUFFERS] {
-        [&self.positions, &self.colors, &self.ids]
+        [&self.positions, &self.colors]
     }
 
     fn get_wgpu_textures<'a>(
@@ -106,6 +100,50 @@ impl RoutineLayout<OVERLAY_NUM_BUFFERS, 0, OVERLAY_NUM_UNIFORMS> for FaceOverlay
     }
 
     fn get_wgpu_uniforms(&self, _settings: &Self::Settings) -> [&Buffer; OVERLAY_NUM_UNIFORMS] {
+        []
+    }
+
+    fn get_draw_type(&self, _settings: &Self::Settings) -> DrawType<'_> {
+        DrawType::UseInstances {
+            num_vertices: 3,
+            num_instances: self.len,
+        }
+    }
+}
+
+const ID_NUM_BUFFERS: usize = 2;
+const ID_NUM_UNIFORMS: usize = 1;
+
+/// Represents the buffers to draw the face ids, used to perform mouse picking.
+pub struct FaceIdLayout {
+    /// `3 * len` positions (as Vec3), one per triangle
+    positions: Buffer,
+    /// `len` face ids, one per triangle. Multilpe triangles may share the same
+    /// face id, in case of quads or N-gons.
+    ids: Buffer,
+    /// A single u32, containing the largest id in the `ids` buffer. Used to
+    /// generate the debug view.
+    max_id: Buffer,
+    /// The number of faces
+    len: usize,
+}
+
+impl RoutineLayout<ID_NUM_BUFFERS, 0, ID_NUM_UNIFORMS> for FaceIdLayout {
+    type Settings = ();
+
+    fn get_wgpu_buffers(&self, _settings: &Self::Settings) -> [&Buffer; ID_NUM_BUFFERS] {
+        [&self.positions, &self.ids]
+    }
+
+    fn get_wgpu_textures<'a>(
+        &'a self,
+        _texture_manager: &'a TextureManager,
+        _settings: &'a Self::Settings,
+    ) -> [&'a TextureView; 0] {
+        []
+    }
+
+    fn get_wgpu_uniforms(&self, _settings: &Self::Settings) -> [&Buffer; ID_NUM_UNIFORMS] {
         [&self.max_id]
     }
 
@@ -123,6 +161,7 @@ pub struct FaceRoutine {
         RoutineRenderer<MeshFacesLayout, BASE_MESH_NUM_BUFFERS, BASE_MESH_NUM_TEXTURES>,
     face_overlay_routine:
         RoutineRenderer<FaceOverlayLayout, OVERLAY_NUM_BUFFERS, 0, OVERLAY_NUM_UNIFORMS>,
+    face_id_routine: RoutineRenderer<FaceIdLayout, ID_NUM_BUFFERS, 0, ID_NUM_UNIFORMS>,
 }
 
 impl FaceRoutine {
@@ -130,6 +169,7 @@ impl FaceRoutine {
         device: &Device,
         texture_manager: &mut TextureManager,
         shader_manager: &ShaderManager,
+        multisample_config: MultisampleConfig,
     ) -> Self {
         let mut matcaps = Vec::new();
         macro_rules! load_matcap {
@@ -161,6 +201,7 @@ impl FaceRoutine {
                 shader_manager.get("face_draw"),
                 PrimitiveTopology::TriangleList,
                 FrontFace::Cw,
+                multisample_config,
             ),
             face_overlay_routine: RoutineRenderer::new(
                 "face overlay",
@@ -168,6 +209,17 @@ impl FaceRoutine {
                 shader_manager.get("face_overlay_draw"),
                 PrimitiveTopology::TriangleList,
                 FrontFace::Cw,
+                multisample_config,
+            ),
+            face_id_routine: RoutineRenderer::new(
+                "face id",
+                &device,
+                shader_manager.get("face_id_draw"),
+                PrimitiveTopology::TriangleList,
+                FrontFace::Ccw,
+                // The id map is always drawn without multisampling.
+                // We don't care about aliasing there.
+                MultisampleConfig::One
             ),
         }
     }
@@ -221,7 +273,15 @@ impl FaceRoutine {
         assert_eq!(positions.len(), len * 3);
         assert_eq!(colors.len(), len);
 
-        let positions = device.create_buffer_init(&BufferInitDescriptor {
+        let positions_buf = device.create_buffer_init(&BufferInitDescriptor {
+            label: None,
+            contents: bytemuck::cast_slice(positions),
+            usage: BufferUsages::STORAGE,
+        });
+        // @Perf -- We need to duplicate this to render both the overlay and id
+        // routines. This is because the system isn't flexible enough to reuse
+        // data from different layouts.
+        let positions_buf_cpy = device.create_buffer_init(&BufferInitDescriptor {
             label: None,
             contents: bytemuck::cast_slice(positions),
             usage: BufferUsages::STORAGE,
@@ -243,8 +303,13 @@ impl FaceRoutine {
         });
 
         self.face_overlay_routine.layouts.push(FaceOverlayLayout {
-            positions,
+            positions: positions_buf,
             colors,
+            len,
+        });
+
+        self.face_id_routine.layouts.push(FaceIdLayout {
+            positions: positions_buf_cpy,
             ids,
             max_id,
             len,
@@ -264,6 +329,7 @@ impl FaceRoutine {
         render_state: &ViewportRenderState,
         settings: &Viewport3dSettings,
         id_map_view: &TextureView,
+        id_map_depth_view: &TextureView,
         base_clear_buffer: bool,
         overlay_clear_buffer: bool,
     ) {
@@ -275,6 +341,7 @@ impl FaceRoutine {
             settings,
             &[],
             base_clear_buffer,
+            None,
         );
         self.face_overlay_routine.render(
             device,
@@ -282,8 +349,19 @@ impl FaceRoutine {
             texture_manager,
             render_state,
             &(),
+            &[],
+            overlay_clear_buffer,
+            None,
+        );
+        self.face_id_routine.render(
+            device,
+            encoder,
+            texture_manager,
+            render_state,
+            &(),
             &[id_map_view],
             overlay_clear_buffer,
+            Some(&id_map_depth_view),
         );
     }
 }

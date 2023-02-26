@@ -6,7 +6,7 @@
 
 use super::{
     render_state::ViewportRenderState,
-    routine_renderer::{DrawType, RoutineLayout, RoutineRenderer},
+    routine_renderer::{DrawType, MultisampleConfig, RoutineLayout, RoutineRenderer},
     texture_manager::TextureManager,
 };
 use glam::Vec3;
@@ -60,7 +60,11 @@ pub struct WireframeRoutine {
 }
 
 impl WireframeRoutine {
-    pub fn new(device: &Device, shader_manager: &ShaderManager) -> Self {
+    pub fn new(
+        device: &Device,
+        shader_manager: &ShaderManager,
+        multisample_config: MultisampleConfig,
+    ) -> Self {
         Self {
             inner: RoutineRenderer::new(
                 "edge wireframe",
@@ -68,6 +72,7 @@ impl WireframeRoutine {
                 shader_manager.get("edge_wireframe_draw"),
                 PrimitiveTopology::LineList,
                 FrontFace::Ccw,
+                multisample_config,
             ),
         }
     }
@@ -117,6 +122,7 @@ impl WireframeRoutine {
             &(),
             &[],
             clear_buffer,
+            None,
         );
     }
 }

@@ -8,14 +8,22 @@ use wgpu::*;
 
 use crate::renderer::wgpu_utils;
 
-use super::{render_state::ViewportRenderState, shader_manager::ShaderManager};
+use super::{
+    render_state::ViewportRenderState, routine_renderer::MultisampleConfig,
+    shader_manager::ShaderManager,
+};
 
 pub struct GridRoutine {
     pipeline: RenderPipeline,
+    multisample_config: MultisampleConfig,
 }
 
 impl GridRoutine {
-    pub fn new(device: &Device, shader_manager: &ShaderManager) -> Self {
+    pub fn new(
+        device: &Device,
+        shader_manager: &ShaderManager,
+        multisample_config: MultisampleConfig,
+    ) -> Self {
         use wgpu::*;
         let shader = shader_manager.get("grid_shader");
 
@@ -31,12 +39,15 @@ impl GridRoutine {
             vertex: shader.to_vertex_state(&[]),
             primitive: wgpu_utils::primitive_state(PrimitiveTopology::TriangleList, FrontFace::Ccw),
             depth_stencil: Some(wgpu_utils::depth_stencil(true)),
-            multisample: MultisampleState::default(),
+            multisample: multisample_config.to_multisample_state(),
             fragment: Some(shader.get_fragment_state()),
             multiview: None,
         });
 
-        Self { pipeline }
+        Self {
+            pipeline,
+            multisample_config,
+        }
     }
 
     pub fn render(&self, encoder: &mut CommandEncoder, render_state: &ViewportRenderState) {
@@ -44,7 +55,7 @@ impl GridRoutine {
             label: Some("Blackjack Grid"),
             color_attachments: &[Some(RenderPassColorAttachment {
                 view: &render_state.color_target,
-                resolve_target: None,
+                resolve_target: render_state.color_resolve_target.as_ref(),
                 ops: Operations {
                     load: LoadOp::Load,
                     store: true,

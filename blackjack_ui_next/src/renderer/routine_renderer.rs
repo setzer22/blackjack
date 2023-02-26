@@ -74,6 +74,32 @@ pub trait RoutineLayout<
     }
 }
 
+#[derive(Clone, Copy)]
+pub enum MultisampleConfig {
+    One,
+    Four,
+}
+
+impl MultisampleConfig {
+    pub fn to_u32(self) -> u32 {
+        match self {
+            MultisampleConfig::One => 1,
+            MultisampleConfig::Four => 4,
+        }
+    }
+
+    pub fn to_multisample_state(self) -> MultisampleState {
+        match self {
+            MultisampleConfig::One => MultisampleState::default(),
+            MultisampleConfig::Four => MultisampleState {
+                count: 4,
+                mask: !0,
+                alpha_to_coverage_enabled: false,
+            },
+        }
+    }
+}
+
 pub struct RoutineRenderer<
     Layout: RoutineLayout<NUM_BUFFERS, NUM_TEXTURES, NUM_UNIFORMS>,
     const NUM_BUFFERS: usize = 0,
@@ -85,6 +111,7 @@ pub struct RoutineRenderer<
     pipeline: RenderPipeline,
     pub layouts: Vec<Layout>,
     pub color_target_descrs: Vec<ShaderColorTarget>,
+    pub multisample: MultisampleConfig,
 }
 
 impl<
@@ -100,6 +127,7 @@ impl<
         shader: &Shader,
         topology: PrimitiveTopology,
         front_face: FrontFace,
+        multisample: MultisampleConfig,
     ) -> Self {
         let bgl = {
             let mut builder = BindGroupLayoutBuilder::new();
@@ -151,7 +179,7 @@ impl<
             vertex: shader.to_vertex_state(&[]),
             primitive: wgpu_utils::primitive_state(topology, front_face),
             depth_stencil: Some(wgpu_utils::depth_stencil(true)),
-            multisample: MultisampleState::default(),
+            multisample: multisample.to_multisample_state(),
             fragment: Some(shader.get_fragment_state()),
             multiview: None,
         });
@@ -162,6 +190,7 @@ impl<
             bgl,
             layouts: Vec::new(),
             color_target_descrs: shader.color_target_descrs.clone(),
+            multisample,
         }
     }
 
@@ -205,6 +234,7 @@ impl<
         // new), one texture view handle matching its configuration.
         offscreen_targets: &[&TextureView],
         clear_buffer: bool,
+        override_depth: Option<&TextureView>,
     ) {
         let mut color_attachments = vec![];
         let mut offscreen_targets = offscreen_targets.iter();
@@ -228,7 +258,7 @@ impl<
                 ShaderColorTarget::Viewport { use_alpha: _ } => {
                     color_attachments.push(Some(RenderPassColorAttachment {
                         view: &render_state.color_target,
-                        resolve_target: None,
+                        resolve_target: render_state.color_resolve_target.as_ref(),
                         ops,
                     }));
                 }
@@ -249,7 +279,7 @@ impl<
             label: Some(&format!("Blackjack Viewport3d RenderPass: {}", self.name)),
             color_attachments: &color_attachments,
             depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
-                view: &render_state.depth_target,
+                view: override_depth.unwrap_or(&render_state.depth_target),
                 depth_ops: Some(Operations {
                     load: if clear_buffer {
                         LoadOp::Clear(0.0)

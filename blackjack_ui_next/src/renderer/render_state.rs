@@ -3,8 +3,8 @@ use std::num::NonZeroU64;
 use glam::{IVec2, Mat4, UVec2};
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
-    BindGroup, BindGroupLayout, Buffer, BufferUsages, Sampler, SamplerDescriptor, ShaderStages,
-    TextureView,
+    BindGroup, BindGroupLayout, Buffer, BufferUsages, Operations, RenderPassColorAttachment,
+    RenderPassDepthStencilAttachment, Sampler, SamplerDescriptor, ShaderStages, TextureView,
 };
 
 use super::wgpu_utils::{self, BindGroupBuilder, BindGroupLayoutBuilder};
@@ -13,6 +13,7 @@ use bytemuck::{Pod, Zeroable};
 pub struct ViewportRenderState {
     pub dimensions: UVec2,
     pub color_target: TextureView,
+    pub color_resolve_target: Option<TextureView>,
     pub depth_target: TextureView,
     /// Contains a ViewportUniforms
     pub viewport_uniforms_bg: BindGroup,
@@ -51,6 +52,7 @@ impl ViewportRenderState {
         dimensions: UVec2,
         color_target: TextureView,
         depth_target: TextureView,
+        color_resolve_target: Option<TextureView>,
         uniforms: ViewportUniforms,
     ) -> Self {
         let mut bgb = BindGroupBuilder::new();
@@ -67,6 +69,7 @@ impl ViewportRenderState {
             dimensions,
             color_target,
             depth_target,
+            color_resolve_target,
             viewport_uniforms_bg: bgb.build(
                 device,
                 Some("Blackjack Viewport Uniforms"),

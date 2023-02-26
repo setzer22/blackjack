@@ -13,7 +13,7 @@ use wgpu::{
 
 use super::{
     render_state::ViewportRenderState,
-    routine_renderer::{DrawType, RoutineLayout, RoutineRenderer},
+    routine_renderer::{DrawType, MultisampleConfig, RoutineLayout, RoutineRenderer},
     shader_manager::ShaderManager,
     texture_manager::TextureManager,
 };
@@ -56,7 +56,11 @@ pub struct PointCloudRoutine {
 }
 
 impl PointCloudRoutine {
-    pub fn new(device: &Device, shader_manager: &ShaderManager) -> Self {
+    pub fn new(
+        device: &Device,
+        shader_manager: &ShaderManager,
+        multisample: MultisampleConfig,
+    ) -> Self {
         Self {
             inner: RoutineRenderer::new(
                 "point cloud",
@@ -64,6 +68,7 @@ impl PointCloudRoutine {
                 shader_manager.get("point_cloud_draw"),
                 PrimitiveTopology::TriangleList,
                 FrontFace::Ccw,
+                multisample,
             ),
         }
     }
@@ -100,6 +105,7 @@ impl PointCloudRoutine {
             &(),
             &[],
             clear_buffer,
+            None,
         )
     }
 }

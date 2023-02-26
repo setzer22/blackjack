@@ -8,6 +8,8 @@ use std::num::{NonZeroU32, NonZeroU64, NonZeroU8};
 
 use wgpu::*;
 
+use super::routine_renderer::MultisampleConfig;
+
 pub fn primitive_state(
     topology: wgpu::PrimitiveTopology,
     front_face: wgpu::FrontFace,
@@ -40,6 +42,7 @@ pub fn create_render_texture(
     label: &str,
     size: glam::UVec2,
     format: Option<TextureFormat>,
+    num_samples: u32,
 ) -> (Texture, TextureView) {
     let format = format.unwrap_or(RENDER_TARGET_FORMAT);
 
@@ -50,7 +53,7 @@ pub fn create_render_texture(
             depth_or_array_layers: 1,
         },
         mip_level_count: 1,
-        sample_count: 1,
+        sample_count: num_samples,
         dimension: wgpu::TextureDimension::D2,
         format,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
@@ -69,6 +72,37 @@ pub fn create_render_texture(
     });
 
     (texture, view)
+}
+
+pub struct MultisampledRenderTexture {
+    pub texture: Texture,
+    pub view: TextureView,
+    pub resolve_texture: Option<Texture>,
+    pub resolve_view: Option<TextureView>,
+}
+
+pub fn create_multisampled_render_texture(
+    device: &Device,
+    label: &str,
+    size: glam::UVec2,
+    format: Option<TextureFormat>,
+    multisample_config: MultisampleConfig,
+) -> MultisampledRenderTexture {
+    let num_samples = multisample_config.to_u32();
+    let (texture, view) = create_render_texture(device, label, size, format, num_samples);
+    let (resolve_texture, resolve_view) = if num_samples > 1 {
+        let (r, v) = create_render_texture(device, &format!("{label} Resolve"), size, format, 1);
+        (Some(r), Some(v))
+    } else {
+        (None, None)
+    };
+
+    MultisampledRenderTexture {
+        texture,
+        view,
+        resolve_texture,
+        resolve_view,
+    }
 }
 
 pub fn create_sampler(

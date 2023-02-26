@@ -145,17 +145,19 @@ impl ShaderManager {
         def_shader!("point_cloud_draw", "wgsl/point_cloud_draw.wgsl", opaque);
         def_shader!("face_draw", "wgsl/face_draw.wgsl", opaque);
         def_shader!("grid_shader", "wgsl/grid_shader.wgsl", alpha_blend);
+        def_shader!(
+            "face_overlay_draw",
+            "wgsl/face_overlay_draw.wgsl",
+            alpha_blend
+        );
 
         // For some shaders, we use custom color targets when we have extra
         // offscreen buffers they draw to.
         def_shader!(
-            "face_overlay_draw",
-            "wgsl/face_overlay_draw.wgsl",
+            "face_id_draw",
+            "wgsl/face_id_draw.wgsl",
             custom,
             vec![
-                // First, a regular color channel, to highlight faces. The channel
-                // uses transparency because it draws on top of the actual mesh.
-                ShaderColorTarget::Viewport { use_alpha: true },
                 // Then, the id channel, which draws to an offscreen u32 pixel
                 // buffer to encode the triangle ids at each pixel.
                 ShaderColorTarget::Offscreen(ColorTargetState {
@@ -165,7 +167,6 @@ impl ShaderManager {
                 }),
             ]
         );
-
 
         Self { shaders }
     }

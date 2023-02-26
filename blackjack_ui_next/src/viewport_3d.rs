@@ -10,7 +10,7 @@ use winit::event::VirtualKeyCode;
 
 use crate::{
     blackjack_theme::pallette,
-    renderer::{BlackjackViewportRenderer, ViewportCamera},
+    renderer::{routine_renderer::MultisampleConfig, BlackjackViewportRenderer, ViewportCamera},
 };
 
 use self::orbit_camera::{CameraInput, OrbitCamera};
@@ -94,6 +94,7 @@ impl Viewport3d {
             renderer: BlackjackViewportRenderer::new(
                 Arc::clone(&render_ctx.device),
                 Arc::clone(&render_ctx.queue),
+                MultisampleConfig::Four,
             ),
             settings: Default::default(),
             // We render with 1 frame delay to know the size of the UI element
