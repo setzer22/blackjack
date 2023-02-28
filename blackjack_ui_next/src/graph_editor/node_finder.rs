@@ -1,3 +1,4 @@
+use blackjack_engine::graph::NodeDefinitions;
 use epaint::{emath::Align2, RectShape, Rounding};
 use guee::{callback_accessor::CallbackAccessor, prelude::*};
 
@@ -27,7 +28,8 @@ impl NodeFinder {
 }
 
 impl NodeFinder {
-    pub fn view(&self, op_names: Vec<String>) -> DynWidget {
+    pub fn view(&self, node_defs: &NodeDefinitions) -> DynWidget {
+        let op_names = node_defs.node_names();
         let search_box = TextEdit::new(
             IdGen::key("node_finder_search"),
             self.search_box_contents.clone(),
@@ -48,8 +50,12 @@ impl NodeFinder {
                         .contains(&self.search_box_contents.to_lowercase())
             })
             .map(|op_name| {
-                let op_name = op_name.clone(); // need to move into closure
-                Button::with_label(&op_name)
+                let button_title = node_defs
+                    .node_def(op_name)
+                    .map(|x| x.label.clone())
+                    .unwrap_or_else(|| op_name.clone());
+                let op_name = op_name.clone(); // Need to move into closure
+                Button::with_label(button_title)
                     .hints(LayoutHints::fill_horizontal())
                     .align_contents(Align2::LEFT_CENTER)
                     .padding(Vec2::new(3.0, 3.0))

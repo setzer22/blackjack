@@ -13,10 +13,11 @@ use epaint::{ahash::HashSet, Vec2};
 use guee::{
     base_widgets::drag_value::{DragValue, ScaleSelector},
     callback_accessor::CallbackAccessor,
+    extension_traits::Color32Ext,
     input::MouseButton,
     prelude::*,
     widget::DynWidget,
-    widget_id::IdGen, extension_traits::Color32Ext,
+    widget_id::IdGen,
 };
 use slotmap::SecondaryMap;
 use winit::event::VirtualKeyCode;
@@ -207,7 +208,7 @@ impl GraphEditor {
         if let Some(node_finder) = self.node_finder.as_ref() {
             stack.push((
                 node_finder.position.to_vec2(),
-                node_finder.view(self.lua_runtime.node_definitions.node_names()),
+                node_finder.view(&self.lua_runtime.node_definitions),
             ));
         }
 
@@ -315,12 +316,18 @@ impl GraphEditor {
                 .build()
         };
 
+        let node_title = self
+            .lua_runtime
+            .node_definitions
+            .node_def(&node.op_name)
+            .map(|x| x.label.clone())
+            .unwrap_or_else(|| node.op_name.clone());
         NodeWidget {
             id: IdGen::key(node_id),
             node_id,
             titlebar_left: MarginContainer::new(
                 IdGen::key("margin_l"),
-                Text::new(node.op_name.clone()).build(),
+                Text::new(node_title).build(),
             )
             .margin(Vec2::new(10.0, 10.0))
             .build(),
