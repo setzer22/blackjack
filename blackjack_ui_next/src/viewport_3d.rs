@@ -188,7 +188,7 @@ impl Viewport3d {
             .build()
     }
 
-    pub fn update(&mut self, renderable: RenderableThing) {
+    pub fn update(&mut self, renderable: Option<RenderableThing>) {
         self.camera.update(10.0 / 60.0);
 
         self.renderer.face_routine.clear();
@@ -196,7 +196,7 @@ impl Viewport3d {
         self.renderer.wireframe_routine.clear();
 
         match renderable {
-            RenderableThing::HalfEdgeMesh(mesh) => {
+            Some(RenderableThing::HalfEdgeMesh(mesh)) => {
                 let face_bufs = mesh.generate_triangle_buffers_flat(true).unwrap();
                 self.renderer.face_routine.add_base_mesh(
                     &self.renderer.device,
@@ -217,7 +217,8 @@ impl Viewport3d {
                     &edge_bufs.colors,
                 );
             }
-            RenderableThing::HeightMap(_) => todo!(),
+            Some(RenderableThing::HeightMap(_)) => todo!(),
+            None => (),
         }
     }
 }

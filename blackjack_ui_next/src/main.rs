@@ -89,7 +89,7 @@ impl AppState {
     }
 
     fn update(&mut self, _context: &Context) {
-        if let Some(active_node) = self.graph_editor.active_node {
+        let renderable = if let Some(active_node) = self.graph_editor.active_node {
             // TODO: Change detection
             self.graph_editor.external_parameters.fill_defaults(
                 &self.graph_editor.graph,
@@ -105,16 +105,17 @@ impl AppState {
             );
 
             match program_result {
-                Ok(result) => {
-                    if let Some(renderable) = result.renderable {
-                        self.viewport_3d.update(renderable);
-                    }
-                }
+                Ok(result) => result.renderable,
                 Err(err) => {
-                    println!("TODO {err}")
+                    println!("TODO {err}");
+                    None
                 }
             }
-        }
+        } else {
+            None
+        };
+
+        self.viewport_3d.update(renderable);
     }
 }
 
