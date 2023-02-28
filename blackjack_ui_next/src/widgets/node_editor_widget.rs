@@ -121,11 +121,11 @@ impl NodeEditorWidget {
     // Given the screen coordinates of the top-left corner of the node editor,
     // returns the the direct transform to be applied to the nodes when
     // rendering them.
-    pub fn direct_transform(&self, top_left: Vec2) -> TranslateScale {
+    pub fn direct_transform(pan_zoom: PanZoom, top_left: Vec2) -> TranslateScale {
         TranslateScale::identity()
             .translated(-top_left)
-            .translated(self.pan_zoom.pan)
-            .scaled(self.pan_zoom.zoom)
+            .translated(pan_zoom.pan)
+            .scaled(pan_zoom.zoom)
             .translated(top_left)
     }
 
@@ -133,11 +133,11 @@ impl NodeEditorWidget {
     // returns the the cursor transform that needs to be applied to convert the
     // cursor position in screen coordiantes to the cursor position inside the
     // node editor.
-    pub fn cursor_transform(&self, top_left: Vec2) -> TranslateScale {
+    pub fn cursor_transform(pan_zoom: PanZoom, top_left: Vec2) -> TranslateScale {
         TranslateScale::identity()
             .translated(-top_left)
-            .scaled(1.0 / self.pan_zoom.zoom)
-            .translated(-self.pan_zoom.pan)
+            .scaled(1.0 / pan_zoom.zoom)
+            .translated(-pan_zoom.pan)
             .translated(top_left)
     }
 
@@ -299,7 +299,7 @@ impl Widget for NodeEditorWidget {
 
         // Setup transformation
         let old_transform = ctx.painter().transform;
-        ctx.painter().transform = self.direct_transform(top_left.to_vec2());
+        ctx.painter().transform = Self::direct_transform(self.pan_zoom, top_left.to_vec2());
 
         // Draw existing connections
         for (src, dst) in &self.connections {
@@ -313,9 +313,9 @@ impl Widget for NodeEditorWidget {
         let state = ctx.memory.get::<NodeEditorWidgetState>(layout.widget_id);
         if let Some(ongoing) = &state.ongoing_connection {
             let port_pos = self.port_pos(layout, ongoing);
-            let mouse_pos = self
-                .cursor_transform(layout.bounds.left_top().to_vec2())
-                .transform_point(ctx.input_state.mouse.position);
+            let mouse_pos =
+                Self::cursor_transform(self.pan_zoom, layout.bounds.left_top().to_vec2())
+                    .transform_point(ctx.input_state.mouse.position);
             ctx.painter()
                 .cubic_bezier(self.connection_shape(port_pos, mouse_pos));
         }
@@ -344,7 +344,7 @@ impl Widget for NodeEditorWidget {
         events: &[Event],
     ) -> EventStatus {
         let top_left = layout.bounds.left_top();
-        let cursor_transform = self.cursor_transform(top_left.to_vec2());
+        let cursor_transform = Self::cursor_transform(self.pan_zoom, top_left.to_vec2());
         let transformed_cursor_position = cursor_transform.transform_point(cursor_position);
 
         // Set the cursor transform state. This is necessary for child widgets

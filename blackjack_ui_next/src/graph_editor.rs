@@ -36,6 +36,9 @@ use node_finder::NodeFinder;
 pub struct GraphEditor {
     pub lua_runtime: LuaRuntime,
     pub pan_zoom: PanZoom,
+    // The top-left corner of the editor. In window coordinates.
+    // Cached after every layout.
+    pub top_left: Pos2,
     pub graph: BjkGraph,
     pub node_positions: SecondaryMap<BjkNodeId, Vec2>,
     pub node_order: Vec<BjkNodeId>,
@@ -55,6 +58,7 @@ impl GraphEditor {
                 .expect("Lua init should not fail"),
             node_positions: SecondaryMap::new(),
             node_order: Vec::new(),
+            top_left: Pos2::ZERO,
             pan_zoom: PanZoom::default(),
             node_finder: None,
             active_node: None,
@@ -64,18 +68,15 @@ impl GraphEditor {
     }
 
     pub fn spawn_node(&mut self, op_name: &str) {
+        let node_finder_pos = self.node_finder.as_ref().expect("Node finder").position;
+        let spawned_node_pos =
+            NodeEditorWidget::cursor_transform(self.pan_zoom, self.top_left.to_vec2())
+                .transform_point(node_finder_pos);
         let new = self
             .graph
             .spawn_node(op_name, &self.lua_runtime.node_definitions)
             .expect("Spawn node should not fail");
-        self.node_positions.insert(
-            new,
-            self.node_finder
-                .as_ref()
-                .expect("Node finder")
-                .position
-                .to_vec2(),
-        );
+        self.node_positions.insert(new, spawned_node_pos.to_vec2());
         self.node_order.push(new);
     }
 
@@ -220,10 +221,16 @@ impl GraphEditor {
         let on_spawn_finder_cb = self.cba.callback(move |editor, spawn_pos: Pos2| {
             editor.node_finder = Some(NodeFinder::new(cba_cpy, spawn_pos));
         });
+        let store_layout_cb = self.cba.callback(move |editor, top_left: Pos2| {
+            editor.top_left = top_left;
+        });
         let on_dismiss_node_finder_cb = self.cba.callback(move |editor, _: ()| {
             editor.node_finder = None;
         });
         TinkerContainer::new(stack)
+            .post_layout(|ctx, layout| {
+                ctx.dispatch_callback(store_layout_cb, layout.bounds.left_top());
+            })
             .post_event(move |ctx, layout, cursor_position, events| {
                 let cursor_in_finder = layout
                     .children
