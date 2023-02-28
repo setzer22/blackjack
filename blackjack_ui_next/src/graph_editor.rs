@@ -86,7 +86,7 @@ impl GraphEditor {
             let old_node = &self.graph.nodes[node];
             for input in &old_node.inputs {
                 match &input.kind {
-                    DependencyKind::External { .. } => todo!(),
+                    DependencyKind::External { .. } => (),
                     DependencyKind::Connection { node, .. } => {
                         self.active_node = Some(*node);
                         break;
@@ -264,12 +264,25 @@ impl GraphEditor {
 
     pub fn make_node_widget(&self, node_id: BjkNodeId, node: &BjkNode) -> NodeWidget {
         let mut rows = Vec::new();
+
+        /// Returns the color of a data type
+        fn data_type_color(data_type: DataType) -> Color32 {
+            match data_type {
+                DataType::Mesh => color!("#b43e3e"),
+                DataType::HeightMap => color!("#33673b"),
+                DataType::Vector => color!("#1A535C"),
+                DataType::Scalar => color!("#4ecdc4"),
+                DataType::Selection => color!("#f7fff7"),
+                DataType::String => color!("#ffe66d"),
+            }
+        }
+
         for input in &node.inputs {
             rows.push((
                 BjkParameter::new(node_id, input.name.clone()),
                 NodeWidgetRow {
                     input_port: Some(NodeWidgetPort {
-                        color: color!("#ff0000"),
+                        color: data_type_color(input.data_type),
                         // Set later, by the node editor, which does the event
                         // checking for ports.
                         hovered: false,
@@ -277,6 +290,7 @@ impl GraphEditor {
                     }),
                     contents: self.make_in_parameter_widget(node_id, input),
                     output_port: None,
+                    align: Align::Start,
                 },
             ));
         }
@@ -287,10 +301,11 @@ impl GraphEditor {
                     input_port: None,
                     contents: Text::new(output.name.clone()).build(),
                     output_port: Some(NodeWidgetPort {
-                        color: color!("#00ff00"),
+                        color: data_type_color(output.data_type),
                         hovered: false, // See above
                         data_type: output.data_type,
                     }),
+                    align: Align::End,
                 },
             ));
         }
@@ -447,9 +462,11 @@ impl GraphEditor {
                             min.unwrap_or(-f32::INFINITY).into()
                                 ..=max.unwrap_or(f32::INFINITY).into(),
                         )
+                        .layout_hints(LayoutHints::fill_horizontal())
                         .build(),
                 ],
             )
+            .layout_hints(LayoutHints::fill_horizontal())
             .separation(10.0)
             .build()
         } else {
@@ -478,7 +495,7 @@ impl GraphEditor {
                     }))
                     .scale_selector(Some(ScaleSelector::float_7vals()))
                     .speed(1.0)
-                    .layout_hints(LayoutHints::shrink())
+                    .layout_hints(LayoutHints::fill_horizontal())
                     .build()
                 }};
             }
@@ -495,6 +512,7 @@ impl GraphEditor {
                             component_drag_val!(z),
                         ],
                     )
+                    .layout_hints(LayoutHints::fill_horizontal())
                     .separation(0.0)
                     .build(),
                 ],
@@ -507,9 +525,9 @@ impl GraphEditor {
 }
 
 // WIP:
-// - [ ] Use human-friendly labels in nodes.
-// - [ ] Node widget alignment improvements.
-// - [ ] Use the color for data types.
+// - [x] Use human-friendly labels in nodes.
+// - [x] Node widget alignment improvements.
+// - [x] Use the color for data types.
 // - [ ] Top menubar
 // - [ ] Save / load system
 // - [ ] Display errors in a console

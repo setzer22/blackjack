@@ -37,6 +37,7 @@ pub struct NodeWidgetRow {
     pub input_port: Option<NodeWidgetPort>,
     pub contents: DynWidget,
     pub output_port: Option<NodeWidgetPort>,
+    pub align: Align,
 }
 
 pub struct NodeWidget {
@@ -123,19 +124,42 @@ impl Widget for NodeWidget {
             total_size: Vec2,
         }
 
+        // The largest minimum size for any row widget
+        let max_shrink_row_width = self
+            .rows
+            .iter_mut()
+            .map(|(_, row)| &mut row.contents.widget)
+            .chain(std::iter::once(&mut self.bottom_ui.widget))
+            .map(|widget| {
+                widget
+                    .layout(ctx, widget_id, available, true)
+                    .bounds
+                    .width()
+            })
+            .max_by(f32::total_cmp)
+            .unwrap_or(0.0);
+
         let mut cursor = Cursor {
             y_offset: self.v_separation,
-            available,
+            available: Vec2::new(max_shrink_row_width, available.y),
             total_size: Vec2::new(0.0, 0.0),
         };
 
-        let layout_widget = |w: &mut DynWidget, c: &mut Cursor| -> Layout {
+        let layout_widget = |w: &mut DynWidget, c: &mut Cursor, align: Align| -> Layout {
             let layout = w.widget.layout(ctx, widget_id, c.available, false);
             let size = layout.bounds.size();
             c.available -= Vec2::new(0.0, size.y + self.v_separation);
             c.total_size.x = c.total_size.x.max(size.x);
             c.total_size.y += size.y + self.v_separation;
-            let layout = layout.translated(Vec2::new(self.h_separation, c.y_offset));
+            let right_align_x_offset = match align {
+                Align::Start => 0.0,
+                Align::End => max_shrink_row_width - layout.bounds.width(),
+                Align::Center => (max_shrink_row_width - layout.bounds.width()) * 0.5,
+            };
+            let layout = layout.translated(Vec2::new(
+                self.h_separation + right_align_x_offset,
+                c.y_offset,
+            ));
             c.y_offset += size.y + self.v_separation;
             layout
         };
@@ -164,13 +188,13 @@ impl Widget for NodeWidget {
         // Layout row contents
         let mut row_contents = vec![];
         for (_, row) in &mut self.rows {
-            let row_layout = layout_widget(&mut row.contents, &mut cursor);
+            let row_layout = layout_widget(&mut row.contents, &mut cursor, row.align);
             row_contents.push(row_layout);
         }
 
         // Layout bottom UI
         cursor.y_offset += self.v_separation;
-        let bottom_ui_layout = layout_widget(&mut self.bottom_ui, &mut cursor);
+        let bottom_ui_layout = layout_widget(&mut self.bottom_ui, &mut cursor, Align::Start);
 
         // Layout titlebar
         let trl_width = title_right_layout.bounds.width();
