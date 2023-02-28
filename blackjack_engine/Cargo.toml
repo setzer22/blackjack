@@ -12,7 +12,9 @@ authors = ["setzer22"]
 
 [features]
 tracy = ["profiling/profile-with-tracy"]
-sync = []
+# The sync feature enables the HalfEdgeMesh and other associated types to be conditionally
+# compiled with Send + Sync counterparts to the normal indirection types that are used.
+sync = ["atomic_refcell"]
 
 [dependencies]
 # Workspace dependencies
@@ -45,4 +47,4 @@ derive_more = "0.99"
 inventory = "0.3.0"
 ndarray = "0.15.6"
 ron = "0.7"
-atomic_refcell = "0.1.9"
+atomic_refcell = { version = "0.1.9", optional = true }

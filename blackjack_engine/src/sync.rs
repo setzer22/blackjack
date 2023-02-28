@@ -16,7 +16,6 @@ use atomic_refcell::{AtomicRef, AtomicRefCell, AtomicRefMut};
 use std::sync::Arc;
 
 #[cfg(feature = "sync")]
-// pub struct InteriorMutable<T>(RwLock<T>);
 pub type InteriorMutable<T> = AtomicRefCell<T>;
 
 #[cfg(not(feature = "sync"))]

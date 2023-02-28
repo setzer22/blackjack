@@ -4,13 +4,12 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-use std::{
-    marker::PhantomData,
-    rc::Rc,
+use std::{marker::PhantomData, rc::Rc};
+
+use crate::{
+    prelude::*,
+    sync::{BorrowedRef, InteriorMutable, MutableRef},
 };
-
-use crate::{prelude::*, sync::{InteriorMutable, BorrowedRef, MutableRef}};
-
 
 use glam::*;
 use itertools::Itertools;
@@ -54,8 +53,6 @@ pub mod channels;
 pub use channels::*;
 
 use self::mappings::MeshMapping;
-
-
 
 /// HalfEdge meshes are a type of linked list. This means it is sometimes
 /// impossible to ensure some algorithms will terminate when the mesh is
@@ -156,7 +153,7 @@ pub struct MeshGenerationConfig {
 }
 
 #[derive(Debug)]
-#[cfg_attr(not(feature = "sync"), derive(Clone))] // TODO I don't know if this is right.
+#[cfg_attr(not(feature = "sync"), derive(Clone))]
 pub struct HalfEdgeMesh {
     connectivity: InteriorMutable<MeshConnectivity>,
     pub channels: MeshChannels,

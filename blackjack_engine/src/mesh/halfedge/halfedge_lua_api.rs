@@ -5,7 +5,10 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 use super::*;
-use crate::{lua_engine::{lua_stdlib::LVec3, ToLuaError}, sync::RefCounted};
+use crate::{
+    lua_engine::{lua_stdlib::LVec3, ToLuaError},
+    sync::RefCounted,
+};
 use mlua::{Function, Lua, ToLua, Value};
 
 #[blackjack_macros::blackjack_lua_module]
