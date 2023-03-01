@@ -3,12 +3,17 @@ use std::time::{Duration, Instant};
 use blackjack_engine::graph_interpreter::run_graph;
 use egui_wgpu::RenderState;
 use graph_editor::GraphEditor;
-use guee::{callback_accessor::CallbackAccessor, painter::ExtraFont, prelude::*};
+use guee::{
+    callback_accessor::CallbackAccessor, extension_traits::Color32Ext, painter::ExtraFont,
+    prelude::*,
+};
 use viewport_3d::Viewport3d;
 use winit::{
     event_loop::{ControlFlow, EventLoop},
     window::WindowBuilder,
 };
+
+use crate::blackjack_theme::pallette;
 
 pub mod blackjack_theme;
 
@@ -40,12 +45,12 @@ impl AppState {
         fn panel(key: &str) -> DynWidget {
             ColoredBox::new(IdGen::key(key))
                 .hints(LayoutHints::fill())
-                .fill(color!("#191919"))
-                .stroke(Stroke::new(1.0, color!("#9b9b9b")))
+                .fill(color!("#19191933"))
+                .stroke(Stroke::new(0.5, color!("#9b9b9b")))
                 .build()
         }
 
-        StackContainer::new(
+        let main_view = StackContainer::new(
             IdGen::key("stack"),
             vec![
                 // Background
@@ -84,6 +89,26 @@ impl AppState {
                     .build(),
                 ),
             ],
+        )
+        .build();
+
+        let menubar_offset = Vec2::new(0.0, 24.0);
+        let top_menubar = ColoredBox::background(pallette().widget_bg_dark)
+            .min_size(menubar_offset)
+            .hints(LayoutHints::fill_horizontal())
+            .stroke(Stroke {
+                width: 2.0,
+                color: pallette().widget_bg_dark.lighten(1.1),
+            })
+            .build();
+
+        StackContainer::new(
+            // NOTE: Can't use a BoxContainer::vertical here because:
+            // - We don't want two-pass layout at the top-level of our view
+            // - Some of the top-level widgets don't support being drawin inside
+            //   a flex container
+            IdGen::key("blackjack"),
+            vec![(menubar_offset, main_view), (Vec2::ZERO, top_menubar)],
         )
         .build()
     }
