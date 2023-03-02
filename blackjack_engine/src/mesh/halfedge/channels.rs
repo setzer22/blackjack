@@ -4,17 +4,12 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-use std::{
-    any::Any,
-    cell::{Ref, RefCell, RefMut},
-    collections::BTreeMap,
-    fmt::Debug,
-    marker::PhantomData,
-    ops::Deref,
-    rc::Rc,
-};
+use std::{any::Any, collections::BTreeMap, fmt::Debug, marker::PhantomData, ops::Deref, rc::Rc};
 
-use crate::lua_engine::lua_stdlib;
+use crate::{
+    lua_engine::lua_stdlib,
+    sync::{BorrowedRef, InteriorMutable, MaybeSync, MutableRef, RefCounted},
+};
 use glam::Vec3;
 use mlua::{FromLua, Lua, ToLua};
 
@@ -24,7 +19,7 @@ use super::*;
 /// to. It can be Vertices, HalfEdges or Faces, and the `ChannelKey` is the
 /// corresponding id type.
 pub trait ChannelKey:
-    slotmap::Key + Default + Debug + Clone + Copy + Sized + FromToLua + 'static
+    slotmap::Key + Default + Debug + Clone + Copy + Sized + FromToLua + MaybeSync + 'static
 {
     fn key_type() -> ChannelKeyType;
     fn name() -> &'static str;
@@ -44,6 +39,7 @@ macro_rules! impl_channel_key {
                 Self::from(slotmap::KeyData::from_ffi(x))
             }
         }
+        impl MaybeSync for $t {}
     };
 }
 impl_channel_key!(VertexId);
@@ -76,7 +72,7 @@ impl Introspect for bool {
 /// The value of a channel is the data that is associated to a specific key.
 /// Values can be scalars (f32) or vectors (Vec3).
 pub trait ChannelValue:
-    Default + Debug + Clone + Copy + Sized + FromToLua + Introspect + 'static
+    Default + Debug + Clone + Copy + Sized + FromToLua + Introspect + MaybeSync + 'static
 {
     fn value_type() -> ChannelValueType;
     fn name() -> &'static str;
@@ -92,6 +88,7 @@ macro_rules! impl_channel_value {
                 stringify!($t)
             }
         }
+        impl MaybeSync for $t {}
     };
 }
 impl_channel_value!(Vec3);
@@ -216,8 +213,10 @@ impl<K: ChannelKey, V: ChannelValue> ChannelId<K, V> {
 #[derive(Debug)]
 pub struct ChannelGroup<K: ChannelKey, V: ChannelValue> {
     channel_names: bimap::BiMap<String, ChannelId<K, V>>,
-    channels: SlotMap<RawChannelId, Rc<RefCell<Channel<K, V>>>>,
+    channels: SlotMap<RawChannelId, RefCounted<InteriorMutable<Channel<K, V>>>>,
 }
+
+impl<K: ChannelKey, V: ChannelValue> MaybeSync for ChannelGroup<K, V> {}
 
 /// The [`MeshChannels`] are one part of a [`HalfEdgeMesh`]. This struct stores
 /// an heterogeneous group of channel groups, with potentially one
@@ -506,7 +505,7 @@ impl<K: ChannelKey, V: ChannelValue> ChannelGroup<K, V> {
     /// - Is borrowed somewhere else (via a cloned Rc)
     pub fn remove_channel(&mut self, id: ChannelId<K, V>) -> Result<Channel<K, V>> {
         self.channel_names.remove_by_right(&id);
-        Ok(Rc::try_unwrap(
+        Ok(RefCounted::try_unwrap(
             self.channels
                 .remove(id.raw)
                 .ok_or_else(|| anyhow!("Non-existing channel cannot be removed"))?,
@@ -531,7 +530,7 @@ impl<K: ChannelKey, V: ChannelValue> ChannelGroup<K, V> {
 
     /// Accesses a channel immutably. The operation may fail if that channel is
     /// already mutably borrowed following the RefCell semantics.
-    pub fn read_channel(&self, ch_id: ChannelId<K, V>) -> Result<Ref<Channel<K, V>>> {
+    pub fn read_channel(&self, ch_id: ChannelId<K, V>) -> Result<BorrowedRef<Channel<K, V>>> {
         self.channels
             .get(ch_id.raw)
             .ok_or_else(|| anyhow!("Channel {ch_id:?} does not exist for this mesh"))?
@@ -541,7 +540,7 @@ impl<K: ChannelKey, V: ChannelValue> ChannelGroup<K, V> {
 
     /// Accesses a channel immutably. The operation may fail if that channel is
     /// already borrowed following the RefCell semantics.
-    pub fn write_channel(&self, ch_id: ChannelId<K, V>) -> Result<RefMut<Channel<K, V>>> {
+    pub fn write_channel(&self, ch_id: ChannelId<K, V>) -> Result<MutableRef<Channel<K, V>>> {
         self.channels
             .get(ch_id.raw)
             .ok_or_else(|| anyhow!("Channel {ch_id:?} does not exist for this mesh"))?
@@ -551,7 +550,7 @@ impl<K: ChannelKey, V: ChannelValue> ChannelGroup<K, V> {
 }
 
 /// This trait is the dynamic API of a [`ChannelGroup`]
-pub trait DynChannelGroup: Any + Debug + dyn_clone::DynClone {
+pub trait DynChannelGroup: Any + Debug + dyn_clone::DynClone + MaybeSync {
     /// Used to inspect the contents of this `ChannelGroup`, for UI display
     fn introspect(&self, keys: &[slotmap::KeyData]) -> BTreeMap<String, Vec<String>>;
     /// Casts this channel group into a `dyn Any`. This hack is required to get
@@ -562,15 +561,15 @@ pub trait DynChannelGroup: Any + Debug + dyn_clone::DynClone {
     /// Same as `ensure_channel`, but with erased types.
     fn ensure_channel_dyn(&mut self, name: &str) -> RawChannelId;
     /// Same as `read_channel`, but with erased types.
-    fn read_channel_dyn(&self, raw_id: RawChannelId) -> Ref<dyn DynChannel>;
+    fn read_channel_dyn(&self, raw_id: RawChannelId) -> BorrowedRef<dyn DynChannel>;
     /// Same as `write_channel`, but with erased types.
-    fn write_channel_dyn(&self, raw_id: RawChannelId) -> RefMut<dyn DynChannel>;
+    fn write_channel_dyn(&self, raw_id: RawChannelId) -> MutableRef<dyn DynChannel>;
     /// Same as `channel_id`, but with erased types.
     fn channel_id_dyn(&self, name: &str) -> Option<RawChannelId>;
     /// Returns a shared ownership borrow of the channel. This uses reference
     /// counting and allows storing the channel as a long-lived value. This can
     /// be used to hand channels over to the Lua runtime.
-    fn channel_rc_dyn(&self, raw_id: RawChannelId) -> Rc<RefCell<dyn DynChannel>>;
+    fn channel_rc_dyn(&self, raw_id: RawChannelId) -> RefCounted<InteriorMutable<dyn DynChannel>>;
     /// Returns the names of the channels present in this group
     fn channel_names(&self) -> Box<dyn Iterator<Item = &str> + '_>;
 }
@@ -586,7 +585,7 @@ impl<K: ChannelKey, V: ChannelValue> Clone for ChannelGroup<K, V> {
             // Also note that this implies cloning a mesh will panic if someone
             // is *writing* to that mesh.
             let ch_inner: Channel<K, V> = ch.borrow().clone();
-            *ch = Rc::new(RefCell::new(ch_inner.clone()))
+            *ch = RefCounted::new(InteriorMutable::new(ch_inner.clone()))
         }
         Self {
             channel_names: self.channel_names.clone(),
@@ -625,21 +624,23 @@ impl<K: ChannelKey, V: ChannelValue> DynChannelGroup for ChannelGroup<K, V> {
     fn ensure_channel_dyn(&mut self, name: &str) -> RawChannelId {
         self.ensure_channel(name).raw
     }
-    fn read_channel_dyn(&self, raw_id: RawChannelId) -> Ref<dyn DynChannel> {
-        self.channels[raw_id].borrow()
+    fn read_channel_dyn(&self, raw_id: RawChannelId) -> BorrowedRef<dyn DynChannel> {
+        let borrowed_ref = self.channels[raw_id].borrow();
+        BorrowedRef::map(borrowed_ref, |k| k as &dyn DynChannel)
     }
-    fn write_channel_dyn(&self, raw_id: RawChannelId) -> RefMut<dyn DynChannel> {
-        self.channels[raw_id].borrow_mut()
+    fn write_channel_dyn(&self, raw_id: RawChannelId) -> MutableRef<dyn DynChannel> {
+        let mutable_ref = self.channels[raw_id].borrow_mut();
+        MutableRef::map(mutable_ref, |k| k as &mut dyn DynChannel)
     }
-    fn channel_rc_dyn(&self, raw_id: RawChannelId) -> Rc<RefCell<dyn DynChannel>> {
+    fn channel_rc_dyn(&self, raw_id: RawChannelId) -> RefCounted<InteriorMutable<dyn DynChannel>> {
         // This standalone function is needed to help the compiler convert
         // between a typed Rc and the dynamic one.
         pub fn convert_channel<K: ChannelKey, V: ChannelValue>(
-            it: Rc<RefCell<Channel<K, V>>>,
-        ) -> Rc<RefCell<dyn DynChannel>> {
+            it: RefCounted<InteriorMutable<Channel<K, V>>>,
+        ) -> RefCounted<InteriorMutable<dyn DynChannel>> {
             it
         }
-        convert_channel(Rc::clone(&self.channels[raw_id]))
+        convert_channel(RefCounted::clone(&self.channels[raw_id]))
     }
     fn channel_id_dyn(&self, name: &str) -> Option<RawChannelId> {
         self.channel_names.get_by_left(name).map(|x| x.raw)
@@ -725,7 +726,7 @@ impl MeshChannels {
     pub fn read_channel<K: ChannelKey, V: ChannelValue>(
         &self,
         ch_id: ChannelId<K, V>,
-    ) -> Result<Ref<Channel<K, V>>> {
+    ) -> Result<BorrowedRef<Channel<K, V>>> {
         self.group()?.read_channel(ch_id)
     }
 
@@ -734,7 +735,7 @@ impl MeshChannels {
     pub fn read_channel_by_name<K: ChannelKey, V: ChannelValue>(
         &self,
         name: &str,
-    ) -> Result<Ref<Channel<K, V>>> {
+    ) -> Result<BorrowedRef<Channel<K, V>>> {
         let group = self.group()?;
         group.read_channel(
             group
@@ -747,7 +748,7 @@ impl MeshChannels {
     pub fn write_channel<K: ChannelKey, V: ChannelValue>(
         &self,
         ch_id: ChannelId<K, V>,
-    ) -> Result<RefMut<Channel<K, V>>> {
+    ) -> Result<MutableRef<Channel<K, V>>> {
         self.group()?.write_channel(ch_id)
     }
 
@@ -756,7 +757,7 @@ impl MeshChannels {
     pub fn write_channel_by_name<K: ChannelKey, V: ChannelValue>(
         &self,
         name: &str,
-    ) -> Result<RefMut<Channel<K, V>>> {
+    ) -> Result<MutableRef<Channel<K, V>>> {
         let group = self.group()?;
         group.write_channel(
             group
@@ -819,7 +820,7 @@ impl MeshChannels {
         kty: ChannelKeyType,
         vty: ChannelValueType,
         id: RawChannelId,
-    ) -> Result<Ref<dyn DynChannel>> {
+    ) -> Result<BorrowedRef<dyn DynChannel>> {
         let group = self
             .channels
             .get(&(kty, vty))
@@ -834,7 +835,7 @@ impl MeshChannels {
         kty: ChannelKeyType,
         vty: ChannelValueType,
         id: RawChannelId,
-    ) -> Result<RefMut<dyn DynChannel>> {
+    ) -> Result<MutableRef<dyn DynChannel>> {
         let group = self
             .channels
             .get(&(kty, vty))
@@ -849,7 +850,7 @@ impl MeshChannels {
         kty: ChannelKeyType,
         vty: ChannelValueType,
         name: &str,
-    ) -> Result<Ref<dyn DynChannel>> {
+    ) -> Result<BorrowedRef<dyn DynChannel>> {
         let group = self
             .channels
             .get(&(kty, vty))
@@ -867,7 +868,7 @@ impl MeshChannels {
         kty: ChannelKeyType,
         vty: ChannelValueType,
         name: &str,
-    ) -> Result<RefMut<dyn DynChannel>> {
+    ) -> Result<MutableRef<dyn DynChannel>> {
         let group = self
             .channels
             .get(&(kty, vty))
@@ -885,7 +886,7 @@ impl MeshChannels {
         kty: ChannelKeyType,
         vty: ChannelValueType,
         name: &str,
-    ) -> Result<Rc<RefCell<dyn DynChannel>>> {
+    ) -> Result<RefCounted<InteriorMutable<dyn DynChannel>>> {
         let group = self
             .channels
             .get(&(kty, vty))

@@ -5,7 +5,10 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 use super::*;
-use crate::lua_engine::{lua_stdlib::LVec3, ToLuaError};
+use crate::{
+    lua_engine::{lua_stdlib::LVec3, ToLuaError},
+    sync::RefCounted,
+};
 use mlua::{Function, Lua, ToLua, Value};
 
 #[blackjack_macros::blackjack_lua_module]
@@ -475,10 +478,10 @@ fn mesh_reduce<'lua>(
     Ok(acc)
 }
 
-pub struct SharedChannel(pub Rc<RefCell<dyn DynChannel>>);
+pub struct SharedChannel(pub RefCounted<InteriorMutable<dyn DynChannel>>);
 impl Clone for SharedChannel {
     fn clone(&self) -> Self {
-        Self(Rc::clone(&self.0))
+        Self(RefCounted::clone(&self.0))
     }
 }
 
