@@ -2,7 +2,7 @@ use std::any::type_name;
 
 use blackjack_engine::{
     graph::{BjkNodeId, DataType},
-    graph_interpreter::BjkParameter,
+    graph_interpreter::BjkInputParameter,
 };
 use epaint::{CircleShape, RectShape, Rounding};
 use guee::{input::MouseButton, prelude::*};
@@ -22,7 +22,8 @@ pub enum PortIdKind {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PortId {
-    pub param: BjkParameter,
+    pub node_id: BjkNodeId,
+    pub param_name: String,
     pub side: PortIdKind,
     pub data_type: DataType,
 }
@@ -46,7 +47,7 @@ pub struct NodeWidget {
     pub titlebar_left: DynWidget,
     pub titlebar_right: DynWidget,
     pub bottom_ui: DynWidget,
-    pub rows: Vec<(BjkParameter, NodeWidgetRow)>,
+    pub rows: Vec<(PortId, NodeWidgetRow)>,
 
     pub v_separation: f32,
     pub h_separation: f32,
@@ -79,12 +80,12 @@ impl NodeWidget {
     pub fn port_visuals(
         &self,
         layout: &Layout,
-        param: &BjkParameter,
+        port: &PortId,
     ) -> (Option<(Pos2, Color32)>, Option<(Pos2, Color32)>) {
         let (row_idx, (_, row)) = self
             .rows
             .iter()
-            .find_position(|(p, _row)| p == param)
+            .find_position(|(p, _row)| p == port)
             .expect("Invalid param");
         let row_bounds = layout.children[row_idx + 2].bounds;
         let node_bounds = layout.bounds;

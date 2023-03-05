@@ -3,15 +3,14 @@ use std::time::{Duration, Instant};
 use blackjack_engine::graph_interpreter::run_graph;
 use egui_wgpu::RenderState;
 use graph_editor::GraphEditor;
-use guee::{
-    callback_accessor::CallbackAccessor, extension_traits::Color32Ext, painter::ExtraFont,
-    prelude::*,
-};
+use guee::base_widgets::menubar_button::MenubarButton;
+use guee::callback_accessor::CallbackAccessor;
+use guee::extension_traits::Color32Ext;
+use guee::painter::ExtraFont;
+use guee::prelude::*;
 use viewport_3d::Viewport3d;
-use winit::{
-    event_loop::{ControlFlow, EventLoop},
-    window::WindowBuilder,
-};
+use winit::event_loop::{ControlFlow, EventLoop};
+use winit::window::WindowBuilder;
 
 use crate::blackjack_theme::pallette;
 
@@ -25,9 +24,18 @@ pub mod viewport_3d;
 
 pub mod renderer;
 
+pub mod serialization;
+
+pub enum RootAction {
+    Save,
+    Load,
+}
+
 pub struct AppState {
     graph_editor: GraphEditor,
     viewport_3d: Viewport3d,
+    cba: CallbackAccessor<Self>,
+    pending_actions: Vec<RootAction>,
 }
 
 impl AppState {
@@ -36,6 +44,8 @@ impl AppState {
         Self {
             graph_editor: GraphEditor::new(cba.drill_down(|this| &mut this.graph_editor)),
             viewport_3d: Viewport3d::new(render_ctx, cba.drill_down(|this| &mut this.viewport_3d)),
+            pending_actions: Vec::new(),
+            cba,
         }
     }
 }
@@ -93,28 +103,89 @@ impl AppState {
         .build();
 
         let menubar_offset = Vec2::new(0.0, 24.0);
-        let top_menubar = ColoredBox::background(pallette().widget_bg_dark)
-            .min_size(menubar_offset)
-            .hints(LayoutHints::fill_horizontal())
-            .stroke(Stroke {
-                width: 2.0,
-                color: pallette().widget_bg_dark.lighten(1.1),
-            })
-            .build();
+        let top_menubar = StackContainer::new(
+            IdGen::key("top_menubar"),
+            vec![
+                (
+                    Vec2::ZERO,
+                    ColoredBox::background(pallette().widget_bg_dark)
+                        .min_size(menubar_offset)
+                        .hints(LayoutHints::fill_horizontal())
+                        .stroke(Stroke {
+                            width: 2.0,
+                            color: pallette().widget_bg_dark.lighten(1.1),
+                        })
+                        .build(),
+                ),
+                (
+                    Vec2::ZERO,
+                    BoxContainer::horizontal(
+                        IdGen::key("h"),
+                        vec![MenubarButton::new(
+                            IdGen::key("b"),
+                            "File".into(),
+                            vec!["Save 'Jack' As".into(), "Load 'Jack'".into()],
+                        )
+                        .on_option_selected(self.cba.callback(|app_state, idx| match idx {
+                            0 => app_state.pending_actions.push(RootAction::Save),
+                            1 => app_state.pending_actions.push(RootAction::Load),
+                            _ => unreachable!(),
+                        }))
+                        .menu_min_width(150.0)
+                        .build()],
+                    )
+                    .build(),
+                ),
+            ],
+        )
+        .build();
 
         StackContainer::new(
             // NOTE: Can't use a BoxContainer::vertical here because:
             // - We don't want two-pass layout at the top-level of our view
-            // - Some of the top-level widgets don't support being drawin inside
-            //   a flex container
+            // - Some of the top-level widgets don't support being drawin inside a flex container
             IdGen::key("blackjack"),
-            vec![(menubar_offset, main_view), (Vec2::ZERO, top_menubar)],
+            vec![(Vec2::ZERO, top_menubar), (menubar_offset, main_view)],
         )
         .build()
     }
 
     fn update(&mut self, _context: &Context) {
-        let renderable = if let Some(active_node) = self.graph_editor.active_node {
+        for root_action in self.pending_actions.drain(..) {
+            match root_action {
+                RootAction::Save => {
+                    let file_location = rfd::FileDialog::new()
+                        .set_file_name("Untitled.bjk")
+                        .add_filter("Blackjack Models", &["bjk"])
+                        .save_file();
+                    if let Some(path) = file_location {
+                        // TODO: Improve error notifications
+                        match serialization::save(&path, &self.graph_editor) {
+                            Ok(_) => (),
+                            Err(err) => {
+                                println!("Error when saving: {err}");
+                            }
+                        }
+                    }
+                }
+                RootAction::Load => {
+                    let file_location = rfd::FileDialog::new()
+                        .add_filter("Blackjack Models", &["bjk"])
+                        .pick_file();
+                    if let Some(path) = file_location {
+                        // TODO: Improve error notifications
+                        match serialization::load(&path, &mut self.graph_editor) {
+                            Ok(_) => (),
+                            Err(err) => {
+                                println!("Error when loading: {err}");
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        let renderable = if let Some(active_node) = self.graph_editor.graph.default_node {
             // TODO: Change detection
             self.graph_editor.external_parameters.fill_defaults(
                 &self.graph_editor.graph,

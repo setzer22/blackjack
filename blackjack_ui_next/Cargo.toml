@@ -26,3 +26,4 @@ glam = "0.21.2"
 bytemuck = { version = "1.7", features = ["derive"] }
 image = { version = "0.24", default-features = false, features = ["png"] }
 spin_sleep = "1.0.0"
+rfd = { version = "0.9.1", default-features = false, features = ["xdg-portal"] }

@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 use slotmap::{SecondaryMap, SlotMap};
 
 use crate::{
-    graph_interpreter::{BjkParameter, ExternalParameterValues},
+    graph_interpreter::{BjkInputParameter, ExternalParameterValues},
     prelude::selection::SelectionExpression,
 };
 
@@ -330,7 +330,7 @@ impl SerializedExternalParameters {
         let mut param_values = HashMap::new();
         for (loc, value) in external_param_values.0 {
             if let Some(val) = SerializedBlackjackValue::from_runtime(value.clone()) {
-                let BjkParameter {
+                let BjkInputParameter {
                     node_id,
                     param_name,
                 } = loc;
@@ -590,7 +590,7 @@ impl SerializedExternalParameters {
                 .into_iter()
                 .map(|(param, value)| {
                     Ok((
-                        BjkParameter {
+                        BjkInputParameter {
                             node_id: mappings.get_id(param.node_idx)?,
                             param_name: param.param_name,
                         },

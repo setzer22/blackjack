@@ -6,7 +6,7 @@ use blackjack_engine::{
         BjkGraph, BjkNode, BjkNodeId, BlackjackValue, DataType, DependencyKind, InputDefinition,
         InputParameter, InputValueConfig,
     },
-    graph_interpreter::{BjkParameter, ExternalParameterValues},
+    graph_interpreter::{BjkInputParameter, ExternalParameterValues},
     lua_engine::LuaRuntime,
 };
 use epaint::{ahash::HashSet, Vec2};
@@ -44,7 +44,6 @@ pub struct GraphEditor {
     pub node_order: Vec<BjkNodeId>,
     pub external_parameters: ExternalParameterValues,
     pub node_finder: Option<NodeFinder>,
-    pub active_node: Option<BjkNodeId>,
     pub cba: CallbackAccessor<Self>,
 }
 
@@ -61,7 +60,6 @@ impl GraphEditor {
             top_left: Pos2::ZERO,
             pan_zoom: PanZoom::default(),
             node_finder: None,
-            active_node: None,
             graph: BjkGraph::new(),
             cba,
         }
@@ -81,7 +79,7 @@ impl GraphEditor {
     }
 
     pub fn remove_node(&mut self, node: BjkNodeId) {
-        if self.active_node == Some(node) {
+        if self.graph.default_node == Some(node) {
             // Heuristic: When removing the active node, look for the previous
             // node connected to the one that got deleted, and activate it.
             let old_node = &self.graph.nodes[node];
@@ -89,7 +87,7 @@ impl GraphEditor {
                 match &input.kind {
                     DependencyKind::External { .. } => (),
                     DependencyKind::Connection { node, .. } => {
-                        self.active_node = Some(*node);
+                        self.graph.default_node = Some(*node);
                         break;
                     }
                 }
@@ -153,12 +151,14 @@ impl GraphEditor {
 
                         connections.push((
                             PortId {
-                                param: BjkParameter::new(node_id, input.name.clone()),
+                                node_id,
+                                param_name: input.name.clone(),
                                 side: PortIdKind::Input,
                                 data_type: input.data_type,
                             },
                             PortId {
-                                param: BjkParameter::new(*other_node_id, other_param.name.clone()),
+                                node_id: *other_node_id,
+                                param_name: other_param.name.clone(),
                                 side: PortIdKind::Output,
                                 data_type: other_param.data_type,
                             },
@@ -180,18 +180,13 @@ impl GraphEditor {
         .on_connection(self.cba.callback(|editor, conn: Connection| {
             editor
                 .graph
-                .add_connection(
-                    conn.output.node_id,
-                    &conn.output.param_name,
-                    conn.input.node_id,
-                    &conn.input.param_name,
-                )
+                .add_connection(conn.output.0, &conn.output.1, conn.input.0, &conn.input.1)
                 .expect("Should not fail");
         }))
         .on_disconnection(self.cba.callback(|editor, disc: Disconnection| {
             editor
                 .graph
-                .remove_connection(disc.input.node_id, &disc.input.param_name)
+                .remove_connection(disc.input.0, &disc.input.1)
                 .expect("Should not fail");
         }))
         .on_node_raised(self.cba.callback(|editor, node_id| {
@@ -286,7 +281,12 @@ impl GraphEditor {
 
         for input in &node.inputs {
             rows.push((
-                BjkParameter::new(node_id, input.name.clone()),
+                PortId {
+                    node_id,
+                    param_name: input.name.clone(),
+                    side: PortIdKind::Input,
+                    data_type: input.data_type,
+                },
                 NodeWidgetRow {
                     input_port: Some(NodeWidgetPort {
                         color: data_type_color(input.data_type),
@@ -303,7 +303,12 @@ impl GraphEditor {
         }
         for output in &node.outputs {
             rows.push((
-                BjkParameter::new(node_id, output.name.clone()),
+                PortId {
+                    node_id,
+                    param_name: output.name.clone(),
+                    side: PortIdKind::Output,
+                    data_type: output.data_type,
+                },
                 NodeWidgetRow {
                     input_port: None,
                     contents: Text::new(output.name.clone()).build(),
@@ -318,9 +323,9 @@ impl GraphEditor {
         }
 
         let set_active_cb = self.cba.callback(move |editor, _| {
-            editor.active_node = Some(node_id);
+            editor.graph.default_node = Some(node_id);
         });
-        let bottom_ui = if self.active_node == Some(node_id) {
+        let bottom_ui = if self.graph.default_node == Some(node_id) {
             Button::with_label("👁 Active")
                 .padding(Vec2::new(5.0, 3.0))
                 .on_click(set_active_cb)
@@ -382,7 +387,7 @@ impl GraphEditor {
     ) -> DynWidget {
         let name_label = Text::new(input.name.clone()).build();
         let op_name = &self.graph.nodes[node_id].op_name;
-        let param = BjkParameter::new(node_id, input.name.clone());
+        let param = BjkInputParameter::new(node_id, input.name.clone());
         match &input.kind {
             DependencyKind::External { promoted: _ } => match input.data_type {
                 DataType::Vector => self.make_vector_param_widget(&param, op_name),
@@ -401,7 +406,7 @@ impl GraphEditor {
 
     pub fn get_current_param_value(
         &self,
-        param: &BjkParameter,
+        param: &BjkInputParameter,
         op_name: &str,
     ) -> anyhow::Result<(BlackjackValue, impl Deref<Target = InputDefinition> + '_)> {
         if let Some(input_def) = self
@@ -419,7 +424,7 @@ impl GraphEditor {
         }
     }
 
-    pub fn make_scalar_param_widget(&self, param: &BjkParameter, op_name: &str) -> DynWidget {
+    pub fn make_scalar_param_widget(&self, param: &BjkInputParameter, op_name: &str) -> DynWidget {
         if let Ok((BlackjackValue::Scalar(current), input_def)) =
             self.get_current_param_value(param, op_name)
         {
@@ -481,7 +486,7 @@ impl GraphEditor {
         }
     }
 
-    pub fn make_vector_param_widget(&self, param: &BjkParameter, op_name: &str) -> DynWidget {
+    pub fn make_vector_param_widget(&self, param: &BjkInputParameter, op_name: &str) -> DynWidget {
         if let Ok((BlackjackValue::Vector(current), _input_def)) =
             self.get_current_param_value(param, op_name)
         {

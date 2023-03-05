@@ -13,12 +13,12 @@ use crate::lua_engine::{ProgramResult, RenderableThing};
 use crate::prelude::*;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, PartialOrd, Ord)]
-pub struct BjkParameter {
+pub struct BjkInputParameter {
     pub node_id: BjkNodeId,
     pub param_name: String,
 }
 
-impl BjkParameter {
+impl BjkInputParameter {
     pub fn new(node_id: BjkNodeId, param_name: String) -> Self {
         Self {
             node_id,
@@ -28,7 +28,7 @@ impl BjkParameter {
 }
 
 #[derive(Debug, Default, Clone)]
-pub struct ExternalParameterValues(pub HashMap<BjkParameter, BlackjackValue>);
+pub struct ExternalParameterValues(pub HashMap<BjkInputParameter, BlackjackValue>);
 
 impl ExternalParameterValues {
     /// Fills any non-set external parameters to their default values
@@ -37,7 +37,7 @@ impl ExternalParameterValues {
             for input in &node.inputs {
                 match input.kind {
                     DependencyKind::External { .. } => {
-                        let param = BjkParameter::new(node_id, input.name.clone());
+                        let param = BjkInputParameter::new(node_id, input.name.clone());
                         if !self.0.contains_key(&param) {
                             let default = node_definitions
                                 .input_def(&node.op_name, &param.param_name)
@@ -136,7 +136,7 @@ pub fn run_node<'lua>(
     // Used to allow the gizmo input function to update a node's parameters.
     // This is None when gizmos don't run to optimize performance
     let mut referenced_external_params = if ctx.gizmo_state.is_some() {
-        Some(Vec::<BjkParameter>::new())
+        Some(Vec::<BjkInputParameter>::new())
     } else {
         None
     };
@@ -161,7 +161,7 @@ pub fn run_node<'lua>(
                 )?;
             }
             DependencyKind::External { promoted: _ } => {
-                let ext = BjkParameter::new(node_id, input.name.clone());
+                let ext = BjkInputParameter::new(node_id, input.name.clone());
                 let val = ctx.external_param_values.0.get(&ext).ok_or_else(|| {
                     anyhow!(
                         "Could not retrieve external parameter named '{}' from node {}",

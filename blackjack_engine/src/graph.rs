@@ -22,7 +22,7 @@ pub struct LuaExpression(pub String);
 
 /// A node has inputs (dependencies) that need to be met. A dependency can be
 /// met in three different ways.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum DependencyKind {
     /// Taking the value of an external parameter, from the inputs to the graph
     /// function itself.
@@ -117,7 +117,7 @@ impl<'lua> FromLua<'lua> for BlackjackValue {
 
 /// An input parameter in the graph. Inputs represent data dependencies that
 /// need to be met before executing a node.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct InputParameter {
     pub name: String,
     pub data_type: DataType,
@@ -126,14 +126,14 @@ pub struct InputParameter {
 
 /// An output parameter. Outputs are pieces of data produced by a node, which
 /// can be used to feed into another nodes as inputs.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Output {
     pub name: String,
     pub data_type: DataType,
 }
 
 /// A node in the blackjack graph
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BjkNode {
     pub op_name: String,
     /// When this node is the target of a graph, this stores the name of the
@@ -154,7 +154,7 @@ impl BjkNodeId {
 /// blackjack procedural asset, or 'Jack'. Graphs describe a computation to be
 /// performed by applying transformations (nodes) over data (input/output
 /// parameters).
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct BjkGraph {
     pub nodes: SlotMap<BjkNodeId, BjkNode>,
     /// When the graph is run, this is the node that will be executed by default.

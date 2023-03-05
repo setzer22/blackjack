@@ -1,5 +1,11 @@
-use epaint::Color32;
-use guee::{base_widgets::split_pane_container::SplitPaneContainerStyle, prelude::*};
+use epaint::{Color32, Rounding};
+use guee::{
+    base_widgets::{
+        menubar_button::{MenubarButton, MenubarButtonStyle},
+        split_pane_container::SplitPaneContainerStyle,
+    },
+    prelude::*,
+};
 
 pub struct BlackjackPallette {
     pub widget_bg: Color32,
@@ -37,12 +43,18 @@ pub fn pallette() -> BlackjackPallette {
 pub fn blackjack_theme() -> Theme {
     let mut theme = Theme::new_empty();
     let pallette = pallette();
-    theme.set_style::<Button>(ButtonStyle::with_base_colors(
-        pallette.widget_bg,
-        Stroke::NONE,
-        1.1,
-        1.3,
-    ));
+    let button_style = ButtonStyle::with_base_colors(pallette.widget_bg, Stroke::NONE, 1.1, 1.3);
+    theme.set_style::<Button>(button_style);
+
+    let mut menubar_button_style =
+        ButtonStyle::with_base_colors(pallette.accent, Stroke::NONE, 1.1, 1.3);
+    menubar_button_style.idle_fill = pallette.widget_bg;
+    theme.set_style::<MenubarButton>(MenubarButtonStyle {
+        outer_button: menubar_button_style.clone().rounding(Rounding::same(0.0)),
+        inner_button: menubar_button_style,
+        menu_fill: pallette.widget_bg_dark,
+        menu_stroke: Stroke::new(1.0, pallette.widget_bg_light),
+    });
 
     theme.set_style::<SplitPaneContainer>(SplitPaneContainerStyle::new(pallette.widget_fg_dark));
 

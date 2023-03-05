@@ -8,7 +8,7 @@ use blackjack_engine::graph::serialization::SerializedBjkGraph;
 use blackjack_engine::graph::BjkGraph;
 use blackjack_engine::graph::BjkNodeId;
 use blackjack_engine::graph::DependencyKind;
-use blackjack_engine::graph_interpreter::BjkParameter;
+use blackjack_engine::graph_interpreter::BjkInputParameter;
 use blackjack_engine::graph_interpreter::ExternalParameterValues;
 use blackjack_engine::lua_engine::ProgramResult;
 use blackjack_engine::lua_engine::RenderableThing;
@@ -151,8 +151,8 @@ pub struct GdExternalParameter {
     param_name: String,
 }
 
-impl From<BjkParameter> for GdExternalParameter {
-    fn from(p: BjkParameter) -> Self {
+impl From<BjkInputParameter> for GdExternalParameter {
+    fn from(p: BjkInputParameter) -> Self {
         use slotmap::Key;
         Self {
             node_id_ffi: p.node_id.data().as_ffi(),
@@ -162,9 +162,9 @@ impl From<BjkParameter> for GdExternalParameter {
 }
 
 #[allow(clippy::from_over_into)] // can't do this due to orphan rules
-impl Into<BjkParameter> for GdExternalParameter {
-    fn into(self) -> BjkParameter {
-        BjkParameter {
+impl Into<BjkInputParameter> for GdExternalParameter {
+    fn into(self) -> BjkInputParameter {
+        BjkInputParameter {
             node_id: BjkNodeId::from(KeyData::from_ffi(self.node_id_ffi)),
             param_name: self.param_name,
         }
