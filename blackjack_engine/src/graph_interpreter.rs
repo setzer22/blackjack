@@ -32,6 +32,7 @@ pub struct ExternalParameterValues(pub HashMap<BjkInputParameter, BlackjackValue
 
 impl ExternalParameterValues {
     /// Fills any non-set external parameters to their default values
+    #[allow(clippy::map_entry)] // This is a bug in clippy https://github.com/rust-lang/rust-clippy/issues/9925
     pub fn fill_defaults(&mut self, graph: &BjkGraph, node_definitions: &NodeDefinitions) {
         for (node_id, node) in &graph.nodes {
             for input in &node.inputs {

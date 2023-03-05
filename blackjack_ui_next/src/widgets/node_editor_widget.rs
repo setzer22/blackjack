@@ -1,6 +1,6 @@
 use std::any::type_name;
 
-use blackjack_engine::{graph::BjkNodeId, graph_interpreter::BjkInputParameter};
+use blackjack_engine::graph::BjkNodeId;
 use epaint::{CircleShape, CubicBezierShape, RectShape, Rounding, Vec2};
 use guee::{
     extension_traits::{Color32Ext, Vec2Ext},
@@ -147,25 +147,17 @@ impl NodeEditorWidget {
     pub fn find_hovered_port(&mut self, cursor_position: Pos2, layout: &Layout) -> Option<PortId> {
         for ((_, node), node_layout) in self.node_widgets.iter_mut().zip(&layout.children) {
             let mut hovered_row = None;
-            for (row_idx, (port_id, row)) in node.rows.iter().enumerate() {
+            for (row_idx, (port_id, _row)) in node.rows.iter().enumerate() {
                 let (left, right) = node.port_visuals(node_layout, port_id);
-
-                macro_rules! find_port {
-                    ($accessor:ident) => {
-                        row.$accessor.as_ref().expect("Port should be input")
-                    };
-                }
 
                 if let Some((left_pos, _)) = left {
                     if cursor_position.distance(left_pos) < NodeWidget::PORT_RADIUS {
-                        let port = find_port!(input_port);
                         hovered_row = Some((row_idx, PortIdKind::Input, port_id.clone()));
                         break;
                     }
                 }
                 if let Some((right_pos, _)) = right {
                     if cursor_position.distance(right_pos) < NodeWidget::PORT_RADIUS {
-                        let port = find_port!(output_port);
                         hovered_row = Some((row_idx, PortIdKind::Output, port_id.clone()));
                         break;
                     }
@@ -389,8 +381,8 @@ impl Widget for NodeEditorWidget {
                             ctx.dispatch_callback(
                                 cb,
                                 Connection {
-                                    input: (input.node_id, input.param_name.clone()),
-                                    output: (output.node_id, output.param_name.clone()),
+                                    input: (input.node_id, input.param_name),
+                                    output: (output.node_id, output.param_name),
                                 },
                             );
                         }
@@ -419,7 +411,7 @@ impl Widget for NodeEditorWidget {
                                 ctx.dispatch_callback(
                                     cb,
                                     Disconnection {
-                                        input: (input.node_id, input.param_name.clone()),
+                                        input: (input.node_id, input.param_name),
                                         output: (output.node_id, output.param_name.clone()),
                                     },
                                 );

@@ -111,7 +111,7 @@ pub trait FromToLua {
 macro_rules! impl_from_to_lua {
     (wrapped $t:ident $wrapper:ident) => {
         impl FromToLua for $t {
-            fn cast_to_lua<'lua>(self, lua: &'lua Lua) -> mlua::Value {
+            fn cast_to_lua(self, lua: &Lua) -> mlua::Value {
                 lua_stdlib::$wrapper(self).to_lua(lua).unwrap()
             }
 
@@ -123,7 +123,7 @@ macro_rules! impl_from_to_lua {
     };
     (flat $t:ident) => {
         impl FromToLua for $t {
-            fn cast_to_lua<'lua>(self, lua: &'lua Lua) -> mlua::Value {
+            fn cast_to_lua(self, lua: &Lua) -> mlua::Value {
                 self.to_lua(lua).unwrap()
             }
 
