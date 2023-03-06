@@ -540,6 +540,6 @@ impl GraphEditor {
 // - [x] Use human-friendly labels in nodes.
 // - [x] Node widget alignment improvements.
 // - [x] Use the color for data types.
-// - [ ] Top menubar
-// - [ ] Save / load system
+// - [x] Top menubar
+// - [x] Save / load system
 // - [ ] Display errors in a console
