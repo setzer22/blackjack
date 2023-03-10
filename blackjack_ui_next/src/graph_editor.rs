@@ -8,6 +8,7 @@ use blackjack_engine::{
     },
     graph_interpreter::{BjkInputParameter, ExternalParameterValues},
     lua_engine::LuaRuntime,
+    prelude::selection::SelectionExpression,
 };
 use epaint::{ahash::HashSet, Vec2};
 use guee::{
@@ -392,7 +393,7 @@ impl GraphEditor {
             DependencyKind::External { promoted: _ } => match input.data_type {
                 DataType::Vector => self.make_vector_param_widget(&param, op_name),
                 DataType::Scalar => self.make_scalar_param_widget(&param, op_name),
-                DataType::Selection => name_label,
+                DataType::Selection => self.make_selection_param_widget(&param, op_name),
                 DataType::Mesh => name_label,
                 DataType::String => name_label,
                 DataType::HeightMap => name_label,
@@ -530,6 +531,37 @@ impl GraphEditor {
                 ],
             )
             .build()
+        } else {
+            Text::new("<error>".into()).build()
+        }
+    }
+
+    pub fn make_selection_param_widget(
+        &self,
+        param: &BjkInputParameter,
+        op_name: &str,
+    ) -> DynWidget {
+        if let Ok((BlackjackValue::Selection(current_str, _), input_def)) =
+            self.get_current_param_value(param, op_name)
+        {
+            let param_cpy = param.clone();
+
+            let InputValueConfig::Selection {
+                default_selection: _,
+            } = &input_def.config else {
+                unreachable!("Wrong selection config type")
+            };
+
+            TextEdit::new(IdGen::key((param, "text_edit")), current_str)
+                .on_changed(self.cba.callback(|editor, new_str: String| {
+                    let parsed = SelectionExpression::parse(&new_str).ok();
+                    editor
+                        .external_parameters
+                        .0
+                        .insert(param_cpy, BlackjackValue::Selection(new_str, parsed));
+                }))
+                .layout_hints(LayoutHints::fill_horizontal())
+                .build()
         } else {
             Text::new("<error>".into()).build()
         }
