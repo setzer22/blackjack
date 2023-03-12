@@ -3,8 +3,8 @@ use std::ops::Deref;
 use anyhow::bail;
 use blackjack_engine::{
     graph::{
-        BjkGraph, BjkNode, BjkNodeId, BlackjackValue, DataType, DependencyKind, InputDefinition,
-        InputParameter, InputValueConfig,
+        BjkGraph, BjkNode, BjkNodeId, BlackjackValue, DataType, DependencyKind, FilePathMode,
+        InputDefinition, InputParameter, InputValueConfig,
     },
     graph_interpreter::{BjkInputParameter, ExternalParameterValues},
     lua_engine::LuaRuntime,
@@ -12,7 +12,10 @@ use blackjack_engine::{
 };
 use epaint::{ahash::HashSet, Vec2};
 use guee::{
-    base_widgets::drag_value::{DragValue, ScaleSelector},
+    base_widgets::{
+        drag_value::{DragValue, ScaleSelector},
+        menubar_button::MenubarButton,
+    },
     callback_accessor::CallbackAccessor,
     extension_traits::Color32Ext,
     input::MouseButton,
@@ -227,7 +230,7 @@ impl GraphEditor {
             .post_layout(|ctx, layout| {
                 ctx.dispatch_callback(store_layout_cb, layout.bounds.left_top());
             })
-            .post_event(move |ctx, layout, cursor_position, events| {
+            .post_event(move |ctx, layout, cursor_position, events, status| {
                 let cursor_in_finder = layout
                     .children
                     .get(1)
@@ -245,7 +248,7 @@ impl GraphEditor {
                         on_spawn_finder_cb,
                         (cursor_position - layout.bounds.left_top()).to_pos2(),
                     );
-                    EventStatus::Consumed
+                    status.consume_event();
                 } else if (!cursor_in_finder
                     && ctx
                         .input_state
@@ -257,9 +260,7 @@ impl GraphEditor {
                         .any(|ev| matches!(ev, Event::KeyPressed(VirtualKeyCode::Escape)))
                 {
                     ctx.dispatch_callback(on_dismiss_node_finder_cb, ());
-                    EventStatus::Consumed
-                } else {
-                    EventStatus::Ignored
+                    // NOTE: Don't consume on a dismiss
                 }
             })
             .build()
@@ -395,7 +396,7 @@ impl GraphEditor {
                 DataType::Scalar => self.make_scalar_param_widget(&param, op_name),
                 DataType::Selection => self.make_selection_param_widget(&param, op_name),
                 DataType::Mesh => name_label,
-                DataType::String => name_label,
+                DataType::String => self.make_string_param_widget(&param, op_name),
                 DataType::HeightMap => name_label,
             },
             DependencyKind::Connection {
@@ -562,6 +563,90 @@ impl GraphEditor {
                 }))
                 .layout_hints(LayoutHints::fill_horizontal())
                 .build()
+        } else {
+            Text::new("<error>".into()).build()
+        }
+    }
+
+    fn make_string_param_widget(&self, param: &BjkInputParameter, op_name: &str) -> DynWidget {
+        if let Ok((BlackjackValue::String(current_str), input_def)) =
+            self.get_current_param_value(param, op_name)
+        {
+            let param_cpy = param.clone();
+
+            match &input_def.config {
+                InputValueConfig::Enum {
+                    values,
+                    default_selection: _,
+                } => BoxContainer::horizontal(
+                    IdGen::key("h"),
+                    vec![
+                        Text::new(param.param_name.clone()).build(),
+                        MenubarButton::new(IdGen::key((param, "wgt")), current_str, values.clone())
+                            .build(),
+                    ],
+                )
+                .separation(10.0)
+                .build(),
+                InputValueConfig::FilePath {
+                    default_path,
+                    file_path_mode,
+                } => {
+                    let file_path_mode = *file_path_mode;
+                    let select_button = Button::with_label("Select")
+                        .on_click(self.cba.callback(move |editor, _: ()| {
+                            let new_path = match file_path_mode {
+                                FilePathMode::Open => rfd::FileDialog::new().pick_file(),
+                                FilePathMode::Save => rfd::FileDialog::new().save_file(),
+                            };
+                            if let Some(new_path) = new_path {
+                                editor.external_parameters.0.insert(
+                                    param_cpy,
+                                    BlackjackValue::String(new_path.to_string_lossy().to_string()),
+                                );
+                            }
+                        }))
+                        .padding(Vec2::new(5.0, 3.0))
+                        .into();
+
+                    let label = if current_str.is_empty() {
+                        Text::new("No file selected".into())
+                    } else {
+                        Text::new(current_str)
+                    }
+                    .build();
+
+                    BoxContainer::vertical(
+                        IdGen::key((param, "file_selector")),
+                        vec![
+                            Text::new(param.param_name.clone()).build(),
+                            BoxContainer::horizontal(IdGen::key("h"), vec![select_button, label])
+                                .cross_align(Align::Center)
+                                .separation(10.0)
+                                .build(),
+                        ],
+                    )
+                    .build()
+                }
+                InputValueConfig::String {
+                    multiline,
+                    default_text,
+                } => TextEdit::new(IdGen::key((param, "text_edit")), current_str)
+                    .on_changed(self.cba.callback(|editor, new_str: String| {
+                        editor
+                            .external_parameters
+                            .0
+                            .insert(param_cpy, BlackjackValue::String(new_str));
+                    }))
+                    .layout_hints(LayoutHints::fill_horizontal())
+                    .build(),
+                InputValueConfig::LuaString {} => {
+                    todo!()
+                }
+                _ => {
+                    unreachable!("Wrong selection config type")
+                }
+            }
         } else {
             Text::new("<error>".into()).build()
         }

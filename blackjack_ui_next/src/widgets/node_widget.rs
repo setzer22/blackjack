@@ -295,38 +295,38 @@ impl Widget for NodeWidget {
         layout: &Layout,
         cursor_position: Pos2,
         events: &[Event],
-    ) -> EventStatus {
-        if let EventStatus::Consumed =
-            self.titlebar_left
-                .widget
-                .on_event(ctx, &layout.children[0], cursor_position, events)
-        {
-            return EventStatus::Consumed;
-        }
-        if let EventStatus::Consumed =
-            self.titlebar_right
-                .widget
-                .on_event(ctx, &layout.children[1], cursor_position, events)
-        {
-            return EventStatus::Consumed;
-        }
+        status: &mut EventStatus,
+    ) {
+        self.titlebar_left.widget.on_event(
+            ctx,
+            &layout.children[0],
+            cursor_position,
+            events,
+            status,
+        );
+        self.titlebar_right.widget.on_event(
+            ctx,
+            &layout.children[1],
+            cursor_position,
+            events,
+            status,
+        );
         let row_layouts = &layout.children[2..2 + self.rows.len()];
         for ((_, row), row_layout) in self.rows.iter_mut().zip(row_layouts) {
-            if let EventStatus::Consumed =
-                row.contents
-                    .widget
-                    .on_event(ctx, row_layout, cursor_position, events)
-            {
-                return EventStatus::Consumed;
-            }
+            row.contents
+                .widget
+                .on_event(ctx, row_layout, cursor_position, events, status);
         }
-        if let EventStatus::Consumed = self.bottom_ui.widget.on_event(
+        self.bottom_ui.widget.on_event(
             ctx,
             &layout.children[2 + self.rows.len()],
             cursor_position,
             events,
-        ) {
-            return EventStatus::Consumed;
+            status,
+        );
+
+        if status.is_consumed() {
+            return;
         }
 
         let titlebar_rect = self.titlebar_rect(layout);
@@ -353,7 +353,5 @@ impl Widget for NodeWidget {
             // TODO: In the future, this will also be a selection event.
             status = EventStatus::Consumed;
         }
-
-        status
     }
 }

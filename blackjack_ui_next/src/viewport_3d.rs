@@ -156,13 +156,15 @@ impl Viewport3d {
             .post_layout(|ctx, layout| {
                 ctx.dispatch_callback(set_last_frame_res_cb, layout.bounds);
             })
-            .pre_event(|ctx, layout, cursor_pos, events| {
+            .pre_event(|ctx, layout, cursor_pos, events, status| {
+                if status.is_consumed() {
+                    return;
+                }
                 let mut cam_input = CameraInput::default();
-                let mut status = EventStatus::Ignored;
                 if layout.bounds.contains(cursor_pos) {
                     cam_input.shift_down = ctx.input_state.modifiers.shift;
                     if ctx.claim_drag_event(layout.widget_id, layout.bounds, MouseButton::Primary) {
-                        status = EventStatus::Consumed;
+                        status.consume_event();
                         cam_input.lmb_pressed = true
                     }
                     cam_input.cursor_delta = ctx.input_state.mouse.delta();
@@ -170,20 +172,19 @@ impl Viewport3d {
                         match &event {
                             Event::MouseWheel(wheel_delta) => {
                                 if wheel_delta.y.abs() > 0.0 {
-                                    status = EventStatus::Consumed;
+                                    status.consume_event();
                                     cam_input.wheel_delta = wheel_delta.y;
                                 }
                             }
                             Event::KeyPressed(VirtualKeyCode::F) => {
                                 cam_input.f_pressed = true;
-                                status = EventStatus::Consumed;
+                                status.consume_event();
                             }
                             _ => (),
                         }
                     }
                 }
                 ctx.dispatch_callback(camera_input_cb, cam_input);
-                status
             })
             .build()
     }

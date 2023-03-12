@@ -318,36 +318,40 @@ impl Widget for NodeEditorWidget {
         layout: &Layout,
         cursor_position: Pos2,
         events: &[Event],
-    ) -> EventStatus {
+        status: &mut EventStatus,
+    ) {
         let top_left = layout.bounds.left_top();
         let cursor_transform = Self::cursor_transform(self.pan_zoom, top_left.to_vec2());
         let transformed_cursor_position = cursor_transform.transform_point(cursor_position);
 
         // Set the cursor transform state. This is necessary for child widgets
         // to be able to properly track click / drag events.
-        let mut event_status = ctx.with_cursor_transform(cursor_transform, || {
+        ctx.with_cursor_transform(cursor_transform, || {
             let mut event_status = EventStatus::Ignored;
             // NOTE: This needs to be iterated in reverse, so nodes are drawn
             // bottom-to-top, but events processed top-to-bottom.
             for ((_pos, node_widget), node_layout) in
                 self.node_widgets.iter_mut().zip(&layout.children).rev()
             {
-                if let EventStatus::Consumed =
-                    node_widget.on_event(ctx, node_layout, transformed_cursor_position, events)
-                {
+                let status_before = *status;
+                node_widget.on_event(
+                    ctx,
+                    node_layout,
+                    transformed_cursor_position,
+                    events,
+                    status,
+                );
+
+                if status_before != *status && status.is_consumed() {
                     if let Some(on_raised) = self.on_node_raised.take() {
                         ctx.dispatch_callback(on_raised, node_widget.node_id);
                     }
-
-                    event_status = EventStatus::Consumed;
-                    break;
                 }
             }
-            event_status
         });
 
-        if event_status == EventStatus::Consumed {
-            return event_status;
+        if status.is_consumed() {
+            return;
         }
 
         let mut state = ctx.memory.get_mut_or(
@@ -387,7 +391,7 @@ impl Widget for NodeEditorWidget {
                             );
                         }
                         state.ongoing_connection = None;
-                        return EventStatus::Consumed;
+                        status.consume_event();
                     }
                 }
                 None => {
@@ -419,7 +423,7 @@ impl Widget for NodeEditorWidget {
                             }
                         } else {
                             state.ongoing_connection = Some(hovered);
-                            return EventStatus::Consumed;
+                            status.consume_event();
                         }
                     }
                 }
@@ -442,7 +446,7 @@ impl Widget for NodeEditorWidget {
                     if let Some(cb) = self.on_pan_zoom_change.take() {
                         ctx.dispatch_callback(cb, self.pan_zoom);
                     }
-                    event_status = EventStatus::Consumed;
+                    status.consume_event();
                 }
                 _ => {}
             }
@@ -454,9 +458,7 @@ impl Widget for NodeEditorWidget {
             if let Some(cb) = self.on_pan_zoom_change.take() {
                 ctx.dispatch_callback(cb, self.pan_zoom);
             }
-            event_status = EventStatus::Consumed;
+            status.consume_event();
         }
-
-        event_status
     }
 }
