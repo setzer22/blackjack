@@ -19,29 +19,33 @@ impl RootViewport {
             // When set, will load a new editor state at the end of this function
             egui::menu::bar(ui, |ui| {
                 ui.menu_button("File", |ui| {
-                    if ui.button("Save 'Jack' As...").clicked() {
+                    ui.add_enabled_ui(false, |ui| ui.button("New"));
+                    if ui.button("Open…").clicked() {
                         let file_location = rfd::FileDialog::new()
-                            .set_file_name("Untitled.bjk")
-                            .add_filter("Blackjack Models", &["bjk"])
-                            .save_file();
-                        if let Some(path) = file_location {
-                            action = Some(AppRootAction::Save(path))
-                        }
-                    }
-                    if ui.button("Load 'Jack'").clicked() {
-                        let file_location = rfd::FileDialog::new()
-                            .add_filter("Blackjack Models", &["bjk"])
+                            .add_filter("Blackjack Model", &["bjk"])
                             .pick_file();
                         if let Some(path) = file_location {
                             action = Some(AppRootAction::Load(path))
                         }
                     }
-                });
-                ui.menu_button("Help", |ui| {
-                    if ui.button("Diagnosics").clicked() {
-                        self.diagnostics_open = true;
+                    ui.separator();
+                    ui.add_enabled_ui(false, |ui| ui.button("Close"));
+                    if ui.button("Save As…").clicked() {
+                        let file_location = rfd::FileDialog::new()
+                            .set_file_name("Untitled.bjk")
+                            .add_filter("Blackjack Model", &["bjk"])
+                            .save_file();
+                        if let Some(path) = file_location {
+                            action = Some(AppRootAction::Save(path))
+                        }
                     }
+                    ui.separator();
+                    ui.add_enabled_ui(false, |ui| ui.button("Quit"));
                 });
+                ui.menu_button("Window", |ui| {
+                    ui.checkbox(&mut self.diagnostics_open, "Diagnostics");
+                });
+
             });
         });
 
@@ -52,7 +56,7 @@ impl RootViewport {
         egui::Window::new("Diagnostics")
             .open(&mut self.diagnostics_open)
             .show(&self.egui_context, |ui| {
-                ui.label(format!("HiDPI scale: {}", ui.ctx().pixels_per_point()));
+                ui.label(format!("HiDPI Scale: {}", ui.ctx().pixels_per_point()));
             });
     }
 

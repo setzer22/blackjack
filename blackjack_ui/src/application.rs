@@ -121,7 +121,7 @@ impl RootViewport {
         if !CLI_ARGS.disable_lua_watcher {
             lua_runtime
                 .start_file_watcher()
-                .expect("Could not start file watcher.");
+                .expect("Error starting file watcher.");
         }
 
         let gizmo_state = UiNodeGizmoStates::init();
@@ -203,7 +203,7 @@ impl RootViewport {
 
         if let Some(load) = &CLI_ARGS.load {
             self.handle_root_action(AppRootAction::Load(std::path::PathBuf::from(load)))
-                .expect("Error loading scene from cli arg");
+                .expect("Error loading scene from CLI arg.");
         }
     }
 
@@ -214,7 +214,7 @@ impl RootViewport {
             match self.lua_runtime.watch_for_changes() {
                 Ok(true) => {
                     if let Err(err) = self.graph_editor.on_node_definitions_update() {
-                        println!("Error while updating graph after Lua code reload: {err}");
+                        println!("Error while updating graph after Lua code reload: {err}.");
                     }
 
                     // Reset gizmo state when code is reloaded. This helps
@@ -224,7 +224,7 @@ impl RootViewport {
                 }
                 Ok(false) => { /* Do nothing */ }
                 Err(err) => {
-                    println!("Error while reloading Lua code: {err}");
+                    println!("Error while reloading Lua code: {err}.");
                 }
             }
         }
@@ -275,7 +275,7 @@ impl RootViewport {
         for action in actions {
             // TODO: Don't panic, report error to user in modal dialog
             self.handle_root_action(action)
-                .expect("Error executing action");
+                .expect("Error executing action.");
         }
     }
 
@@ -353,7 +353,7 @@ impl RootViewport {
         graph.execute(&render_ctx.renderer, frame, cmd_bufs, &ready);
 
         if let Some(error) = pollster::block_on(render_ctx.renderer.device.pop_error_scope()) {
-            println!("WGPU VALIDATION ERROR: {error}");
+            println!("Error validating WebGPU: {error}.");
         }
 
         let id = id_picking_routine.id_under_mouse(&render_ctx.renderer.device);

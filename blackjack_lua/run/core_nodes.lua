@@ -176,7 +176,7 @@ local primitives = {
         returns = "out_mesh",
     },
     MakeLineFromPoints = {
-        label = "Line from points",
+        label = "Line From Points",
         op = function(inputs)
             local points = {}
             -- Parse the point list, separated by space
@@ -244,7 +244,7 @@ local primitives = {
         returns = "out_mesh",
     },
     MakeGrid = {
-        label = "Points grid",
+        label = "Point Grid",
         op = function(inputs)
             return {
                 out_mesh = Primitives.grid(inputs.x, inputs.y, inputs.spacing_x, inputs.spacing_y),
@@ -307,7 +307,7 @@ local primitives = {
 -- Edit ops: Nodes to edit existing meshes
 local edit_ops = {
     BevelEdges = {
-        label = "Bevel edges",
+        label = "Bevel Edges",
         inputs = {
             P.mesh("in_mesh"),
             P.selection("edges"),
@@ -324,7 +324,7 @@ local edit_ops = {
         end,
     },
     ChamferVertices = {
-        label = "Chamfer vertices",
+        label = "Chamfer Vertices",
         inputs = {
             P.mesh("in_mesh"),
             P.selection("vertices"),
@@ -341,7 +341,7 @@ local edit_ops = {
         end,
     },
     ExtrudeFaces = {
-        label = "Extrude faces",
+        label = "Extrude Faces",
         inputs = {
             P.mesh("in_mesh"),
             P.selection("faces"),
@@ -358,7 +358,7 @@ local edit_ops = {
         end,
     },
     CollapseEdge = {
-        label = "Collapse edges",
+        label = "Collapse Edges",
         inputs = {
             P.mesh("in_mesh"),
             P.selection("edges"),
@@ -412,7 +412,7 @@ local edit_ops = {
         end,
     },
     MergeMeshes = {
-        label = "Merge meshes",
+        label = "Merge Meshes",
         inputs = {
             P.mesh("mesh_a"),
             P.mesh("mesh_b"),
@@ -529,7 +529,7 @@ local edit_ops = {
         gizmos = { Gz.tweak_transform("translate", "rotate", "scale") },
     },
     VertexAttribTransfer = {
-        label = "Vertex attribute transfer",
+        label = "Vertex Attribute Transfer",
         inputs = {
             P.mesh("src_mesh"),
             P.mesh("dst_mesh"),
@@ -546,7 +546,7 @@ local edit_ops = {
         end,
     },
     SetFullRangeUVs = {
-        label = "Set full range UVs",
+        label = "Set Full Range UVs",
         inputs = {
             P.mesh("mesh"),
         },
@@ -561,7 +561,7 @@ local edit_ops = {
         end,
     },
     SetMaterial = {
-        label = "Set material",
+        label = "Set Material",
         inputs = {
             P.mesh("mesh"),
             P.selection("faces"),
@@ -578,7 +578,7 @@ local edit_ops = {
         end,
     },
     MakeGroup = {
-        label = "Make group",
+        label = "Group",
         inputs = {
             P.mesh("mesh"),
             P.enum("type", { "Vertex", "Face", "Halfedge" }, 0),
@@ -597,7 +597,7 @@ local edit_ops = {
         end,
     },
     EditChannels = {
-        label = "Edit channels",
+        label = "Edit Channels",
         inputs = {
             P.mesh("mesh"),
             P.enum("channel_key", { "Vertex", "Face", "Halfedge" }, 0),
@@ -654,7 +654,7 @@ local edit_ops = {
         end,
     },
     CopyToPoints = {
-        label = "Copy to points",
+        label = "Copy To Points",
         op = function(inputs)
             return { out_mesh = Ops.copy_to_points(inputs.points, inputs.mesh) }
         end,
@@ -668,7 +668,7 @@ local edit_ops = {
         returns = "out_mesh",
     },
     ExtrudeAlongCurve = {
-        label = "Extrude along curve",
+        label = "Extrude Along Curve",
         op = function(inputs)
             return {
                 out_mesh = Ops.extrude_along_curve(
@@ -689,7 +689,7 @@ local edit_ops = {
         returns = "out_mesh",
     },
     ResampleCurve = {
-        label = "Resample curve",
+        label = "Resample Curve",
         op = function(inputs)
             return {
                 out_mesh = Ops.resample_curve(
@@ -714,7 +714,7 @@ local edit_ops = {
         returns = "out_mesh",
     },
     PointCloud = {
-        label = "Point cloud",
+        label = "Point Cloud",
         op = function(inputs)
             return { out_mesh = inputs.mesh:point_cloud(inputs.points) }
         end,
@@ -729,7 +729,7 @@ local edit_ops = {
     },
     -- TODO: This should be a more generic randomize channel
     RandomizeSize = {
-        label = "Randomize size",
+        label = "Randomize Size",
         op = function(inputs)
             local mesh = inputs.mesh:clone()
             local size_ch = mesh:ensure_channel(Types.VERTEX_ID, Types.F32, "size")
@@ -833,7 +833,7 @@ local math_nodes = {
         end,
     },
     MakeVector = {
-        label = "MakeVector",
+        label = "Vector",
         inputs = {
             P.scalar("x", { default = 0.0 }),
             P.scalar("y", { default = 0.0 }),
@@ -847,7 +847,7 @@ local math_nodes = {
         end,
     },
     VectorMath = {
-        label = "Vector math",
+        label = "Vector Math",
         inputs = {
             P.enum("op", { "Add", "Sub", "Mul" }, 0),
             P.v3("vec_a", vector(0, 0, 0)),
@@ -869,7 +869,7 @@ local math_nodes = {
         end,
     },
     ScalarMath = {
-        label = "Scalar math",
+        label = "Scalar Math",
         inputs = {
             P.enum("op", { "Add", "Sub", "Mul" }, 0),
             P.scalar("x", { default = 0 }),
