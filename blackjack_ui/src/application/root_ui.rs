@@ -29,7 +29,6 @@ impl RootViewport {
                         }
                     }
                     ui.separator();
-                    ui.add_enabled_ui(false, |ui| ui.button("Close"));
                     if ui.button("Save As…").clicked() {
                         let file_location = rfd::FileDialog::new()
                             .set_file_name("Untitled.bjk")
