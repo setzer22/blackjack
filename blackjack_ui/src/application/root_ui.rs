@@ -44,7 +44,6 @@ impl RootViewport {
                 ui.menu_button("Window", |ui| {
                     ui.checkbox(&mut self.diagnostics_open, "Diagnostics");
                 });
-
             });
         });
 
