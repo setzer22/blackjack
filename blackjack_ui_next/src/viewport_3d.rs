@@ -10,7 +10,7 @@ use winit::event::VirtualKeyCode;
 
 use crate::{
     blackjack_theme::pallette,
-    renderer::{routine_renderer::MultisampleConfig, BlackjackViewportRenderer},
+    renderer::{routine_renderer::MultisampleConfig, BlackjackViewportRenderer, texture_manager::TextureManager},
 };
 
 use self::orbit_camera::{CameraInput, OrbitCamera};
@@ -89,12 +89,13 @@ pub struct Viewport3d {
 }
 
 impl Viewport3d {
-    pub fn new(render_ctx: &RenderState, cba: CallbackAccessor<Self>) -> Self {
+    pub fn new(render_ctx: &RenderState, cba: CallbackAccessor<Self>, texture_manager: &mut TextureManager) -> Self {
         Self {
             renderer: BlackjackViewportRenderer::new(
                 Arc::clone(&render_ctx.device),
                 Arc::clone(&render_ctx.queue),
                 MultisampleConfig::Four,
+                texture_manager,
             ),
             settings: Default::default(),
             // We render with 1 frame delay to know the size of the UI element
@@ -105,7 +106,7 @@ impl Viewport3d {
         }
     }
 
-    pub fn view(&self, render_ctx: &RenderState) -> DynWidget {
+    pub fn view(&self, render_ctx: &RenderState, texture_manager: &TextureManager) -> DynWidget {
         if let Some(last_frame_bounds) = self.last_frame_bounds {
             let resolution = UVec2::new(
                 last_frame_bounds.width() as u32,
@@ -115,6 +116,7 @@ impl Viewport3d {
                 resolution,
                 self.camera.compute_matrices(resolution),
                 &self.settings,
+                texture_manager,
             );
             if let Some(tex_id) = self.epaint_texture_id.get() {
                 render_ctx

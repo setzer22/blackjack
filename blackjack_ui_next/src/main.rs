@@ -8,6 +8,7 @@ use guee::callback_accessor::CallbackAccessor;
 use guee::extension_traits::Color32Ext;
 use guee::painter::ExtraFont;
 use guee::prelude::*;
+use renderer::texture_manager::TextureManager;
 use viewport_3d::Viewport3d;
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::WindowBuilder;
@@ -26,6 +27,8 @@ pub mod renderer;
 
 pub mod serialization;
 
+pub mod icon_management;
+
 pub enum RootAction {
     Save,
     Load,
@@ -36,14 +39,25 @@ pub struct AppState {
     viewport_3d: Viewport3d,
     cba: CallbackAccessor<Self>,
     pending_actions: Vec<RootAction>,
+    texture_manager: TextureManager,
 }
 
 impl AppState {
     pub fn init(render_ctx: &RenderState) -> Self {
         let cba = CallbackAccessor::<Self>::root();
+        let mut texture_manager =
+            TextureManager::new(render_ctx.device.clone(), render_ctx.queue.clone());
+
+        icon_management::load_icons(render_ctx, &mut texture_manager);
+
         Self {
             graph_editor: GraphEditor::new(cba.drill_down(|this| &mut this.graph_editor)),
-            viewport_3d: Viewport3d::new(render_ctx, cba.drill_down(|this| &mut this.viewport_3d)),
+            viewport_3d: Viewport3d::new(
+                render_ctx,
+                cba.drill_down(|this| &mut this.viewport_3d),
+                &mut texture_manager,
+            ),
+            texture_manager,
             pending_actions: Vec::new(),
             cba,
         }
@@ -80,7 +94,11 @@ impl AppState {
                                 IdGen::key("left_stack"),
                                 vec![
                                     (Vec2::ZERO, panel("bottom")),
-                                    (Vec2::ZERO, self.viewport_3d.view(render_ctx)),
+                                    (
+                                        Vec2::ZERO,
+                                        self.viewport_3d
+                                            .view(render_ctx, &self.texture_manager),
+                                    ),
                                 ],
                             )
                             .build(),

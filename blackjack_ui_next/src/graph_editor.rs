@@ -578,18 +578,32 @@ impl GraphEditor {
                 InputValueConfig::Enum {
                     values,
                     default_selection: _,
-                } => BoxContainer::horizontal(
-                    IdGen::key("h"),
-                    vec![
-                        Text::new(param.param_name.clone()).build(),
-                        MenubarButton::new(IdGen::key((param, "wgt")), current_str, values.clone())
+                } => {
+                    let values = values.clone();
+                    BoxContainer::horizontal(
+                        IdGen::key("h"),
+                        vec![
+                            Text::new(param.param_name.clone()).build(),
+                            MenubarButton::new(
+                                IdGen::key((param, "wgt")),
+                                current_str,
+                                values.clone(),
+                            )
+                            .menu_min_width(100.0)
+                            .on_option_selected(self.cba.callback(move |editor, idx: usize| {
+                                editor
+                                    .external_parameters
+                                    .0
+                                    .insert(param_cpy, BlackjackValue::String(values[idx].clone()));
+                            }))
                             .build(),
-                    ],
-                )
-                .separation(10.0)
-                .build(),
+                        ],
+                    )
+                    .separation(10.0)
+                    .build()
+                }
                 InputValueConfig::FilePath {
-                    default_path,
+                    default_path: _,
                     file_path_mode,
                 } => {
                     let file_path_mode = *file_path_mode;
@@ -629,19 +643,20 @@ impl GraphEditor {
                     .build()
                 }
                 InputValueConfig::String {
-                    multiline,
-                    default_text,
-                } => TextEdit::new(IdGen::key((param, "text_edit")), current_str)
-                    .on_changed(self.cba.callback(|editor, new_str: String| {
-                        editor
-                            .external_parameters
-                            .0
-                            .insert(param_cpy, BlackjackValue::String(new_str));
-                    }))
-                    .layout_hints(LayoutHints::fill_horizontal())
-                    .build(),
-                InputValueConfig::LuaString {} => {
-                    todo!()
+                    multiline: _,
+                    default_text: _,
+                }
+                | InputValueConfig::LuaString {} => {
+                    // TODO: Multiline string and code editor
+                    TextEdit::new(IdGen::key((param, "text_edit")), current_str)
+                        .on_changed(self.cba.callback(|editor, new_str: String| {
+                            editor
+                                .external_parameters
+                                .0
+                                .insert(param_cpy, BlackjackValue::String(new_str));
+                        }))
+                        .layout_hints(LayoutHints::fill_horizontal())
+                        .build()
                 }
                 _ => {
                     unreachable!("Wrong selection config type")

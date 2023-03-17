@@ -58,7 +58,6 @@ pub struct BlackjackViewportRenderer {
     pub device: Arc<Device>,
     pub queue: Arc<Queue>,
     pub shader_manager: ShaderManager,
-    pub texture_manager: TextureManager,
     pub wireframe_routine: WireframeRoutine,
     pub point_cloud_routine: PointCloudRoutine,
     pub face_routine: FaceRoutine,
@@ -82,9 +81,9 @@ impl BlackjackViewportRenderer {
         device: Arc<Device>,
         queue: Arc<Queue>,
         multisample_config: MultisampleConfig,
+        texture_manager: &mut TextureManager,
     ) -> Self {
         let shader_manager = ShaderManager::new(&device);
-        let mut texture_manager = TextureManager::new(Arc::clone(&device), Arc::clone(&queue));
 
         Self {
             wireframe_routine: WireframeRoutine::new(&device, &shader_manager, multisample_config),
@@ -95,14 +94,13 @@ impl BlackjackViewportRenderer {
             ),
             face_routine: FaceRoutine::new(
                 &device,
-                &mut texture_manager,
+                texture_manager,
                 &shader_manager,
                 multisample_config,
             ),
             id_picking_routine: IdPickingRoutine::new(&device),
             grid_routine: GridRoutine::new(&device, &shader_manager, multisample_config),
             shader_manager,
-            texture_manager,
             device,
             queue,
             multisample_config,
@@ -114,6 +112,7 @@ impl BlackjackViewportRenderer {
         resolution: UVec2,
         camera: ViewportCamera,
         settings: &Viewport3dSettings,
+        texture_manager: &TextureManager,
     ) -> ViewportRendererOutput {
         let mut encoder = self
             .device
@@ -166,21 +165,21 @@ impl BlackjackViewportRenderer {
         self.wireframe_routine.render(
             &self.device,
             &mut encoder,
-            &self.texture_manager,
+            texture_manager,
             &render_state,
             true,
         );
         self.point_cloud_routine.render(
             &self.device,
             &mut encoder,
-            &self.texture_manager,
+            texture_manager,
             &render_state,
             false,
         );
         self.face_routine.render(
             &self.device,
             &mut encoder,
-            &self.texture_manager,
+            texture_manager,
             &render_state,
             settings,
             &id_map_view,
