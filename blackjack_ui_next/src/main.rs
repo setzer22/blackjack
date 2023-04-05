@@ -1,3 +1,4 @@
+use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 use blackjack_engine::graph_interpreter::run_graph;
@@ -8,6 +9,7 @@ use guee::callback_accessor::CallbackAccessor;
 use guee::extension_traits::Color32Ext;
 use guee::painter::ExtraFont;
 use guee::prelude::*;
+use icon_management::IconAtlas;
 use renderer::texture_manager::TextureManager;
 use viewport_3d::Viewport3d;
 use winit::event_loop::{ControlFlow, EventLoop};
@@ -40,6 +42,7 @@ pub struct AppState {
     cba: CallbackAccessor<Self>,
     pending_actions: Vec<RootAction>,
     texture_manager: TextureManager,
+    icon_atlas: Rc<IconAtlas>,
 }
 
 impl AppState {
@@ -48,10 +51,13 @@ impl AppState {
         let mut texture_manager =
             TextureManager::new(render_ctx.device.clone(), render_ctx.queue.clone());
 
-        icon_management::load_icons(render_ctx, &mut texture_manager);
+        let icon_atlas = Rc::new(IconAtlas::new(render_ctx, &mut texture_manager));
 
         Self {
-            graph_editor: GraphEditor::new(cba.drill_down(|this| &mut this.graph_editor)),
+            graph_editor: GraphEditor::new(
+                cba.drill_down(|this| &mut this.graph_editor),
+                icon_atlas.clone(),
+            ),
             viewport_3d: Viewport3d::new(
                 render_ctx,
                 cba.drill_down(|this| &mut this.viewport_3d),
@@ -59,6 +65,7 @@ impl AppState {
             ),
             texture_manager,
             pending_actions: Vec::new(),
+            icon_atlas,
             cba,
         }
     }
@@ -96,8 +103,7 @@ impl AppState {
                                     (Vec2::ZERO, panel("bottom")),
                                     (
                                         Vec2::ZERO,
-                                        self.viewport_3d
-                                            .view(render_ctx, &self.texture_manager),
+                                        self.viewport_3d.view(render_ctx, &self.texture_manager),
                                     ),
                                 ],
                             )
@@ -142,8 +148,12 @@ impl AppState {
                         vec![MenubarButton::new(
                             IdGen::key("b"),
                             "File".into(),
-                            vec!["Save 'Jack' As".into(), "Load 'Jack'".into()],
+                            vec!["Save 'Jack' As".into(), "Open 'Jack'".into()],
                         )
+                        .button_icons(vec![
+                            self.icon_atlas.get_icon("floppy-disk").unwrap(),
+                            self.icon_atlas.get_icon("open-folder").unwrap(),
+                        ])
                         .on_option_selected(self.cba.callback(|app_state, idx| match idx {
                             0 => app_state.pending_actions.push(RootAction::Save),
                             1 => app_state.pending_actions.push(RootAction::Load),

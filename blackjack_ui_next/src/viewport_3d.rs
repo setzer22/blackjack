@@ -1,4 +1,4 @@
-use std::{cell::Cell, sync::Arc};
+use std::{cell::Cell, rc::Rc, sync::Arc};
 
 use blackjack_engine::lua_engine::RenderableThing;
 use egui_wgpu::RenderState;
@@ -10,7 +10,11 @@ use winit::event::VirtualKeyCode;
 
 use crate::{
     blackjack_theme::pallette,
-    renderer::{routine_renderer::MultisampleConfig, BlackjackViewportRenderer, texture_manager::TextureManager},
+    icon_management::IconAtlas,
+    renderer::{
+        routine_renderer::MultisampleConfig, texture_manager::TextureManager,
+        BlackjackViewportRenderer,
+    },
 };
 
 use self::orbit_camera::{CameraInput, OrbitCamera};
@@ -89,7 +93,11 @@ pub struct Viewport3d {
 }
 
 impl Viewport3d {
-    pub fn new(render_ctx: &RenderState, cba: CallbackAccessor<Self>, texture_manager: &mut TextureManager) -> Self {
+    pub fn new(
+        render_ctx: &RenderState,
+        cba: CallbackAccessor<Self>,
+        texture_manager: &mut TextureManager,
+    ) -> Self {
         Self {
             renderer: BlackjackViewportRenderer::new(
                 Arc::clone(&render_ctx.device),

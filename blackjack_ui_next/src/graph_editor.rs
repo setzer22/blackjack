@@ -1,4 +1,4 @@
-use std::ops::Deref;
+use std::{cell::Ref, ops::Deref, rc::Rc};
 
 use anyhow::bail;
 use blackjack_engine::{
@@ -28,6 +28,7 @@ use winit::event::VirtualKeyCode;
 
 use crate::{
     blackjack_theme::pallette,
+    icon_management::IconAtlas,
     widgets::{
         node_editor_widget::{Connection, Disconnection, NodeEditorWidget, PanZoom},
         node_widget::{NodeWidget, NodeWidgetPort, NodeWidgetRow, PortId, PortIdKind},
@@ -49,11 +50,12 @@ pub struct GraphEditor {
     pub external_parameters: ExternalParameterValues,
     pub node_finder: Option<NodeFinder>,
     pub cba: CallbackAccessor<Self>,
+    pub icon_atlas: Rc<IconAtlas>,
 }
 
 #[allow(clippy::new_without_default)]
 impl GraphEditor {
-    pub fn new(cba: CallbackAccessor<Self>) -> Self {
+    pub fn new(cba: CallbackAccessor<Self>, icon_atlas: Rc<IconAtlas>) -> Self {
         Self {
             external_parameters: ExternalParameterValues::default(),
             // TODO: Hardcoded path
@@ -65,6 +67,7 @@ impl GraphEditor {
             pan_zoom: PanZoom::default(),
             node_finder: None,
             graph: BjkGraph::new(),
+            icon_atlas,
             cba,
         }
     }
@@ -345,6 +348,7 @@ impl GraphEditor {
                 .build()
         };
 
+        let close_icon = self.icon_atlas.get_icon("close").unwrap();
         let node_title = self
             .lua_runtime
             .node_definitions
@@ -362,8 +366,8 @@ impl GraphEditor {
             .build(),
             titlebar_right: MarginContainer::new(
                 IdGen::key("margin_r"),
-                Button::with_label("x")
-                    .padding(Vec2::ZERO)
+                Button::with_icon(close_icon.0, close_icon.1, Vec2::new(16.0, 16.0))
+                    .padding(Vec2::new(0.0, 2.0))
                     .on_click(self.cba.callback(move |editor, _| {
                         editor.remove_node(node_id);
                     }))
