@@ -1,4 +1,4 @@
-use std::{cell::Cell, rc::Rc, sync::Arc};
+use std::{cell::Cell, sync::Arc};
 
 use blackjack_engine::lua_engine::RenderableThing;
 use egui_wgpu::RenderState;
@@ -10,7 +10,6 @@ use winit::event::VirtualKeyCode;
 
 use crate::{
     blackjack_theme::pallette,
-    icon_management::IconAtlas,
     renderer::{
         routine_renderer::MultisampleConfig, texture_manager::TextureManager,
         BlackjackViewportRenderer,

@@ -327,7 +327,6 @@ impl Widget for NodeEditorWidget {
         // Set the cursor transform state. This is necessary for child widgets
         // to be able to properly track click / drag events.
         ctx.with_cursor_transform(cursor_transform, || {
-            let mut event_status = EventStatus::Ignored;
             // NOTE: This needs to be iterated in reverse, so nodes are drawn
             // bottom-to-top, but events processed top-to-bottom.
             for ((_pos, node_widget), node_layout) in

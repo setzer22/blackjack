@@ -1,4 +1,4 @@
-use std::{cell::Ref, ops::Deref, rc::Rc};
+use std::{ops::Deref, rc::Rc};
 
 use anyhow::bail;
 use blackjack_engine::{

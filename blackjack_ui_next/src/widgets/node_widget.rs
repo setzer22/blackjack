@@ -331,11 +331,10 @@ impl Widget for NodeWidget {
 
         let titlebar_rect = self.titlebar_rect(layout);
 
-        let mut status = EventStatus::Ignored;
         let dragging = ctx.claim_drag_event(layout.widget_id, titlebar_rect, MouseButton::Primary);
 
         if dragging {
-            status = EventStatus::Consumed;
+            status.consume_event();
             let delta = ctx.input_state.mouse.delta();
             if let Some(cb) = self.on_node_dragged.take() {
                 ctx.dispatch_callback(cb, delta);
@@ -349,9 +348,7 @@ impl Widget for NodeWidget {
                 .button_state
                 .is_clicked(MouseButton::Primary)
         {
-            // When the mouse clicks anywhere on the node, raise that node.
-            // TODO: In the future, this will also be a selection event.
-            status = EventStatus::Consumed;
+            status.consume_event();
         }
     }
 }
