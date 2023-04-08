@@ -4,7 +4,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-use blackjack_engine::prelude::{edit_ops, HalfEdgeMesh};
+use blackjack_engine::prelude::{edit_ops, HalfEdgeMesh, VertexIndexBuffers};
 use glam::Vec3;
 
 use wgpu::{
@@ -74,6 +74,66 @@ pub struct GizmoRoutine {
     transform_gizmo: GizmosLayout,
 }
 
+/// A helper struct to build a GizmoLayout.
+#[derive(Default)]
+pub struct GizmoMeshBuilder {
+    positions: Vec<Vec3>,
+    indices: Vec<u32>,
+    subgizmo_ids: Vec<u32>,
+    next_subgizmo_id: u32,
+    subgizmos: Vec<Subgizmo>,
+}
+
+impl GizmoMeshBuilder {
+    pub fn add_subgizmo_mesh(&mut self, mesh: &HalfEdgeMesh, subgizmo: Subgizmo) {
+        let buffers = mesh
+            .generate_triangle_buffers_smooth(true)
+            .expect("Subgizmo mesh should not fail");
+        let index_offset = self.positions.len() as u32;
+
+        self.positions.extend_from_slice(&buffers.positions);
+        self.indices
+            .extend(buffers.indices.iter().map(|idx| idx + index_offset));
+        self.subgizmo_ids
+            .extend(std::iter::repeat(self.next_subgizmo_id).take(buffers.positions.len()));
+
+        self.subgizmos.push(subgizmo);
+
+        self.next_subgizmo_id += 1;
+    }
+
+    pub fn build(self, device: &Device) -> GizmosLayout {
+        let indices = device.create_buffer_init(&BufferInitDescriptor {
+            label: Some("Gizmo Indices"),
+            contents: bytemuck::cast_slice(&self.indices),
+            usage: BufferUsages::INDEX,
+        });
+        let positions = device.create_buffer_init(&BufferInitDescriptor {
+            label: Some("Gizmo Positions"),
+            contents: bytemuck::cast_slice(&self.positions),
+            usage: BufferUsages::STORAGE,
+        });
+        let subgizmo_ids = device.create_buffer_init(&BufferInitDescriptor {
+            label: Some("Gizmo Subgizmo IDs"),
+            contents: bytemuck::cast_slice(&self.subgizmo_ids),
+            usage: BufferUsages::STORAGE,
+        });
+        let subgizmos = device.create_buffer_init(&BufferInitDescriptor {
+            label: Some("Gizmo Subgizmos"),
+            contents: bytemuck::cast_slice(&self.subgizmos),
+            usage: BufferUsages::STORAGE,
+        });
+
+        GizmosLayout {
+            indices,
+            positions,
+            subgizmo_ids,
+            subgizmos,
+            num_indices: self.indices.len(),
+        }
+    }
+}
+
 impl GizmoRoutine {
     pub fn new(
         device: &Device,
@@ -100,11 +160,19 @@ impl GizmoRoutine {
     }
 
     pub fn build_transform_gizmo(device: &Device) -> GizmosLayout {
-        // Build translation gizmo
+        // The arrow mesh, which is used for all three axes. Can be used to
+        // translate in a single direction.
         let arrow_mesh = HalfEdgeMesh::from_wavefront_obj_str(include_str!(
             "../../resources/meshes/gizmo_translate_arrow.obj"
         ))
         .expect("Could not open arrow mesh gizmo OBJ");
+
+        // The plane mesh, shown at intersections between axes. Can be used to
+        // translate in two simultaneous directions.
+        let plane_mesh = HalfEdgeMesh::from_wavefront_obj_str(include_str!(
+            "../../resources/meshes/gizmo_translate_plane_handle.obj"
+        ))
+        .expect("Could not open plane handle mesh gizmo OBJ");
 
         // Arrow OBJ is stored looking upward (Y axis)
         let x_axis = arrow_mesh.clone();
@@ -124,87 +192,74 @@ impl GizmoRoutine {
             Vec3::ONE,
         )
         .expect("Transform");
+        
+        let xy_plane = plane_mesh.clone();
+        let xz_plane = plane_mesh.clone();
+        let yz_plane = plane_mesh.clone();
+        edit_ops::transform(
+            &xz_plane,
+            Vec3::ZERO,
+            Vec3::X * 90.0f32.to_radians(),
+            Vec3::ONE,
+        ).expect("Transform");
+        edit_ops::transform(
+            &yz_plane,
+            Vec3::ZERO,
+            Vec3::Y * -90.0f32.to_radians(),
+            Vec3::ONE,
+        ).expect("Transform");
 
-        // Convert to buffers
-        let mut indices = vec![];
-        let mut positions = vec![];
-        let mut subgizmo_ids = vec![];
-
-        let x_buffers = x_axis
-            .generate_triangle_buffers_smooth(true)
-            .expect("Buffers");
-        let y_buffers = y_axis
-            .generate_triangle_buffers_smooth(true)
-            .expect("Buffers");
-        let z_buffers = z_axis
-            .generate_triangle_buffers_smooth(true)
-            .expect("Buffers");
-
-        positions.extend_from_slice(&x_buffers.positions);
-        positions.extend_from_slice(&y_buffers.positions);
-        positions.extend_from_slice(&z_buffers.positions);
-
-        indices.extend_from_slice(&x_buffers.indices);
-        indices.extend(
-            y_buffers
-                .indices
-                .iter()
-                .map(|idx| idx + x_buffers.positions.len() as u32),
-        );
-        indices.extend(
-            z_buffers.indices.iter().map(|idx| {
-                idx + x_buffers.positions.len() as u32 + y_buffers.positions.len() as u32
-            }),
-        );
-
-        subgizmo_ids.extend(std::iter::repeat(0u32).take(x_buffers.positions.len()));
-        subgizmo_ids.extend(std::iter::repeat(1u32).take(y_buffers.positions.len()));
-        subgizmo_ids.extend(std::iter::repeat(2u32).take(z_buffers.positions.len()));
-
-        let subgizmos = vec![
-            // X arrow handle
+        let mut builder = GizmoMeshBuilder::default();
+        builder.add_subgizmo_mesh(
+            &x_axis,
             Subgizmo {
                 color: Vec3::new(1.0, 0.0, 0.0),
                 object_pick_id: 0,
                 is_highlighted: 0,
             },
-            // Y arrow handle
+        );
+        builder.add_subgizmo_mesh(
+            &y_axis,
             Subgizmo {
                 color: Vec3::new(0.0, 1.0, 0.0),
                 object_pick_id: 1,
                 is_highlighted: 0,
             },
-            // Z arrow handle
+        );
+        builder.add_subgizmo_mesh(
+            &z_axis,
             Subgizmo {
                 color: Vec3::new(0.0, 0.0, 1.0),
                 object_pick_id: 2,
                 is_highlighted: 0,
             },
-        ];
+        );
+        builder.add_subgizmo_mesh(
+            &xy_plane,
+            Subgizmo {
+                color: Vec3::new(1.0, 1.0, 0.0),
+                object_pick_id: 3,
+                is_highlighted: 0,
+            },
+        );
+        builder.add_subgizmo_mesh(
+            &xz_plane,
+            Subgizmo {
+                color: Vec3::new(1.0, 0.0, 1.0),
+                object_pick_id: 4,
+                is_highlighted: 0,
+            },
+        );
+        builder.add_subgizmo_mesh(
+            &yz_plane,
+            Subgizmo {
+                color: Vec3::new(0.0, 1.0, 1.0),
+                object_pick_id: 5,
+                is_highlighted: 0,
+            },
+        );
 
-        GizmosLayout {
-            num_indices: indices.len(),
-            indices: device.create_buffer_init(&BufferInitDescriptor {
-                label: None,
-                contents: bytemuck::cast_slice(&indices),
-                usage: BufferUsages::INDEX,
-            }),
-            positions: device.create_buffer_init(&BufferInitDescriptor {
-                label: None,
-                contents: bytemuck::cast_slice(&positions),
-                usage: BufferUsages::STORAGE,
-            }),
-            subgizmo_ids: device.create_buffer_init(&BufferInitDescriptor {
-                label: None,
-                contents: bytemuck::cast_slice(&subgizmo_ids),
-                usage: BufferUsages::STORAGE,
-            }),
-            subgizmos: device.create_buffer_init(&BufferInitDescriptor {
-                label: None,
-                contents: bytemuck::cast_slice(&subgizmos),
-                usage: BufferUsages::STORAGE,
-            }),
-        }
+        builder.build(device)
     }
 
     pub fn render(
