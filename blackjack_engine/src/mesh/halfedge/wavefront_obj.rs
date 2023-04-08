@@ -7,7 +7,7 @@
 use slotmap::SecondaryMap;
 use std::{
     fs::File,
-    io::{BufReader, BufWriter, Write},
+    io::{BufReader, BufWriter, Write, BufRead},
     path::PathBuf,
 };
 use wavefront_rs::obj::{
@@ -125,11 +125,10 @@ impl HalfEdgeMesh {
         Ok(())
     }
 
-    pub fn from_wavefront_obj(path: PathBuf) -> Result<HalfEdgeMesh> {
-        let mut reader = BufReader::new(File::open(path)?);
+    fn from_wavefront_obj(reader: &mut impl BufRead) -> Result<HalfEdgeMesh> {
         let mut positions = vec![];
         let mut polygons = vec![];
-        obj::read_lexer::ReadLexer::read_to_end(&mut reader, |entity| match entity {
+        obj::read_lexer::ReadLexer::read_to_end(reader, |entity| match entity {
             Entity::Vertex { x, y, z, w: _w } => {
                 positions.push(Vec3::new(x as f32, y as f32, z as f32));
             }
@@ -142,6 +141,16 @@ impl HalfEdgeMesh {
             _ => {}
         })?;
         halfedge::HalfEdgeMesh::build_from_polygons(&positions, &polygons)
+    }
+
+    pub fn from_wavefront_obj_file(path: PathBuf) -> Result<HalfEdgeMesh> {
+        let mut reader = BufReader::new(File::open(path)?);
+        Self::from_wavefront_obj(&mut reader)
+    }
+    
+    pub fn from_wavefront_obj_str(obj_str: &str) -> Result<HalfEdgeMesh> {
+        let mut reader = BufReader::new(obj_str.as_bytes());
+        Self::from_wavefront_obj(&mut reader)
     }
 }
 
@@ -165,7 +174,7 @@ mod lua_api {
     /// coordinates.
     #[lua(under = "HalfEdgeMesh")]
     pub fn from_wavefront_obj(path: String) -> Result<HalfEdgeMesh> {
-        HalfEdgeMesh::from_wavefront_obj(path.into())
+        HalfEdgeMesh::from_wavefront_obj_file(path.into())
     }
 }
 
@@ -175,7 +184,7 @@ mod tests {
 
     #[test]
     pub fn test_load_obj() {
-        HalfEdgeMesh::from_wavefront_obj("../test/test_mesh.obj".into())
+        HalfEdgeMesh::from_wavefront_obj_file("../test/test_mesh.obj".into())
             .unwrap()
             .to_wavefront_obj("/tmp/output.obj")
             .unwrap();

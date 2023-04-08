@@ -13,6 +13,7 @@ use crate::viewport_3d::Viewport3dSettings;
 
 use self::{
     face_routine::FaceRoutine,
+    gizmo_routine::GizmoRoutine,
     grid_routine::GridRoutine,
     id_picking_routine::IdPickingRoutine,
     point_cloud_routine::PointCloudRoutine,
@@ -44,6 +45,9 @@ pub mod point_cloud_routine;
 /// A render routine to draw meshes
 pub mod face_routine;
 
+/// A render routine to draw gizmos
+pub mod gizmo_routine;
+
 /// A routine to implement object picking, by reading the id_map buffer.
 pub mod id_picking_routine;
 
@@ -61,6 +65,7 @@ pub struct BlackjackViewportRenderer {
     pub wireframe_routine: WireframeRoutine,
     pub point_cloud_routine: PointCloudRoutine,
     pub face_routine: FaceRoutine,
+    pub gizmo_routine: GizmoRoutine,
     pub id_picking_routine: IdPickingRoutine,
     pub grid_routine: GridRoutine,
     pub multisample_config: MultisampleConfig,
@@ -98,6 +103,7 @@ impl BlackjackViewportRenderer {
                 &shader_manager,
                 multisample_config,
             ),
+            gizmo_routine: GizmoRoutine::new(&device, &shader_manager, multisample_config),
             id_picking_routine: IdPickingRoutine::new(&device),
             grid_routine: GridRoutine::new(&device, &shader_manager, multisample_config),
             shader_manager,
@@ -185,6 +191,14 @@ impl BlackjackViewportRenderer {
             &id_map_view,
             &id_depth_view,
             false,
+            false,
+        );
+        self.gizmo_routine.render(
+            &self.device,
+            &mut encoder,
+            texture_manager,
+            &render_state,
+            settings,
             false,
         );
         self.id_picking_routine

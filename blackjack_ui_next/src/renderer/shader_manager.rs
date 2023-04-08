@@ -144,6 +144,7 @@ impl ShaderManager {
         );
         def_shader!("point_cloud_draw", "wgsl/point_cloud_draw.wgsl", opaque);
         def_shader!("face_draw", "wgsl/face_draw.wgsl", opaque);
+        def_shader!("gizmo_color", "wgsl/gizmo_color.wgsl", opaque);
         def_shader!("grid_shader", "wgsl/grid_shader.wgsl", alpha_blend);
         def_shader!(
             "face_overlay_draw",

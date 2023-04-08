@@ -215,7 +215,7 @@ impl FaceRoutine {
                 device,
                 shader_manager.get("face_id_draw"),
                 PrimitiveTopology::TriangleList,
-                FrontFace::Ccw,
+                FrontFace::Cw,
                 // The id map is always drawn without multisampling.
                 // We don't care about aliasing there.
                 MultisampleConfig::One,
