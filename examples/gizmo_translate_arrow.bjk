@@ -1,0 +1,319 @@
+// BLACKJACK_VERSION_HEADER 0 1 0
+(
+    nodes: [
+        (
+            op_name: "MakeCylinder",
+            return_value: Some("out_mesh"),
+            inputs: [
+                (
+                    name: "center",
+                    data_type: "BJK_VECTOR",
+                    kind: External(
+                        promoted: None,
+                    ),
+                ),
+                (
+                    name: "radius",
+                    data_type: "BJK_SCALAR",
+                    kind: External(
+                        promoted: None,
+                    ),
+                ),
+                (
+                    name: "height",
+                    data_type: "BJK_SCALAR",
+                    kind: External(
+                        promoted: None,
+                    ),
+                ),
+                (
+                    name: "num_vertices",
+                    data_type: "BJK_SCALAR",
+                    kind: External(
+                        promoted: None,
+                    ),
+                ),
+            ],
+            outputs: [
+                (
+                    name: "out_mesh",
+                    data_type: "BJK_MESH",
+                ),
+            ],
+        ),
+        (
+            op_name: "ExtrudeFaces",
+            return_value: Some("out_mesh"),
+            inputs: [
+                (
+                    name: "in_mesh",
+                    data_type: "BJK_MESH",
+                    kind: Conection(
+                        node_idx: 0,
+                        param_name: "out_mesh",
+                    ),
+                ),
+                (
+                    name: "faces",
+                    data_type: "BJK_SELECTION",
+                    kind: External(
+                        promoted: None,
+                    ),
+                ),
+                (
+                    name: "amount",
+                    data_type: "BJK_SCALAR",
+                    kind: External(
+                        promoted: None,
+                    ),
+                ),
+            ],
+            outputs: [
+                (
+                    name: "out_mesh",
+                    data_type: "BJK_MESH",
+                ),
+            ],
+        ),
+        (
+            op_name: "EditGeometry",
+            return_value: Some("out_mesh"),
+            inputs: [
+                (
+                    name: "mesh",
+                    data_type: "BJK_MESH",
+                    kind: Conection(
+                        node_idx: 1,
+                        param_name: "out_mesh",
+                    ),
+                ),
+                (
+                    name: "geometry",
+                    data_type: "BJK_STRING",
+                    kind: External(
+                        promoted: None,
+                    ),
+                ),
+                (
+                    name: "selection",
+                    data_type: "BJK_SELECTION",
+                    kind: External(
+                        promoted: None,
+                    ),
+                ),
+                (
+                    name: "translate",
+                    data_type: "BJK_VECTOR",
+                    kind: External(
+                        promoted: None,
+                    ),
+                ),
+                (
+                    name: "rotate",
+                    data_type: "BJK_VECTOR",
+                    kind: External(
+                        promoted: None,
+                    ),
+                ),
+                (
+                    name: "scale",
+                    data_type: "BJK_VECTOR",
+                    kind: External(
+                        promoted: None,
+                    ),
+                ),
+            ],
+            outputs: [
+                (
+                    name: "out_mesh",
+                    data_type: "BJK_MESH",
+                ),
+            ],
+        ),
+        (
+            op_name: "ExtrudeFaces",
+            return_value: Some("out_mesh"),
+            inputs: [
+                (
+                    name: "in_mesh",
+                    data_type: "BJK_MESH",
+                    kind: Conection(
+                        node_idx: 2,
+                        param_name: "out_mesh",
+                    ),
+                ),
+                (
+                    name: "faces",
+                    data_type: "BJK_SELECTION",
+                    kind: External(
+                        promoted: None,
+                    ),
+                ),
+                (
+                    name: "amount",
+                    data_type: "BJK_SCALAR",
+                    kind: External(
+                        promoted: None,
+                    ),
+                ),
+            ],
+            outputs: [
+                (
+                    name: "out_mesh",
+                    data_type: "BJK_MESH",
+                ),
+            ],
+        ),
+        (
+            op_name: "EditGeometry",
+            return_value: Some("out_mesh"),
+            inputs: [
+                (
+                    name: "mesh",
+                    data_type: "BJK_MESH",
+                    kind: Conection(
+                        node_idx: 3,
+                        param_name: "out_mesh",
+                    ),
+                ),
+                (
+                    name: "geometry",
+                    data_type: "BJK_STRING",
+                    kind: External(
+                        promoted: None,
+                    ),
+                ),
+                (
+                    name: "selection",
+                    data_type: "BJK_SELECTION",
+                    kind: External(
+                        promoted: None,
+                    ),
+                ),
+                (
+                    name: "translate",
+                    data_type: "BJK_VECTOR",
+                    kind: External(
+                        promoted: None,
+                    ),
+                ),
+                (
+                    name: "rotate",
+                    data_type: "BJK_VECTOR",
+                    kind: External(
+                        promoted: None,
+                    ),
+                ),
+                (
+                    name: "scale",
+                    data_type: "BJK_VECTOR",
+                    kind: External(
+                        promoted: None,
+                    ),
+                ),
+            ],
+            outputs: [
+                (
+                    name: "out_mesh",
+                    data_type: "BJK_MESH",
+                ),
+            ],
+        ),
+    ],
+    default_node: Some(4),
+    ui_data: Some((
+        node_positions: [
+            (114.89929, 74.55347),
+            (425.42862, 94.76941),
+            (646.26874, 25.9605),
+            (933.1227, 85.22924),
+            (1170.3755, 28.545902),
+        ],
+        node_order: [
+            0,
+            1,
+            2,
+            3,
+            4,
+        ],
+        pan: (-488.74866, 5.371395),
+        zoom: 1.1576248,
+        locked_gizmo_nodes: [],
+    )),
+    external_parameters: Some((
+        param_values: {
+            (
+                node_idx: 0,
+                param_name: "center",
+            ): Vector((0.0, 0.75, 0.0)),
+            (
+                node_idx: 1,
+                param_name: "faces",
+            ): Selection("1"),
+            (
+                node_idx: 0,
+                param_name: "height",
+            ): Scalar(1.5),
+            (
+                node_idx: 4,
+                param_name: "selection",
+            ): Selection("1"),
+            (
+                node_idx: 4,
+                param_name: "rotate",
+            ): Vector((0.0, 0.0, 0.0)),
+            (
+                node_idx: 4,
+                param_name: "geometry",
+            ): String("Face"),
+            (
+                node_idx: 3,
+                param_name: "amount",
+            ): Scalar(0.25),
+            (
+                node_idx: 4,
+                param_name: "scale",
+            ): Vector((0.01, 0.01, 0.01)),
+            (
+                node_idx: 2,
+                param_name: "geometry",
+            ): String("Face"),
+            (
+                node_idx: 2,
+                param_name: "scale",
+            ): Vector((2.0, 2.0, 2.0)),
+            (
+                node_idx: 2,
+                param_name: "selection",
+            ): Selection("1"),
+            (
+                node_idx: 4,
+                param_name: "translate",
+            ): Vector((0.0, 0.0, 0.0)),
+            (
+                node_idx: 0,
+                param_name: "num_vertices",
+            ): Scalar(32.0),
+            (
+                node_idx: 1,
+                param_name: "amount",
+            ): Scalar(0.005),
+            (
+                node_idx: 0,
+                param_name: "radius",
+            ): Scalar(0.05),
+            (
+                node_idx: 2,
+                param_name: "translate",
+            ): Vector((0.0, 0.0, 0.0)),
+            (
+                node_idx: 2,
+                param_name: "rotate",
+            ): Vector((0.0, 0.0, 0.0)),
+            (
+                node_idx: 3,
+                param_name: "faces",
+            ): Selection("1"),
+        },
+    )),
+)

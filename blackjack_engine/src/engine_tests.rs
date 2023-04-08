@@ -79,6 +79,18 @@ pub fn test_examples_folder() {
             halfedges: 988,
             faces: 228,
         },
+        Example {
+            path: "../examples/gizmo_translate_arrow.bjk",
+            vertices: 128,
+            halfedges: 448,
+            faces: 98,
+        },
+        Example {
+            path: "../examples/gizmo_translate_plane_handle.bjk",
+            vertices: 30,
+            halfedges: 100,
+            faces: 20,
+        },
     ];
 
     for example in examples {

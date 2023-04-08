@@ -1,0 +1,200 @@
+// BLACKJACK_VERSION_HEADER 0 1 0
+(
+    nodes: [
+        (
+            op_name: "MakeLineFromPoints",
+            return_value: Some("out_mesh"),
+            inputs: [
+                (
+                    name: "points",
+                    data_type: "BJK_STRING",
+                    kind: External(
+                        promoted: None,
+                    ),
+                ),
+            ],
+            outputs: [
+                (
+                    name: "out_mesh",
+                    data_type: "BJK_MESH",
+                ),
+            ],
+        ),
+        (
+            op_name: "ExtrudeAlongCurve",
+            return_value: Some("out_mesh"),
+            inputs: [
+                (
+                    name: "backbone",
+                    data_type: "BJK_MESH",
+                    kind: Conection(
+                        node_idx: 0,
+                        param_name: "out_mesh",
+                    ),
+                ),
+                (
+                    name: "cross_section",
+                    data_type: "BJK_MESH",
+                    kind: Conection(
+                        node_idx: 3,
+                        param_name: "out_mesh",
+                    ),
+                ),
+                (
+                    name: "flip",
+                    data_type: "BJK_SCALAR",
+                    kind: External(
+                        promoted: None,
+                    ),
+                ),
+            ],
+            outputs: [
+                (
+                    name: "out_mesh",
+                    data_type: "BJK_MESH",
+                ),
+            ],
+        ),
+        (
+            op_name: "MakeCircle",
+            return_value: Some("out_mesh"),
+            inputs: [
+                (
+                    name: "center",
+                    data_type: "BJK_VECTOR",
+                    kind: External(
+                        promoted: None,
+                    ),
+                ),
+                (
+                    name: "radius",
+                    data_type: "BJK_SCALAR",
+                    kind: External(
+                        promoted: None,
+                    ),
+                ),
+                (
+                    name: "num_vertices",
+                    data_type: "BJK_SCALAR",
+                    kind: External(
+                        promoted: None,
+                    ),
+                ),
+                (
+                    name: "fill",
+                    data_type: "BJK_STRING",
+                    kind: External(
+                        promoted: None,
+                    ),
+                ),
+            ],
+            outputs: [
+                (
+                    name: "out_mesh",
+                    data_type: "BJK_MESH",
+                ),
+            ],
+        ),
+        (
+            op_name: "Transform",
+            return_value: Some("out_mesh"),
+            inputs: [
+                (
+                    name: "mesh",
+                    data_type: "BJK_MESH",
+                    kind: Conection(
+                        node_idx: 2,
+                        param_name: "out_mesh",
+                    ),
+                ),
+                (
+                    name: "translate",
+                    data_type: "BJK_VECTOR",
+                    kind: External(
+                        promoted: None,
+                    ),
+                ),
+                (
+                    name: "rotate",
+                    data_type: "BJK_VECTOR",
+                    kind: External(
+                        promoted: None,
+                    ),
+                ),
+                (
+                    name: "scale",
+                    data_type: "BJK_VECTOR",
+                    kind: External(
+                        promoted: None,
+                    ),
+                ),
+            ],
+            outputs: [
+                (
+                    name: "out_mesh",
+                    data_type: "BJK_MESH",
+                ),
+            ],
+        ),
+    ],
+    default_node: Some(1),
+    ui_data: Some((
+        node_positions: [
+            (83.739136, 227.4862),
+            (512.0325, 227.92468),
+            (-277.19983, 421.14502),
+            (82.19409, 411.64734),
+        ],
+        node_order: [
+            1,
+            2,
+            3,
+            0,
+        ],
+        pan: (490.94067, -160.48572),
+        zoom: 1.0,
+        locked_gizmo_nodes: [
+            3,
+        ],
+    )),
+    external_parameters: Some((
+        param_values: {
+            (
+                node_idx: 1,
+                param_name: "flip",
+            ): Scalar(0.0),
+            (
+                node_idx: 2,
+                param_name: "center",
+            ): Vector((0.0, 0.0, 0.0)),
+            (
+                node_idx: 2,
+                param_name: "radius",
+            ): Scalar(0.020000001),
+            (
+                node_idx: 3,
+                param_name: "scale",
+            ): Vector((0.9999955, 0.9999972, 1.0000015)),
+            (
+                node_idx: 3,
+                param_name: "rotate",
+            ): Vector((-1.7105308, 0.0, -0.0)),
+            (
+                node_idx: 2,
+                param_name: "num_vertices",
+            ): Scalar(10.0),
+            (
+                node_idx: 0,
+                param_name: "points",
+            ): String("0,0.6,0\n0.6,0.6,0\n0.6,0,0"),
+            (
+                node_idx: 3,
+                param_name: "translate",
+            ): Vector((0.0, 0.0, 0.0)),
+            (
+                node_idx: 2,
+                param_name: "fill",
+            ): String("None"),
+        },
+    )),
+)
