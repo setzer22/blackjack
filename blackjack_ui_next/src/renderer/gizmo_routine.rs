@@ -76,6 +76,7 @@ impl RoutineLayout for GizmosLayout {
 pub struct GizmoRoutine {
     gizmo_color_routine: RoutineRenderer<GizmosLayout>,
     gizmo_id_routine: RoutineRenderer<GizmosLayout>,
+    transform_gizmo: GizmosLayout,
 }
 
 /// A helper struct to build a GizmoLayout.
@@ -169,17 +170,10 @@ impl GizmoRoutine {
             MultisampleConfig::One,
         );
 
-        // TODO: Placeholder code
-        gizmo_color_routine
-            .layouts
-            .push(Self::build_transform_gizmo(device));
-        gizmo_id_routine
-            .layouts
-            .push(Self::build_transform_gizmo(device));
-
         GizmoRoutine {
             gizmo_color_routine,
             gizmo_id_routine,
+            transform_gizmo: GizmoRoutine::build_transform_gizmo(device),
         }
     }
 
@@ -257,7 +251,9 @@ impl GizmoRoutine {
         self.gizmo_color_routine.render(
             device,
             encoder,
-            RenderCommand::new(texture_manager, render_state, &()).clear_buffer(clear_buffer),
+            RenderCommand::new(texture_manager, render_state, &())
+                .clear_buffer(clear_buffer)
+                .borrowed_layouts(vec![&self.transform_gizmo]),
         );
         self.gizmo_id_routine.render(
             device,
@@ -265,7 +261,8 @@ impl GizmoRoutine {
             RenderCommand::new(texture_manager, render_state, &())
                 .clear_buffer(clear_buffer)
                 .offscren_targets(&[&render_state.id_map_target])
-                .override_depth(Some(&render_state.id_map_depth_target)),
+                .override_depth(Some(&render_state.id_map_depth_target))
+                .borrowed_layouts(vec![&self.transform_gizmo]),
         );
     }
 }
