@@ -25,6 +25,9 @@ pub enum DrawType<'a> {
     /// Uses vertex pulling without an index buffer, will draw instances of
     /// `num_vertices` and the instance id will is used to index the storage
     UseInstances {
+        // TODO: Using instances like this is not as performant. We should
+        // issue a single draw call for num_vertices * num_instances instead
+        // and let the shader do the math.
         num_vertices: usize,
         num_instances: usize,
     },
@@ -105,13 +108,13 @@ impl MultisampleConfig {
 }
 
 /// A structure holding the configuration to render a routine.
-pub struct RenderCommand<'a, Settings> {
+pub struct RenderCommand<'a, Layout: RoutineLayout> {
     /// The [`TextureManager`]
     pub texture_manager: &'a TextureManager,
     /// The [`ViewportRenderState`]
     pub render_state: &'a ViewportRenderState,
     /// The settings. Should match the Layout.
-    pub settings: &'a Settings,
+    pub settings: &'a Layout::Settings,
     /// For each ShaderColorTarget::Offscreen in the provided shader, one
     /// texture view handle matching its configuration.
     pub offscreen_targets: &'a [&'a TextureView],
@@ -119,18 +122,22 @@ pub struct RenderCommand<'a, Settings> {
     pub override_depth: Option<&'a TextureView>,
     /// If true, the provided targets will be cleared before the render pass.
     pub clear_buffer: bool,
+    /// Layouts passed from the outside. These will be drawn in addition to any
+    /// layouts stored in the routine's `inner` buffer.
+    pub borrowed_layouts: Vec<&'a Layout>,
 }
 
-impl<'a, Settings> RenderCommand<'a, Settings> {
+impl<'a, Layout: RoutineLayout> RenderCommand<'a, Layout> {
     pub fn new(
         texture_manager: &'a TextureManager,
         render_state: &'a ViewportRenderState,
-        settings: &'a Settings,
+        settings: &'a Layout::Settings,
     ) -> Self {
         Self {
             texture_manager,
             render_state,
             settings,
+            borrowed_layouts: vec![],
             offscreen_targets: &[],
             override_depth: None,
             clear_buffer: false,
@@ -149,6 +156,11 @@ impl<'a, Settings> RenderCommand<'a, Settings> {
 
     pub fn clear_buffer(&mut self, clear_buffer: bool) -> &mut Self {
         self.clear_buffer = clear_buffer;
+        self
+    }
+
+    pub fn borrowed_layouts(&mut self, borrowed_layouts: Vec<&'a Layout>) -> &mut Self {
+        self.borrowed_layouts = borrowed_layouts;
         self
     }
 }
@@ -244,20 +256,46 @@ impl<Layout: RoutineLayout + 'static> RoutineRenderer<Layout> {
     pub fn create_bind_groups(
         &self,
         device: &Device,
-        texture_manager: &TextureManager,
-        settings: &Layout::Settings,
+        command: &RenderCommand<Layout>,
     ) -> Vec<BindGroup> {
-        self.layouts
-            .iter()
+        self.iter_layouts(command)
             .map(|buffer| {
                 let mut builder = BindGroupBuilder::new();
-                for buffer in buffer.get_wgpu_buffers(settings) {
+
+                let buffers = buffer.get_wgpu_buffers(command.settings);
+                debug_assert!(
+                    buffers.len() == Layout::num_buffers(),
+                    "In routine {}. Expected {} buffers, got {}",
+                    self.name,
+                    Layout::num_buffers(),
+                    buffers.len()
+                );
+
+                let textures = buffer.get_wgpu_textures(command.texture_manager, command.settings);
+                debug_assert!(
+                    textures.len() == Layout::num_textures(),
+                    "In routine {}. Expected {} textures, got {}",
+                    self.name,
+                    Layout::num_textures(),
+                    textures.len()
+                );
+
+                let uniforms = buffer.get_wgpu_uniforms(command.settings);
+                debug_assert!(
+                    uniforms.len() == Layout::num_uniforms(),
+                    "In routine {}. Expected {} uniforms, got {}",
+                    self.name,
+                    Layout::num_uniforms(),
+                    uniforms.len()
+                );
+
+                for buffer in buffers {
                     builder.append_buffer(buffer);
                 }
-                for texture in buffer.get_wgpu_textures(texture_manager, settings) {
+                for texture in textures {
                     builder.append_texture_view(texture);
                 }
-                for uniform in buffer.get_wgpu_uniforms(settings) {
+                for uniform in uniforms {
                     builder.append_buffer(uniform);
                 }
                 builder.build(device, None, &self.bgl)
@@ -265,11 +303,20 @@ impl<Layout: RoutineLayout + 'static> RoutineRenderer<Layout> {
             .collect()
     }
 
+    pub fn iter_layouts<'a>(
+        &'a self,
+        command: &'a RenderCommand<'a, Layout>,
+    ) -> impl Iterator<Item = &Layout> + 'a {
+        self.layouts
+            .iter()
+            .chain(command.borrowed_layouts.iter().map(|l| *l))
+    }
+
     pub fn render(
         &self,
         device: &Device,
         encoder: &mut CommandEncoder,
-        command: &mut RenderCommand<'_, Layout::Settings>,
+        command: &mut RenderCommand<'_, Layout>,
     ) {
         let mut color_attachments = vec![];
         let mut offscreen_targets = command.offscreen_targets.iter();
@@ -309,8 +356,8 @@ impl<Layout: RoutineLayout + 'static> RoutineRenderer<Layout> {
             }
         }
 
-        let bind_groups =
-            self.create_bind_groups(device, command.texture_manager, command.settings);
+        let bind_groups = self.create_bind_groups(device, command);
+
         let mut pass = encoder.begin_render_pass(&RenderPassDescriptor {
             label: Some(&format!("Blackjack Viewport3d RenderPass: {}", self.name)),
             color_attachments: &color_attachments,
@@ -332,7 +379,7 @@ impl<Layout: RoutineLayout + 'static> RoutineRenderer<Layout> {
 
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, &command.render_state.viewport_uniforms_bg, &[]);
-        for (buffer, bg) in self.layouts.iter().zip(bind_groups.iter()) {
+        for (buffer, bg) in self.iter_layouts(command).zip(bind_groups.iter()) {
             pass.set_bind_group(1, bg, &[]);
 
             match buffer.get_draw_type(command.settings) {
