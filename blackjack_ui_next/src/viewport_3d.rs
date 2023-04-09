@@ -231,15 +231,12 @@ impl Viewport3d {
         }
 
         if let Some(last_frame_bounds) = self.last_frame_bounds {
-            if let Some(picked) = self.renderer.check_picked_object(
+            let picked = self.renderer.check_picked_object(
                 cursor_position,
                 last_frame_bounds,
                 PickableIdFilter::Subgizmos,
-            ) {
-                dbg!(picked.get_subgizmo_index());
-            } else {
-                dbg!("Nothing picked");
-            }
+            );
+            self.renderer.update_gizmo_state(picked);
         }
     }
 }

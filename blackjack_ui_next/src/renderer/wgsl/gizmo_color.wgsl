@@ -34,7 +34,7 @@ fn vs_main(
     if subgizmo.is_highlighted == 0u {
         output.color = unpack_v3(subgizmo.color);
     } else {
-        output.color = vec3(1.0, 1.0, 0.0);
+        output.color = vec3(1.0, 1.0, 1.0);
     }
     return output;
 }

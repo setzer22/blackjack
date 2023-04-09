@@ -4,6 +4,8 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+use std::collections::HashMap;
+
 use blackjack_engine::prelude::{edit_ops, HalfEdgeMesh};
 use glam::Vec3;
 
@@ -22,6 +24,14 @@ use super::{
     texture_manager::TextureManager,
 };
 
+/// The type of gizmo. This is used to identify the shape of a gizmo and its
+/// parts (subgizmos).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum GizmoKind {
+    /// A gizmo that can be used to translate an object.
+    Translate,
+}
+
 /// A subgizmo represents a piece of a gizmo. Vertices of a gizmo are annotated
 /// with a subgizmo id, so the shader can reference this data structure. This is
 /// used to highlight different parts of the gizmo and to do object picking.
@@ -38,7 +48,8 @@ pub struct GizmosLayout {
     indices: Buffer,
     positions: Buffer,
     subgizmo_ids: Buffer,
-    subgizmos: Buffer,
+    subgizmos: Vec<Subgizmo>,
+    subgizmos_buffer: Buffer,
     num_indices: usize,
 }
 
@@ -46,7 +57,7 @@ impl RoutineLayout for GizmosLayout {
     type Settings = ();
 
     fn get_wgpu_buffers(&self, _settings: &()) -> Vec<&Buffer> {
-        vec![&self.positions, &self.subgizmo_ids, &self.subgizmos]
+        vec![&self.positions, &self.subgizmo_ids, &self.subgizmos_buffer]
     }
 
     fn get_wgpu_textures<'a>(
@@ -76,7 +87,8 @@ impl RoutineLayout for GizmosLayout {
 pub struct GizmoRoutine {
     gizmo_color_routine: RoutineRenderer<GizmosLayout>,
     gizmo_id_routine: RoutineRenderer<GizmosLayout>,
-    transform_gizmo: GizmosLayout,
+    gizmo_layouts: HashMap<GizmoKind, GizmosLayout>,
+    current_gizmo: Option<GizmoKind>,
 }
 
 /// A helper struct to build a GizmoLayout.
@@ -127,7 +139,7 @@ impl GizmoMeshBuilder {
             contents: bytemuck::cast_slice(&self.subgizmo_ids),
             usage: BufferUsages::STORAGE,
         });
-        let subgizmos = device.create_buffer_init(&BufferInitDescriptor {
+        let subgizmos_buffer = device.create_buffer_init(&BufferInitDescriptor {
             label: Some("Gizmo Subgizmos"),
             contents: bytemuck::cast_slice(&self.subgizmos),
             usage: BufferUsages::STORAGE,
@@ -137,7 +149,8 @@ impl GizmoMeshBuilder {
             indices,
             positions,
             subgizmo_ids,
-            subgizmos,
+            subgizmos_buffer,
+            subgizmos: self.subgizmos,
             num_indices: self.indices.len(),
         }
     }
@@ -170,14 +183,95 @@ impl GizmoRoutine {
             MultisampleConfig::One,
         );
 
+        let gizmo_layouts = HashMap::from([
+            (
+                GizmoKind::Translate,
+                GizmoRoutine::build_translate_gizmo(device),
+            ),
+            // Add more here
+        ]);
+
         GizmoRoutine {
             gizmo_color_routine,
             gizmo_id_routine,
-            transform_gizmo: GizmoRoutine::build_transform_gizmo(device),
+            gizmo_layouts,
+            current_gizmo: Some(GizmoKind::Translate),
         }
     }
 
-    pub fn build_transform_gizmo(device: &Device) -> GizmosLayout {
+    pub fn set_current_gizmo(&mut self, gizmo_kind: Option<GizmoKind>) {
+        self.current_gizmo = gizmo_kind;
+    }
+
+    pub fn update_gizmo_state(
+        &mut self,
+        device: &Device,
+        highlighted_subgizmo: Option<PickableId>,
+    ) {
+        // Get the gizmo state from the CPU-side data, modify it, then upload
+        // new wgpu Buffers.
+        //
+        // We could map the buffers but it's more complicated, involves unsafe,
+        // and the buffer is really small so it's hardly worth it.
+        if let Some(gizmo_kind) = self.current_gizmo {
+            let gizmo_layout = &mut self
+                .gizmo_layouts
+                .get_mut(&gizmo_kind)
+                .expect("There should be a gizmo data for the current gizmo");
+            for subgizmo in &mut gizmo_layout.subgizmos {
+                match highlighted_subgizmo {
+                    Some(highlighted_subgizmo) => {
+                        subgizmo.is_highlighted =
+                            (subgizmo.object_pick_id == highlighted_subgizmo) as u32;
+                    }
+                    None => {
+                        subgizmo.is_highlighted = 0;
+                    }
+                }
+            }
+            gizmo_layout.subgizmos_buffer = device.create_buffer_init(&BufferInitDescriptor {
+                label: Some("Gizmo Subgizmos"),
+                contents: bytemuck::cast_slice(&gizmo_layout.subgizmos),
+                usage: BufferUsages::STORAGE,
+            });
+        }
+    }
+
+    pub fn render(
+        &self,
+        device: &Device,
+        encoder: &mut CommandEncoder,
+        texture_manager: &TextureManager,
+        render_state: &ViewportRenderState,
+        clear_buffer: bool,
+    ) {
+        let layouts = self
+            .current_gizmo
+            .as_ref()
+            .map(|gizmo_kind| &self.gizmo_layouts[gizmo_kind])
+            .into_iter()
+            .collect::<Vec<_>>();
+
+        self.gizmo_color_routine.render(
+            device,
+            encoder,
+            RenderCommand::new(texture_manager, render_state, &())
+                .clear_buffer(clear_buffer)
+                .borrowed_layouts(layouts.clone()),
+        );
+        self.gizmo_id_routine.render(
+            device,
+            encoder,
+            RenderCommand::new(texture_manager, render_state, &())
+                .clear_buffer(clear_buffer)
+                .offscren_targets(&[&render_state.id_map_target])
+                .override_depth(Some(&render_state.id_map_depth_target))
+                .borrowed_layouts(layouts),
+        );
+    }
+
+    /// builds the meshes for the transform gizmo
+    fn build_translate_gizmo(device: &Device) -> GizmosLayout {
         // The arrow mesh, which is used for all three axes. Can be used to
         // translate in a single direction.
         let arrow_mesh = HalfEdgeMesh::from_wavefront_obj_str(include_str!(
@@ -238,31 +332,5 @@ impl GizmoRoutine {
         builder.add_subgizmo_mesh(&yz_plane, Vec3::new(0.0, 1.0, 1.0));
 
         builder.build(device)
-    }
-
-    pub fn render(
-        &self,
-        device: &Device,
-        encoder: &mut CommandEncoder,
-        texture_manager: &TextureManager,
-        render_state: &ViewportRenderState,
-        clear_buffer: bool,
-    ) {
-        self.gizmo_color_routine.render(
-            device,
-            encoder,
-            RenderCommand::new(texture_manager, render_state, &())
-                .clear_buffer(clear_buffer)
-                .borrowed_layouts(vec![&self.transform_gizmo]),
-        );
-        self.gizmo_id_routine.render(
-            device,
-            encoder,
-            RenderCommand::new(texture_manager, render_state, &())
-                .clear_buffer(clear_buffer)
-                .offscren_targets(&[&render_state.id_map_target])
-                .override_depth(Some(&render_state.id_map_depth_target))
-                .borrowed_layouts(vec![&self.transform_gizmo]),
-        );
     }
 }

@@ -231,4 +231,9 @@ impl BlackjackViewportRenderer {
             .set_cursor_pos(window_cursor_pos, viewport_rect);
         self.id_picking_routine.id_under_mouse(&self.device, filter)
     }
+
+    pub fn update_gizmo_state(&mut self, highlighted_subgizmo: Option<PickableId>) {
+        self.gizmo_routine
+            .update_gizmo_state(&self.device, highlighted_subgizmo);
+    }
 }
