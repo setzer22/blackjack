@@ -42,24 +42,23 @@ pub struct GizmosLayout {
     num_indices: usize,
 }
 
-const GIZMO_NUM_BUFFERS: usize = 3;
-impl RoutineLayout<GIZMO_NUM_BUFFERS> for GizmosLayout {
+impl RoutineLayout for GizmosLayout {
     type Settings = ();
 
-    fn get_wgpu_buffers(&self, _settings: &()) -> [&Buffer; GIZMO_NUM_BUFFERS] {
-        [&self.positions, &self.subgizmo_ids, &self.subgizmos]
+    fn get_wgpu_buffers(&self, _settings: &()) -> Vec<&Buffer> {
+        vec![&self.positions, &self.subgizmo_ids, &self.subgizmos]
     }
 
     fn get_wgpu_textures<'a>(
-        &'a self,
+        &self,
         _texture_manager: &'a TextureManager,
         _settings: &(),
-    ) -> [&'a TextureView; 0] {
-        []
+    ) -> Vec<&'a TextureView> {
+        vec![]
     }
 
-    fn get_wgpu_uniforms(&self, _settings: &Self::Settings) -> [&Buffer; 0] {
-        []
+    fn get_wgpu_uniforms(&self, _settings: &Self::Settings) -> Vec<&Buffer> {
+        vec![]
     }
 
     fn get_draw_type(&self, _settings: &Self::Settings) -> DrawType<'_> {
@@ -68,11 +67,15 @@ impl RoutineLayout<GIZMO_NUM_BUFFERS> for GizmosLayout {
             num_indices: self.num_indices,
         }
     }
+
+    fn num_buffers() -> usize {
+        3
+    }
 }
 
 pub struct GizmoRoutine {
-    gizmo_color_routine: RoutineRenderer<GizmosLayout, GIZMO_NUM_BUFFERS>,
-    gizmo_id_routine: RoutineRenderer<GizmosLayout, GIZMO_NUM_BUFFERS>,
+    gizmo_color_routine: RoutineRenderer<GizmosLayout>,
+    gizmo_id_routine: RoutineRenderer<GizmosLayout>,
 }
 
 /// A helper struct to build a GizmoLayout.

@@ -29,24 +29,22 @@ pub struct WireframeLayout {
     len: usize,
 }
 
-const NUM_BUFFERS: usize = 2;
-
-impl RoutineLayout<NUM_BUFFERS> for WireframeLayout {
+impl RoutineLayout for WireframeLayout {
     type Settings = ();
-    fn get_wgpu_buffers(&self, _settings: &()) -> [&Buffer; NUM_BUFFERS] {
-        [&self.line_positions, &self.colors]
+    fn get_wgpu_buffers(&self, _settings: &()) -> Vec<&Buffer> {
+        vec![&self.line_positions, &self.colors]
     }
 
     fn get_wgpu_textures<'a>(
-        &'a self,
+        &self,
         _texture_manager: &'a TextureManager,
         _settings: &(),
-    ) -> [&'a TextureView; 0] {
-        []
+    ) -> Vec<&'a TextureView> {
+        vec![]
     }
 
-    fn get_wgpu_uniforms(&self, _settings: &Self::Settings) -> [&Buffer; 0] {
-        []
+    fn get_wgpu_uniforms(&self, _settings: &Self::Settings) -> Vec<&Buffer> {
+        vec![]
     }
 
     fn get_draw_type(&self, _settings: &Self::Settings) -> DrawType<'_> {
@@ -55,10 +53,14 @@ impl RoutineLayout<NUM_BUFFERS> for WireframeLayout {
             num_instances: self.len,
         }
     }
+
+    fn num_buffers() -> usize {
+        2
+    }
 }
 
 pub struct WireframeRoutine {
-    inner: RoutineRenderer<WireframeLayout, NUM_BUFFERS>,
+    inner: RoutineRenderer<WireframeLayout>,
 }
 
 impl WireframeRoutine {

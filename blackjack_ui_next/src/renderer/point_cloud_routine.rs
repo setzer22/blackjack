@@ -25,24 +25,22 @@ pub struct PointCloudLayout {
     len: usize,
 }
 
-const NUM_BUFFERS: usize = 1;
-
-impl RoutineLayout<NUM_BUFFERS> for PointCloudLayout {
+impl RoutineLayout for PointCloudLayout {
     type Settings = ();
-    fn get_wgpu_buffers(&self, _settings: &()) -> [&Buffer; NUM_BUFFERS] {
-        [&self.buffer]
+    fn get_wgpu_buffers(&self, _settings: &()) -> Vec<&Buffer> {
+        vec![&self.buffer]
     }
 
     fn get_wgpu_textures<'a>(
-        &'a self,
+        &self,
         _texture_manager: &'a TextureManager,
         _settings: &(),
-    ) -> [&'a TextureView; 0] {
-        []
+    ) -> Vec<&'a TextureView> {
+        vec![]
     }
 
-    fn get_wgpu_uniforms(&self, _settings: &Self::Settings) -> [&Buffer; 0] {
-        []
+    fn get_wgpu_uniforms(&self, _settings: &Self::Settings) -> Vec<&Buffer> {
+        vec![]
     }
 
     fn get_draw_type(&self, _settings: &Self::Settings) -> DrawType<'_> {
@@ -51,10 +49,14 @@ impl RoutineLayout<NUM_BUFFERS> for PointCloudLayout {
             num_instances: self.len,
         }
     }
+
+    fn num_buffers() -> usize {
+        1
+    }
 }
 
 pub struct PointCloudRoutine {
-    inner: RoutineRenderer<PointCloudLayout, NUM_BUFFERS, 0>,
+    inner: RoutineRenderer<PointCloudLayout>,
 }
 
 impl PointCloudRoutine {

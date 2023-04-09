@@ -36,41 +36,45 @@ pub enum DrawType<'a> {
 /// buffers. Any of the three could be left as empty and will be generated in
 /// the following order: (storages, textures, uniforms). All bindings will be
 /// added to bind group 1, since bind group 0 is already used by rend3.
-pub trait RoutineLayout<
-    const NUM_BUFFERS: usize = 0,
-    const NUM_TEXTURES: usize = 0,
-    const NUM_UNIFORMS: usize = 0,
->
-{
+pub trait RoutineLayout {
     type Settings;
 
     /// Returns one wgpu buffer for each of the `NUM_BUFFERS` buffers
-    fn get_wgpu_buffers(&self, settings: &Self::Settings) -> [&Buffer; NUM_BUFFERS];
+    fn get_wgpu_buffers(&self, settings: &Self::Settings) -> Vec<&Buffer>;
 
     /// Returns one wgpu buffer for each of the `NUM_TEXTURES` buffers
     fn get_wgpu_textures<'a>(
-        &'a self,
+        &self,
         texture_manager: &'a TextureManager,
-        settings: &'a Self::Settings,
-    ) -> [&'a TextureView; NUM_TEXTURES];
+        settings: &Self::Settings,
+    ) -> Vec<&'a TextureView>;
 
     /// Returns one wgpu uniform for eah of the `NUM_UNIFORMS` buffers
-    fn get_wgpu_uniforms(&self, settings: &Self::Settings) -> [&Buffer; NUM_UNIFORMS];
+    fn get_wgpu_uniforms(&self, settings: &Self::Settings) -> Vec<&Buffer>;
 
     /// Returns the draw type that should be used to draw this routine. Either
     /// spawn a fixed number of primitives, or use an index buffer.
     fn get_draw_type(&self, settings: &Self::Settings) -> DrawType<'_>;
 
+    /// Returns the number of buffers that are used by this routine. The
+    /// get_wgpu_buffers method shuld return the same number of buffers.
     fn num_buffers() -> usize {
-        NUM_BUFFERS
+        // Default value
+        0
     }
 
+    /// Returns the number of textures that are used by this routine. The
+    /// get_wgpu_textures method shuld return the same number of buffers.
     fn num_textures() -> usize {
-        NUM_TEXTURES
+        // Default value
+        0
     }
 
+    /// Returns the number of uniforms that are used by this routine. The
+    /// get_wgpu_uniforms method shuld return the same number of buffers.
     fn num_uniforms() -> usize {
-        NUM_UNIFORMS
+        // Default value
+        0
     }
 }
 
@@ -149,12 +153,7 @@ impl<'a, Settings> RenderCommand<'a, Settings> {
     }
 }
 
-pub struct RoutineRenderer<
-    Layout: RoutineLayout<NUM_BUFFERS, NUM_TEXTURES, NUM_UNIFORMS>,
-    const NUM_BUFFERS: usize = 0,
-    const NUM_TEXTURES: usize = 0,
-    const NUM_UNIFORMS: usize = 0,
-> {
+pub struct RoutineRenderer<Layout: RoutineLayout> {
     name: String,
     bgl: BindGroupLayout,
     pipeline: RenderPipeline,
@@ -163,13 +162,7 @@ pub struct RoutineRenderer<
     pub multisample: MultisampleConfig,
 }
 
-impl<
-        Layout: RoutineLayout<NUM_BUFFERS, NUM_TEXTURES, NUM_UNIFORMS> + 'static,
-        const NUM_BUFFERS: usize,
-        const NUM_TEXTURES: usize,
-        const NUM_UNIFORMS: usize,
-    > RoutineRenderer<Layout, NUM_BUFFERS, NUM_TEXTURES, NUM_UNIFORMS>
-{
+impl<Layout: RoutineLayout + 'static> RoutineRenderer<Layout> {
     pub fn new(
         name: &str,
         device: &Device,

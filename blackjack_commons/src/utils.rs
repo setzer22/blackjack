@@ -10,6 +10,8 @@ use smallvec::SmallVec;
 pub type SVec<T> = SmallVec<[T; 4]>;
 pub type SVecN<T, const N: usize> = SmallVec<[T; N]>;
 
+pub use smallvec as svec;
+
 pub trait IteratorUtils: Iterator {
     fn collect_svec(self) -> SVec<Self::Item>
     where

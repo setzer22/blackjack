@@ -39,28 +39,25 @@ pub struct MeshFacesLayout {
     num_indices: usize,
 }
 
-const BASE_MESH_NUM_BUFFERS: usize = 2;
-const BASE_MESH_NUM_TEXTURES: usize = 1;
-impl RoutineLayout<BASE_MESH_NUM_BUFFERS, BASE_MESH_NUM_TEXTURES> for MeshFacesLayout {
+impl RoutineLayout for MeshFacesLayout {
     type Settings = Viewport3dSettings;
 
-    fn get_wgpu_buffers(&self, _settings: &Viewport3dSettings) -> [&Buffer; BASE_MESH_NUM_BUFFERS] {
-        [&self.positions, &self.normals]
+    fn get_wgpu_buffers(&self, _settings: &Viewport3dSettings) -> Vec<&Buffer> {
+        vec![&self.positions, &self.normals]
     }
 
     fn get_wgpu_textures<'a>(
-        &'a self,
+        &self,
         texture_manager: &'a TextureManager,
         settings: &Viewport3dSettings,
-    ) -> [&'a TextureView; BASE_MESH_NUM_TEXTURES] {
-        [texture_manager
+    ) -> Vec<&'a TextureView> {
+        vec![texture_manager
             .get_texture_view(&self.matcaps[settings.matcap % NUM_MATCAPS])
-            .as_ref()
             .unwrap()]
     }
 
-    fn get_wgpu_uniforms(&self, _settings: &Self::Settings) -> [&Buffer; 0] {
-        []
+    fn get_wgpu_uniforms(&self, _settings: &Self::Settings) -> Vec<&Buffer> {
+        vec![]
     }
 
     fn get_draw_type(&self, _settings: &Self::Settings) -> DrawType<'_> {
@@ -69,10 +66,15 @@ impl RoutineLayout<BASE_MESH_NUM_BUFFERS, BASE_MESH_NUM_TEXTURES> for MeshFacesL
             num_indices: self.num_indices,
         }
     }
-}
 
-const OVERLAY_NUM_BUFFERS: usize = 2;
-const OVERLAY_NUM_UNIFORMS: usize = 0;
+    fn num_buffers() -> usize {
+        2
+    }
+
+    fn num_textures() -> usize {
+        1
+    }
+}
 
 /// Represents the buffers to draw the face overlays, flat unshaded
 /// semi-transparent triangles that are drawn over the base mesh.
@@ -85,23 +87,23 @@ pub struct FaceOverlayLayout {
     len: usize,
 }
 
-impl RoutineLayout<OVERLAY_NUM_BUFFERS, 0, OVERLAY_NUM_UNIFORMS> for FaceOverlayLayout {
+impl RoutineLayout for FaceOverlayLayout {
     type Settings = ();
 
-    fn get_wgpu_buffers(&self, _settings: &Self::Settings) -> [&Buffer; OVERLAY_NUM_BUFFERS] {
-        [&self.positions, &self.colors]
+    fn get_wgpu_buffers(&self, _settings: &Self::Settings) -> Vec<&Buffer> {
+        vec![&self.positions, &self.colors]
     }
 
     fn get_wgpu_textures<'a>(
-        &'a self,
+        &self,
         _texture_manager: &'a TextureManager,
-        _settings: &'a Self::Settings,
-    ) -> [&'a TextureView; 0] {
-        []
+        _settings: &Self::Settings,
+    ) -> Vec<&'a TextureView> {
+        vec![]
     }
 
-    fn get_wgpu_uniforms(&self, _settings: &Self::Settings) -> [&Buffer; OVERLAY_NUM_UNIFORMS] {
-        []
+    fn get_wgpu_uniforms(&self, _settings: &Self::Settings) -> Vec<&Buffer> {
+        vec![]
     }
 
     fn get_draw_type(&self, _settings: &Self::Settings) -> DrawType<'_> {
@@ -110,10 +112,11 @@ impl RoutineLayout<OVERLAY_NUM_BUFFERS, 0, OVERLAY_NUM_UNIFORMS> for FaceOverlay
             num_instances: self.len,
         }
     }
-}
 
-const ID_NUM_BUFFERS: usize = 2;
-const ID_NUM_UNIFORMS: usize = 1;
+    fn num_buffers() -> usize {
+        2
+    }
+}
 
 /// Represents the buffers to draw the face ids, used to perform mouse picking.
 pub struct FaceIdLayout {
@@ -129,23 +132,23 @@ pub struct FaceIdLayout {
     len: usize,
 }
 
-impl RoutineLayout<ID_NUM_BUFFERS, 0, ID_NUM_UNIFORMS> for FaceIdLayout {
+impl RoutineLayout for FaceIdLayout {
     type Settings = ();
 
-    fn get_wgpu_buffers(&self, _settings: &Self::Settings) -> [&Buffer; ID_NUM_BUFFERS] {
-        [&self.positions, &self.ids]
+    fn get_wgpu_buffers(&self, _settings: &Self::Settings) -> Vec<&Buffer> {
+        vec![&self.positions, &self.ids]
     }
 
     fn get_wgpu_textures<'a>(
-        &'a self,
+        &self,
         _texture_manager: &'a TextureManager,
-        _settings: &'a Self::Settings,
-    ) -> [&'a TextureView; 0] {
-        []
+        _settings: &Self::Settings,
+    ) -> Vec<&'a TextureView> {
+        vec![]
     }
 
-    fn get_wgpu_uniforms(&self, _settings: &Self::Settings) -> [&Buffer; ID_NUM_UNIFORMS] {
-        [&self.max_id]
+    fn get_wgpu_uniforms(&self, _settings: &Self::Settings) -> Vec<&Buffer> {
+        vec![&self.max_id]
     }
 
     fn get_draw_type(&self, _settings: &Self::Settings) -> DrawType<'_> {
@@ -154,15 +157,21 @@ impl RoutineLayout<ID_NUM_BUFFERS, 0, ID_NUM_UNIFORMS> for FaceIdLayout {
             num_instances: self.len,
         }
     }
+
+    fn num_buffers() -> usize {
+        2
+    }
+
+    fn num_uniforms() -> usize {
+        1
+    }
 }
 
 pub struct FaceRoutine {
     matcaps: Arc<Vec<String>>,
-    base_mesh_routine:
-        RoutineRenderer<MeshFacesLayout, BASE_MESH_NUM_BUFFERS, BASE_MESH_NUM_TEXTURES>,
-    face_overlay_routine:
-        RoutineRenderer<FaceOverlayLayout, OVERLAY_NUM_BUFFERS, 0, OVERLAY_NUM_UNIFORMS>,
-    face_id_routine: RoutineRenderer<FaceIdLayout, ID_NUM_BUFFERS, 0, ID_NUM_UNIFORMS>,
+    base_mesh_routine: RoutineRenderer<MeshFacesLayout>,
+    face_overlay_routine: RoutineRenderer<FaceOverlayLayout>,
+    face_id_routine: RoutineRenderer<FaceIdLayout>,
 }
 
 impl FaceRoutine {
