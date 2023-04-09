@@ -7,8 +7,7 @@
 use std::collections::HashMap;
 
 use wgpu::{
-    BlendState, ColorTargetState, ColorWrites, FragmentState, VertexBufferLayout,
-    VertexState,
+    BlendState, ColorTargetState, ColorWrites, FragmentState, VertexBufferLayout, VertexState,
 };
 
 use super::wgpu_utils;
@@ -94,7 +93,8 @@ impl ShaderManager {
         let mut context = glsl_include::Context::new();
         let context = context
             .include("utils.wgsl", include_str!("wgsl/utils.wgsl"))
-            .include("uniforms.wgsl", include_str!("wgsl/uniforms.wgsl"));
+            .include("uniforms.wgsl", include_str!("wgsl/uniforms.wgsl"))
+            .include("gizmo_common.wgsl", include_str!("wgsl/gizmo_common.wgsl"));
 
         macro_rules! def_shader {
             ($name:expr, $src:expr, opaque) => {
@@ -111,6 +111,22 @@ impl ShaderManager {
                     vec![ShaderColorTarget::Viewport {
                         use_alpha: $use_alpha
                     }]
+                )
+            };
+            ($name:expr, $src:expr, id_picking) => {
+                def_shader!(
+                    $name,
+                    $src,
+                    custom,
+                    vec![
+                        // The id channel, which draws to an offscreen u32 pixel
+                        // buffer to encode the ids at each pixel.
+                        ShaderColorTarget::Offscreen(ColorTargetState {
+                            format: wgpu::TextureFormat::R32Uint,
+                            blend: None,
+                            write_mask: wgpu::ColorWrites::ALL,
+                        }),
+                    ]
                 )
             };
             ($name:expr, $src:expr, custom, $targets:expr) => {
@@ -151,23 +167,8 @@ impl ShaderManager {
             "wgsl/face_overlay_draw.wgsl",
             alpha_blend
         );
-
-        // For some shaders, we use custom color targets when we have extra
-        // offscreen buffers they draw to.
-        def_shader!(
-            "face_id_draw",
-            "wgsl/face_id_draw.wgsl",
-            custom,
-            vec![
-                // Then, the id channel, which draws to an offscreen u32 pixel
-                // buffer to encode the triangle ids at each pixel.
-                ShaderColorTarget::Offscreen(ColorTargetState {
-                    format: wgpu::TextureFormat::R32Uint,
-                    blend: None,
-                    write_mask: wgpu::ColorWrites::ALL,
-                }),
-            ]
-        );
+        def_shader!("face_id_draw", "wgsl/face_id_draw.wgsl", id_picking);
+        def_shader!("gizmo_id", "wgsl/gizmo_id.wgsl", id_picking);
 
         Self { shaders }
     }

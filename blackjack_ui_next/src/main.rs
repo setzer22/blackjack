@@ -178,7 +178,7 @@ impl AppState {
         .build()
     }
 
-    fn update(&mut self, _context: &Context) {
+    fn update(&mut self, context: &Context) {
         for root_action in self.pending_actions.drain(..) {
             match root_action {
                 RootAction::Save => {
@@ -239,7 +239,8 @@ impl AppState {
             None
         };
 
-        self.viewport_3d.update(renderable);
+        self.viewport_3d
+            .update(context.input_state.mouse.position, renderable);
     }
 }
 

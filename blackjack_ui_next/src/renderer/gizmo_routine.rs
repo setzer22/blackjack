@@ -4,7 +4,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-use blackjack_engine::prelude::{edit_ops, HalfEdgeMesh, VertexIndexBuffers};
+use blackjack_engine::prelude::{edit_ops, HalfEdgeMesh};
 use glam::Vec3;
 
 use wgpu::{
@@ -12,9 +12,8 @@ use wgpu::{
     *,
 };
 
-use crate::viewport_3d::Viewport3dSettings;
-
 use super::{
+    id_picking_routine::PickableId,
     render_state::ViewportRenderState,
     routine_renderer::{DrawType, MultisampleConfig, RoutineLayout, RoutineRenderer},
     shader_manager::ShaderManager,
@@ -28,8 +27,8 @@ use super::{
 #[derive(bytemuck::Pod, bytemuck::Zeroable, Clone, Copy)]
 pub struct Subgizmo {
     pub color: Vec3,
-    pub object_pick_id: u32,
-    pub is_highlighted: u32, // bool, but we can't have padding
+    pub object_pick_id: PickableId, // same layout as u32
+    pub is_highlighted: u32,        // bool, but we can't have padding
 }
 
 /// Represents the required buffers to draw a gizmo mesh.
@@ -43,16 +42,16 @@ pub struct GizmosLayout {
 
 const GIZMO_NUM_BUFFERS: usize = 3;
 impl RoutineLayout<GIZMO_NUM_BUFFERS> for GizmosLayout {
-    type Settings = Viewport3dSettings;
+    type Settings = ();
 
-    fn get_wgpu_buffers(&self, _settings: &Viewport3dSettings) -> [&Buffer; GIZMO_NUM_BUFFERS] {
+    fn get_wgpu_buffers(&self, _settings: &()) -> [&Buffer; GIZMO_NUM_BUFFERS] {
         [&self.positions, &self.subgizmo_ids, &self.subgizmos]
     }
 
     fn get_wgpu_textures<'a>(
         &'a self,
         _texture_manager: &'a TextureManager,
-        _settings: &Viewport3dSettings,
+        _settings: &(),
     ) -> [&'a TextureView; 0] {
         []
     }
@@ -70,8 +69,8 @@ impl RoutineLayout<GIZMO_NUM_BUFFERS> for GizmosLayout {
 }
 
 pub struct GizmoRoutine {
-    gizmo_routine: RoutineRenderer<GizmosLayout, GIZMO_NUM_BUFFERS>,
-    transform_gizmo: GizmosLayout,
+    gizmo_color_routine: RoutineRenderer<GizmosLayout, GIZMO_NUM_BUFFERS>,
+    gizmo_id_routine: RoutineRenderer<GizmosLayout, GIZMO_NUM_BUFFERS>,
 }
 
 /// A helper struct to build a GizmoLayout.
@@ -85,7 +84,7 @@ pub struct GizmoMeshBuilder {
 }
 
 impl GizmoMeshBuilder {
-    pub fn add_subgizmo_mesh(&mut self, mesh: &HalfEdgeMesh, subgizmo: Subgizmo) {
+    pub fn add_subgizmo_mesh(&mut self, mesh: &HalfEdgeMesh, color: Vec3) {
         let buffers = mesh
             .generate_triangle_buffers_smooth(true)
             .expect("Subgizmo mesh should not fail");
@@ -97,7 +96,11 @@ impl GizmoMeshBuilder {
         self.subgizmo_ids
             .extend(std::iter::repeat(self.next_subgizmo_id).take(buffers.positions.len()));
 
-        self.subgizmos.push(subgizmo);
+        self.subgizmos.push(Subgizmo {
+            color,
+            object_pick_id: PickableId::new_subgizmo(self.next_subgizmo_id),
+            is_highlighted: 0, // false
+        });
 
         self.next_subgizmo_id += 1;
     }
@@ -140,22 +143,38 @@ impl GizmoRoutine {
         shader_manager: &ShaderManager,
         multisample_config: MultisampleConfig,
     ) -> Self {
-        let shader = shader_manager.get("gizmo_color");
-
-        let mut routine = RoutineRenderer::new(
-            "Gizmo Routine",
+        let color_shader = shader_manager.get("gizmo_color");
+        let mut gizmo_color_routine = RoutineRenderer::new(
+            "gizmo color",
             device,
-            shader,
+            color_shader,
             PrimitiveTopology::TriangleList,
             FrontFace::Cw,
             multisample_config,
         );
+        let id_shader = shader_manager.get("gizmo_id");
+        let mut gizmo_id_routine = RoutineRenderer::new(
+            "gizmo id",
+            device,
+            id_shader,
+            PrimitiveTopology::TriangleList,
+            FrontFace::Cw,
+            // The id map is always drawn without multisampling.
+            // We don't care about aliasing there.
+            MultisampleConfig::One,
+        );
 
-        routine.layouts.push(Self::build_transform_gizmo(device));
+        // TODO: Placeholder code
+        gizmo_color_routine
+            .layouts
+            .push(Self::build_transform_gizmo(device));
+        gizmo_id_routine
+            .layouts
+            .push(Self::build_transform_gizmo(device));
 
         GizmoRoutine {
-            gizmo_routine: routine,
-            transform_gizmo: Self::build_transform_gizmo(device),
+            gizmo_color_routine,
+            gizmo_id_routine,
         }
     }
 
@@ -192,7 +211,7 @@ impl GizmoRoutine {
             Vec3::ONE,
         )
         .expect("Transform");
-        
+
         let xy_plane = plane_mesh.clone();
         let xz_plane = plane_mesh.clone();
         let yz_plane = plane_mesh.clone();
@@ -201,63 +220,23 @@ impl GizmoRoutine {
             Vec3::ZERO,
             Vec3::X * 90.0f32.to_radians(),
             Vec3::ONE,
-        ).expect("Transform");
+        )
+        .expect("Transform");
         edit_ops::transform(
             &yz_plane,
             Vec3::ZERO,
             Vec3::Y * -90.0f32.to_radians(),
             Vec3::ONE,
-        ).expect("Transform");
+        )
+        .expect("Transform");
 
         let mut builder = GizmoMeshBuilder::default();
-        builder.add_subgizmo_mesh(
-            &x_axis,
-            Subgizmo {
-                color: Vec3::new(1.0, 0.0, 0.0),
-                object_pick_id: 0,
-                is_highlighted: 0,
-            },
-        );
-        builder.add_subgizmo_mesh(
-            &y_axis,
-            Subgizmo {
-                color: Vec3::new(0.0, 1.0, 0.0),
-                object_pick_id: 1,
-                is_highlighted: 0,
-            },
-        );
-        builder.add_subgizmo_mesh(
-            &z_axis,
-            Subgizmo {
-                color: Vec3::new(0.0, 0.0, 1.0),
-                object_pick_id: 2,
-                is_highlighted: 0,
-            },
-        );
-        builder.add_subgizmo_mesh(
-            &xy_plane,
-            Subgizmo {
-                color: Vec3::new(1.0, 1.0, 0.0),
-                object_pick_id: 3,
-                is_highlighted: 0,
-            },
-        );
-        builder.add_subgizmo_mesh(
-            &xz_plane,
-            Subgizmo {
-                color: Vec3::new(1.0, 0.0, 1.0),
-                object_pick_id: 4,
-                is_highlighted: 0,
-            },
-        );
-        builder.add_subgizmo_mesh(
-            &yz_plane,
-            Subgizmo {
-                color: Vec3::new(0.0, 1.0, 1.0),
-                object_pick_id: 5,
-                is_highlighted: 0,
-            },
-        );
+        builder.add_subgizmo_mesh(&x_axis, Vec3::new(1.0, 0.0, 0.0));
+        builder.add_subgizmo_mesh(&y_axis, Vec3::new(0.0, 1.0, 0.0));
+        builder.add_subgizmo_mesh(&z_axis, Vec3::new(0.0, 0.0, 1.0));
+        builder.add_subgizmo_mesh(&xy_plane, Vec3::new(1.0, 1.0, 0.0));
+        builder.add_subgizmo_mesh(&xz_plane, Vec3::new(1.0, 0.0, 1.0));
+        builder.add_subgizmo_mesh(&yz_plane, Vec3::new(0.0, 1.0, 1.0));
 
         builder.build(device)
     }
@@ -268,18 +247,27 @@ impl GizmoRoutine {
         encoder: &mut CommandEncoder,
         texture_manager: &TextureManager,
         render_state: &ViewportRenderState,
-        settings: &Viewport3dSettings,
         clear_buffer: bool,
     ) {
-        self.gizmo_routine.render(
+        self.gizmo_color_routine.render(
             device,
             encoder,
             texture_manager,
             render_state,
-            settings,
+            &(),
             &[],
             clear_buffer,
             None,
+        );
+        self.gizmo_id_routine.render(
+            device,
+            encoder,
+            texture_manager,
+            render_state,
+            &(),
+            &[&render_state.id_map_target],
+            clear_buffer,
+            Some(&render_state.id_map_depth_target),
         );
     }
 }

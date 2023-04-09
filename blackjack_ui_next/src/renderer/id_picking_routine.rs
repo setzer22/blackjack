@@ -4,9 +4,85 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-use std::{collections::HashSet, num::NonZeroU32};
+use std::{collections::HashSet, num::NonZeroU32, ops::Range};
 
 use glam::{IVec2, UVec2};
+
+/// Splits the u32 range in several sub-regions for different types of ids. For
+/// now, this is used to distinguish between subgizmo ids and primitive ids
+#[derive(bytemuck::Pod, bytemuck::Zeroable, Clone, Copy, Hash, PartialEq, Eq, Debug)]
+#[repr(transparent)]
+pub struct PickableId(u32);
+
+impl PickableId {
+    const MAX_PRIMITIVE_IDS: u32 = 2 << 30;
+
+    /// Pickable primitives are stored from id 1 onwards. The maximum number of
+    /// primitive ids is an implementation detail, but chosen to be large enough
+    /// that any reasonable mesh would fit.
+    pub const PRIMITIVE_ID_RANGE: Range<u32> = 1..Self::MAX_PRIMITIVE_IDS;
+
+    /// Subgizmo ids are stored after primitive ids. A total of 16 possible
+    /// subgizmos is possible.
+    pub const SUBGIZMO_ID_RANGE: Range<u32> = Self::MAX_PRIMITIVE_IDS..Self::MAX_PRIMITIVE_IDS + 16;
+
+    /// Constructs a new PickableId if the provided index falls inside one of
+    /// the valid ranges. Otherwise returns None.
+    pub fn new(index: u32) -> Option<Self> {
+        if Self::PRIMITIVE_ID_RANGE.contains(&index) || Self::SUBGIZMO_ID_RANGE.contains(&index) {
+            Some(Self(index))
+        } else {
+            None
+        }
+    }
+
+    /// Creates a new subgizmo id. Subgizmo ids are used to pick parts of gizmos.
+    pub fn new_subgizmo(idx: u32) -> Self {
+        Self(idx + Self::SUBGIZMO_ID_RANGE.start)
+    }
+
+    /// Creates a new primitive id. Primitive ids are used to select parts of a
+    /// mesh, such as halfedges, faces, or vertices.
+    pub fn new_primitive(idx: u32) -> Self {
+        Self(idx + Self::PRIMITIVE_ID_RANGE.start)
+    }
+
+    pub fn is_subgizmo(self) -> bool {
+        Self::SUBGIZMO_ID_RANGE.contains(&self.0)
+    }
+
+    pub fn is_primitive(self) -> bool {
+        Self::PRIMITIVE_ID_RANGE.contains(&self.0)
+    }
+
+    pub fn get_subgizmo_index(self) -> Option<u32> {
+        if self.is_subgizmo() {
+            Some(self.0 - Self::SUBGIZMO_ID_RANGE.start)
+        } else {
+            None
+        }
+    }
+}
+
+/// Allows filtering different pickable id types. This can be used by
+/// interaction code to prioritize certain kinds of selections. For instance, to
+/// allow selecting a gizmo even when the cursor is over a mesh face pixel (but
+/// close to a gizmo).
+pub enum PickableIdFilter {
+    Subgizmos,
+    Primitives,
+    All,
+}
+
+impl PickableIdFilter {
+    fn passes_filter(&self, index: PickableId) -> bool {
+        match self {
+            Self::Subgizmos => index.is_subgizmo(),
+            Self::Primitives => index.is_primitive(),
+            Self::All => true,
+        }
+    }
+}
 
 /// Different metrics for the offscreen buffer we copy from, and where the mouse
 /// is located within that texture
@@ -46,7 +122,7 @@ impl IdPickingRoutine {
 
     // The actual distance from the mouse cursor for which we want to check
     // hovered elements. Must be smaller than `Self::SIZE`
-    const DISTANCE: u32 = 20;
+    const DISTANCE: u32 = 5;
 
     pub fn new(device: &wgpu::Device) -> Self {
         let size = Self::SIZE as u64;
@@ -177,7 +253,11 @@ impl IdPickingRoutine {
     ///
     /// The returned id is the same value as the one found on the id map. This
     /// value may have to be converted to map back to an actual mesh id.
-    pub fn id_under_mouse(&self, device: &wgpu::Device) -> Option<u32> {
+    pub fn id_under_mouse(
+        &self,
+        device: &wgpu::Device,
+        filter: PickableIdFilter,
+    ) -> Option<PickableId> {
         if let Some(metrics) = self.metrics {
             // Grab a portion of the id map from the GPU, and check for all the
             // ids inside that window. The valid id that is closest to the mouse
@@ -193,7 +273,7 @@ impl IdPickingRoutine {
             let id_grid = bytemuck::cast_slice::<_, u32>(&mapped);
 
             let mut ids_set = HashSet::new();
-            let mut min_id = 0;
+            let mut min_id = None;
             let mut min_dist = u32::MAX;
 
             let cursor = metrics.cursor_pos_in_buffer;
@@ -209,25 +289,52 @@ impl IdPickingRoutine {
 
                     if dist <= Self::DISTANCE {
                         let idx = i * Self::SIZE + j;
-                        let id = id_grid[idx as usize];
-                        // Id zero corresponds to the clear color of the id
-                        // buffer, which means no id is in that pixel.
-                        if id != 0 {
-                            ids_set.insert(id);
+                        if let Some(id) = PickableId::new(id_grid[idx as usize]) {
+                            if filter.passes_filter(id) {
+                                ids_set.insert(id);
 
-                            if dist < min_dist {
-                                min_dist = dist;
-                                min_id = id;
+                                if dist < min_dist {
+                                    min_dist = dist;
+                                    min_id = Some(id);
+                                }
                             }
                         }
                     }
                 }
             }
 
+            if min_id.is_some() {
+                // Write out id_grid as an image (using the image crate)
+                let mut img = image::ImageBuffer::new(Self::SIZE as u32, Self::SIZE as u32);
+                for i in 0..Self::SIZE {
+                    for j in 0..Self::SIZE {
+                        let idx = i * Self::SIZE + j;
+                        let id = PickableId::new(id_grid[idx as usize]);
+
+                        if metrics.cursor_pos_in_buffer == UVec2::new(j, i) {
+                            // Cursor position
+                            let color = image::Luma([255]);
+                            img.put_pixel(j as u32, i as u32, color);
+                        } else if let Some(id) = id {
+                            // There are a total of 6 subgizmos, split color
+                            // accordingly. Start at luma 50
+                            let subgizmo_idx = id.get_subgizmo_index().unwrap();
+                            let color = image::Luma([(50 + (subgizmo_idx * 50) % 255) as u8]);
+                            img.put_pixel(j as u32, i as u32, color);
+                        } else {
+                            // Invalid id
+                            let color = image::Luma([0]);
+                            img.put_pixel(j as u32, i as u32, color);
+                        }
+                    }
+                }
+                img.save("/tmp/id_grid.png").unwrap();
+            }
+
             drop(mapped);
             self.output_buffer.unmap();
 
-            (min_id != 0).then_some(min_id)
+            min_id
         } else {
             None
         }

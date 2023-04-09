@@ -328,8 +328,6 @@ impl FaceRoutine {
         texture_manager: &TextureManager,
         render_state: &ViewportRenderState,
         settings: &Viewport3dSettings,
-        id_map_view: &TextureView,
-        id_map_depth_view: &TextureView,
         base_clear_buffer: bool,
         overlay_clear_buffer: bool,
     ) {
@@ -359,9 +357,9 @@ impl FaceRoutine {
             texture_manager,
             render_state,
             &(),
-            &[id_map_view],
+            &[&render_state.id_map_target],
             overlay_clear_buffer,
-            Some(id_map_depth_view),
+            Some(&render_state.id_map_depth_target),
         );
     }
 }

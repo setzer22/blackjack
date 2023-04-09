@@ -13,7 +13,9 @@ pub struct ViewportRenderState {
     pub dimensions: UVec2,
     pub color_target: TextureView,
     pub color_resolve_target: Option<TextureView>,
-    pub depth_target: TextureView,
+    pub color_depth_target: TextureView,
+    pub id_map_target: TextureView,
+    pub id_map_depth_target: TextureView,
     /// Contains a ViewportUniforms
     pub viewport_uniforms_bg: BindGroup,
 }
@@ -52,6 +54,8 @@ impl ViewportRenderState {
         color_target: TextureView,
         depth_target: TextureView,
         color_resolve_target: Option<TextureView>,
+        id_target: TextureView,
+        id_depth_target: TextureView,
         uniforms: ViewportUniforms,
     ) -> Self {
         let mut bgb = BindGroupBuilder::new();
@@ -67,8 +71,10 @@ impl ViewportRenderState {
         Self {
             dimensions,
             color_target,
-            depth_target,
+            color_depth_target: depth_target,
             color_resolve_target,
+            id_map_target: id_target,
+            id_map_depth_target: id_depth_target,
             viewport_uniforms_bg: bgb.build(
                 device,
                 Some("Blackjack Viewport Uniforms"),

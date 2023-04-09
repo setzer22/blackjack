@@ -58,7 +58,7 @@ impl GridRoutine {
                 },
             })],
             depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
-                view: &render_state.depth_target,
+                view: &render_state.color_depth_target,
                 depth_ops: Some(Operations {
                     load: LoadOp::Load,
                     store: true,

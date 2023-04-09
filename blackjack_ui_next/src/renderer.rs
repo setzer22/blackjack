@@ -6,6 +6,7 @@
 
 use std::sync::Arc;
 
+use epaint::{Pos2, Rect};
 use glam::UVec2;
 use wgpu::*;
 
@@ -15,7 +16,7 @@ use self::{
     face_routine::FaceRoutine,
     gizmo_routine::GizmoRoutine,
     grid_routine::GridRoutine,
-    id_picking_routine::IdPickingRoutine,
+    id_picking_routine::{IdPickingRoutine, PickableId, PickableIdFilter},
     point_cloud_routine::PointCloudRoutine,
     render_state::{ViewportRenderState, ViewportUniforms},
     routine_renderer::MultisampleConfig,
@@ -73,7 +74,7 @@ pub struct BlackjackViewportRenderer {
 
 pub struct ViewportRendererOutput {
     pub color_texture_view: TextureView,
-    pub id_under_mouse: Option<u32>,
+    pub id_under_mouse: Option<PickableId>,
 }
 
 pub struct ViewportCamera {
@@ -165,6 +166,8 @@ impl BlackjackViewportRenderer {
             color.view,
             depth.view,
             color.resolve_view,
+            id_map_view,
+            id_depth_view,
             ViewportUniforms::new(camera.view_matrix, camera.projection_matrix, resolution),
         );
 
@@ -188,8 +191,6 @@ impl BlackjackViewportRenderer {
             texture_manager,
             &render_state,
             settings,
-            &id_map_view,
-            &id_depth_view,
             false,
             false,
         );
@@ -198,7 +199,6 @@ impl BlackjackViewportRenderer {
             &mut encoder,
             texture_manager,
             &render_state,
-            settings,
             false,
         );
         self.id_picking_routine
@@ -214,7 +214,21 @@ impl BlackjackViewportRenderer {
                 MultisampleConfig::One => render_state.color_target,
                 MultisampleConfig::Four => render_state.color_resolve_target.unwrap(),
             },
-            id_under_mouse: self.id_picking_routine.id_under_mouse(&self.device),
+            id_under_mouse: self
+                .id_picking_routine
+                .id_under_mouse(&self.device, PickableIdFilter::All),
         }
+    }
+
+    /// Finds the picked object under the cursor.
+    pub fn check_picked_object(
+        &mut self,
+        window_cursor_pos: Pos2,
+        viewport_rect: Rect,
+        filter: PickableIdFilter,
+    ) -> Option<PickableId> {
+        self.id_picking_routine
+            .set_cursor_pos(window_cursor_pos, viewport_rect);
+        self.id_picking_routine.id_under_mouse(&self.device, filter)
     }
 }

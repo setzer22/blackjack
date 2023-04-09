@@ -280,7 +280,7 @@ impl<
             label: Some(&format!("Blackjack Viewport3d RenderPass: {}", self.name)),
             color_attachments: &color_attachments,
             depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
-                view: override_depth.unwrap_or(&render_state.depth_target),
+                view: override_depth.unwrap_or(&render_state.color_depth_target),
                 depth_ops: Some(Operations {
                     load: if clear_buffer {
                         LoadOp::Clear(0.0)

@@ -4,11 +4,11 @@
 
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
-    @location(1) color: vec3<f32>,
+    @location(0) @interpolate(flat) id: u32,
 };
 
 struct FragmentOutput {
-    @location(0) color: vec4<f32>,
+    @location(0) id: u32,
 };
 
 @vertex
@@ -31,17 +31,13 @@ fn vs_main(
     
     output.clip_position = uniforms.view_proj * scale_adj * vec4<f32>(position, 1.0);
 
-    if subgizmo.is_highlighted == 0u {
-        output.color = unpack_v3(subgizmo.color);
-    } else {
-        output.color = vec3(1.0, 1.0, 0.0);
-    }
+    output.id = subgizmo.object_pick_id;
     return output;
 }
 
 @fragment
 fn fs_main(input: VertexOutput) -> FragmentOutput {
     var out : FragmentOutput;
-    out.color = vec4(input.color, 0.0);
+    out.id = input.id;
     return out;
 }

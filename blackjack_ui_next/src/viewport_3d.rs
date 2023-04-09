@@ -11,8 +11,8 @@ use winit::event::VirtualKeyCode;
 use crate::{
     blackjack_theme::pallette,
     renderer::{
-        routine_renderer::MultisampleConfig, texture_manager::TextureManager,
-        BlackjackViewportRenderer,
+        id_picking_routine::PickableIdFilter, routine_renderer::MultisampleConfig,
+        texture_manager::TextureManager, BlackjackViewportRenderer,
     },
 };
 
@@ -162,10 +162,9 @@ impl Viewport3d {
             viewport.camera.on_input(cam_input);
         });
         TinkerContainer::new(image)
-            .post_layout(|ctx, layout| {
-                ctx.dispatch_callback(set_last_frame_res_cb, layout.bounds);
-            })
             .pre_event(|ctx, layout, cursor_pos, events, status| {
+                ctx.dispatch_callback(set_last_frame_res_cb, layout.bounds);
+
                 if status.is_consumed() {
                     return;
                 }
@@ -198,7 +197,7 @@ impl Viewport3d {
             .build()
     }
 
-    pub fn update(&mut self, renderable: Option<RenderableThing>) {
+    pub fn update(&mut self, cursor_position: Pos2, renderable: Option<RenderableThing>) {
         self.camera.update(10.0 / 60.0);
 
         self.renderer.face_routine.clear();
@@ -229,6 +228,18 @@ impl Viewport3d {
             }
             Some(RenderableThing::HeightMap(_)) => todo!(),
             None => (),
+        }
+
+        if let Some(last_frame_bounds) = self.last_frame_bounds {
+            if let Some(picked) = self.renderer.check_picked_object(
+                cursor_position,
+                last_frame_bounds,
+                PickableIdFilter::Subgizmos,
+            ) {
+                dbg!(picked.get_subgizmo_index());
+            } else {
+                dbg!("Nothing picked");
+            }
         }
     }
 }
