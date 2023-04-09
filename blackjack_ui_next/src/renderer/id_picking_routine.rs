@@ -303,34 +303,6 @@ impl IdPickingRoutine {
                 }
             }
 
-            if min_id.is_some() {
-                // Write out id_grid as an image (using the image crate)
-                let mut img = image::ImageBuffer::new(Self::SIZE as u32, Self::SIZE as u32);
-                for i in 0..Self::SIZE {
-                    for j in 0..Self::SIZE {
-                        let idx = i * Self::SIZE + j;
-                        let id = PickableId::new(id_grid[idx as usize]);
-
-                        if metrics.cursor_pos_in_buffer == UVec2::new(j, i) {
-                            // Cursor position
-                            let color = image::Luma([255]);
-                            img.put_pixel(j as u32, i as u32, color);
-                        } else if let Some(id) = id {
-                            // There are a total of 6 subgizmos, split color
-                            // accordingly. Start at luma 50
-                            let subgizmo_idx = id.get_subgizmo_index().unwrap();
-                            let color = image::Luma([(50 + (subgizmo_idx * 50) % 255) as u8]);
-                            img.put_pixel(j as u32, i as u32, color);
-                        } else {
-                            // Invalid id
-                            let color = image::Luma([0]);
-                            img.put_pixel(j as u32, i as u32, color);
-                        }
-                    }
-                }
-                img.save("/tmp/id_grid.png").unwrap();
-            }
-
             drop(mapped);
             self.output_buffer.unmap();
 
