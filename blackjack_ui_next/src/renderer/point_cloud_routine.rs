@@ -13,7 +13,9 @@ use wgpu::{
 
 use super::{
     render_state::ViewportRenderState,
-    routine_renderer::{DrawType, MultisampleConfig, RoutineLayout, RoutineRenderer},
+    routine_renderer::{
+        DrawType, MultisampleConfig, RenderCommand, RoutineLayout, RoutineRenderer,
+    },
     shader_manager::ShaderManager,
     texture_manager::TextureManager,
 };
@@ -100,12 +102,7 @@ impl PointCloudRoutine {
         self.inner.render(
             device,
             encoder,
-            texture_manager,
-            render_state,
-            &(),
-            &[],
-            clear_buffer,
-            None,
+            RenderCommand::new(texture_manager, render_state, &()).clear_buffer(clear_buffer),
         )
     }
 }

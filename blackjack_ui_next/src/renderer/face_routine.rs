@@ -17,7 +17,9 @@ use crate::viewport_3d::Viewport3dSettings;
 
 use super::{
     render_state::ViewportRenderState,
-    routine_renderer::{DrawType, MultisampleConfig, RoutineLayout, RoutineRenderer},
+    routine_renderer::{
+        DrawType, MultisampleConfig, RenderCommand, RoutineLayout, RoutineRenderer,
+    },
     shader_manager::ShaderManager,
     texture_manager::TextureManager,
 };
@@ -334,32 +336,22 @@ impl FaceRoutine {
         self.base_mesh_routine.render(
             device,
             encoder,
-            texture_manager,
-            render_state,
-            settings,
-            &[],
-            base_clear_buffer,
-            None,
+            RenderCommand::new(texture_manager, render_state, settings)
+                .clear_buffer(base_clear_buffer),
         );
         self.face_overlay_routine.render(
             device,
             encoder,
-            texture_manager,
-            render_state,
-            &(),
-            &[],
-            overlay_clear_buffer,
-            None,
+            RenderCommand::new(texture_manager, render_state, &())
+                .clear_buffer(overlay_clear_buffer),
         );
         self.face_id_routine.render(
             device,
             encoder,
-            texture_manager,
-            render_state,
-            &(),
-            &[&render_state.id_map_target],
-            overlay_clear_buffer,
-            Some(&render_state.id_map_depth_target),
+            RenderCommand::new(texture_manager, render_state, &())
+                .offscren_targets(&[&render_state.id_map_target])
+                .clear_buffer(overlay_clear_buffer)
+                .override_depth(Some(&render_state.id_map_depth_target)),
         );
     }
 }

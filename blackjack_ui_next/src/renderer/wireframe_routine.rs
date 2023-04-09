@@ -6,7 +6,9 @@
 
 use super::{
     render_state::ViewportRenderState,
-    routine_renderer::{DrawType, MultisampleConfig, RoutineLayout, RoutineRenderer},
+    routine_renderer::{
+        DrawType, MultisampleConfig, RenderCommand, RoutineLayout, RoutineRenderer,
+    },
     texture_manager::TextureManager,
 };
 use glam::Vec3;
@@ -117,12 +119,7 @@ impl WireframeRoutine {
         self.inner.render(
             device,
             encoder,
-            texture_manager,
-            render_state,
-            &(),
-            &[],
-            clear_buffer,
-            None,
+            RenderCommand::new(texture_manager, render_state, &()).clear_buffer(clear_buffer),
         );
     }
 }

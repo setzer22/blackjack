@@ -15,7 +15,9 @@ use wgpu::{
 use super::{
     id_picking_routine::PickableId,
     render_state::ViewportRenderState,
-    routine_renderer::{DrawType, MultisampleConfig, RoutineLayout, RoutineRenderer},
+    routine_renderer::{
+        DrawType, MultisampleConfig, RenderCommand, RoutineLayout, RoutineRenderer,
+    },
     shader_manager::ShaderManager,
     texture_manager::TextureManager,
 };
@@ -252,22 +254,15 @@ impl GizmoRoutine {
         self.gizmo_color_routine.render(
             device,
             encoder,
-            texture_manager,
-            render_state,
-            &(),
-            &[],
-            clear_buffer,
-            None,
+            RenderCommand::new(texture_manager, render_state, &()).clear_buffer(clear_buffer),
         );
         self.gizmo_id_routine.render(
             device,
             encoder,
-            texture_manager,
-            render_state,
-            &(),
-            &[&render_state.id_map_target],
-            clear_buffer,
-            Some(&render_state.id_map_depth_target),
+            RenderCommand::new(texture_manager, render_state, &())
+                .clear_buffer(clear_buffer)
+                .offscren_targets(&[&render_state.id_map_target])
+                .override_depth(Some(&render_state.id_map_depth_target)),
         );
     }
 }

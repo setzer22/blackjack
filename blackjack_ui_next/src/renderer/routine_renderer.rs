@@ -100,6 +100,55 @@ impl MultisampleConfig {
     }
 }
 
+/// A structure holding the configuration to render a routine.
+pub struct RenderCommand<'a, Settings> {
+    /// The [`TextureManager`]
+    pub texture_manager: &'a TextureManager,
+    /// The [`ViewportRenderState`]
+    pub render_state: &'a ViewportRenderState,
+    /// The settings. Should match the Layout.
+    pub settings: &'a Settings,
+    /// For each ShaderColorTarget::Offscreen in the provided shader, one
+    /// texture view handle matching its configuration.
+    pub offscreen_targets: &'a [&'a TextureView],
+    /// If provided, the depth texture view to use for this render pass.
+    pub override_depth: Option<&'a TextureView>,
+    /// If true, the provided targets will be cleared before the render pass.
+    pub clear_buffer: bool,
+}
+
+impl<'a, Settings> RenderCommand<'a, Settings> {
+    pub fn new(
+        texture_manager: &'a TextureManager,
+        render_state: &'a ViewportRenderState,
+        settings: &'a Settings,
+    ) -> Self {
+        Self {
+            texture_manager,
+            render_state,
+            settings,
+            offscreen_targets: &[],
+            override_depth: None,
+            clear_buffer: false,
+        }
+    }
+
+    pub fn offscren_targets(&mut self, offscreen_targets: &'a [&'a TextureView]) -> &mut Self {
+        self.offscreen_targets = offscreen_targets;
+        self
+    }
+
+    pub fn override_depth(&mut self, override_depth: Option<&'a TextureView>) -> &mut Self {
+        self.override_depth = override_depth;
+        self
+    }
+
+    pub fn clear_buffer(&mut self, clear_buffer: bool) -> &mut Self {
+        self.clear_buffer = clear_buffer;
+        self
+    }
+}
+
 pub struct RoutineRenderer<
     Layout: RoutineLayout<NUM_BUFFERS, NUM_TEXTURES, NUM_UNIFORMS>,
     const NUM_BUFFERS: usize = 0,
@@ -223,22 +272,14 @@ impl<
             .collect()
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub fn render(
         &self,
         device: &Device,
         encoder: &mut CommandEncoder,
-        texture_manager: &TextureManager,
-        render_state: &ViewportRenderState,
-        settings: &Layout::Settings,
-        // For each ShaderColorTarget::Offscreen in the provided shader (during
-        // new), one texture view handle matching its configuration.
-        offscreen_targets: &[&TextureView],
-        clear_buffer: bool,
-        override_depth: Option<&TextureView>,
+        command: &mut RenderCommand<'_, Layout::Settings>,
     ) {
         let mut color_attachments = vec![];
-        let mut offscreen_targets = offscreen_targets.iter();
+        let mut offscreen_targets = command.offscreen_targets.iter();
         for d in &self.color_target_descrs {
             let clear_color = pallette().background_dark;
             let clear_color = wgpu::Color {
@@ -248,7 +289,7 @@ impl<
                 a: clear_color.alpha_f().powf(2.2) as f64,
             };
             let ops = Operations {
-                load: if clear_buffer {
+                load: if command.clear_buffer {
                     LoadOp::Clear(clear_color)
                 } else {
                     LoadOp::Load
@@ -258,8 +299,8 @@ impl<
             match d {
                 ShaderColorTarget::Viewport { use_alpha: _ } => {
                     color_attachments.push(Some(RenderPassColorAttachment {
-                        view: &render_state.color_target,
-                        resolve_target: render_state.color_resolve_target.as_ref(),
+                        view: &command.render_state.color_target,
+                        resolve_target: command.render_state.color_resolve_target.as_ref(),
                         ops,
                     }));
                 }
@@ -275,14 +316,17 @@ impl<
             }
         }
 
-        let bind_groups = self.create_bind_groups(device, texture_manager, settings);
+        let bind_groups =
+            self.create_bind_groups(device, command.texture_manager, command.settings);
         let mut pass = encoder.begin_render_pass(&RenderPassDescriptor {
             label: Some(&format!("Blackjack Viewport3d RenderPass: {}", self.name)),
             color_attachments: &color_attachments,
             depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
-                view: override_depth.unwrap_or(&render_state.color_depth_target),
+                view: command
+                    .override_depth
+                    .unwrap_or(&command.render_state.color_depth_target),
                 depth_ops: Some(Operations {
-                    load: if clear_buffer {
+                    load: if command.clear_buffer {
                         LoadOp::Clear(0.0)
                     } else {
                         LoadOp::Load
@@ -294,11 +338,11 @@ impl<
         });
 
         pass.set_pipeline(&self.pipeline);
-        pass.set_bind_group(0, &render_state.viewport_uniforms_bg, &[]);
+        pass.set_bind_group(0, &command.render_state.viewport_uniforms_bg, &[]);
         for (buffer, bg) in self.layouts.iter().zip(bind_groups.iter()) {
             pass.set_bind_group(1, bg, &[]);
 
-            match buffer.get_draw_type(settings) {
+            match buffer.get_draw_type(command.settings) {
                 DrawType::UseIndices {
                     indices,
                     num_indices,
