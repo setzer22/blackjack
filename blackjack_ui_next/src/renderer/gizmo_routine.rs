@@ -24,10 +24,10 @@ use super::{
     texture_manager::TextureManager,
 };
 
-/// The type of gizmo. This is used to identify the shape of a gizmo and its
-/// parts (subgizmos).
+/// The type of a visual gizmo. This is used to identify the shape of a gizmo
+/// and its parts (subgizmos).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum GizmoKind {
+pub enum VisualGizmoKind {
     /// A gizmo that can be used to translate an object.
     Translate,
 }
@@ -37,23 +37,23 @@ pub enum GizmoKind {
 /// used to highlight different parts of the gizmo and to do object picking.
 #[repr(C)]
 #[derive(bytemuck::Pod, bytemuck::Zeroable, Clone, Copy)]
-pub struct Subgizmo {
+pub struct VisualGizmoPart {
     pub color: Vec3,
     pub object_pick_id: PickableId, // same layout as u32
     pub is_highlighted: u32,        // bool, but we can't have padding
 }
 
 /// Represents the required buffers to draw a gizmo mesh.
-pub struct GizmosLayout {
+pub struct GpuGizmo {
     indices: Buffer,
     positions: Buffer,
     subgizmo_ids: Buffer,
-    subgizmos: Vec<Subgizmo>,
+    subgizmos: Vec<VisualGizmoPart>,
     subgizmos_buffer: Buffer,
     num_indices: usize,
 }
 
-impl RoutineLayout for GizmosLayout {
+impl RoutineLayout for GpuGizmo {
     type Settings = ();
 
     fn get_wgpu_buffers(&self, _settings: &()) -> Vec<&Buffer> {
@@ -85,24 +85,24 @@ impl RoutineLayout for GizmosLayout {
 }
 
 pub struct GizmoRoutine {
-    gizmo_color_routine: RoutineRenderer<GizmosLayout>,
-    gizmo_id_routine: RoutineRenderer<GizmosLayout>,
-    gizmo_layouts: HashMap<GizmoKind, GizmosLayout>,
-    current_gizmo: Option<GizmoKind>,
+    gizmo_color_routine: RoutineRenderer<GpuGizmo>,
+    gizmo_id_routine: RoutineRenderer<GpuGizmo>,
+    gizmo_layouts: HashMap<VisualGizmoKind, GpuGizmo>,
+    current_gizmo: Option<VisualGizmoKind>,
 }
 
 /// A helper struct to build a GizmoLayout.
 #[derive(Default)]
-pub struct GizmoMeshBuilder {
+pub struct GpuGizmoBuilder {
     positions: Vec<Vec3>,
     indices: Vec<u32>,
     subgizmo_ids: Vec<u32>,
     next_subgizmo_id: u32,
-    subgizmos: Vec<Subgizmo>,
+    subgizmos: Vec<VisualGizmoPart>,
 }
 
-impl GizmoMeshBuilder {
-    pub fn add_subgizmo_mesh(&mut self, mesh: &HalfEdgeMesh, color: Vec3) {
+impl GpuGizmoBuilder {
+    pub fn add_gizmo_part(&mut self, mesh: &HalfEdgeMesh, color: Vec3) {
         let buffers = mesh
             .generate_triangle_buffers_smooth(true)
             .expect("Subgizmo mesh should not fail");
@@ -114,7 +114,7 @@ impl GizmoMeshBuilder {
         self.subgizmo_ids
             .extend(std::iter::repeat(self.next_subgizmo_id).take(buffers.positions.len()));
 
-        self.subgizmos.push(Subgizmo {
+        self.subgizmos.push(VisualGizmoPart {
             color,
             object_pick_id: PickableId::new_subgizmo(self.next_subgizmo_id),
             is_highlighted: 0, // false
@@ -123,7 +123,7 @@ impl GizmoMeshBuilder {
         self.next_subgizmo_id += 1;
     }
 
-    pub fn build(self, device: &Device) -> GizmosLayout {
+    pub fn build(self, device: &Device) -> GpuGizmo {
         let indices = device.create_buffer_init(&BufferInitDescriptor {
             label: Some("Gizmo Indices"),
             contents: bytemuck::cast_slice(&self.indices),
@@ -145,7 +145,7 @@ impl GizmoMeshBuilder {
             usage: BufferUsages::STORAGE,
         });
 
-        GizmosLayout {
+        GpuGizmo {
             indices,
             positions,
             subgizmo_ids,
@@ -163,7 +163,7 @@ impl GizmoRoutine {
         multisample_config: MultisampleConfig,
     ) -> Self {
         let color_shader = shader_manager.get("gizmo_color");
-        let mut gizmo_color_routine = RoutineRenderer::new(
+        let gizmo_color_routine = RoutineRenderer::new(
             "gizmo color",
             device,
             color_shader,
@@ -172,7 +172,7 @@ impl GizmoRoutine {
             multisample_config,
         );
         let id_shader = shader_manager.get("gizmo_id");
-        let mut gizmo_id_routine = RoutineRenderer::new(
+        let gizmo_id_routine = RoutineRenderer::new(
             "gizmo id",
             device,
             id_shader,
@@ -185,7 +185,7 @@ impl GizmoRoutine {
 
         let gizmo_layouts = HashMap::from([
             (
-                GizmoKind::Translate,
+                VisualGizmoKind::Translate,
                 GizmoRoutine::build_translate_gizmo(device),
             ),
             // Add more here
@@ -195,11 +195,11 @@ impl GizmoRoutine {
             gizmo_color_routine,
             gizmo_id_routine,
             gizmo_layouts,
-            current_gizmo: Some(GizmoKind::Translate),
+            current_gizmo: Some(VisualGizmoKind::Translate),
         }
     }
 
-    pub fn set_current_gizmo(&mut self, gizmo_kind: Option<GizmoKind>) {
+    pub fn set_current_gizmo(&mut self, gizmo_kind: Option<VisualGizmoKind>) {
         self.current_gizmo = gizmo_kind;
     }
 
@@ -271,7 +271,7 @@ impl GizmoRoutine {
     }
 
     /// builds the meshes for the transform gizmo
-    fn build_translate_gizmo(device: &Device) -> GizmosLayout {
+    fn build_translate_gizmo(device: &Device) -> GpuGizmo {
         // The arrow mesh, which is used for all three axes. Can be used to
         // translate in a single direction.
         let arrow_mesh = HalfEdgeMesh::from_wavefront_obj_str(include_str!(
@@ -323,13 +323,13 @@ impl GizmoRoutine {
         )
         .expect("Transform");
 
-        let mut builder = GizmoMeshBuilder::default();
-        builder.add_subgizmo_mesh(&x_axis, Vec3::new(1.0, 0.0, 0.0));
-        builder.add_subgizmo_mesh(&y_axis, Vec3::new(0.0, 1.0, 0.0));
-        builder.add_subgizmo_mesh(&z_axis, Vec3::new(0.0, 0.0, 1.0));
-        builder.add_subgizmo_mesh(&xy_plane, Vec3::new(1.0, 1.0, 0.0));
-        builder.add_subgizmo_mesh(&xz_plane, Vec3::new(1.0, 0.0, 1.0));
-        builder.add_subgizmo_mesh(&yz_plane, Vec3::new(0.0, 1.0, 1.0));
+        let mut builder = GpuGizmoBuilder::default();
+        builder.add_gizmo_part(&x_axis, Vec3::new(1.0, 0.0, 0.0));
+        builder.add_gizmo_part(&y_axis, Vec3::new(0.0, 1.0, 0.0));
+        builder.add_gizmo_part(&z_axis, Vec3::new(0.0, 0.0, 1.0));
+        builder.add_gizmo_part(&xy_plane, Vec3::new(1.0, 1.0, 0.0));
+        builder.add_gizmo_part(&xz_plane, Vec3::new(1.0, 0.0, 1.0));
+        builder.add_gizmo_part(&yz_plane, Vec3::new(0.0, 1.0, 1.0));
 
         builder.build(device)
     }

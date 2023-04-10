@@ -22,6 +22,10 @@ pub mod lerp;
 
 pub mod orbit_camera;
 
+pub mod viewport_math;
+
+pub mod viewport_gizmos;
+
 #[derive(PartialEq, Eq, Default)]
 pub enum EdgeDrawMode {
     HalfEdge,
@@ -237,6 +241,18 @@ impl Viewport3d {
                 PickableIdFilter::Subgizmos,
             );
             self.renderer.update_gizmo_state(picked);
+
+            let resolution = UVec2::new(
+                last_frame_bounds.width() as u32,
+                last_frame_bounds.height() as u32,
+            );
+            viewport_gizmos::gizmo_update(
+                last_frame_bounds.size(),
+                (cursor_position.to_vec2() - last_frame_bounds.min.to_vec2()).to_pos2(),
+                None,
+                &self.camera.compute_matrices(resolution),
+                None,
+            );
         }
     }
 }
