@@ -37,6 +37,7 @@ struct Example {
     vertices: usize,
     halfedges: usize,
     faces: usize,
+    bounding_box: primitives::Box, // TODO: enable std::marker::Copy trait on primitives::Box
 }
 
 fn run_example(example: &Example, rt: &LuaRuntime) -> ProgramResult {
@@ -66,24 +67,40 @@ pub fn test_examples_folder() {
             vertices: 8,
             halfedges: 24,
             faces: 6,
+            bounding_box: primitives::Box::build(
+                Vec3 { x: 0, y: 0, z: 0 }, // TODO: fix center and size
+                Vec3 { x: 0, y: 0, z: 0 },
+            ),
         },
         Example {
             path: "../examples/tp_cutter.bjk",
             vertices: 184,
             halfedges: 680,
             faces: 170,
+            bounding_box: primitives::Box::build(
+                Vec3 { x: 0, y: 0, z: 0 }, // TODO: fix center and size
+                Vec3 { x: 0, y: 0, z: 0 },
+            ),
         },
         Example {
             path: "../examples/stylised_sword.bjk",
             vertices: 284,
             halfedges: 988,
             faces: 228,
+            bounding_box: primitives::Box::build(
+                Vec3 { x: 0, y: 0, z: 0 }, // TODO: fix center and size
+                Vec3 { x: 0, y: 0, z: 0 },
+            ),
         },
         Example {
             path: "../examples/extrude-quad-along-helix.bjk",
             vertices: 148,
             halfedges: 584,
             faces: 144,
+            bounding_box: primitives::Box::build(
+                Vec3 { x: 0, y: 0, z: 0 }, // TODO: fix center and size
+                Vec3 { x: 0, y: 0, z: 0 },
+            ),
         },
     ];
 
@@ -94,7 +111,7 @@ pub fn test_examples_folder() {
             assert_eq!(h.read_connectivity().num_vertices(), example.vertices);
             assert_eq!(h.read_connectivity().num_halfedges(), example.halfedges);
             assert_eq!(h.read_connectivity().num_faces(), example.faces);
-            assert_eq!(h.read_positions().face_vertex_average(), example.faces);
+            assert_eq!(h.bounding_box(), example.bounding_box);
         } else {
             panic!("Expected a mesh")
         }

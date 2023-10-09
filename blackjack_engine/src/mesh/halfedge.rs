@@ -529,6 +529,12 @@ impl HalfEdgeMesh {
         }
     }
 
+    pub fn bounding_box(&self) -> Result<HalfEdgeMesh> {
+        let center = Vec3::new(0., 0., 0.); // TODO: calculate center and size from vertices
+        let size = Vec3::new(0., 0., 0.);
+        primitives::Box::build(center, size)
+    }
+
     pub fn read_connectivity(&self) -> BorrowedRef<'_, MeshConnectivity> {
         self.connectivity.borrow()
     }
