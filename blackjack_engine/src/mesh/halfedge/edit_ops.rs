@@ -1559,6 +1559,8 @@ pub fn extrude_along_curve(
 
     let mut positions = vec![];
 
+    let first_vertex_id = backbone_conn.iter_vertices().next().unwrap().0;
+    println!("first_vertex_id={:?}", first_vertex_id);
     for (v, _) in backbone_conn.iter_vertices() {
         let scale = if let Ok(ref size) = backbone_size {
             Vec3::splat(size[v])
@@ -1572,6 +1574,10 @@ pub fn extrude_along_curve(
             let normal = normal_ch[v];
             let tangent = tangent_ch[v];
             let cotangent = normal.cross(tangent);
+            println!(
+                "v={:?}, normal={:?}, tangent={:?}, cotangent={:?}",
+                v, normal, tangent, cotangent
+            );
             let (_, rotate, _) = glam::Affine3A::from_cols(
                 cotangent.into(),
                 normal.into(),
@@ -1579,15 +1585,19 @@ pub fn extrude_along_curve(
                 glam::Vec3A::ZERO,
             )
             .to_scale_rotation_translation();
-            rotate.to_euler(glam::EulerRot::XYZ).into()
+            // rotate.to_euler(glam::EulerRot::XYZ).into()
+            rotate
         } else {
-            Vec3::ZERO
+            glam::Quat::IDENTITY
         };
+        println!("v={:?}, rotate={:?}", v, rotate);
 
         for vc in csect_chain.iter_cpy() {
-            let pos = csect_pos[vc];
-            let rot = Quat::from_euler(glam::EulerRot::XYZ, rotate.x, rotate.y, rotate.z);
-            positions.push(rot * (pos * scale) + backbone_pos[v]);
+            let pos = csect_pos[vc] - backbone_pos[first_vertex_id];
+            // let rot = Quat::from_euler(glam::EulerRot::XYZ, rotate.x, rotate.y, rotate.z);
+            println!("v={:?}, pos={:?}, pos*scale={:?}, rotate*(pos*scale)={:?} backbone_pos={:?}, final={:?}",
+            v, pos, pos*scale, rotate*(pos*scale), backbone_pos[v], rotate * (pos * scale) + backbone_pos[v]);
+            positions.push(rotate * (pos * scale) + backbone_pos[v]);
         }
     }
 
