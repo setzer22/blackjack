@@ -79,6 +79,12 @@ pub fn test_examples_folder() {
             halfedges: 988,
             faces: 228,
         },
+        Example {
+            path: "../examples/extrude-quad-along-helix.bjk",
+            vertices: 148,
+            halfedges: 584,
+            faces: 144,
+        },
     ];
 
     for example in examples {
@@ -88,6 +94,7 @@ pub fn test_examples_folder() {
             assert_eq!(h.read_connectivity().num_vertices(), example.vertices);
             assert_eq!(h.read_connectivity().num_halfedges(), example.halfedges);
             assert_eq!(h.read_connectivity().num_faces(), example.faces);
+            assert_eq!(h.read_positions().face_vertex_average(), example.faces);
         } else {
             panic!("Expected a mesh")
         }
