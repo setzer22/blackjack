@@ -74,9 +74,9 @@ pub fn test_examples_folder() {
                 z: 0.0,
             },
             bounding_box_size: Vec3 {
-                x: 0.0,
-                y: 0.0,
-                z: 0.0,
+                x: 1.0,
+                y: 1.0,
+                z: 1.0,
             },
         },
         Example {
@@ -86,29 +86,29 @@ pub fn test_examples_folder() {
             faces: 170,
             bounding_box_center: Vec3 {
                 x: 0.0,
-                y: 0.0,
+                y: 0.29355407,
                 z: 0.0,
             },
             bounding_box_size: Vec3 {
-                x: 0.0,
-                y: 0.0,
-                z: 0.0,
+                x: 1.1,
+                y: 0.6210451,
+                z: 0.9,
             },
         },
         Example {
-            path: "../examples/stylised_sword.bjk",
+            path: "../examples/static-sword.bjk",
             vertices: 284,
             halfedges: 988,
             faces: 228,
             bounding_box_center: Vec3 {
-                x: 0.0,
-                y: 0.0,
-                z: 0.0,
+                x: 0.020206064,
+                y: 0.14655268,
+                z: 0.074326545,
             },
             bounding_box_size: Vec3 {
-                x: 0.0,
-                y: 0.0,
-                z: 0.0,
+                x: 1.1485293,
+                y: 2.532574,
+                z: 1.3417027,
             },
         },
         Example {
