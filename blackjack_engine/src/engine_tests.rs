@@ -118,13 +118,13 @@ pub fn test_examples_folder() {
             faces: 144,
             bounding_box_center: Vec3 {
                 x: 0.0,
-                y: 0.0,
+                y: 1.5,
                 z: 0.0,
             },
             bounding_box_size: Vec3 {
-                x: 0.0,
-                y: 0.0,
-                z: 0.0,
+                x: 6.9999986,
+                y: 3.9965458,
+                z: 6.9999986,
             },
         },
     ];
