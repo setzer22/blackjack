@@ -1559,7 +1559,6 @@ pub fn extrude_along_curve(
 
     let mut positions = vec![];
 
-    let first_vertex_id = backbone_conn.iter_vertices().next().unwrap().0;
     for (v, _) in backbone_conn.iter_vertices() {
         let scale = if let Ok(ref size) = backbone_size {
             Vec3::splat(size[v])
@@ -1580,14 +1579,15 @@ pub fn extrude_along_curve(
                 glam::Vec3A::ZERO,
             )
             .to_scale_rotation_translation();
-            rotate
+            rotate.to_euler(glam::EulerRot::XYZ).into()
         } else {
-            glam::Quat::IDENTITY
+            Vec3::ZERO
         };
 
         for vc in csect_chain.iter_cpy() {
-            let pos = csect_pos[vc] - backbone_pos[first_vertex_id];
-            positions.push(rotate * (pos * scale) + backbone_pos[v]);
+            let pos = csect_pos[vc];
+            let rot = Quat::from_euler(glam::EulerRot::XYZ, rotate.x, rotate.y, rotate.z);
+            positions.push(rot * (pos * scale) + backbone_pos[v]);
         }
     }
 

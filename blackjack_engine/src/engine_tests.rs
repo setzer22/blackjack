@@ -122,9 +122,9 @@ pub fn test_examples_folder() {
                 z: 0.0,
             },
             bounding_box_size: Vec3 {
-                x: 6.9999986,
+                x: 7.0,
                 y: 3.9965458,
-                z: 6.9999986,
+                z: 7.0,
             },
         },
     ];
