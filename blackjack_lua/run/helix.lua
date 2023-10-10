@@ -24,18 +24,24 @@ NodeLibrary:addNodes({
             local start_angle = math.pi * inputs.start_angle / 180
             for i = 0, num_steps do
                 local angle = direction * (start_angle + i * angle_delta)
-                local x = inputs.pos.x + inputs.size.x * math.cos(angle)
-                local z = inputs.pos.z + inputs.size.z * math.sin(angle)
+                local cos_angle = math.cos(angle)
+                local sin_angle = math.sin(angle)
+                local x = inputs.pos.x + inputs.size.x * cos_angle
+                local z = inputs.pos.z + inputs.size.z * sin_angle
                 local y = inputs.pos.y + i * delta_y -- y is "up"
+                table.insert(points, vector(x, y, z))
+                local tx = -direction * sin_angle
+                local tz = direction * cos_angle
+                local ty = 0.0
+                table.insert(tangents, vector(tx, ty, tz))
+                -- local next_angle = direction * (start_angle + (i + 1) * angle_delta)
+                -- local nx = inputs.size.x * (math.cos(next_angle) - cos_angle)
+                -- local nz = inputs.size.z * (math.sin(next_angle) - sin_angle)
+                -- local ny = delta_y
                 local nx = 0.0
                 local nz = 0.0
                 local ny = 1.0
-                local tx = math.sin(angle)
-                local tz = math.cos(angle)
-                local ty = 0.0
-                table.insert(points, vector(x, y, z))
                 table.insert(normals, vector(nx, ny, nz))
-                table.insert(tangents, vector(tx, ty, tz))
             end
             return {
                 out_mesh = Primitives.line_with_normals(points, normals, tangents, num_steps)
