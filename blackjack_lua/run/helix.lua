@@ -1,5 +1,6 @@
 local P = require("params")
 local NodeLibrary = require("node_library")
+local V = require("vector_math")
 
 NodeLibrary:addNodes({
     Helix = {
@@ -29,11 +30,13 @@ NodeLibrary:addNodes({
                 local x = inputs.pos.x + inputs.size.x * cos_angle
                 local z = inputs.pos.z + inputs.size.z * sin_angle
                 local y = inputs.pos.y + i * delta_y -- y is "up"
-                table.insert(points, vector(x, y, z))
+                local point = vector(x, y, z)
+                table.insert(points, point)
                 local tx = -direction * sin_angle
                 local tz = direction * cos_angle
-                local ty = 0.0
-                table.insert(tangents, vector(tx, ty, tz))
+                local ty = delta_y
+                local tangent = V.normalize(vector(tx, ty, tz))
+                table.insert(tangents, tangent)
                 -- local next_angle = direction * (start_angle + (i + 1) * angle_delta)
                 -- local nx = inputs.size.x * (math.cos(next_angle) - cos_angle)
                 -- local nz = inputs.size.z * (math.sin(next_angle) - sin_angle)
@@ -41,7 +44,10 @@ NodeLibrary:addNodes({
                 local nx = 0.0
                 local nz = 0.0
                 local ny = 1.0
+                -- local normal = V.normalize(vector(nx, ny, nz))
+                -- table.insert(normals, normal)
                 table.insert(normals, vector(nx, ny, nz))
+                -- table.insert(normals, V.cross(point, tangent))
             end
             return {
                 out_mesh = Primitives.line_with_normals(points, normals, tangents, num_steps)
