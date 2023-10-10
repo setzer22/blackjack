@@ -37,17 +37,11 @@ NodeLibrary:addNodes({
                 local ty = delta_y
                 local tangent = V.normalize(vector(tx, ty, tz))
                 table.insert(tangents, tangent)
-                -- local next_angle = direction * (start_angle + (i + 1) * angle_delta)
-                -- local nx = inputs.size.x * (math.cos(next_angle) - cos_angle)
-                -- local nz = inputs.size.z * (math.sin(next_angle) - sin_angle)
-                -- local ny = delta_y
-                local nx = 0.0
-                local nz = 0.0
-                local ny = 1.0
-                -- local normal = V.normalize(vector(nx, ny, nz))
-                -- table.insert(normals, normal)
-                table.insert(normals, vector(nx, ny, nz))
-                -- table.insert(normals, V.cross(point, tangent))
+                local nx = cos_angle
+                local nz = sin_angle
+                local ny = 0.0
+                local normal = V.normalize(V.cross(vector(nx, ny, nz), tangent))
+                table.insert(normals, normal)
             end
             return {
                 out_mesh = Primitives.line_with_normals(points, normals, tangents, num_steps)
