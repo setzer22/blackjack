@@ -50,7 +50,7 @@ NodeLibrary:addNodes(
             inputs = {
                 P.v3("pos", vector(0, 0, 0)),
                 P.v3("size", vector(1, 1, 1)),
-                P.scalar("start_angle", {default = 0, min = 0, soft_max = 360}),
+                P.scalar("start_angle", {default = 0, soft_max = 360}),
                 P.scalar("turns", {default = 1, min = 0, soft_max = 10}),
                 P.scalar_int("segments", {default = 36, min = 1, soft_max = 360}),
                 P.enum("direction", {"Clockwise", "Counter-Clockwise"}, 0)
