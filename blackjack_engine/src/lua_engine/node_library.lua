@@ -13,9 +13,9 @@ function NodeLibrary:addNodes(nodes)
 
     for k, v in pairs(nodes) do
         if self.nodes[k] then
-            print("[Engine] Redefinition for node "..k)
+            io.stderr:write("[Engine] Redefinition for node "..k.."\n")
         else
-            print("[Engine] Loading new node definition for "..k)
+            io.stderr:write("[Engine] Loading new node definition for "..k.."\n")
         end
         self.nodes[k] = v
     end
