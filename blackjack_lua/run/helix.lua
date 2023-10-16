@@ -34,7 +34,7 @@ NodeLibrary:addNodes(
                     table.insert(points, point)
                     local tx = -direction * sin_angle
                     local tz = direction * cos_angle
-                    local ty = delta_y
+                    local ty = 0.0
                     local tangent = V.normalize(vector(tx, ty, tz))
                     table.insert(tangents, tangent)
                     local nx = cos_angle
