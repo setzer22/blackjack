@@ -123,7 +123,7 @@ pub fn test_examples_folder() {
             },
             bounding_box_size: Vec3 {
                 x: 7.0,
-                y: 3.9965458,
+                y: 4.0,
                 z: 7.0,
             },
         },
