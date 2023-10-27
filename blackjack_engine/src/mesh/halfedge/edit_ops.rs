@@ -1998,6 +1998,54 @@ pub mod lua_fns {
         Ok(())
     }
 
+    /// Extrudes the given `faces` by a given `amount` distance and flips the normal of the
+    /// original faces in order to cap the extrusion into a solid.
+    #[lua(under = "Ops")]
+    pub fn extrude_with_caps(
+        faces: SelectionExpression,
+        amount: f32,
+        mesh: &mut HalfEdgeMesh,
+    ) -> Result<()> {
+        let faces = mesh.resolve_face_selection_full(&faces)?;
+        let face_set: HashSet<FaceId> = faces.iter().cloned().collect();
+
+        let mut to_merge = vec![];
+        {
+            // For each face, a new face is created with the opposite winding order so that
+            // its normal faces opposite to the original face.
+            let mesh_connectivity = &mesh.write_connectivity();
+            let mesh_positions = &mesh.write_positions();
+            for f in face_set {
+                let mut reversed_points = mesh_connectivity.at_face(f).vertices()?;
+                reversed_points.reverse();
+                let vec3s = reversed_points
+                    .iter()
+                    .enumerate()
+                    .map(|(_, v_id)| mesh_positions[*v_id])
+                    .collect_vec();
+                let indices = reversed_points
+                    .iter()
+                    .enumerate()
+                    .map(|(i, _)| i as u32)
+                    .collect_vec();
+                let half_edge_mesh = HalfEdgeMesh::build_from_polygons(&vec3s, &[&indices])?;
+                to_merge.push(half_edge_mesh);
+            }
+        }
+
+        for half_edge_mesh in to_merge {
+            mesh.merge_with(&half_edge_mesh);
+        }
+
+        crate::mesh::halfedge::edit_ops::extrude_faces(
+            &mut mesh.write_connectivity(),
+            &mut mesh.write_positions(),
+            &faces,
+            amount,
+        )?;
+        Ok(())
+    }
+
     /// Modifies the given mesh `a` by merging `b` into it. The `b` mesh remains
     /// unmodified.
     #[lua(under = "Ops")]
