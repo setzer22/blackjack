@@ -9,9 +9,9 @@ NodeLibrary:addNodes(
             op = function(inputs)
                 local points = {}
                 local max_angle = inputs.turns * 2.0 * math.pi
-                local num_steps = math.ceil(inputs.turns * inputs.segments)
+                local total_segments = math.ceil(inputs.turns * inputs.segments)
 
-                if num_steps < 1 then
+                if total_segments < 1 then
                     return {
                         out_mesh = Primitives.line_from_points(points)
                     }
@@ -19,11 +19,11 @@ NodeLibrary:addNodes(
 
                 local normals = {}
                 local tangents = {}
-                local angle_delta = max_angle / num_steps
-                local delta_y = inputs.size.y * inputs.turns / num_steps
+                local angle_delta = max_angle / total_segments
+                local delta_y = inputs.size.y * inputs.turns / total_segments
                 local direction = inputs.direction == "Clockwise" and -1 or 1
                 local start_angle = math.pi * inputs.start_angle / 180
-                for i = 0, num_steps do
+                for i = 0, total_segments do
                     local angle = direction * (start_angle + i * angle_delta)
                     local cos_angle = math.cos(angle)
                     local sin_angle = math.sin(angle)
@@ -44,7 +44,7 @@ NodeLibrary:addNodes(
                     table.insert(normals, normal)
                 end
                 return {
-                    out_mesh = Primitives.line_with_normals(points, normals, tangents, num_steps)
+                    out_mesh = Primitives.line_with_normals(points, normals, tangents, total_segments)
                 }
             end,
             inputs = {
