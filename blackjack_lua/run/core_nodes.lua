@@ -357,6 +357,23 @@ local edit_ops = {
             return { out_mesh = out_mesh }
         end,
     },
+    ExtrudeFacesWithCaps = {
+        label = "Extrude Faces With Caps",
+        inputs = {
+            P.mesh("in_mesh"),
+            P.selection("faces"),
+            P.scalar("amount", { default = 0.0 }),
+        },
+        outputs = {
+            P.mesh("out_mesh"),
+        },
+        returns = "out_mesh",
+        op = function(inputs)
+            local out_mesh = inputs.in_mesh:clone()
+            Ops.extrude_with_caps(inputs.faces, inputs.amount, out_mesh)
+            return { out_mesh = out_mesh }
+        end,
+    },
     CollapseEdge = {
         label = "Collapse Edges",
         inputs = {

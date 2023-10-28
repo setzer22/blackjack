@@ -12,11 +12,14 @@ function NodeLibrary:addNodes(nodes)
     assert(type(nodes) == "table")
 
     for k, v in pairs(nodes) do
-        if self.nodes[k] then
-            print("[Engine] Redefinition for node "..k)
-        else
-            print("[Engine] Loading new node definition for "..k)
-        end
+	-- mlua does not provide io.stderr, and this module can't be
+	-- used to directly generate code if it prints to stdout, so
+	-- the following needs to be commented out until mlua supports io.stderr:
+        -- if self.nodes[k] then
+        --     io.stderr:write("[Engine] Redefinition for node "..k.."\n")
+        -- else
+        --     io.stderr:write("[Engine] Loading new node definition for "..k.."\n")
+        -- end
         self.nodes[k] = v
     end
 end

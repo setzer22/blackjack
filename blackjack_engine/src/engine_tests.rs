@@ -37,6 +37,8 @@ struct Example {
     vertices: usize,
     halfedges: usize,
     faces: usize,
+    bounding_box_center: Vec3,
+    bounding_box_size: Vec3,
 }
 
 fn run_example(example: &Example, rt: &LuaRuntime) -> ProgramResult {
@@ -66,18 +68,64 @@ pub fn test_examples_folder() {
             vertices: 8,
             halfedges: 24,
             faces: 6,
+            bounding_box_center: Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+            bounding_box_size: Vec3 {
+                x: 1.0,
+                y: 1.0,
+                z: 1.0,
+            },
         },
         Example {
             path: "../examples/tp_cutter.bjk",
             vertices: 184,
             halfedges: 680,
             faces: 170,
+            bounding_box_center: Vec3 {
+                x: 0.0,
+                y: 0.29355407,
+                z: 0.0,
+            },
+            bounding_box_size: Vec3 {
+                x: 1.1,
+                y: 0.6210451,
+                z: 0.9,
+            },
         },
         Example {
-            path: "../examples/stylised_sword.bjk",
+            path: "../examples/static-sword.bjk",
             vertices: 284,
             halfedges: 988,
             faces: 228,
+            bounding_box_center: Vec3 {
+                x: 0.020206064,
+                y: 0.14655268,
+                z: 0.074326545,
+            },
+            bounding_box_size: Vec3 {
+                x: 1.1485293,
+                y: 2.532574,
+                z: 1.3417027,
+            },
+        },
+        Example {
+            path: "../examples/extrude-quad-along-helix.bjk",
+            vertices: 148,
+            halfedges: 584,
+            faces: 144,
+            bounding_box_center: Vec3 {
+                x: 0.0,
+                y: 1.5,
+                z: 0.0,
+            },
+            bounding_box_size: Vec3 {
+                x: 7.0,
+                y: 4.0,
+                z: 7.0,
+            },
         },
     ];
 
@@ -88,6 +136,9 @@ pub fn test_examples_folder() {
             assert_eq!(h.read_connectivity().num_vertices(), example.vertices);
             assert_eq!(h.read_connectivity().num_halfedges(), example.halfedges);
             assert_eq!(h.read_connectivity().num_faces(), example.faces);
+            let (got_center, got_size) = h.bounding_box();
+            assert_eq!(got_center, example.bounding_box_center);
+            assert_eq!(got_size, example.bounding_box_size);
         } else {
             panic!("Expected a mesh")
         }
