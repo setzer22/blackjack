@@ -442,11 +442,9 @@ NodeLibrary:addNodes(
             op = function(inputs)
                 local normal = V.normalize(inputs.normal)
                 local right = V.normalize(inputs.right)
-                local forward = V.cross(normal, right)
                 local state = {
                     normal = normal,
                     right = right,
-                    forward = forward,
                     pos = inputs.pos,
                     current_pos = inputs.pos,
                     segments = inputs.segments,

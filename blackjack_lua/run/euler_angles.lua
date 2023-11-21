@@ -20,8 +20,10 @@ NodeLibrary:addNodes(
             op = function(inputs)
                 local normal = euler_to_v3(inputs.pitch+90, inputs.yaw)
                 local right = euler_to_v3(inputs.pitch, inputs.yaw)
+                local forward = V.cross(normal, right)
 
                 return {
+                    forward = forward,
                     normal = normal,
                     right = right,
                 }
@@ -30,8 +32,8 @@ NodeLibrary:addNodes(
                 P.scalar("pitch", {default = 0, min = -360, soft_max = 360}),
                 P.scalar("yaw", {default = 0, min = -360, soft_max = 360}),
             },
-            outputs = {P.v3("normal"), P.v3("right")},
-            returns = "normal"
+            outputs = {P.v3("forward"), P.v3("normal"), P.v3("right")},
+            returns = "forward"
         }
     }
 )
