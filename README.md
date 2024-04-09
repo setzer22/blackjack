@@ -7,7 +7,7 @@
 ![GitHub CI](https://github.com/setzer22/blackjack/actions/workflows/ci.yml/badge.svg)
 ![MPL](https://img.shields.io/badge/license-MPL%202%2E0-blue.svg)
 
-[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/F1F8DNO5D)
+**ARCHIVED REPOSITORY** This repository is now archived because of a variety of technical and political reasons that made me loose my motivation to continue contributing to the Rust community in my free time.
 
 **Blackjack** is a procedural modelling application, following the steps of great tools like [Houdini](https://www.sidefx.com/) or [Blender's geometry nodes project](https://docs.blender.org/manual/en/latest/modeling/geometry_nodes/index.html). At its core, Blackjack is a simple node-driven interface where you can compose operations to create a 3d mesh in a non-destructive way.
 
