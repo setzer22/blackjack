@@ -529,6 +529,38 @@ impl HalfEdgeMesh {
         }
     }
 
+    pub fn bounding_box(&self) -> (Vec3, Vec3) {
+        let mut min = Vec3::new(f32::MAX, f32::MAX, f32::MAX);
+        let mut max = Vec3::new(f32::MIN, f32::MIN, f32::MIN);
+        for v in self.read_positions().iter() {
+            if v.1.x < min.x {
+                min.x = v.1.x
+            }
+            if v.1.y < min.y {
+                min.y = v.1.y
+            }
+            if v.1.z < min.z {
+                min.z = v.1.z
+            }
+            if v.1.x > max.x {
+                max.x = v.1.x
+            }
+            if v.1.y > max.y {
+                max.y = v.1.y
+            }
+            if v.1.z > max.z {
+                max.z = v.1.z
+            }
+        }
+        let center = Vec3::new(
+            (min.x + max.x) / 2.0,
+            (min.y + max.y) / 2.0,
+            (min.z + max.z) / 2.0,
+        );
+        let size = Vec3::new(max.x - min.x, max.y - min.y, max.z - min.z);
+        (center, size)
+    }
+
     pub fn read_connectivity(&self) -> BorrowedRef<'_, MeshConnectivity> {
         self.connectivity.borrow()
     }

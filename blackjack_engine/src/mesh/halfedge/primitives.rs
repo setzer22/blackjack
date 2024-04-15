@@ -590,6 +590,23 @@ mod lua_api {
         Line::build_from_points(LVec3::cast_vector(points))
     }
 
+    /// Creates a polyline from a given sequence of `points` with normals.
+    #[lua(under = "Primitives")]
+    fn line_with_normals(
+        points: Vec<LVec3>,
+        normals: Vec<LVec3>,
+        tangents: Vec<LVec3>,
+        segments: u32,
+    ) -> Result<HalfEdgeMesh> {
+        let pts = LVec3::cast_vector(points);
+        let nrms = LVec3::cast_vector(normals);
+        let tgts = LVec3::cast_vector(tangents);
+        let position = |i: u32| pts[i as usize];
+        let normal = |i: u32| nrms[i as usize];
+        let tangent = |i: u32| tgts[i as usize];
+        Line::build_with_normals(&position, &normal, &tangent, segments)
+    }
+
     /// Creates a catenary curve, the curve followed by a chain or rope hanging between two points,
     /// between `start` and `end` split into a number of `segments`. `sag` adjusts how much the curve sags,
     /// higher values make the curve hang lower, lower values make it closer to a straight line.
