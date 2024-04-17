@@ -607,9 +607,12 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.0.73"
+version = "1.0.83"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2fff2a6927b3bb87f9595d67196a70493f627687a71d87a0d692242c33f58c11"
+checksum = "f1174fb0b6ec23863f8b971027804a42614e347eafb0a95bf0b12cdae21fc4d0"
+dependencies = [
+ "libc",
+]
 
 [[package]]
 name = "cesu8"
@@ -2175,9 +2178,9 @@ dependencies = [
 
 [[package]]
 name = "luau0-src"
-version = "0.3.8+luau545"
+version = "0.7.4+luau594"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ddbd401da535023003168bf4af248ec3f818ed6049a945e5522cb45560036f54"
+checksum = "fd3a63bc31a97efdd1f4d0246c33bed3086f63a67cdf7d0451f68cb215aad20c"
 dependencies = [
  "cc",
 ]
@@ -2360,9 +2363,9 @@ dependencies = [
 
 [[package]]
 name = "mlua"
-version = "0.8.3"
+version = "0.8.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "10277581090f5cb7ecf814bc611152ce4db6dc8deffcaa08e24ed4c5197d9186"
+checksum = "0bb37b0ba91f017aa7ca2b98ef99496827770cd635b4a932a6047c5b4bbe678e"
 dependencies = [
  "bstr",
  "cc",
@@ -3061,9 +3064,9 @@ dependencies = [
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.46"
+version = "1.0.67"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "94e2ef8dbfc347b10c094890f778ee2e36ca9bb4262e86dc99cd217e35f3470b"
+checksum = "3d433d9f1a3e8c1263d9456598b16fec66f4acc9a74dacffd35c7bb09b3a1328"
 dependencies = [
  "unicode-ident",
 ]
